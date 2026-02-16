@@ -1,9 +1,10 @@
 ---
 name: Task
 about: Create a task
-title: "Don't forget to give a meaningful name to your issue\\"
-labels: "draft"
-assignees: ""
+title: Don't forget to give a meaningful name to your issue\
+labels: draft
+assignees: ''
+
 ---
 
 ## 📝 Description

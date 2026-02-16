@@ -1,9 +1,10 @@
 ---
 name: Bug Report
 about: Report a bug
-title: "Don't forget to give a meaningful name to your issue"
-labels: "draft"
-assignees: ""
+title: Don't forget to give a meaningful name to your issue
+labels: ''
+assignees: ''
+
 ---
 
 ## 📝 Description
