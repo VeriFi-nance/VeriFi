@@ -1,0 +1,226 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Signance</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: #000;
+        color: #fff;
+        line-height: 1.5;
+        min-height: 100vh;
+      }
+      
+      .container { max-width: 900px; margin: 0 auto; padding: 40px 20px; }
+      
+      header { margin-bottom: 32px; border-bottom: 1px solid #222; padding-bottom: 20px; }
+      h1 { font-size: 1.5rem; font-weight: 500; letter-spacing: -0.02em; }
+      .subtitle { color: #666; font-size: 0.875rem; margin-top: 4px; }
+      
+      .controls { margin-bottom: 24px; display: flex; flex-direction: column; gap: 12px; }
+      .search-box { position: relative; }
+      .search-input {
+        width: 100%;
+        padding: 12px 16px 12px 40px;
+        background: #0a0a0a;
+        border: 1px solid #222;
+        border-radius: 4px;
+        color: #fff;
+        font-size: 0.9rem;
+        outline: none;
+      }
+      .search-input::placeholder { color: #444; }
+      .search-input:focus { border-color: #444; }
+      .search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #444; }
+      
+      .filters { display: flex; gap: 8px; flex-wrap: wrap; }
+      .filter-btn {
+        padding: 8px 14px;
+        background: transparent;
+        border: 1px solid #222;
+        border-radius: 4px;
+        color: #666;
+        font-size: 0.75rem;
+        cursor: pointer;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .filter-btn:hover { border-color: #444; color: #888; }
+      .filter-btn.active { border-color: #fff; color: #fff; }
+      
+      .filter-group { display: flex; gap: 8px; align-items: center; }
+      .filter-label { font-size: 0.7rem; color: #444; text-transform: uppercase; letter-spacing: 0.05em; margin-right: 4px; }
+      .divider { width: 1px; height: 20px; background: #222; margin: 0 8px; }
+      
+      .results-count { font-size: 0.75rem; color: #444; margin-bottom: 12px; }
+      .error { background: #111; border: 1px solid #333; border-radius: 4px; padding: 12px; margin-bottom: 16px; font-size: 0.875rem; color: #888; }
+      
+      .markets { display: flex; flex-direction: column; gap: 1px; background: #222; border-radius: 6px; overflow: hidden; }
+      .market {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 16px;
+        background: #0a0a0a;
+      }
+      .market:hover { background: #111; }
+      .market.hidden { display: none; }
+      
+      .market-image { width: 48px; height: 48px; border-radius: 4px; object-fit: cover; background: #1a1a1a; flex-shrink: 0; }
+      .market-image.placeholder { display: flex; align-items: center; justify-content: center; font-size: 1.25rem; color: #333; }
+      
+      .market-content { flex: 1; min-width: 0; }
+      .market-title { font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .market-meta { display: flex; align-items: center; gap: 12px; margin-top: 4px; font-size: 0.75rem; color: #666; }
+      .source-badge { padding: 2px 6px; border-radius: 3px; background: #1a1a1a; border: 1px solid #333; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; }
+      
+      .probability { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+      .prob-value { font-size: 1.25rem; font-weight: 500; font-variant-numeric: tabular-nums; min-width: 60px; text-align: right; }
+      .prob-bar { width: 80px; height: 4px; background: #1a1a1a; border-radius: 2px; overflow: hidden; }
+      .prob-fill { height: 100%; background: #fff; border-radius: 2px; }
+      .prob-label { font-size: 0.7rem; color: #666; text-transform: uppercase; letter-spacing: 0.05em; }
+      
+      .empty-state { text-align: center; padding: 60px 20px; color: #666; background: #0a0a0a; border-radius: 6px; }
+      footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #222; font-size: 0.75rem; color: #444; }
+      footer a { color: #666; text-decoration: none; }
+      footer a:hover { color: #fff; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>signance</h1>
+        <p class="subtitle">prediction markets</p>
+      </header>
+      
+      {% for error in errors %}
+        <div class="error">{{ error }}</div>
+      {% endfor %}
+      
+      <div class="controls">
+        <div class="search-box">
+          <span class="search-icon">⌕</span>
+          <input type="text" class="search-input" id="searchInput" placeholder="Search markets..."/>
+        </div>
+        
+        <div class="filters">
+          <div class="filter-group">
+            <span class="filter-label">Source</span>
+            <button class="filter-btn active" data-filter="source" data-value="all">All</button>
+            <button class="filter-btn" data-filter="source" data-value="polymarket">Polymarket</button>
+            <button class="filter-btn" data-filter="source" data-value="kalshi">Kalshi</button>
+          </div>
+          
+          <div class="divider"></div>
+          
+          <div class="filter-group">
+            <span class="filter-label">Probability</span>
+            <button class="filter-btn active" data-filter="prob" data-value="all">All</button>
+            <button class="filter-btn" data-filter="prob" data-value="high">High (>70%)</button>
+            <button class="filter-btn" data-filter="prob" data-value="mid">Mid (30-70%)</button>
+            <button class="filter-btn" data-filter="prob" data-value="low">Low (<30%)</button>
+          </div>
+        </div>
+      </div>
+      
+      <div class="results-count" id="resultsCount"></div>
+      
+      {% if markets %}
+        <div class="markets" id="marketsContainer">
+          {% for market in markets %}
+            <div class="market" 
+                 data-source="{{ market.source }}" 
+                 data-prob="{{ market.probability }}"
+                 data-title="{{ market.title|lower }}">
+              {% if market.image %}
+                <img src="{{ market.image }}" alt="" class="market-image" loading="lazy"/>
+              {% else %}
+                <div class="market-image placeholder">?</div>
+              {% endif %}
+              
+              <div class="market-content">
+                <div class="market-title">{{ market.title }}</div>
+                <div class="market-meta">
+                  <span class="source-badge">{{ market.source }}</span>
+                  {% if market.end_date %}
+                    <span>{{ market.end_date|slice:":10" }}</span>
+                  {% endif %}
+                </div>
+              </div>
+              
+              <div class="probability">
+                <div>
+                  <div class="prob-value">{{ market.probability|floatformat:0 }}%</div>
+                  <div class="prob-label">yes</div>
+                </div>
+                <div class="prob-bar">
+                  <div class="prob-fill" style="width: {{ market.probability }}%"></div>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty-state">No markets available</div>
+      {% endif %}
+      
+      <footer>
+        <a href="/markets/api/markets?source=polymarket">polymarket api</a> · 
+        <a href="/markets/api/markets?source=kalshi">kalshi api</a>
+      </footer>
+    </div>
+    
+    <script>
+      let activeFilters = { source: 'all', prob: 'all', search: '' };
+      
+      const searchInput = document.getElementById('searchInput');
+      const resultsCount = document.getElementById('resultsCount');
+      const filterButtons = document.querySelectorAll('.filter-btn');
+      
+      function applyFilters() {
+        const markets = document.querySelectorAll('.market');
+        let visibleCount = 0;
+        
+        markets.forEach(market => {
+          const source = market.dataset.source;
+          const prob = parseFloat(market.dataset.prob);
+          const title = market.dataset.title;
+          
+          let show = true;
+          
+          if (activeFilters.source !== 'all' && source !== activeFilters.source) show = false;
+          if (activeFilters.prob === 'high' && prob <= 70) show = false;
+          if (activeFilters.prob === 'mid' && (prob < 30 || prob > 70)) show = false;
+          if (activeFilters.prob === 'low' && prob >= 30) show = false;
+          if (activeFilters.search && !title.includes(activeFilters.search.toLowerCase())) show = false;
+          
+          market.classList.toggle('hidden', !show);
+          if (show) visibleCount++;
+        });
+        
+        resultsCount.textContent = visibleCount + ' market' + (visibleCount !== 1 ? 's' : '');
+      }
+      
+      searchInput.addEventListener('input', (e) => {
+        activeFilters.search = e.target.value;
+        applyFilters();
+      });
+      
+      filterButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const filterType = btn.dataset.filter;
+          document.querySelectorAll(`.filter-btn[data-filter="${filterType}"]`).forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          activeFilters[filterType] = btn.dataset.value;
+          applyFilters();
+        });
+      });
+      
+      applyFilters();
+    </script>
+  </body>
+</html>
