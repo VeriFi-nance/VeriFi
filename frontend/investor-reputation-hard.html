@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Investor Reputation — VeriFi</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Ticker Bar -->
+  <div class="ticker-bar">
+    <div class="ticker-inner">
+      <div class="ticker-item"><span class="ticker-symbol">BTC</span><span class="ticker-price">$67,240</span><span class="ticker-change up">▲ +2.4%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">ETH</span><span class="ticker-price">$3,512</span><span class="ticker-change up">▲ +1.8%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">NVDA</span><span class="ticker-price">$924.10</span><span class="ticker-change down">▼ -0.6%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">AAPL</span><span class="ticker-price">$189.55</span><span class="ticker-change up">▲ +0.9%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">SOL</span><span class="ticker-price">$178.30</span><span class="ticker-change up">▲ +3.1%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">TSLA</span><span class="ticker-price">$242.80</span><span class="ticker-change down">▼ -1.2%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">S&amp;P500</span><span class="ticker-price">5,421</span><span class="ticker-change up">▲ +0.4%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">GOLD</span><span class="ticker-price">$2,334</span><span class="ticker-change up">▲ +0.2%</span></div>
+      <!-- duplicate -->
+      <div class="ticker-item"><span class="ticker-symbol">BTC</span><span class="ticker-price">$67,240</span><span class="ticker-change up">▲ +2.4%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">ETH</span><span class="ticker-price">$3,512</span><span class="ticker-change up">▲ +1.8%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">NVDA</span><span class="ticker-price">$924.10</span><span class="ticker-change down">▼ -0.6%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">AAPL</span><span class="ticker-price">$189.55</span><span class="ticker-change up">▲ +0.9%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">SOL</span><span class="ticker-price">$178.30</span><span class="ticker-change up">▲ +3.1%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">TSLA</span><span class="ticker-price">$242.80</span><span class="ticker-change down">▼ -1.2%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">S&amp;P500</span><span class="ticker-price">5,421</span><span class="ticker-change up">▲ +0.4%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">GOLD</span><span class="ticker-price">$2,334</span><span class="ticker-change up">▲ +0.2%</span></div>
+    </div>
+  </div>
+
+  <!-- Nav -->
+  <nav class="nav">
+    <a href="index.html" class="app-title">
+      <span class="app-title-icon">VF</span>
+      Veri<span class="fi">Fi</span>
+    </a>
+    <span class="nav-title">Hard Claims</span>
+    <div class="nav-links">
+      <a href="index.html"><span>Home</span></a>
+      <a href="hard-claim-create.html"><span>Create Claim</span></a>
+      <a href="hard-claim-resolution.html"><span>Resolution</span></a>
+      <a href="investor-reputation-hard.html" class="active"><span>Reputation</span></a>
+      <a href="signed-claim-proof.html"><span>Proof</span></a>
+    </div>
+    <div class="nav-avatar">YB</div>
+  </nav>
+
+  <!-- Main -->
+  <div class="page">
+    <div class="layout-main">
+
+      <!-- Feed column -->
+      <div class="layout-feed">
+
+        <!-- Profile header -->
+        <div class="box" style="padding: 24px;">
+          <div style="display:flex; align-items:center; gap:20px;">
+            <div class="post-avatar" style="width:72px; height:72px; font-size:24px;">YB</div>
+            <div style="flex:1;">
+              <h1 style="margin:0;">Yatırımcı Baba</h1>
+              <p style="margin:0; font-family:'IBM Plex Mono',monospace; font-size:13px;">@yatbaba • Joined Oct 2025</p>
+              <div style="margin-top:10px; display:flex; gap:10px;">
+                <span class="badge badge-accent">Top 28% Global</span>
+                <span class="badge badge-success">Crypto Whale</span>
+              </div>
+            </div>
+            <button class="btn btn-ghost">Following</button>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- Stats -->
+          <div class="stat-row" style="margin-top:0;">
+            <div class="stat-chip">
+              <div class="stat-chip-val" id="totalClaims" style="color:var(--txt-primary);">3</div>
+              <div class="stat-chip-label">Hard Claims</div>
+            </div>
+            <div class="stat-chip">
+              <div class="stat-chip-val score-dynamic good" id="truthScore">72</div>
+              <div class="stat-chip-label">Global Truth Score</div>
+            </div>
+            <div class="stat-chip">
+              <div class="stat-chip-val green" id="cryptoScore">78</div>
+              <div class="stat-chip-label">Crypto Domain</div>
+            </div>
+            <div class="stat-chip">
+              <div class="stat-chip-val red">41</div>
+              <div class="stat-chip-label">Equities Domain</div>
+            </div>
+          </div>
+
+          <!-- Reputation band strip -->
+          <div class="rep-score-pill rep-good">
+            <div class="rep-score-dot"></div>
+            <div class="rep-score-meta">
+              <div class="rep-score-label">Reputation Band • Strong</div>
+              <div class="rep-score-desc">You’re ahead of most investors on VeriFi based on oracle-resolved claims.</div>
+            </div>
+            <div class="rep-score-value" aria-label="Current Truth Score">72</div>
+          </div>
+        </div>
+
+        <div class="box">
+          <div class="card-title">
+            <div class="card-title-icon purple"></div>
+            Track Record (Hard Claims Only)
+          </div>
+          <p style="margin-bottom:14px;">This table shows the immutable history of oracle-resolved predictions.</p>
+          <div class="table-wrap">
+            <table id="claimsTable">
+              <thead>
+                <tr>
+                  <th>Asset</th>
+                  <th>Direction</th>
+                  <th>Target</th>
+                  <th>Outcome</th>
+                  <th>Impact</th>
+                  <th>Link</th>
+                </tr>
+              </thead>
+              <tbody id="claimsBody">
+                <tr>
+                  <td class="td-asset">BTC</td>
+              <td class="td-direction down">Drop</td>
+                  <td class="td-target">-50%</td>
+                  <td><span class="badge badge-failure">Failed</span></td>
+                  <td style="color:var(--red); font-family:'IBM Plex Mono',monospace; font-weight:700;">-15</td>
+                  <td><a href="#" style="color:var(--accent-bright);text-decoration:underline;">Tx</a></td>
+                </tr>
+                <tr>
+                  <td class="td-asset">NVDA</td>
+                  <td class="td-direction up">Rise</td>
+                  <td class="td-target">+10%</td>
+                  <td><span class="badge badge-success">Success</span></td>
+                  <td style="color:var(--green); font-family:'IBM Plex Mono',monospace; font-weight:700;">+12</td>
+                  <td><a href="#" style="color:var(--accent-bright);text-decoration:underline;">Tx</a></td>
+                </tr>
+                <tr>
+                  <td class="td-asset">ETH</td>
+                  <td class="td-direction up">Rise</td>
+                  <td class="td-target">+30%</td>
+                  <td><span class="badge badge-pending">Pending</span></td>
+                  <td style="color:var(--txt-muted); font-family:'IBM Plex Mono',monospace; font-weight:700;">0</td>
+                  <td><a href="#" style="color:var(--accent-bright);text-decoration:underline;">Tx</a></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="margin-top:20px; display:flex; align-items:center; gap:14px;">
+            <button id="recalcBtn" class="btn btn-primary">Recalculate Truth Score</button>
+            <span style="font-size:12px;color:var(--txt-muted);">(Mock: base score 60 + sum of impacts row-by-row)</span>
+          </div>
+        </div>
+
+      </div><!-- /.layout-feed -->
+
+      <!-- Sidebar -->
+      <aside class="layout-side">
+        <!-- Add a mock profile card snippet -->
+        <div class="side-widget" style="padding:2px;">
+          <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop" style="width:100%; height:120px; object-fit:cover; border-radius:18px 18px 0 0;" alt="Header">
+          <div style="padding:16px; padding-top:0; position:relative;">
+            <div style="width:60px; height:60px; background:var(--bg-card); border-radius:50%; margin-top:-30px; display:flex; align-items:center; justify-content:center; border:3px solid var(--bg-card); font-size:24px;"></div>
+            <h3 style="margin-top:10px;">Truth Score Explained</h3>
+            <p style="font-size:12px; margin-bottom:0;">The Truth Score is a weighted index representing how accurate a user's <strong style="color:var(--txt-primary);">hard claims</strong> are over time. It is fully automated via Oracles and mathematically impossible to fake.</p>
+          </div>
+        </div>
+      </aside>
+
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var recalcBtn = document.getElementById("recalcBtn");
+      var truthScore = document.getElementById("truthScore");
+      var claimsBody = document.getElementById("claimsBody");
+
+      function updateTruthScoreVisual(score) {
+        // update numeric badge
+        truthScore.textContent = score;
+
+        // dynamic colour band for the number
+        truthScore.classList.remove("good", "medium", "bad");
+        if (score >= 76) {
+          truthScore.classList.add("good");
+        } else if (score >= 50) {
+          truthScore.classList.add("medium");
+        } else {
+          truthScore.classList.add("bad");
+        }
+
+        // update the reputation pill on the right
+        var repPill = document.querySelector(".rep-score-pill");
+        if (repPill) {
+          repPill.classList.remove("rep-good", "rep-medium", "rep-bad");
+          var label = repPill.querySelector(".rep-score-label");
+          var valueEl = repPill.querySelector(".rep-score-value");
+
+          var bandClass = "rep-medium";
+          var bandText = "Balanced";
+          if (score >= 76) {
+            bandClass = "rep-good";
+            bandText = "Strong";
+          } else if (score < 50) {
+            bandClass = "rep-bad";
+            bandText = "At Risk";
+          }
+
+          repPill.classList.add(bandClass);
+          if (label) {
+            label.textContent = "Reputation Band • " + bandText;
+          }
+          if (valueEl) {
+            valueEl.textContent = score;
+          }
+        }
+      }
+
+      // initial visual state
+      updateTruthScoreVisual(parseInt(truthScore.textContent || "0", 10) || 0);
+
+      recalcBtn.onclick = function () {
+        var rows = claimsBody.getElementsByTagName("tr");
+        var baseScore = 60;
+        for (var i = 0; i < rows.length; i++) {
+          var cells = rows[i].getElementsByTagName("td");
+          var impactText = cells[4].textContent || "0";
+          var impact = parseInt(impactText, 10);
+          if (!isNaN(impact)) {
+            baseScore += impact;
+          }
+        }
+        updateTruthScoreVisual(baseScore);
+        // visual pulse effect
+        truthScore.parentNode.style.boxShadow = "0 0 0 3px var(--accent-glow)";
+        setTimeout(() => truthScore.parentNode.style.boxShadow = "", 300);
+      };
+    }());
+  </script>
+</body>
+</html>

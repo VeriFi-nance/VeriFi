@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hard Claim Resolution — VeriFi</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Ticker Bar -->
+  <div class="ticker-bar">
+    <div class="ticker-inner">
+      <div class="ticker-item"><span class="ticker-symbol">BTC</span><span class="ticker-price">$67,240</span><span class="ticker-change up">▲ +2.4%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">ETH</span><span class="ticker-price">$3,512</span><span class="ticker-change up">▲ +1.8%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">NVDA</span><span class="ticker-price">$924.10</span><span class="ticker-change down">▼ -0.6%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">AAPL</span><span class="ticker-price">$189.55</span><span class="ticker-change up">▲ +0.9%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">SOL</span><span class="ticker-price">$178.30</span><span class="ticker-change up">▲ +3.1%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">TSLA</span><span class="ticker-price">$242.80</span><span class="ticker-change down">▼ -1.2%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">S&amp;P500</span><span class="ticker-price">5,421</span><span class="ticker-change up">▲ +0.4%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">GOLD</span><span class="ticker-price">$2,334</span><span class="ticker-change up">▲ +0.2%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">BTC</span><span class="ticker-price">$67,240</span><span class="ticker-change up">▲ +2.4%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">ETH</span><span class="ticker-price">$3,512</span><span class="ticker-change up">▲ +1.8%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">NVDA</span><span class="ticker-price">$924.10</span><span class="ticker-change down">▼ -0.6%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">AAPL</span><span class="ticker-price">$189.55</span><span class="ticker-change up">▲ +0.9%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">SOL</span><span class="ticker-price">$178.30</span><span class="ticker-change up">▲ +3.1%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">TSLA</span><span class="ticker-price">$242.80</span><span class="ticker-change down">▼ -1.2%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">S&amp;P500</span><span class="ticker-price">5,421</span><span class="ticker-change up">▲ +0.4%</span></div>
+      <div class="ticker-item"><span class="ticker-symbol">GOLD</span><span class="ticker-price">$2,334</span><span class="ticker-change up">▲ +0.2%</span></div>
+    </div>
+  </div>
+
+  <!-- Nav -->
+  <nav class="nav">
+    <a href="index.html" class="app-title">
+      <span class="app-title-icon">⚡</span>
+      Veri<span class="fi">Fi</span>
+    </a>
+    <span class="nav-title">Hard Claims</span>
+    <div class="nav-links">
+      <a href="index.html">🏠 <span>Home</span></a>
+      <a href="hard-claim-create.html">✏️ <span>Create Claim</span></a>
+      <a href="hard-claim-resolution.html" class="active">⚖️ <span>Resolution</span></a>
+      <a href="investor-reputation-hard.html">🏆 <span>Reputation</span></a>
+      <a href="signed-claim-proof.html">🔏 <span>Proof</span></a>
+    </div>
+    <div class="nav-avatar">YB</div>
+  </nav>
+
+  <!-- Main -->
+  <div class="page">
+    <div class="layout-main">
+
+      <!-- Feed column -->
+      <div class="layout-feed">
+
+        <div class="page-header">
+          <h1>Hard Claim Resolution</h1>
+          <p>Oracle-automated resolution of market predictions. Click a row to inspect details.</p>
+        </div>
+
+        <!-- Summary stat chips -->
+        <div class="stat-row" style="margin-bottom:20px;">
+          <div class="stat-chip">
+            <div class="stat-chip-val accent">3</div>
+            <div class="stat-chip-label">Total Claims</div>
+          </div>
+          <div class="stat-chip">
+            <div class="stat-chip-val green">1</div>
+            <div class="stat-chip-label">Resolved ✓</div>
+          </div>
+          <div class="stat-chip">
+            <div class="stat-chip-val red">1</div>
+            <div class="stat-chip-label">Failed ✗</div>
+          </div>
+          <div class="stat-chip">
+            <div class="stat-chip-val" style="color:var(--amber);">1</div>
+            <div class="stat-chip-label">Pending ⏳</div>
+          </div>
+        </div>
+
+        <!-- Claims table -->
+        <div class="box">
+          <div class="card-title">
+            <div class="card-title-icon purple">📋</div>
+            Active &amp; Resolved Claims
+          </div>
+          <p style="margin-bottom:14px;">Select a claim to see resolution details and oracle data.</p>
+          <div class="table-wrap">
+            <table id="claimsTable">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Asset</th>
+                  <th>Direction</th>
+                  <th>Target</th>
+                  <th>Deadline</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr data-id="1">
+                  <td style="color:var(--txt-muted); font-family:'IBM Plex Mono',monospace;">1</td>
+                  <td class="td-asset">BTC</td>
+                  <td class="td-direction down">↓ Drop</td>
+                  <td class="td-target">-50%</td>
+                  <td style="color:var(--txt-secondary); font-size:12px;">2026-12-01</td>
+                  <td><span class="badge badge-failure">✗ Failed</span></td>
+                </tr>
+                <tr data-id="2">
+                  <td style="color:var(--txt-muted); font-family:'IBM Plex Mono',monospace;">2</td>
+                  <td class="td-asset">NVDA</td>
+                  <td class="td-direction up">↑ Rise</td>
+                  <td class="td-target">+10%</td>
+                  <td style="color:var(--txt-secondary); font-size:12px;">2026-03-01</td>
+                  <td><span class="badge badge-success">✓ Success</span></td>
+                </tr>
+                <tr data-id="3">
+                  <td style="color:var(--txt-muted); font-family:'IBM Plex Mono',monospace;">3</td>
+                  <td class="td-asset">ETH</td>
+                  <td class="td-direction up">↑ Rise</td>
+                  <td class="td-target">+30%</td>
+                  <td style="color:var(--txt-secondary); font-size:12px;">2026-04-15</td>
+                  <td id="claim3status"><span class="badge badge-pending">⏳ Pending</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <button id="simulateBtn" style="margin-top:16px;">🔮 Simulate Oracle Resolution (Claim #3)</button>
+        </div>
+
+        <!-- Resolution detail card -->
+        <div class="box" id="detailsBox">
+          <div class="card-title">
+            <div class="card-title-icon green">🔍</div>
+            Oracle Resolution Detail
+          </div>
+          <div class="resolution-detail" id="detailsText">
+            Select a claim above to view oracle data and resolution reasoning.
+          </div>
+        </div>
+
+      </div><!-- /.layout-feed -->
+
+      <!-- Sidebar -->
+      <aside class="layout-side">
+
+        <div class="side-widget">
+          <div class="side-widget-title">⚙️ Oracle Status</div>
+          <div class="stat-chip" style="margin-bottom:8px;text-align:left;display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="font-size:12px;font-weight:600;color:var(--green);">● Live</div>
+              <div style="font-size:11px;color:var(--txt-muted);">Chainlink Oracle</div>
+            </div>
+            <span class="badge badge-success">Connected</span>
+          </div>
+          <p style="font-size:12px;line-height:1.6; margin-top:8px;">Last sync: <span style="color:var(--txt-primary);font-family:'IBM Plex Mono',monospace;">2 min ago</span></p>
+          <p style="font-size:12px;">Block height: <span style="color:var(--txt-primary);font-family:'IBM Plex Mono',monospace;">#21,440,112</span></p>
+        </div>
+
+        <div class="side-widget">
+          <div class="side-widget-title">📖 How Resolution Works</div>
+          <p style="font-size:12px;line-height:1.7;">After the claim deadline, our oracle queries live market data. If the price moved in the claimed direction &amp; magnitude, it's a <strong style="color:var(--green)">Success</strong>. Otherwise it's a <strong style="color:var(--red)">Failure</strong>. Results are immutable and update your Truth Score immediately.</p>
+        </div>
+
+        <div class="side-widget">
+          <div class="side-widget-title">🔗 Recent Activity</div>
+          <div class="leaderboard-row">
+            <div class="lb-rank">#1</div>
+            <div class="post-avatar" style="width:26px;height:26px;font-size:10px;">MK</div>
+            <div class="lb-name">@mkarakus</div>
+            <div class="lb-score">+12 pts</div>
+          </div>
+          <div class="leaderboard-row">
+            <div class="lb-rank">#2</div>
+            <div class="post-avatar" style="width:26px;height:26px;font-size:10px;background:linear-gradient(135deg,#10b981,#059669);">YB</div>
+            <div class="lb-name">@yatbaba</div>
+            <div class="lb-score" style="color:var(--red);">-15 pts</div>
+          </div>
+          <div class="leaderboard-row">
+            <div class="lb-rank">#3</div>
+            <div class="post-avatar" style="width:26px;height:26px;font-size:10px;background:linear-gradient(135deg,#f59e0b,#d97706);">AS</div>
+            <div class="lb-name">@asaygan</div>
+            <div class="lb-score">+8 pts</div>
+          </div>
+        </div>
+
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var claimsTable = document.getElementById("claimsTable");
+      var rows = claimsTable.getElementsByTagName("tr");
+      var detailsText = document.getElementById("detailsText");
+      var simulateBtn = document.getElementById("simulateBtn");
+
+      var detailsById = {
+        "1": "❌ Claim #1 (BTC ↓50%) — Oracle queried at deadline 2026-12-01. Actual BTC price change: -10.2%. Claim required -50%. FAILED. Reputation impact: -15 pts.",
+        "2": "✅ Claim #2 (NVDA ↑10%) — Oracle confirmed a +12.4% rise in the 24h window ending 2026-03-01. Claim threshold of +10% was exceeded. SUCCESS. Reputation impact: +12 pts.",
+        "3": "⏳ Claim #3 (ETH ↑30%) — Deadline is 2026-04-15. Oracle has not been queried yet. Status: awaiting resolution."
+      };
+
+      function clearSelected() {
+        for (var i = 0; i < rows.length; i++) rows[i].classList.remove("selected");
+      }
+
+      claimsTable.onclick = function (event) {
+        var t = event.target || event.srcElement;
+        while (t && t.tagName !== "TR") t = t.parentNode;
+        if (!t || !t.getAttribute("data-id")) return;
+        clearSelected();
+        t.classList.add("selected");
+        detailsText.textContent = detailsById[t.getAttribute("data-id")] || "No details.";
+      };
+
+      simulateBtn.onclick = function () {
+        for (var i = 0; i < rows.length; i++) {
+          if (rows[i].getAttribute("data-id") === "3") {
+            var cells = rows[i].getElementsByTagName("td");
+            cells[5].innerHTML = '<span class="badge badge-failure">✗ Failed</span>';
+            detailsById["3"] = "❌ Claim #3 (ETH ↑30%) — Oracle queried; ETH rose only +8.1% by the deadline 2026-04-15. Target of +30% was not reached. FAILED. Reputation impact: -10 pts.";
+            clearSelected();
+            rows[i].classList.add("selected");
+            detailsText.textContent = detailsById["3"];
+            break;
+          }
+        }
+      };
+    }());
+  </script>
+</body>
+</html>
