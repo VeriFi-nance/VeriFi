@@ -9,13 +9,15 @@ interface HeaderNavProps {
 
 const HeaderNav: React.FC<HeaderNavProps> = ({ current, onChange }) => {
   return (
-    <div className="nav">
-      <span className="app-title">
-        <span className="app-title-icon">VF</span>
-        Veri<strong>Fi</strong>
-      </span>
-      <span className="nav-title">Hard Claims</span>
-      <span className="nav-links">
+    <div className="nav-vertical">
+      <div className="nav-header">
+        <span className="app-title">
+          <span className="app-title-icon">VF</span>
+          Veri<strong>Fi</strong>
+        </span>
+      </div>
+
+      <div className="nav-links-vertical">
         <a
           href="#feed"
           className={current === "feed" ? "active" : undefined}
@@ -24,6 +26,7 @@ const HeaderNav: React.FC<HeaderNavProps> = ({ current, onChange }) => {
             onChange("feed");
           }}
         >
+          <span className="nav-icon">🏠</span>
           <span>Feed</span>
         </a>
         <a
@@ -34,6 +37,7 @@ const HeaderNav: React.FC<HeaderNavProps> = ({ current, onChange }) => {
             onChange("profile");
           }}
         >
+          <span className="nav-icon">⭐️</span>
           <span>Reputation</span>
         </a>
         <a
@@ -44,6 +48,7 @@ const HeaderNav: React.FC<HeaderNavProps> = ({ current, onChange }) => {
             onChange("resolutions");
           }}
         >
+          <span className="nav-icon">⚖️</span>
           <span>Resolutions</span>
         </a>
         <a
@@ -54,9 +59,20 @@ const HeaderNav: React.FC<HeaderNavProps> = ({ current, onChange }) => {
             onChange("proofs");
           }}
         >
+          <span className="nav-icon">🛡️</span>
           <span>Proofs</span>
         </a>
-      </span>
+      </div>
+
+      <button className="btn btn-primary btn-post-nav">Post Claim</button>
+
+      <div className="nav-user-profile">
+        <div className="nav-avatar">YB</div>
+        <div className="nav-user-info">
+          <div className="nav-username">Yatbaba</div>
+          <div className="nav-handle">@yatbaba</div>
+        </div>
+      </div>
     </div>
   );
 };

@@ -31,9 +31,51 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="page">
-      <HeaderNav current={screen} onChange={setScreen} />
-      {content}
+    <div className="layout-twitter">
+      <aside className="left-sidebar">
+        <HeaderNav current={screen} onChange={setScreen} />
+      </aside>
+      
+      <main className="main-feed">
+        {content}
+      </main>
+      
+      <aside className="right-sidebar">
+        <div className="side-widget">
+          <div className="side-widget-title"><span className="icon">🏆</span> Leaderboard</div>
+          <div className="leaderboard-row">
+            <div className="lb-rank">1</div>
+            <div className="lb-name">@yatbaba</div>
+            <div className="lb-score">450</div>
+          </div>
+          <div className="leaderboard-row">
+            <div className="lb-rank">2</div>
+            <div className="lb-name">@crypto_king</div>
+            <div className="lb-score">320</div>
+          </div>
+          <div className="leaderboard-row">
+            <div className="lb-rank">3</div>
+            <div className="lb-name">@oracle_node</div>
+            <div className="lb-score">215</div>
+          </div>
+        </div>
+        
+        <div className="side-widget">
+          <div className="side-widget-title"><span className="icon">📈</span> Trending Assets</div>
+          <div className="leaderboard-row">
+            <div className="lb-name">1. $BTC</div>
+            <div className="lb-score trending-stat">52.4K posts</div>
+          </div>
+          <div className="leaderboard-row">
+            <div className="lb-name">2. $NVDA</div>
+            <div className="lb-score trending-stat">18.1K posts</div>
+          </div>
+          <div className="leaderboard-row">
+            <div className="lb-name">3. $SOL</div>
+            <div className="lb-score trending-stat">14.2K posts</div>
+          </div>
+        </div>
+      </aside>
     </div>
   );
 };

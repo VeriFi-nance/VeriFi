@@ -100,20 +100,19 @@ body {
   100% { transform: translateX(-50%); }
 }
 
-/* ── Top navigation ──────────────────────────────────────── */
-.nav {
-  position: sticky;
+/* ── Vertical Navigation Sidebar ─────────────────────────── */
+.nav-vertical {
+  position: fixed;
   top: 0;
-  z-index: 100;
-  background: rgba(255,255,255,.9);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--border);
-  padding: 0 24px;
-  height: 64px;
+  height: 100vh;
+  width: 275px;
+  padding: 16px 24px 24px 24px;
   display: flex;
-  align-items: center;
-  gap: 16px;
+  flex-direction: column;
+}
+
+.nav-header {
+  padding: 0 12px 24px 12px;
 }
 
 .app-title {
@@ -141,42 +140,66 @@ body {
   color: #fff;
 }
 
-.nav-title {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--txt-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding: 4px 10px;
-  background: var(--bg-card);
+.nav-links-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 24px;
+}
+.nav-links-vertical a {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 12px 14px;
+  color: var(--txt-primary);
+  text-decoration: none;
+  font-size: 19px;
+  font-weight: 400;
   border-radius: var(--r-full);
-  border: 1px solid var(--border);
+  transition: background .18s var(--ease);
+}
+.nav-links-vertical a:hover {
+  background: var(--bg-hover);
+}
+.nav-links-vertical a.active {
+  font-weight: 700;
+}
+.nav-icon {
+  font-size: 24px;
 }
 
-.nav-links {
+.btn-post-nav {
+  width: 90%;
+  padding: 14px 0;
+  font-size: 16px;
+  border-radius: var(--r-full);
+  margin-bottom: auto;
+}
+
+.nav-user-profile {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-left: auto;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--r-full);
+  cursor: pointer;
+  transition: background .2s;
+  margin-top: auto;
 }
-.nav-links a {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  color: var(--txt-secondary);
-  text-decoration: none;
-  font-size: 13px;
-  font-weight: 500;
-  border-radius: var(--r-md);
-  transition: background .18s var(--ease), color .18s var(--ease);
+.nav-user-profile:hover {
+  background: var(--bg-hover);
 }
-.nav-links a:hover,
-.nav-links a.active {
-  background: var(--bg-card);
-  color: var(--txt-primary);
+.nav-user-info {
+  flex: 1;
 }
-.nav-links a.active { color: var(--accent-bright); }
+.nav-username {
+  font-weight: 700;
+  font-size: 15px;
+}
+.nav-handle {
+  color: var(--txt-muted);
+  font-size: 14px;
+}
 
 .nav-avatar {
   width: 34px;
@@ -202,10 +225,53 @@ body {
   padding: 28px 20px 60px;
 }
 
-/* ── Two-column layout ───────────────────────────────────── */
-.layout-main { display: flex; gap: 20px; align-items: flex-start; }
-.layout-feed { flex: 1; min-width: 0; }
-.layout-side { width: 280px; flex-shrink: 0; }
+/* ── Three-column Twitter layout ─────────────────────────── */
+.layout-twitter {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.left-sidebar {
+  width: 275px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.main-feed {
+  width: 600px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  min-height: 100vh;
+  padding: 0;
+  background: var(--bg-surface);
+}
+
+.main-feed > .box, .main-feed > .post-card {
+  margin-left: 0;
+  margin-right: 0;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+}
+
+.main-feed > .post-card {
+  margin-bottom: 0;
+}
+
+.main-feed > .post-card:not(:last-child) {
+  border-bottom: 1px solid var(--border);
+}
+
+.right-sidebar {
+  width: 350px;
+  flex-shrink: 0;
+  padding: 16px 24px;
+}
 
 /* ── Page header ─────────────────────────────────────────── */
 .page-header {
@@ -779,5 +845,21 @@ tr.selected td { color: var(--txt-primary); }
   .fields-grid { grid-template-columns: 1fr; }
   .nav { padding: 0 14px; height: 56px; }
   .nav-links a span { display: none; }
-  .page { padding: 16px 12px 40px; }
+}
+
+/* ── Share Widget ────────────────────────────────────────── */
+.btn-twitter:hover {
+  background: #1a91da !important;
+}
+.btn-whatsapp:hover {
+  background: #20ba56 !important;
+}
+
+.share-widget {
+  animation: slideDown 0.3s var(--ease);
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
