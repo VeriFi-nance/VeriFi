@@ -1,4 +1,5 @@
 import React from "react";
+import { Home, Star, Scale, Shield } from "lucide-react";
 
 export type ScreenKey = "feed" | "profile" | "resolutions" | "proofs";
 
@@ -26,7 +27,7 @@ const HeaderNav: React.FC<HeaderNavProps> = ({ current, onChange }) => {
             onChange("feed");
           }}
         >
-          <span className="nav-icon">🏠</span>
+          <span className="nav-icon"><Home size={20} /></span>
           <span>Feed</span>
         </a>
         <a
@@ -37,7 +38,7 @@ const HeaderNav: React.FC<HeaderNavProps> = ({ current, onChange }) => {
             onChange("profile");
           }}
         >
-          <span className="nav-icon">⭐️</span>
+          <span className="nav-icon"><Star size={20} /></span>
           <span>Reputation</span>
         </a>
         <a
@@ -48,7 +49,7 @@ const HeaderNav: React.FC<HeaderNavProps> = ({ current, onChange }) => {
             onChange("resolutions");
           }}
         >
-          <span className="nav-icon">⚖️</span>
+          <span className="nav-icon"><Scale size={20} /></span>
           <span>Resolutions</span>
         </a>
         <a
@@ -59,7 +60,7 @@ const HeaderNav: React.FC<HeaderNavProps> = ({ current, onChange }) => {
             onChange("proofs");
           }}
         >
-          <span className="nav-icon">🛡️</span>
+          <span className="nav-icon"><Shield size={20} /></span>
           <span>Proofs</span>
         </a>
       </div>

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { CheckCircle, XCircle } from "lucide-react";
 import type { HardClaim } from "../types";
 
 interface ProofsScreenProps {
@@ -96,7 +97,9 @@ const ProofsScreen: React.FC<ProofsScreenProps> = ({ claim }) => {
 
         {verificationState === "success" && (
           <div className="result" style={{ borderColor: "var(--green)", backgroundColor: "var(--green-bg)", color: "var(--green)" }}>
-            <strong>✅ Signature Valid</strong>
+            <strong style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <CheckCircle size={18} /> Signature Valid
+            </strong>
             <p style={{ color: "var(--green)", marginTop: 4 }}>
               The provided signature correctly signs the claim payload using the specified public key.
               This claim is cryptographically bound to the author.
@@ -145,7 +148,9 @@ const ProofsScreen: React.FC<ProofsScreenProps> = ({ claim }) => {
 
         {verificationState === "failure" && (
           <div className="result" style={{ borderColor: "var(--red)", backgroundColor: "var(--red-bg)", color: "var(--red)" }}>
-            <strong>❌ Signature Invalid</strong>
+            <strong style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <XCircle size={18} /> Signature Invalid
+            </strong>
             <p style={{ color: "var(--red)", marginTop: 4 }}>
               The cryptographic signature does not match the claim payload for the provided public key.
               This claim may have been tampered with or the public key is incorrect.
