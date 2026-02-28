@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   generateMnemonic,
   deriveKeyPair,
+  privateKeyToKeyPair,
   signMessage,
   encryptPrivateKey,
   saveEncryptedKey,
@@ -38,7 +39,9 @@ export default function LoginPage() {
   const [creating, setCreating] = useState(false);
 
   // ── Sign-in state ────────────────────────────────────────────────────────
+  const [restoreMethod, setRestoreMethod] = useState<'mnemonic' | 'privatekey'>('mnemonic');
   const [inputMnemonic, setInputMnemonic] = useState('');
+  const [inputPrivateKey, setInputPrivateKey] = useState('');
   const [signinPassword, setSigninPassword] = useState('');
   const [signingIn, setSigningIn] = useState(false);
 
@@ -52,7 +55,9 @@ export default function LoginPage() {
     setSaved(false);
     setCreatePassword('');
     setConfirmPassword('');
+    setRestoreMethod('mnemonic');
     setInputMnemonic('');
+    setInputPrivateKey('');
     setSigninPassword('');
   }
 
@@ -94,18 +99,16 @@ export default function LoginPage() {
   // ── Sign in ──────────────────────────────────────────────────────────────
   async function handleSignIn() {
     setError('');
-    const trimmed = inputMnemonic.trim();
-    if (!trimmed) {
-      setError('Please enter your 12-word passphrase.');
-      return;
-    }
     if (signinPassword.length < 8) {
       setError('Password must be at least 8 characters.');
       return;
     }
     setSigningIn(true);
     try {
-      const { privateKey, address } = deriveKeyPair(trimmed);
+      const { privateKey, address } =
+        restoreMethod === 'mnemonic'
+          ? deriveKeyPair(inputMnemonic.trim())
+          : privateKeyToKeyPair(inputPrivateKey.trim());
       const { nonce } = await getChallenge(address);
       const signature = await signMessage(privateKey, nonce);
       const { access } = await login(address, signature, nonce);
@@ -258,17 +261,51 @@ export default function LoginPage() {
           {/* ── Sign in ───────────────────────────────────────────────── */}
           {tab === 'signin' && (
             <div className="space-y-4">
-              <div className="space-y-1">
-                <Label htmlFor="mnemonic">Your 12-word passphrase</Label>
-                <Textarea
-                  id="mnemonic"
-                  placeholder="word1 word2 word3 … word12"
-                  rows={3}
-                  value={inputMnemonic}
-                  onChange={(e) => setInputMnemonic(e.target.value)}
-                  className="font-mono text-sm resize-none"
-                />
+              {/* Restore method toggle */}
+              <div className="flex rounded-lg border overflow-hidden text-sm">
+                {(['mnemonic', 'privatekey'] as const).map((m) => (
+                  <button
+                    key={m}
+                    className={`flex-1 py-1.5 font-medium transition-colors ${
+                      restoreMethod === m
+                        ? 'bg-secondary text-secondary-foreground'
+                        : 'bg-background text-muted-foreground hover:bg-muted'
+                    }`}
+                    onClick={() => {
+                      setRestoreMethod(m);
+                      setError('');
+                    }}
+                  >
+                    {m === 'mnemonic' ? '12-word passphrase' : 'Private key'}
+                  </button>
+                ))}
               </div>
+
+              {restoreMethod === 'mnemonic' ? (
+                <div className="space-y-1">
+                  <Label htmlFor="mnemonic">Your 12-word passphrase</Label>
+                  <Textarea
+                    id="mnemonic"
+                    placeholder="word1 word2 word3 … word12"
+                    rows={3}
+                    value={inputMnemonic}
+                    onChange={(e) => setInputMnemonic(e.target.value)}
+                    className="font-mono text-sm resize-none"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <Label htmlFor="privkey">Private key (hex)</Label>
+                  <Input
+                    id="privkey"
+                    placeholder="0x… or 64 hex characters"
+                    value={inputPrivateKey}
+                    onChange={(e) => setInputPrivateKey(e.target.value)}
+                    className="font-mono text-sm"
+                  />
+                </div>
+              )}
+
               <div className="space-y-1">
                 <Label htmlFor="signin-pw">Encryption password</Label>
                 <Input
