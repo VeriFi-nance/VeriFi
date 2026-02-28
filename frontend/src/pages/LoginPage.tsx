@@ -22,7 +22,7 @@ import {
   saveEncryptedKey,
 } from '@/lib/crypto';
 import { register, getChallenge, login } from '@/lib/api';
-import { saveToken, savePublicKey } from '@/lib/auth';
+import { saveToken, saveAddress } from '@/lib/auth';
 
 type Tab = 'create' | 'signin';
 
@@ -77,11 +77,11 @@ export default function LoginPage() {
     setError('');
     setCreating(true);
     try {
-      const { privateKey, publicKey } = deriveKeyPair(mnemonic);
+      const { privateKey, address } = deriveKeyPair(mnemonic);
       const encrypted = await encryptPrivateKey(privateKey, createPassword);
-      const { access } = await register(publicKey);
+      const { access } = await register(address);
       saveEncryptedKey(encrypted);
-      savePublicKey(publicKey);
+      saveAddress(address);
       saveToken(access);
       navigate('/app');
     } catch (e) {
@@ -105,13 +105,13 @@ export default function LoginPage() {
     }
     setSigningIn(true);
     try {
-      const { privateKey, publicKey } = deriveKeyPair(trimmed);
-      const { nonce } = await getChallenge(publicKey);
+      const { privateKey, address } = deriveKeyPair(trimmed);
+      const { nonce } = await getChallenge(address);
       const signature = await signMessage(privateKey, nonce);
-      const { access } = await login(publicKey, signature, nonce);
+      const { access } = await login(address, signature, nonce);
       const encrypted = await encryptPrivateKey(privateKey, signinPassword);
       saveEncryptedKey(encrypted);
-      savePublicKey(publicKey);
+      saveAddress(address);
       saveToken(access);
       navigate('/app');
     } catch (e) {

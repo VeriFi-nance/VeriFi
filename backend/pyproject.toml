@@ -9,6 +9,6 @@ dependencies = [
     "django-cors-headers>=4.9.0",
     "djangorestframework>=3.16.1",
     "djangorestframework-simplejwt>=5.5.1",
-    "ecdsa>=0.19.1",
+    "eth-account>=0.13.0",
     "gunicorn>=25.1.0",
 ]

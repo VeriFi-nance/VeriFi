@@ -22,7 +22,7 @@ class Migration(migrations.Migration):
                         verbose_name="ID",
                     ),
                 ),
-                ("public_key", models.CharField(max_length=66, unique=True)),
+                ("address", models.CharField(max_length=42, unique=True)),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
             ],
         ),

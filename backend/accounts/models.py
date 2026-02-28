@@ -2,8 +2,8 @@ from django.db import models
 
 
 class WalletUser(models.Model):
-    public_key = models.CharField(max_length=66, unique=True)  # hex compressed secp256k1
+    address = models.CharField(max_length=42, unique=True)  # Ethereum address: 0x + 40 hex
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return self.public_key[:16] + "..."
+        return self.address

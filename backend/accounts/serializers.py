@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 
 class RegisterSerializer(serializers.Serializer):
-    public_key = serializers.CharField(max_length=66)
+    address = serializers.CharField(max_length=42)
 
 
 class ChallengeResponseSerializer(serializers.Serializer):
@@ -10,7 +10,7 @@ class ChallengeResponseSerializer(serializers.Serializer):
 
 
 class LoginSerializer(serializers.Serializer):
-    public_key = serializers.CharField(max_length=66)
+    address = serializers.CharField(max_length=42)
     signature = serializers.CharField()
     nonce = serializers.CharField()
 

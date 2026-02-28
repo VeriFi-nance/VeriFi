@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { clearAuth, loadPublicKey } from '@/lib/auth';
+import { clearAuth, loadAddress } from '@/lib/auth';
 import { clearPrivateKey, loadEncryptedKey, decryptPrivateKey } from '@/lib/crypto';
 
 const REVEAL_TTL = 60; // seconds before private key auto-hides
@@ -30,7 +30,7 @@ function CopyButton({ text }: { text: string }) {
 
 export default function AppPage() {
   const navigate = useNavigate();
-  const publicKey = loadPublicKey() ?? '';
+  const address = loadAddress() ?? '';
 
   // ── Private key reveal state ─────────────────────────────────────────────
   const [showReveal, setShowReveal] = useState(false);
@@ -100,17 +100,17 @@ export default function AppPage() {
       {/* ── Public key card ───────────────────────────────────────────────── */}
       <Card className="w-full max-w-lg">
         <CardHeader>
-          <CardTitle className="text-base">Your Public Key</CardTitle>
+          <CardTitle className="text-base">Your Address</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           <div className="flex items-center gap-2">
             <code className="flex-1 text-xs font-mono bg-muted px-3 py-2 rounded break-all">
-              {publicKey || '—'}
+              {address || '—'}
             </code>
-            {publicKey && <CopyButton text={publicKey} />}
+            {address && <CopyButton text={address} />}
           </div>
           <p className="text-xs text-muted-foreground">
-            This is your account identity (compressed secp256k1, 33 bytes).
+            Your Ethereum-compatible address (secp256k1, keccak256).
           </p>
         </CardContent>
       </Card>
