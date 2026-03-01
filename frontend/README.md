@@ -1,11 +1,78 @@
-# React + TypeScript + Vite
+# Frontend - VeriFi
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + TypeScript + Vite frontend for the VeriFi application.
 
-Currently, two official plugins are available:
+## Tech Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Framework**: React 19
+- **Language**: TypeScript 5.9
+- **Build Tool**: Vite 7
+- **Styling**: TailwindCSS 4
+- **UI Library**: Radix UI
+- **Package Manager**: pnpm
+
+## Prerequisites
+
+- **Node.js** (v18 or higher)
+- **pnpm** (recommended) or npm/yarn
+
+Install pnpm if you don't have it:
+
+```bash
+npm install -g pnpm
+```
+
+## Installation
+
+### 1. Navigate to the Frontend Directory
+
+```bash
+cd frontend
+```
+
+### 2. Install Dependencies
+
+Using pnpm (recommended, as specified in pnpm-lock.yaml):
+
+```bash
+pnpm install
+```
+
+Or using npm:
+
+```bash
+npm install
+```
+
+## Running the Development Server
+
+```bash
+pnpm dev
+```
+
+The application will be available at `http://localhost:5173` with Hot Module Replacement (HMR) enabled.
+
+## Building for Production
+
+```bash
+pnpm build
+```
+
+This generates an optimized build in the `dist/` directory.
+
+## Preview Production Build
+
+```bash
+pnpm preview
+```
+
+## Linting
+
+Run ESLint to check code quality:
+
+```bash
+pnpm lint
+```
 
 ## React Compiler
 
