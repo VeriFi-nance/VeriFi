@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: verifi-backend
+    runtime: python
+    buildCommand: "pip install uv && uv sync"
+    startCommand: "uv run gunicorn core.wsgi:application"
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"
