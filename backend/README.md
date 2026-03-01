@@ -13,56 +13,38 @@ Django REST Framework backend for the VeriFi application.
 ## Prerequisites
 
 - Python 3.12 or higher
-- pip or another Python package manager
+- [uv](https://docs.astral.sh/uv/) — fast Python package manager
 
 ## Installation
 
-### 1. Create a Virtual Environment
+### 1. Install Dependencies
 
 ```bash
 # Navigate to the backend directory
 cd backend
 
-# Create a virtual environment
-python3 -m venv venv
-
-# Activate the virtual environment
-# On macOS/Linux:
-source venv/bin/activate
-# On Windows:
-venv\Scripts\activate
+# Install all dependencies (creates .venv automatically)
+uv sync
 ```
 
-### 2. Install Dependencies
+### 2. Apply Migrations
 
 ```bash
-pip install -e .
+uv run python manage.py migrate
 ```
 
-Or if using the pyproject.toml directly:
-
-```bash
-pip install django django-cors-headers djangorestframework gunicorn
-```
-
-### 3. Apply Migrations
-
-```bash
-python manage.py migrate
-```
-
-### 4. Create a Superuser (Optional)
+### 3. Create a Superuser (Optional)
 
 For admin access:
 
 ```bash
-python manage.py createsuperuser
+uv run python manage.py createsuperuser
 ```
 
 ## Running the Development Server
 
 ```bash
-python manage.py runserver
+uv run python manage.py runserver
 ```
 
 The API will be available at `http://localhost:8000`
@@ -98,19 +80,19 @@ ALLOWED_HOSTS=localhost,127.0.0.1
 
 ```bash
 # Create a new Django app
-python manage.py startapp appname
+uv run python manage.py startapp appname
 
 # Make migrations
-python manage.py makemigrations
+uv run python manage.py makemigrations
 
 # Apply migrations
-python manage.py migrate
+uv run python manage.py migrate
 
 # Collect static files
-python manage.py collectstatic
+uv run python manage.py collectstatic
 
 # Run tests
-python manage.py test
+uv run python manage.py test
 ```
 
 ## CORS Configuration
