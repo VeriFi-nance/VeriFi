@@ -1,0 +1,76 @@
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import AllowAny
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
+from accounts.models import WalletUser
+from .models import Post, Claim
+from .serializers import PostSerializer, ClaimInputSerializer
+
+
+MOCK_CLAIMS = [
+    {"text": "Bitcoin will reach $200,000 by end of 2025.", "asset": "BTC", "direction": "bullish"},
+    {"text": "Ethereum will outperform the market next quarter.", "asset": "ETH", "direction": "bullish"},
+]
+
+
+def _get_wallet_user(request) -> WalletUser | None:
+    auth = JWTAuthentication()
+    try:
+        raw = auth.get_raw_token(auth.get_header(request))
+        token = auth.get_validated_token(raw)
+        return WalletUser.objects.get(address=token.get("address", "").lower())
+    except Exception:
+        return None
+
+
+class PostListCreateView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        posts = Post.objects.prefetch_related("claims").all()
+        return Response(PostSerializer(posts, many=True).data)
+
+    def post(self, request):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        content = request.data.get("content", "").strip()
+        if not content:
+            return Response({"detail": "content is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if len(content) > 500:
+            return Response({"detail": "content exceeds 500 characters."}, status=status.HTTP_400_BAD_REQUEST)
+
+        claims_data = request.data.get("claims", [])
+        serializer = ClaimInputSerializer(data=claims_data, many=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        post = Post.objects.create(author=user, content=content)
+        for claim in serializer.validated_data:
+            if claim.get("status") != "rejected":
+                Claim.objects.create(
+                    post=post,
+                    text=claim["text"],
+                    asset=claim.get("asset", ""),
+                    direction=claim.get("direction", ""),
+                    status=Claim.Status.CONFIRMED,
+                )
+
+        return Response(PostSerializer(post).data, status=status.HTTP_201_CREATED)
+
+
+class ExtractClaimsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # TODO: integrate LLM claim extraction (#29)
+        return Response([])

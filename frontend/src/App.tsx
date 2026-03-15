@@ -1,7 +1,12 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import LoginPage from './pages/LoginPage';
-import AppPage from './pages/AppPage';
+import AppLayout from './pages/AppLayout';
+import FeedPage from './pages/FeedPage';
+import PostCreationPage from './pages/PostCreationPage';
+import PostDetailPage from './pages/PostDetailPage';
+import UserPostsPage from './pages/UserPostsPage';
+import ProfilePage from './pages/ProfilePage';
 import { isAuthenticated } from './lib/auth';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -21,10 +26,16 @@ export default function App() {
           path="/app"
           element={
             <ProtectedRoute>
-              <AppPage />
+              <AppLayout />
             </ProtectedRoute>
           }
-        />
+        >
+          <Route index element={<FeedPage />} />
+          <Route path="post/new" element={<PostCreationPage />} />
+          <Route path="post/:id" element={<PostDetailPage />} />
+          <Route path="user/:address" element={<UserPostsPage />} />
+          <Route path="profile" element={<ProfilePage />} />
+        </Route>
       </Routes>
     </BrowserRouter>
   );
