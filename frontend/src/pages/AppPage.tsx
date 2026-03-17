@@ -31,6 +31,7 @@ function CopyButton({ text }: { text: string }) {
 export default function AppPage() {
   const navigate = useNavigate();
   const address = loadAddress() ?? '';
+  const hasEncryptedKey = loadEncryptedKey() !== null;
 
   // ── Private key reveal state ─────────────────────────────────────────────
   const [showReveal, setShowReveal] = useState(false);
@@ -115,8 +116,8 @@ export default function AppPage() {
         </CardContent>
       </Card>
 
-      {/* ── Private key card ─────────────────────────────────────────────── */}
-      <Card className="w-full max-w-lg">
+      {/* ── Private key card (hidden for MetaMask users) ─────────────────── */}
+      {hasEncryptedKey && <Card className="w-full max-w-lg">
         <CardHeader>
           <CardTitle className="text-base">Private Key</CardTitle>
         </CardHeader>
@@ -202,7 +203,7 @@ export default function AppPage() {
             </div>
           )}
         </CardContent>
-      </Card>
+      </Card>}
 
       <Button variant="ghost" onClick={handleLogout}>
         Log out

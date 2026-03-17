@@ -1,4 +1,14 @@
 import { useState } from 'react';
+
+// Minimal EIP-1193 provider type
+interface EIP1193Provider {
+  request(args: { method: string; params?: unknown[] }): Promise<unknown>;
+}
+declare global {
+  interface Window {
+    ethereum?: EIP1193Provider;
+  }
+}
 import { useNavigate } from 'react-router-dom';
 import {
   Card,
@@ -46,6 +56,9 @@ export default function LoginPage() {
   const [signingIn, setSigningIn] = useState(false);
 
   const [error, setError] = useState('');
+
+  // ── MetaMask state ───────────────────────────────────────────────────────
+  const [metamaskLoading, setMetamaskLoading] = useState(false);
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   function resetTab(t: Tab) {
@@ -121,6 +134,50 @@ export default function LoginPage() {
       setError(e instanceof Error ? e.message : 'Something went wrong');
     } finally {
       setSigningIn(false);
+    }
+  }
+
+  // ── MetaMask ─────────────────────────────────────────────────────────────
+  async function handleMetaMask() {
+    setMetamaskLoading(true);
+    setError('');
+    try {
+      if (!window.ethereum) {
+        throw new Error('MetaMask is not installed. Please install it to use this option.');
+      }
+
+      const accounts = (await window.ethereum.request({ method: 'eth_requestAccounts' })) as string[];
+      const address = accounts[0].toLowerCase();
+
+      // Attempt registration for new users. 409 means already registered → sign in.
+      try {
+        const { access } = await register(address);
+        saveAddress(address);
+        saveToken(access);
+        navigate('/app');
+        return;
+      } catch (regErr) {
+        if (!(regErr instanceof Error && regErr.message === 'Address already registered.')) {
+          throw regErr;
+        }
+      }
+
+      // Already registered – verify ownership via challenge-sign-login
+      const { nonce } = await getChallenge(address);
+      const rawSig = (await window.ethereum.request({
+        method: 'personal_sign',
+        params: [nonce, address],
+      })) as string;
+      // Strip 0x prefix that MetaMask adds
+      const signature = rawSig.startsWith('0x') ? rawSig.slice(2) : rawSig;
+      const { access } = await login(address, signature, nonce);
+      saveAddress(address);
+      saveToken(access);
+      navigate('/app');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'MetaMask connection failed');
+    } finally {
+      setMetamaskLoading(false);
     }
   }
 
@@ -334,6 +391,22 @@ export default function LoginPage() {
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
+
+          {/* MetaMask */}
+          <div className="relative flex items-center gap-2">
+            <div className="flex-1 border-t" />
+            <span className="text-xs text-muted-foreground px-1">or</span>
+            <div className="flex-1 border-t" />
+          </div>
+
+          <Button
+            variant="outline"
+            className="w-full"
+            disabled={metamaskLoading}
+            onClick={handleMetaMask}
+          >
+            {metamaskLoading ? 'Connecting…' : 'Connect with MetaMask'}
+          </Button>
         </CardContent>
       </Card>
     </div>

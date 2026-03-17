@@ -52,7 +52,7 @@ class ChallengeView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        nonce = binascii.hexlify(os.urandom(32)).decode()
+        nonce = "0x" + binascii.hexlify(os.urandom(32)).decode()
         cache_key = f"nonce:{address}"
         cache.set(cache_key, nonce, timeout=300)  # 5 minutes
         return Response({"nonce": nonce})
@@ -90,7 +90,7 @@ class LoginView(APIView):
 
         # Recover address from EIP-191 personal_sign signature
         try:
-            msg = encode_defunct(text=nonce)
+            msg = encode_defunct(hexstr=nonce)
             recovered = Account.recover_message(msg, signature=bytes.fromhex(signature_hex))
             if recovered.lower() != address:
                 raise ValueError("Address mismatch")
