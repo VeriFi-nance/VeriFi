@@ -12,8 +12,7 @@ class Post(models.Model):
 
     def __str__(self):
         return f"{self.author.address[:10]}… — {self.content[:40]}"
-
-
+    
 class Claim(models.Model):
     class Status(models.TextChoices):
         CONFIRMED = "confirmed"
@@ -27,3 +26,28 @@ class Claim(models.Model):
 
     def __str__(self):
         return f"{self.asset} {self.direction}: {self.text[:40]}"
+
+
+class Asset(models.Model):
+    name = models.CharField(max_length=100)
+    symbol = models.CharField(max_length=10)
+    description = models.TextField(blank=True)
+
+    def __str__(self):
+        return self.name
+    
+class HardClaim(models.Model):
+    class Status(models.TextChoices):
+        CONFIRMED = "confirmed"
+        UNDETERMINED = "undetermined"
+        REJECTED = "rejected"
+
+    text = models.TextField()
+    asset = models.ForeignKey(Asset, on_delete=models.CASCADE, blank=False, null=False)
+    direction = models.CharField(max_length=20, blank=True, default="") # this will be binary, 1 up, 0 down
+    until = models.DateField(blank=False, null=False)
+    status = models.CharField(max_length=12, choices=Status.choices, default="undetermined")
+
+    def __str__(self):
+        return f"{self.asset} {self.direction}: {self.text[:40]}"
+

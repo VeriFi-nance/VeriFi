@@ -5,8 +5,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from accounts.models import WalletUser
-from .models import Post, Claim
-from .serializers import PostSerializer, ClaimInputSerializer
+from .models import Post, Claim, HardClaim, Asset
+from .serializers import PostSerializer, ClaimInputSerializer, HardClaimInputSerializer, AssetSerializer
 
 
 MOCK_CLAIMS = [
@@ -74,3 +74,37 @@ class ExtractClaimsView(APIView):
 
         # TODO: integrate LLM claim extraction (#29)
         return Response([])
+    
+class HardClaimView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        serializer = HardClaimInputSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        data = serializer.validated_data
+
+        # Validate that asset exist
+        try:
+            asset = Asset.objects.get(id=data["asset_id"])
+        except Asset.DoesNotExist as e:
+            return Response({"detail": f"Invalid reference: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create HardClaim object in the database with the given data
+        try:
+            hard_claim = HardClaim.objects.create(
+                text=data["text"],
+                asset=asset,
+                direction=data.get("direction", ""),
+                until=data["until"],
+                status=data.get("status", "undetermined"),
+            )
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response({"detail": "Hard claim created successfully.", "id": hard_claim.id}, status=status.HTTP_201_CREATED)

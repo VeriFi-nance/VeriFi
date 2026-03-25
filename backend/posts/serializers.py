@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Post, Claim
+from .models import Asset, Post, Claim
 
 
 class ClaimSerializer(serializers.ModelSerializer):
@@ -22,3 +22,15 @@ class ClaimInputSerializer(serializers.Serializer):
     asset = serializers.CharField(allow_blank=True, default="")
     direction = serializers.CharField(allow_blank=True, default="")
     status = serializers.ChoiceField(choices=["confirmed", "rejected"], default="confirmed")
+
+class AssetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Asset
+        fields = ["id", "name", "symbol", "description"]
+
+class HardClaimInputSerializer(serializers.Serializer):
+    text = serializers.CharField()
+    asset_id = serializers.IntegerField()
+    direction = serializers.CharField(allow_blank=True, default="")
+    until = serializers.DateField()
+    status = serializers.ChoiceField(choices=["confirmed", "undetermined", "rejected"], default="undetermined")
