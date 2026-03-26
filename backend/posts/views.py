@@ -75,9 +75,21 @@ class ExtractClaimsView(APIView):
         # TODO: integrate LLM claim extraction (#29)
         return Response([])
     
+class AssetListView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        assets = Asset.objects.all().order_by("name")
+        return Response(AssetSerializer(assets, many=True).data)
+
 class HardClaimView(APIView):
     authentication_classes = []
     permission_classes = []
+
+    def get(self, request):
+        hard_claims = HardClaim.objects.all().order_by("-id")
+        return Response(HardClaimSerializer(hard_claims, many=True).data)
 
     def post(self, request):
         user = _get_wallet_user(request)
