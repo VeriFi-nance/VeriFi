@@ -20,3 +20,20 @@ export interface PostItem {
   created_at: string;
   claims: ClaimItem[];
 }
+
+export interface HardClaimItem {
+  id: number;
+  author_address: string | null;
+  text: string;
+  asset: number;
+  direction: string;
+  until: string;
+  status: string;
+}
+
+export interface AssetItem {
+  id: number;
+  name: string;
+  symbol: string;
+  description: string;
+}

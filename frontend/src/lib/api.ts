@@ -1,5 +1,5 @@
 import { getToken } from './auth';
-import type { ReviewClaim, PostItem } from './types';
+import type { ReviewClaim, PostItem, HardClaimItem, AssetItem } from './types';
 
 const BASE_URL = 'http://localhost:8000';
 
@@ -78,4 +78,25 @@ export async function createPost(
 
 export async function getFeed(): Promise<PostItem[]> {
   return request('/api/posts/');
+}
+
+export async function getHardClaims(): Promise<HardClaimItem[]> {
+  return request('/api/posts/hard-claims/');
+}
+
+export async function createHardClaim(data: {
+  text: string;
+  asset_id: number;
+  direction: string;
+  until: string;
+}): Promise<HardClaimItem> {
+  return request('/api/posts/hard-claims/', {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getAssets(): Promise<AssetItem[]> {
+  return request('/api/posts/assets/');
 }
