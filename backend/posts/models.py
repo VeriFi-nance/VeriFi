@@ -42,6 +42,7 @@ class HardClaim(models.Model):
         UNDETERMINED = "undetermined"
         REJECTED = "rejected"
 
+    author = models.ForeignKey(WalletUser, on_delete=models.CASCADE, related_name="hard_claims", null=True, blank=True)
     text = models.TextField()
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE, blank=False, null=False)
     direction = models.CharField(max_length=20, blank=True, default="") # this will be binary, 1 up, 0 down

@@ -6,7 +6,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from accounts.models import WalletUser
 from .models import Post, Claim, HardClaim, Asset
-from .serializers import PostSerializer, ClaimInputSerializer, HardClaimInputSerializer, AssetSerializer
+from .serializers import PostSerializer, ClaimInputSerializer, HardClaimInputSerializer, HardClaimSerializer, AssetSerializer
 
 
 MOCK_CLAIMS = [
@@ -98,6 +98,7 @@ class HardClaimView(APIView):
         # Create HardClaim object in the database with the given data
         try:
             hard_claim = HardClaim.objects.create(
+                author=user,
                 text=data["text"],
                 asset=asset,
                 direction=data.get("direction", ""),
@@ -107,4 +108,4 @@ class HardClaimView(APIView):
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
-        return Response({"detail": "Hard claim created successfully.", "id": hard_claim.id}, status=status.HTTP_201_CREATED)
+        return Response(HardClaimSerializer(hard_claim).data, status=status.HTTP_201_CREATED)

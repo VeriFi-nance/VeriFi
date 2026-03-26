@@ -48,13 +48,25 @@ class HardClaimAPITestCase(APITestCase):
         # Assert response status
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         
-        # Assert response data
-        self.assertIn('detail', response.data)
+        # Assert response data contains expected fields
         self.assertIn('id', response.data)
-        self.assertEqual(response.data['detail'], 'Hard claim created successfully.')
+        self.assertIn('author_address', response.data)
+        self.assertIn('text', response.data)
+        self.assertIn('asset', response.data)
+        self.assertIn('direction', response.data)
+        self.assertIn('until', response.data)
+        self.assertIn('status', response.data)
         
-        # Assert the hard claim was created in the database
+        # Assert response values
+        self.assertEqual(response.data['text'], 'Bitcoin will reach $100,000 by end of 2025')
+        self.assertEqual(response.data['direction'], 'bullish')
+        self.assertEqual(response.data['until'], '2025-12-31')
+        self.assertEqual(response.data['status'], 'undetermined')
+        self.assertEqual(response.data['author_address'], self.wallet_user.address)
+        
+        # Assert the hard claim was created in the database with correct author
         hard_claim = HardClaim.objects.get(id=response.data['id'])
+        self.assertEqual(hard_claim.author, self.wallet_user)
         self.assertEqual(hard_claim.asset, self.asset)
         self.assertEqual(hard_claim.text, 'Bitcoin will reach $100,000 by end of 2025')
         self.assertEqual(hard_claim.direction, 'bullish')
@@ -88,9 +100,22 @@ class HardClaimAPITestCase(APITestCase):
         
         # Should return 400 Bad Request due to missing required fields
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_hard_claim_unauthenticated(self):
+        """Test that unauthenticated users cannot create hard claims."""
+        # Clear credentials to simulate unauthenticated request
+        self.client.credentials()
         
+        url = reverse('hard-claims')
+        data = {
+            'text': 'Bitcoin will reach $100,000 by end of 2025',
+            'asset_id': self.asset.id,
+            'direction': 'bullish',
+            'until': '2025-12-31'
+        }
         
         response = self.client.post(url, data, format='json')
         
-        # Should return 400 Bad Request due to missing required fields
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        # Should return 401 Unauthorized
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertIn('detail', response.data)

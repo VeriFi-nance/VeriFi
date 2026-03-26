@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Asset, Post, Claim
+from .models import Asset, Post, Claim, HardClaim
 
 
 class ClaimSerializer(serializers.ModelSerializer):
@@ -34,3 +34,10 @@ class HardClaimInputSerializer(serializers.Serializer):
     direction = serializers.CharField(allow_blank=True, default="")
     until = serializers.DateField()
     status = serializers.ChoiceField(choices=["confirmed", "undetermined", "rejected"], default="undetermined")
+
+class HardClaimSerializer(serializers.ModelSerializer):
+    author_address = serializers.CharField(source="author.address", read_only=True, allow_null=True)
+
+    class Meta:
+        model = HardClaim
+        fields = ["id", "author_address", "text", "asset", "direction", "until", "status"]
