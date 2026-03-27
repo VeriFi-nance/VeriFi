@@ -125,3 +125,64 @@ class HardClaimAPITestCase(APITestCase):
         # Should return 401 Unauthorized
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertIn('detail', response.data)
+
+
+class HardClaimUpdateStatusTestCase(APITestCase):
+    def setUp(self):
+        self.admin_address = "0xadmin000000000000000000000000000000000000"
+        self.regular_address = "0x742d35cc6634c0532925a3b844bc454e4438f44e"
+
+        self.admin_user = WalletUser.objects.create(address=self.admin_address)
+        self.regular_user = WalletUser.objects.create(address=self.regular_address)
+
+        self.asset = Asset.objects.create(name="Bitcoin", symbol="BTC", description="Digital gold")
+        self.hard_claim = HardClaim.objects.create(
+            author=self.regular_user,
+            text="BTC to $100k",
+            asset=self.asset,
+            direction="bullish",
+            percentage=20.0,
+            until="2025-12-31",
+            status="undetermined",
+        )
+
+    def _auth(self, user):
+        refresh = RefreshToken()
+        refresh["address"] = user.address
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {str(refresh.access_token)}')
+
+    def _url(self):
+        return reverse("hard-claim-update-status", kwargs={"pk": self.hard_claim.pk})
+
+    def test_admin_can_update_status(self):
+        with self.settings(ADMIN_ADDRESSES=[self.admin_address]):
+            self._auth(self.admin_user)
+            response = self.client.patch(self._url(), {"status": "confirmed"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], "confirmed")
+        self.hard_claim.refresh_from_db()
+        self.assertEqual(self.hard_claim.status, "confirmed")
+
+    def test_non_admin_is_forbidden(self):
+        with self.settings(ADMIN_ADDRESSES=[self.admin_address]):
+            self._auth(self.regular_user)
+            response = self.client.patch(self._url(), {"status": "confirmed"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_unauthenticated_is_rejected(self):
+        self.client.credentials()
+        response = self.client.patch(self._url(), {"status": "confirmed"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_invalid_status_is_rejected(self):
+        with self.settings(ADMIN_ADDRESSES=[self.admin_address]):
+            self._auth(self.admin_user)
+            response = self.client.patch(self._url(), {"status": "invalid_value"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_nonexistent_hard_claim_returns_404(self):
+        url = reverse("hard-claim-update-status", kwargs={"pk": 99999})
+        with self.settings(ADMIN_ADDRESSES=[self.admin_address]):
+            self._auth(self.admin_user)
+            response = self.client.patch(url, {"status": "confirmed"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

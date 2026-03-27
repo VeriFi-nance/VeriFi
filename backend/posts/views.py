@@ -1,3 +1,4 @@
+from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -122,3 +123,27 @@ class HardClaimView(APIView):
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
         return Response(HardClaimSerializer(hard_claim).data, status=status.HTTP_201_CREATED)
+
+    def patch(self, request, pk):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        if user.address not in settings.ADMIN_ADDRESSES:
+            return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            hard_claim = HardClaim.objects.get(pk=pk)
+        except HardClaim.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        new_status = request.data.get("status")
+        if new_status not in HardClaim.Status.values:
+            return Response(
+                {"detail": f"Invalid status. Choose from: {HardClaim.Status.values}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        hard_claim.status = new_status
+        hard_claim.save()
+        return Response(HardClaimSerializer(hard_claim).data)
