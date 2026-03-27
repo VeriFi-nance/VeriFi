@@ -89,8 +89,11 @@ class HardClaimView(APIView):
     permission_classes = []
 
     def get(self, request):
-        hard_claims = HardClaim.objects.all().order_by("-id")
-        return Response(HardClaimSerializer(hard_claims, many=True).data)
+        qs = HardClaim.objects.all().order_by("-id")
+        address = request.query_params.get("address", "").strip().lower()
+        if address:
+            qs = qs.filter(author__address=address)
+        return Response(HardClaimSerializer(qs, many=True).data)
 
     def post(self, request):
         user = _get_wallet_user(request)

@@ -84,6 +84,10 @@ export async function getHardClaims(): Promise<HardClaimItem[]> {
   return request('/api/posts/hard-claims/');
 }
 
+export async function getHardClaimsByAddress(address: string): Promise<HardClaimItem[]> {
+  return request(`/api/posts/hard-claims/?address=${encodeURIComponent(address)}`);
+}
+
 export async function createHardClaim(data: {
   text: string;
   asset_id: number;
