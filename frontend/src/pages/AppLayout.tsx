@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
+import { CreateHardClaimDialog } from './FeedPage';
 
 export default function AppLayout() {
   const navigate = useNavigate();
@@ -18,9 +18,9 @@ export default function AppLayout() {
           </button>
           <div className="flex items-center gap-2">
             {isHome && (
-              <Button size="sm" onClick={() => navigate('/app/post/new')}>
-                + New Post
-              </Button>
+              <CreateHardClaimDialog
+                onCreated={() => window.dispatchEvent(new Event('hard-claim-created'))}
+              />
             )}
             <button
               onClick={() => navigate('/app/profile')}

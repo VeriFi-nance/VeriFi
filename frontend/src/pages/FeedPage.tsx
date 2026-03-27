@@ -1,9 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,8 +8,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-import { getFeed, getHardClaims, createHardClaim, getAssets } from '@/lib/api';
-import type { PostItem, HardClaimItem, AssetItem } from '@/lib/types';
+import { getHardClaims, createHardClaim, getAssets } from '@/lib/api';
+import type { HardClaimItem, AssetItem } from '@/lib/types';
 
 function truncateAddress(addr: string | null) {
   if (!addr) return 'Unknown';
@@ -20,104 +17,77 @@ function truncateAddress(addr: string | null) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
-function PostCard({ post }: { post: PostItem }) {
-  const navigate = useNavigate();
-  const confirmedClaims = post.claims.filter((c) => c.status === 'confirmed');
-
-  return (
-    <Card
-      className="cursor-pointer hover:bg-muted/50 transition-colors"
-      onClick={() => navigate(`/app/post/${post.id}`)}
-    >
-      <CardContent className="p-5 space-y-2">
-        <div className="flex items-center justify-between">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/app/user/${post.author_address}`);
-            }}
-            className="text-xs font-mono text-primary hover:underline"
-          >
-            {truncateAddress(post.author_address)}
-          </button>
-          <span className="text-xs text-muted-foreground">
-            {new Date(post.created_at).toLocaleDateString()}
-          </span>
-        </div>
-        <p className="text-sm whitespace-pre-wrap leading-relaxed">{post.content}</p>
-        {confirmedClaims.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {confirmedClaims.map((c) => (
-              <div key={c.id} className="flex gap-1">
-                {c.asset && <Badge variant="secondary">{c.asset}</Badge>}
-                {c.direction && (
-                  <Badge
-                    variant={c.direction.toLowerCase() === 'bullish' ? 'default' : 'destructive'}
-                  >
-                    {c.direction}
-                  </Badge>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
 function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets: AssetItem[] }) {
   const navigate = useNavigate();
-  const assetName = assets.find((a) => a.id === claim.asset)?.symbol || `Asset ${claim.asset}`;
+  const asset = assets.find((a) => a.id === claim.asset);
+  const assetSymbol = asset?.symbol ?? `#${claim.asset}`;
+  const isBullish = claim.direction.toLowerCase() === 'bullish';
+
+  const isConfirmed = claim.status === 'confirmed';
+  const isRejected = claim.status === 'rejected';
+
+  const cardClass = isConfirmed
+    ? 'border-green-500 hover:bg-muted/30'
+    : isRejected
+    ? 'border-red-500 hover:bg-muted/30 opacity-60'
+    : 'border-border hover:bg-muted/30';
+
+  const directionClass = isBullish ? 'text-green-500' : 'text-red-500';
+
+  const statusClass = isConfirmed
+    ? 'text-green-500 font-semibold'
+    : isRejected
+    ? 'text-red-500 font-semibold'
+    : 'text-muted-foreground font-semibold';
 
   return (
-    <Card className="cursor-pointer hover:bg-muted/50 transition-colors">
-      <CardContent className="p-5 space-y-2">
-        <div className="flex items-center justify-between">
+    <div className={`flex items-center gap-4 rounded-lg border-2 px-4 py-3 transition-colors ${cardClass}`}>
+      {/* Direction block */}
+      <div className={`flex flex-col items-center justify-center min-w-[52px] gap-0.5 ${directionClass}`}>
+        <span className="text-xl leading-none">{isBullish ? '▲' : '▼'}</span>
+        <span className="text-sm font-bold leading-none">{assetSymbol}</span>
+        <span className="text-xs font-semibold leading-none">{claim.percentage}%</span>
+      </div>
+
+      {/* Text + meta */}
+      <div className="flex-1 min-w-0">
+        <p className={`text-sm font-medium leading-snug line-clamp-2 ${isRejected ? 'text-muted-foreground' : ''}`}>
+          {claim.text}
+        </p>
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
           {claim.author_address ? (
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                navigate(`/app/user/${claim.author_address}`);
-              }}
-              className="text-xs font-mono text-primary hover:underline"
+              onClick={() => navigate(`/app/user/${claim.author_address}`)}
+              className="font-mono hover:underline"
             >
               {truncateAddress(claim.author_address)}
             </button>
           ) : (
-            <span className="text-xs font-mono text-muted-foreground">Anonymous</span>
+            <span className="font-mono">Anonymous</span>
           )}
-          <span className="text-xs text-muted-foreground">
-            Until: {new Date(claim.until).toLocaleDateString()}
-          </span>
+          <span>·</span>
+          <span>until {new Date(claim.until).toLocaleDateString()}</span>
         </div>
-        <p className="text-sm whitespace-pre-wrap leading-relaxed font-semibold">
-          {claim.text}
-        </p>
-        <div className="flex flex-wrap gap-1.5 mt-2">
-          <Badge variant="secondary">{assetName}</Badge>
-          <Badge variant={claim.direction.toLowerCase() === 'bullish' ? 'default' : 'destructive'}>
-            {claim.direction}
-          </Badge>
-          <Badge variant="outline" className="capitalize">
-            {claim.status}
-          </Badge>
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      {/* Status */}
+      <span className={`text-xs capitalize shrink-0 ${statusClass}`}>
+        {claim.status}
+      </span>
+    </div>
   );
 }
 
-function CreateHardClaimDialog({ onCreated }: { onCreated: () => void }) {
+export function CreateHardClaimDialog({ onCreated }: { onCreated: () => void }) {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   const [assets, setAssets] = useState<AssetItem[]>([]);
-
   const [text, setText] = useState('');
   const [assetId, setAssetId] = useState('');
   const [direction, setDirection] = useState('');
+  const [percentage, setPercentage] = useState('');
   const [until, setUntil] = useState('');
 
   useEffect(() => {
@@ -128,8 +98,13 @@ function CreateHardClaimDialog({ onCreated }: { onCreated: () => void }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text || !assetId || !direction || !until) {
+    if (!text || !assetId || !direction || !percentage || !until) {
       setError('Please fill all fields');
+      return;
+    }
+    const pct = parseFloat(percentage);
+    if (isNaN(pct) || pct < 0 || pct > 100) {
+      setError('Percentage must be between 0 and 100');
       return;
     }
     setError('');
@@ -139,12 +114,14 @@ function CreateHardClaimDialog({ onCreated }: { onCreated: () => void }) {
         text,
         asset_id: parseInt(assetId, 10),
         direction,
+        percentage: pct,
         until,
       });
       setOpen(false);
       setText('');
       setAssetId('');
       setDirection('');
+      setPercentage('');
       setUntil('');
       onCreated();
     } catch (err: any) {
@@ -157,12 +134,12 @@ function CreateHardClaimDialog({ onCreated }: { onCreated: () => void }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>Create HardClaim</Button>
+        <Button size="sm">+ New Claim</Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Create HardClaim</DialogTitle>
-          <DialogDescription>Submit a new hard claim.</DialogDescription>
+          <DialogTitle>New Hard Claim</DialogTitle>
+          <DialogDescription>Submit a verifiable prediction.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
@@ -207,6 +184,19 @@ function CreateHardClaimDialog({ onCreated }: { onCreated: () => void }) {
             </Select>
           </div>
           <div className="space-y-2">
+            <Label>Expected move (%)</Label>
+            <Input
+              type="number"
+              min="0"
+              max="100"
+              step="0.1"
+              required
+              value={percentage}
+              onChange={(e) => setPercentage(e.target.value)}
+              placeholder="e.g. 25"
+            />
+          </div>
+          <div className="space-y-2">
             <Label>Until (Date)</Label>
             <Input
               type="date"
@@ -216,7 +206,7 @@ function CreateHardClaimDialog({ onCreated }: { onCreated: () => void }) {
             />
           </div>
           <Button type="submit" disabled={submitting} className="w-full">
-            {submitting ? 'Creating...' : 'Submit HardClaim'}
+            {submitting ? 'Creating...' : 'Submit Claim'}
           </Button>
         </form>
       </DialogContent>
@@ -225,83 +215,45 @@ function CreateHardClaimDialog({ onCreated }: { onCreated: () => void }) {
 }
 
 export default function FeedPage() {
-  const [posts, setPosts] = useState<PostItem[]>([]);
   const [hardClaims, setHardClaims] = useState<HardClaimItem[]>([]);
   const [assets, setAssets] = useState<AssetItem[]>([]);
-  const [loadingPosts, setLoadingPosts] = useState(true);
-  const [loadingHardClaims, setLoadingHardClaims] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const fetchPosts = () => {
-    setLoadingPosts(true);
-    getFeed()
-      .then(setPosts)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoadingPosts(false));
-  };
-
   const fetchHardClaims = () => {
-    setLoadingHardClaims(true);
+    setLoading(true);
     getHardClaims()
       .then(setHardClaims)
       .catch((e) => setError(e.message))
-      .finally(() => setLoadingHardClaims(false));
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => {
-    fetchPosts();
     fetchHardClaims();
     getAssets().then(setAssets).catch(console.error);
+
+    window.addEventListener('hard-claim-created', fetchHardClaims);
+    return () => window.removeEventListener('hard-claim-created', fetchHardClaims);
   }, []);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-
-      <Tabs defaultValue="posts" className="w-full space-y-4">
-        <div className="flex items-center justify-between">
-          <TabsList>
-            <TabsTrigger value="posts">Posts</TabsTrigger>
-            <TabsTrigger value="hardclaims">HardClaims</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="hardclaims" className="m-0 border-none p-0 outline-none">
-             <CreateHardClaimDialog onCreated={fetchHardClaims} />
-          </TabsContent>
-        </div>
-
-        <TabsContent value="posts" className="space-y-4 outline-none">
-          {loadingPosts && (
-            <p className="text-sm text-muted-foreground text-center py-8">Loading posts…</p>
-          )}
-          {!loadingPosts && posts.length === 0 && !error && (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              No posts yet. Be the first to post!
-            </p>
-          )}
-          {posts.map((post) => (
-            <PostCard key={post.id} post={post} />
-          ))}
-        </TabsContent>
-
-        <TabsContent value="hardclaims" className="space-y-4 outline-none">
-          {loadingHardClaims && (
-            <p className="text-sm text-muted-foreground text-center py-8">Loading hard claims…</p>
-          )}
-          {!loadingHardClaims && hardClaims.length === 0 && !error && (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              No hard claims yet. Create one!
-            </p>
-          )}
-          {hardClaims.map((claim) => (
-            <HardClaimCard key={claim.id} claim={claim} assets={assets} />
-          ))}
-        </TabsContent>
-      </Tabs>
+      {loading && (
+        <p className="text-sm text-muted-foreground text-center py-8">Loading…</p>
+      )}
+      {!loading && hardClaims.length === 0 && !error && (
+        <p className="text-sm text-muted-foreground text-center py-8">
+          No claims yet. Be the first!
+        </p>
+      )}
+      {hardClaims.map((claim) => (
+        <HardClaimCard key={claim.id} claim={claim} assets={assets} />
+      ))}
     </div>
   );
 }
