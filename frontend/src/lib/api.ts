@@ -88,12 +88,24 @@ export async function createHardClaim(data: {
   text: string;
   asset_id: number;
   direction: string;
+  percentage: number;
   until: string;
 }): Promise<HardClaimItem> {
   return request('/api/posts/hard-claims/', {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(data),
+  });
+}
+
+export async function updateHardClaimStatus(
+  id: number,
+  status: string
+): Promise<HardClaimItem> {
+  return request(`/api/posts/hard-claims/${id}/update-status/`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify({ status }),
   });
 }
 

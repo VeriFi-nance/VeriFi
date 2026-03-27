@@ -3,10 +3,10 @@ from django.db import migrations
 def create_initial_assets(apps, schema_editor):
     Asset = apps.get_model('posts', 'Asset')
     initial_assets = [
-        {'symbol': 'BTC', 'name': 'bitcoin'},
-        {'symbol': 'USD', 'name': 'dollar'},
-        {'symbol': 'ETH', 'name': 'ethereum'},
-        {'symbol': 'COCOA', 'name': 'cocoa beans'},
+        {'symbol': 'BTC', 'name': 'Bitcoin'},
+        {'symbol': 'USD', 'name': 'US Dollar'},
+        {'symbol': 'ETH', 'name': 'Ethereum'},
+        {'symbol': 'COCOA', 'name': 'Cocoa Beans'},
     ]
     for asset_data in initial_assets:
         Asset.objects.get_or_create(

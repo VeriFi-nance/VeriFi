@@ -27,6 +27,7 @@ export interface HardClaimItem {
   text: string;
   asset: number;
   direction: string;
+  percentage: number;
   until: string;
   status: string;
 }
