@@ -46,6 +46,7 @@ class HardClaim(models.Model):
     text = models.TextField()
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE, blank=False, null=False)
     direction = models.CharField(max_length=20, blank=True, default="") # this will be binary, 1 up, 0 down
+    percentage = models.FloatField(blank=False, null=False) # this will be a percentage value between 0 and 100
     until = models.DateField(blank=False, null=False)
     status = models.CharField(max_length=12, choices=Status.choices, default="undetermined")
 

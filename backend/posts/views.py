@@ -114,6 +114,7 @@ class HardClaimView(APIView):
                 text=data["text"],
                 asset=asset,
                 direction=data.get("direction", ""),
+                percentage=data["percentage"],
                 until=data["until"],
                 status=data.get("status", "undetermined"),
             )
