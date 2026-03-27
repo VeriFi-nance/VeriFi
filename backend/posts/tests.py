@@ -40,7 +40,7 @@ class HardClaimAPITestCase(APITestCase):
             'asset_id': self.asset.id,
             'direction': 'bullish',
             'percentage': 25.0,
-            'until': '2025-12-31',
+            'until': '2027-12-31',
             'status': 'undetermined'
         }
 
@@ -63,7 +63,7 @@ class HardClaimAPITestCase(APITestCase):
         self.assertEqual(response.data['text'], 'Bitcoin will reach $100,000 by end of 2025')
         self.assertEqual(response.data['direction'], 'bullish')
         self.assertEqual(response.data['percentage'], 25.0)
-        self.assertEqual(response.data['until'], '2025-12-31')
+        self.assertEqual(response.data['until'], '2027-12-31')
         self.assertEqual(response.data['status'], 'undetermined')
         self.assertEqual(response.data['author_address'], self.wallet_user.address)
 
@@ -74,7 +74,7 @@ class HardClaimAPITestCase(APITestCase):
         self.assertEqual(hard_claim.text, 'Bitcoin will reach $100,000 by end of 2025')
         self.assertEqual(hard_claim.direction, 'bullish')
         self.assertEqual(hard_claim.percentage, 25.0)
-        self.assertEqual(str(hard_claim.until), '2025-12-31')
+        self.assertEqual(str(hard_claim.until), '2027-12-31')
         self.assertEqual(hard_claim.status, 'undetermined')
 
     def test_create_hard_claim_invalid_data(self):
@@ -84,7 +84,7 @@ class HardClaimAPITestCase(APITestCase):
             'text': 'Invalid claim',
             'asset_id': 9999,  # Non-existent asset ID
             'percentage': 10.0,
-            'until': '2025-12-31'
+            'until': '2027-12-31'
         }
         
         response = self.client.post(url, data, format='json')
@@ -117,7 +117,7 @@ class HardClaimAPITestCase(APITestCase):
             'asset_id': self.asset.id,
             'direction': 'bullish',
             'percentage': 25.0,
-            'until': '2025-12-31'
+            'until': '2027-12-31'
         }
 
         response = self.client.post(url, data, format='json')
@@ -142,7 +142,7 @@ class HardClaimUpdateStatusTestCase(APITestCase):
             asset=self.asset,
             direction="bullish",
             percentage=20.0,
-            until="2025-12-31",
+            until="2027-12-31",
             status="undetermined",
         )
 

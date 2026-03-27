@@ -29,6 +29,7 @@ export interface HardClaimItem {
   direction: string;
   percentage: number;
   until: string;
+  created_at: string;
   status: string;
 }
 

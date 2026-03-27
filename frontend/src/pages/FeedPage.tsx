@@ -134,6 +134,7 @@ export function CreateHardClaimDialog({ onCreated }: { onCreated: () => void }) 
             <Input
               type="date"
               required
+              min={new Date(Date.now() + 86400000).toISOString().split('T')[0]}
               value={until}
               onChange={(e) => setUntil(e.target.value)}
             />

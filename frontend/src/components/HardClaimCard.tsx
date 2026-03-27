@@ -54,6 +54,8 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
             <span className="font-mono">Anonymous</span>
           )}
           <span>·</span>
+          <span>{new Date(claim.created_at).toLocaleDateString()}</span>
+          <span>·</span>
           <span>until {new Date(claim.until).toLocaleDateString()}</span>
         </div>
       </div>

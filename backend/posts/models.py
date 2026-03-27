@@ -48,7 +48,16 @@ class HardClaim(models.Model):
     direction = models.CharField(max_length=20, blank=True, default="") # this will be binary, 1 up, 0 down
     percentage = models.FloatField(blank=False, null=False) # this will be a percentage value between 0 and 100
     until = models.DateField(blank=False, null=False)
+    created_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=12, choices=Status.choices, default="undetermined")
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(until__gt=models.F("created_at")),
+                name="hardclaim_until_after_created_at",
+            )
+        ]
 
     def __str__(self):
         return f"{self.asset} {self.direction}: {self.text[:40]}"

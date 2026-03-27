@@ -1,3 +1,4 @@
+from datetime import date
 from rest_framework import serializers
 from .models import Asset, Post, Claim, HardClaim
 
@@ -36,9 +37,14 @@ class HardClaimInputSerializer(serializers.Serializer):
     until = serializers.DateField()
     status = serializers.ChoiceField(choices=["confirmed", "undetermined", "rejected"], default="undetermined")
 
+    def validate_until(self, value):
+        if value <= date.today():
+            raise serializers.ValidationError("'until' must be a future date.")
+        return value
+
 class HardClaimSerializer(serializers.ModelSerializer):
     author_address = serializers.CharField(source="author.address", read_only=True, allow_null=True)
 
     class Meta:
         model = HardClaim
-        fields = ["id", "author_address", "text", "asset", "direction", "percentage", "until", "status"]
+        fields = ["id", "author_address", "text", "asset", "direction", "percentage", "until", "created_at", "status"]
