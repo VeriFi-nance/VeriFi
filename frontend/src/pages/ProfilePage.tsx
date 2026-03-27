@@ -5,8 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { HardClaimCard } from '@/components/HardClaimCard';
 import { clearAuth, loadAddress } from '@/lib/auth';
 import { clearPrivateKey, loadEncryptedKey, decryptPrivateKey } from '@/lib/crypto';
+import { getHardClaimsByAddress, getAssets } from '@/lib/api';
+import type { HardClaimItem, AssetItem } from '@/lib/types';
 
 const REVEAL_TTL = 60;
 
@@ -28,6 +31,15 @@ export default function ProfilePage() {
   const navigate = useNavigate();
   const address = loadAddress() ?? '';
   const hasEncryptedKey = loadEncryptedKey() !== null;
+
+  const [hardClaims, setHardClaims] = useState<HardClaimItem[]>([]);
+  const [assets, setAssets] = useState<AssetItem[]>([]);
+
+  useEffect(() => {
+    if (!address) return;
+    getHardClaimsByAddress(address).then(setHardClaims).catch(console.error);
+    getAssets().then(setAssets).catch(console.error);
+  }, [address]);
 
   const [showReveal, setShowReveal] = useState(false);
   const [revealPassword, setRevealPassword] = useState('');
@@ -197,6 +209,20 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Hard Claims */}
+      <div className="space-y-2">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          Your Claims
+        </h2>
+        {hardClaims.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4 text-center">No claims yet.</p>
+        ) : (
+          hardClaims.map((claim) => (
+            <HardClaimCard key={claim.id} claim={claim} assets={assets} />
+          ))
+        )}
+      </div>
 
       <Button variant="destructive" onClick={handleLogout} className="w-full">
         Log out
