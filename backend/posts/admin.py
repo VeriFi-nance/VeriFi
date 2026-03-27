@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Post, Claim
+from .models import Post, Claim, Asset, HardClaim
 
 
 class ClaimInline(admin.TabularInline):
@@ -24,3 +24,16 @@ class ClaimAdmin(admin.ModelAdmin):
     list_display = ["id", "post", "text", "asset", "direction", "status"]
     list_filter = ["status", "asset"]
     search_fields = ["text"]
+
+
+@admin.register(Asset)
+class AssetAdmin(admin.ModelAdmin):
+    list_display = ["id", "name", "symbol"]
+    search_fields = ["name", "symbol"]
+
+
+@admin.register(HardClaim)
+class HardClaimAdmin(admin.ModelAdmin):
+    list_display = ["id", "author", "asset", "direction", "percentage", "until", "status"]
+    list_filter = ["status", "direction", "asset"]
+    search_fields = ["text", "author__address"]
