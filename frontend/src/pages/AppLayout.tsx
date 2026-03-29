@@ -1,51 +1,94 @@
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { CreateHardClaimDialog } from './FeedPage';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Home, User, LogOut } from 'lucide-react';
+import { clearAuth } from '@/lib/auth';
+import { clearPrivateKey } from '@/lib/crypto';
+
+function NavLink({
+  to,
+  icon,
+  label,
+  active,
+}: {
+  to: string;
+  icon: React.ReactNode;
+  label: string;
+  active: boolean;
+}) {
+  return (
+    <Button
+      variant={active ? 'navActive' : 'ghost'}
+      size="lg"
+      asChild
+      className="gap-2 font-semibold"
+    >
+      <Link to={to}>
+        {icon}
+        {label}
+      </Link>
+    </Button>
+  );
+}
 
 export default function AppLayout() {
-  const navigate = useNavigate();
   const location = useLocation();
-  const isHome = location.pathname === '/app';
+  const navigate = useNavigate();
+  const isFeed = location.pathname === '/app' || location.pathname === '/app/';
+
+  function handleDisconnect() {
+    clearAuth();
+    clearPrivateKey();
+    navigate('/login');
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <header className="border-b sticky top-0 z-10 bg-background/95 backdrop-blur">
-        <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
-          <button
-            onClick={() => navigate('/app')}
-            className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+      {/* ── Navbar ──────────────────────────────────────────────────────── */}
+      <header className="border-b sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between gap-6">
+
+          {/* Brand */}
+          <Button variant="ghost" size="lg" asChild className="gap-3 px-2 hover:bg-transparent shrink-0">
+            <Link to="/app">
+              <img src="/logo.png" alt="VeriFi" className="h-10 w-auto" />
+            </Link>
+          </Button>
+
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {/* Nav links + Disconnect — grouped on the right */}
+          <nav className="flex items-center gap-1">
+            <NavLink
+              to="/app"
+              icon={<Home className="size-5" />}
+              label="Feed"
+              active={isFeed}
+            />
+            <NavLink
+              to="/app/profile"
+              icon={<User className="size-5" />}
+              label="Profile"
+              active={location.pathname === '/app/profile'}
+            />
+          </nav>
+
+          {/* Disconnect */}
+          <Button
+            variant="outline"
+            size="lg"
+            className="gap-2 shrink-0"
+            onClick={handleDisconnect}
           >
-            <img src="/logo.png" alt="VeriFi" className="h-7" />
-          </button>
-          <div className="flex items-center gap-2">
-            {isHome && (
-              <CreateHardClaimDialog
-                onCreated={() => window.dispatchEvent(new Event('hard-claim-created'))}
-              />
-            )}
-            <button
-              onClick={() => navigate('/app/profile')}
-              className="w-8 h-8 rounded-full bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
-              title="Profile"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
-            </button>
-          </div>
+            <LogOut className="size-5" />
+            Disconnect
+          </Button>
         </div>
       </header>
-      <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-6">
+
+      {/* ── Page content ────────────────────────────────────────────────── */}
+      <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-6">
         <Outlet />
       </main>
     </div>
