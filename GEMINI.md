@@ -8,6 +8,13 @@ VeriFi is a decentralized social platform built around cryptographic identity an
 - `frontend/`: React 19 + Vite 7 (TypeScript, `pnpm`, Tailwind 4, shadcn/ui).
 - **CRITICAL**: Never use `npm`, `yarn`, or `pip` directly. 
 
+## Frontend Component Rules
+- **shadcn/ui first**: Always compose new components from the shadcn primitives in `@/components/ui/` (Card, Button, Badge, etc.) instead of bare HTML divs/buttons/spans.
+- **Installed primitives**: `alert`, `badge`, `button`, `card`, `checkbox`, `dialog`, `input`, `label`, `select`, `tabs`, `textarea`. Add new ones with `pnpm dlx shadcn@latest add <name>` — never hand-roll what shadcn already provides.
+- **No new shadcn primitive without asking**: If a component task would benefit from a primitive not yet installed, explicitly ask the user before installing it.
+- **Reuse before creating**: Check `@/components/ui/` before writing custom markup for common patterns (navigation links, separators, tooltips, etc.).
+- **`Button variant="ghost"` for navigation links**: Never use a raw `<button>` with manual hover classes when the shadcn `Button` can do it. Use `asChild` + `<Link>` for router navigation when appropriate.
+
 ## Non-Negotiable Security Rules
 - Private keys must NEVER be sent over the network or logged.
 - Store raw private keys in `localStorage` ONLY if encrypted (AES-256-GCM).
