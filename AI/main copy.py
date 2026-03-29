@@ -1,10 +1,12 @@
 import re
+import json
+import time
 from agno.agent import Agent
 from agno.models.openai import OpenAIChat
 from schema import HardClaimExtractor
 
 # LM Studio model listesindeki tam kimlik (ID)
-ACTIVE_MODEL_ID = "meta-llama-3-8b-instruct"
+ACTIVE_MODEL_ID = "ministral-3-8b-instruct-2512"
 
 local_llm = OpenAIChat(
     id=ACTIVE_MODEL_ID,
@@ -49,10 +51,10 @@ Görev: Gürültüyü elemek ve sadece test edilebilir, somut iddiaları ayıkla
 ### 1. VERIFIABILITY & OWNERSHIP KONTROLÜ
 Şu üç kriterden BİRİ BİLE EKSİKSE cümleyi ayıklama (status: "filtered" yap):
 - SAHİPLİK: Kullanıcının kendi tahmini mi? ("Beklentim", "Bence" -> EVET | "Haberlere göre", "X dedi ki" -> HAYIR) (Cümle doğrudan bir yargı bildiriyorsa ("X olacak", "Y artar") veya onay veriyorsa ("katılıyorum", "onaylıyorum") EVET kabul et. SADECE başkasının ağzından alıntı yapılıyorsa ve kullanıcı yorum katmıyorsa ("X bankası dedi ki", "Habere göre", "Analistler diyor") HAYIR kabul et.)
-- ÜÇLÜ BİLEŞEN: Şu üçü kesinlikle var mı? 1. Nesne, Finansal Varlık (Equity, Entity) 2. Miktar (%, rakam, dip) 3. Zaman (Vade, tarih).
+- ÜÇLÜ BİLEŞEN: Şu üçü kesinlikle var mı? 1. Özne (Varlık) 2. Miktar (%, rakam, dip) 3. Zaman (Vade, tarih).
 - KAPSAM DIŞI: Sadece duygu belirten veya belirsiz yorumları ele.
 
-### 2. ÖRNEKLER
+### 2. ÖRNEKLER (DENGELİ FEW-SHOT)
 Aşağıdaki 3 farklı senaryoyu dikkatle incele ve çıktı üretirken bu mantığı birebir kopyala. Her cümleyi zorla ikiye bölmeye çalışma, sadece gerekliyse böl!
 
 SENARYO A (Single Claim - Tek İddia):
@@ -117,47 +119,33 @@ SADECE VE SADECE JSON formatında yanıt ver.
 Yanıtın KESİNLİKLE {{ karakteri ile başlamalı ve }} karakteri ile bitmelidir.
 Başında veya sonunda "İşte sonuç", "```json" gibi HİÇBİR açıklama veya Markdown işareti KULLANMA. Asla formatı bozma.
 ASLA JSON İÇİNE YORUM SATIRI (// veya #) EKLEME.
-
-
 """
     return PROMPT
 # Kullanım:
 SYSTEM_INSTRUCTIONS = get_financial_claim_extractor_system_prompt()
 
-# --- 3. YARDIMCI FONKSİYONLAR (GÜVENLİK KALKANLARI) ---
+agent = Agent(model=local_llm, instructions=SYSTEM_INSTRUCTIONS)
 
-def safe_strip(value, default="N/A"):
-    """NoneType ve list hatalarını önleyen koruma kalkanı."""
-    if value is None: return default
-    if isinstance(value, list):
-        return ", ".join([str(v) for v in value]).strip()
-    return str(value).strip()
+import random
+import json
+import re
+from datetime import datetime
 
 def clean_json_comments(text):
-    """JSON içindeki yorum satırlarını temizler."""
-    if not text: return ""
-    return re.sub(r'(//|#).*$', '', text, flags=re.MULTILINE)
-
-def clean_and_repair_json(raw_text):
-    """LLM çıktısından sadece JSON bloğunu ayıklar."""
-    if not raw_text: return "{}"
-    start = raw_text.find('{')
-    end = raw_text.rfind('}') + 1
-    if start == -1 or end == 0: return "{}"
-    return raw_text[start:end].replace(": None", ": null").replace(":None", ":null")
-
+    """JSON içindeki // veya # ile başlayan yorumları temizler."""
+    # Satır sonundaki // ... veya # ... yorumlarını temizle
+    text = re.sub(r'(//|#).*$', '', text, flags=re.MULTILINE)
+    return text
 def get_expected_stats(line_no):
-    """Veri setindeki kategorik aralıklar."""
-    if 1 <= line_no <= 800: return "Single Claim", 1
-    elif 801 <= line_no <= 1072: return "Multi Claim", 2
-    elif 1073 <= line_no <= 1323: return "Noise", 0
+    """Volkan'ın yeni aralıklarına göre güncellendi."""
+    if 1 <= line_no <= 800:
+        return "Single Claim", 1
+    elif 801 <= line_no <= 1072:
+        return "Multi Claim", 2
+    elif 1073 <= line_no <= 1350: # 1072 sonrası Noise kabul edildi
+        return "Noise", 0
     return "Unknown", -1
-
-# --- 4. AGENT VE ANA DÖNGÜ ---
-
-agent = Agent(model=local_llm, instructions=SYSTEM_INSTRUCTIONS, markdown=False)
-
-def run_all_claims(file_path="claims.txt", output_path="outputs.txt"):
+def run_balanced_test_with_debug(file_path="claims.txt"):
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             all_lines = f.readlines()
@@ -165,54 +153,83 @@ def run_all_claims(file_path="claims.txt", output_path="outputs.txt"):
         print(f"❌ Hata: {file_path} bulunamadı!")
         return
 
-    total_lines = len(all_lines)
-    print(f"--- 🚀 Raw Modu: {total_lines} Satır İşleniyor ---")
+    # Havuzlar
+    single_pool = list(range(1, 801))
+    multi_pool = list(range(801, 1073))
+    noise_pool = list(range(1073, 1324))
 
-    with open(output_path, "w", encoding="utf-8") as out_file:
-        for i, line_content in enumerate(all_lines, 1):
-            line_content = line_content.strip()
-            if not line_content: continue
+    sampled_indices = (
+        random.sample(single_pool, 40) +
+        random.sample(multi_pool, 40) +
+        random.sample(noise_pool, 20)
+    )
+    random.shuffle(sampled_indices)
+
+    stats = {
+        "Single Claim": {"tested": 0, "correct": 0},
+        "Multi Claim": {"tested": 0, "correct": 0},
+        "Noise": {"tested": 0, "correct": 0}
+    }
+    
+    total_correct = 0
+    
+    print(f"--- 🛠️ [DEBUG] {ACTIVE_MODEL_ID} | 40/40/20 Test Başlatıldı ---\n")
+
+    for i, line_no in enumerate(sampled_indices, 1):
+        line_content = all_lines[line_no - 1].strip()
+        category, expected_count = get_expected_stats(line_no)
+        stats[category]["tested"] += 1
+        
+        found_count = 0
+        raw_content = ""
+        
+        try:
+            response = agent.run(line_content)
+            raw_content = response.content
+            
+            # JSON Tamiri: Yorumları temizle ve Markdown bloklarını ayıkla
+            clean_text = clean_and_repair_json(raw_content) # Senin mevcut fonksiyonun
+            clean_text = clean_json_comments(clean_text)    # Yeni eklediğimiz yorum temizleyici
             
             try:
-                # 1. Modelden yanıtı al
-                response = agent.run(line_content, response_model=HardClaimExtractor)
-                data = response.content
-                
-                # 2. Veri Yapısını Çöz (String mi, Nesne mi?)
-                claims_list = []
-                if isinstance(data, str):
-                    try:
-                        import json
-                        d_dict = json.loads(clean_and_repair_json(data))
-                        claims_list = d_dict.get("claims", [])
-                    except: pass
+                data = json.loads(clean_text)
+                # Sadece claims listesinin uzunluğuna bakıyoruz
+                if data.get("status") == "success" and "claims" in data:
+                    found_count = len(data["claims"])
                 else:
-                    claims_list = getattr(data, 'claims', [])
+                    found_count = 0
+            except:
+                found_count = -1 # Hala parse edilemiyorsa
 
-                # 3. KONTROL ETMEDEN YAZ (Raw Extraction)
-                if claims_list:
-                    for c in claims_list:
-                        # Veriyi çek, yoksa boş bırak
-                        def get_raw(obj, key):
-                            val = getattr(obj, key, obj.get(key, "")) if isinstance(obj, dict) else getattr(obj, key, "")
-                            # Çoklu satırı engelle: \n ve \r temizliği
-                            return str(val).replace("\n", " ").replace("\r", " ")
+            is_correct = (found_count == expected_count)
+            if is_correct:
+                stats[category]["correct"] += 1
+                total_correct += 1
+                status_icon = "✅"
+            else:
+                status_icon = f"❌ (B:{expected_count} F:{found_count})"
 
-                        subject = get_raw(c, "subject_object")
-                        quantity = get_raw(c, "quantity")
-                        time_fr = get_raw(c, "time_frame")
-                        
-                        # Ham çıktıyı tek satırda bas
-                        out_file.write(f"Satır {i} | {subject} | {quantity} | {time_fr}\n")
+            print(f"[{i:03}/100] Satır {line_no:4} | {status_icon} | {category}")
 
-                # Progress Bar (Terminali kirletmemek için 100'de bir)
-                if i % 100 == 0 or i == total_lines:
-                    print(f"[{i:4}/{total_lines}] İşlendi...")
+            # Sadece hata aldığında bas (İstersen kapatabilirsin)
+            if not is_correct:
+                print(f"> Girdi: {line_content}")
+                print(f"> Model Yanıtı: {raw_content.strip()}")
+                print("-" * 50)
 
-            except Exception as e:
-                # Hata olsa bile durma, satır numarasını not et
-                print(f"Satır {i} Atlandı: {str(e)[:50]}")
+        except Exception as e:
+            print(f"[{i:03}/100] Satır {line_no:4} | ⚠️ Sistem Hatası: {str(e)[:50]}")
 
-    print(f"\n✅ İşlem tamam! Ham sonuçlar '{output_path}' dosyasına yazıldı.")
+        # Tablo Raporu (Öncekiyle aynı format)
+    print("\n" + "="*60)
+    print(f"📈 FİNAL SONUÇLARI - {datetime.now().strftime('%H:%M:%S')}")
+    print("-" * 60)
+    for cat in ["Single Claim", "Multi Claim", "Noise"]:
+        v = stats[cat]
+        acc = (v["correct"]/v["tested"]*100) if v["tested"] > 0 else 0
+        print(f"{cat:<15} | {v['tested']:<6} | {v['correct']:<8} | %{acc:.1f}")
+    print("-" * 60)
+    print(f"GENEL TOPLAM    | 100    | {total_correct:<8} | %{total_correct:.1f}")
+    print("="*60)
 if __name__ == "__main__":
-    run_all_claims()
+    run_balanced_test_with_debug()

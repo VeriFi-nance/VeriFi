@@ -1,0 +1,1021 @@
+Satır 1 | Bitcoin | 150.000 doları görecek | Yıl sonu
+Satır 2 | Ethereum | %40 değer kazanacak | Önümüzdeki 3 ay
+Satır 3 | Solana | 250 dolar seviyesine ulaşır | Yaz sonuna kadar
+Satır 4 | Avax | 100 doları test olacak | kısa vadede
+Satır 5 | Binance Coin | 800 dolar | Yıl sonuna kadar
+Satır 9 | Polkadot | 50 $ | orta vade
+Satır 10 | Chainlink | 40 doları aşar | 1 yıl içinde
+Satır 11 | THYAO hissesi | 450 TL'i aşacak | 6 ay içinde
+Satır 12 | SASA | 80 TL olacak | Yıl sonuna kadar
+Satır 13 | EREGL | 65 TL | 3 ay sonra
+Satır 14 | KCHOL | %20 prim | kısa vadede
+Satır 15 | TÜRKSAT | 250 TL | Yıl sonu
+Satır 16 | ASELS | 100 TL | 6 ay içinde
+Satır 17 | BİMAS | 500 TL | orta vade
+Satır 19 | İSCTR | 20 TL''ye ulaşır | yıl sonuna kadar
+Satır 20 | AKBNK | %15 yükselir | 3 ay içinde
+Satır 21 | Dolar | 35 TL olacak | Haziran sonuna kadar
+Satır 22 | Euro/TL | 42 TL | Yıl sonuna kadar
+Satır 23 | Enflasyon | %30'a düşeceğine | önümüzdeki 12 ayda
+Satır 24 | Sterlin |  | kısa vadede
+Satır 27 |  | %40'a geriler | 6 ay içinde
+Satır 28 | EUR/USD Paritesi | 1.15 | Yıl sonuna kadar
+Satır 29 | Gram Altın | 4000 TL görür | 2026 sonunda
+Satır 30 | Gümüş ons fiyatı | 1 yılda 35 dolara çıkar | Yıl
+Satır 31 | petrol fiyatları | 100 doları aşar | 6 ay içinde
+Satır 32 | Doğalgaz fiyatları | %20 artar | Kış sonuna kadar
+Satır 34 | İşsizlik oranı | %9'a düşer | Yıl sonu
+Satır 35 | İhracat | 300 milyon dolar | Yıl sonu
+Satır 36 | Bütçe açığı | %5 azalır | Yıl sonunda
+Satır 37 | Vergi gelirleri | %10 artışı | 6 ay içinde
+Satır 38 | Turizm gelirleri | %15 büyüyecek | Bu yaz
+Satır 40 | Bitcoin | %60 | yıl sonu
+Satır 41 | Altın | 3000 dolara | sene sonuna kadar
+Satır 42 | Dolar | 38 TL olacak | 6 ay
+Satır 44 | Enflasyon | %35 | Yıl sonu
+Satır 46 | Konut fiyatları | %5 azalır | Ay sonuna kadar
+Satır 47 | Şirket raporundaki kâr beklentisi | 1 milyar TL | 
+Satır 49 | Faiz | %5 düşer | Eylül
+Satır 51 | Konut fiyatları | %40 artar | 1 yıl
+Satır 52 | Kira fiyatları | %10 düşecek | 6 ay içinde
+Satır 55 | Bakır fiyatları | %15 yükseliş | kısa vadede
+Satır 56 | Platin ons fiyatı | 1200 dolar | Yıl sonuna kadar
+Satır 58 | Ofis kiraları | %25 artış gösterir | Yıl
+Satır 59 | yazlık fiyatları | %50 zamlanır | öngörülen yaz
+Satır 60 | Kahve fiyatları | %10 geriler | 3 ay içinde
+Satır 61 | S&P 500 | 6000 puanı aşar | Yıl sonuna kadar
+Satır 62 | Nasdaq | %15 prim yapar | 
+Satır 63 | Almanya'nn büyüme oranı | %1.5 | 2026 sonunda
+Satır 64 | Japon Yeni | %5 değer kazanır | 3 ayda
+Satır 67 | Çin | %8 artar | Önümüzdeki 6 ay
+Satır 68 | Brent petrolü | 85 dolar | 3 ay içinde
+Satır 69 | Paladyum fiyatı | 1500 dolara ulaşır | yıl sonuna kadar
+Satır 70 | Şeker fiyatları | %12 artış | Önümüzdeki çeyrekte
+Satır 72 | Tesla hissesi | 300 doları geçer | yıl sonuna kadar
+Satır 73 | Nvidia'nin pazar payı | %10 daha artar | 1 yıl içinde
+Satır 74 | Meta | 550 dolar | kısa vade
+Satır 75 | Microsoft'un bulut gelirleri | 30 milyar dolar | Q4 sonuna
+Satır 76 | Amazon hisseleri | %25 değer kazanır | 6 ay içinde
+Satır 77 | iPhone | %12 büyüme | bu yıl
+Satır 78 | Netflix abone sayısı | 300 milyona ulaşır | yıl sonunda
+Satır 79 | Google hissesi | 200 dolar | orta vadede
+Satır 80 | Adobe'nin net kârı | %18 artış | Önümüzdeki yıl
+Satır 81 | Bitcoin | 150.000 dolar direncini kıracak | Yıl sonunda
+Satır 82 | Ethereum | %40 değer kazanacak | Önümüzdeki 3 ay içinde
+Satır 83 | Solana | 250 dolar seviyesine ulaşır | Yıl sonuna kadar
+Satır 84 | Avax | 100 doları | kısa vadede
+Satır 85 | THYAO Hissesi | 450 TL'ı aşacak | 6 ay içinde
+Satır 87 | EREGL | 65 TL olacak | Önümüzdeki 3 ayda
+Satır 89 | Dolar | 35 TL olacak | Haziran sonuna kadar
+Satır 91 | Mevduat failleri | 500 baz puan geriler | 6 ay içinde
+Satır 92 | Gram Altın | 4000 TL görecek | Yıl sonunda
+Satır 94 | Petrol fiyatları | 100 doları aşar | 6 ay içinde
+Satır 95 |  Doğalgaz fiyatları | %20 artar | Kış sonuna kadar
+Satır 96 | İşsizlik oranı | %9'a düşer | Yıl sonuna kadar
+Satır 98 | Dolar Kuru | %3 artar | Hafta sonuna kadar
+Satır 101 | Nvidia | 1500 doları aşacak | 6 ay içinde
+Satır 104 | AMD | 250 dollar | 6 ay içinde
+Satır 106 | Dolar | 2500 TL olacak | Yıl sonu
+Satır 107 | Eli Lilly | 1000 doları aşar | 3 ay içinde
+Satır 108 | Ons Altın | 2800 dolar | Yıl sonu
+Satır 109 | ABD Enflasyonu | %2.5'e iner | Yıl sonuna kadar
+Satır 111 | EUR/USD paritesi | 1.12 | yıl sonuna kadar
+Satır 113 | Alüminyum ton fiyatı | 3000 dolar olur | Yıl sonuna kadar
+Satır 115 | Kakao fiyatları | None | Yıl sonuna kadar
+Satır 116 | BIST 100 Endeksi | 15.000 puan | Yıl sonunda
+Satır 118 | BTC | 200k dolar | Yıl sonunda
+Satır 119 | ETH | 10k dolar | 1 yıl içinde
+Satır 120 | Solana | 500 dolar | 2 yıl içinde
+Satır 121 | XRP | 5 dolar | 1 yıl
+Satır 123 | Link | 50 dolar direncini | 3 ayda
+Satır 124 | Bakır | 12.000 doları | 6 ay içinde
+Satır 125 | Bğday | %20 yükselir | Yıl sonuna kadar
+Satır 126 | Mısır | 600 dolar seviyesini | 6 ayda
+Satır 127 | Kahve | 300 doları | 3 ay içinde
+Satır 128 | Sterlin | 50 TL olacak | Yıl sonu
+Satır 129 | Nasdaq | 25.000 puan olacak | Yıl sonu
+Satır 130 | Büyüme Oranı | %5 | Yıl sonu
+Satır 131 | İhraçat | 300 milyar dolar | 1 yılda
+Satır 132 | Togg | 2 milyon dolar | Yıl sonunda
+Satır 133 | Yazılım ihracatı | 5 milyar dolar | 1 yılda
+Satır 134 | Bitcoin | 120.000 dolar | 6 ay içinde
+Satır 135 | Ethereum | 5500 dollars | yıl sonuna kadar
+Satır 137 | Avax | %50 yükseliş | kısa vadede
+Satır 138 | Link Hissesi | 60 doları aşar | 1 yıl içinde
+Satır 140 | Cardano | 1.5 dolar | yıl sonuna kadar
+Satır 142 | Chainlink | 45 dolar | orta vadede
+Satır 143 | Polygon | %25 kazandırır | None
+Satır 144 | THYAO | 550 TL seviyesine | yıl sonu
+Satır 145 | TÜPERS | 280 TL | 6 ay içinde
+Satır 146 | ASELS | > 110 TL | Önümüzdeki 3 ayda
+Satır 147 | EREGL | 75 TL | Yıl sonu
+Satır 148 | SASA | %20 prim | Short-term
+Satır 149 | Sise | 95 TL olacak | 1 yıl içinde
+Satır 151 | SAHOL | 140 TL | yıl sonuna kadar
+Satır 153 | MGROS | 650 TL | Yıl sonu
+Satır 154 | Dolar Kuru | 34.50 TL | 1 ay içinde
+Satır 155 | Euro/TL | 38 TL'yi aşar | Haziran sonuna kadar
+Satır 156 | Gram Altın | 3800 TL | Yıl sonuna kadar
+Satır 158 | Gümüş gramı | 45 TL seviyesine | Yıl sonunda
+Satır 160 | Brent petrol | 95 dolara çıkar | Yıl sonuna kadar
+Satır 162 | ABD Enflasyonu | %2.2 | Yıl sonuna kadar
+Satır 163 | Türkiye enflasyonu | %32'ye geriler | 1 yıl içinde
+Satır 164 | FED faizleri | -25 baz puan | 3 ay içinde
+Satır 165 | TCMB | %42' ye çeker | Yıl sonuna kadar
+Satır 166 | EUR/USD Paritesi | 1.14 | 6 ay içinde
+Satır 168 | BIST 100 endeksi | 12.500 puanı aşar | 3 ay içinde
+Satır 169 | S&P 500 | 5800 puan | Yıl sonunda
+Satır 170 | Nasdaq 100 endeksi | 21.000 puanı | 6 ay içinde
+Satır 172 | Apple | 230 dolar | Yıl sonu
+Satır 174 | Google | %30 değer kazanır | 1 yıl
+Satır 175 | Meta | 520 Dolar | Önümüzdeki 3 ayda
+Satır 176 | Amazon | 210 dolara | yıl sonuna kadar
+Satır 177 | Tesla | 220 dolar direncini kıracak | Kısa vadede
+Satır 178 | Netflix | 680 dollar | 6 ay içinde
+Satır 179 | AMD | 200 dolar | Yıl sonu
+Satır 181 | Coinbase | 350 dollar | Yıl sonuna kadar
+Satır 182 | MicroStrategy | 2200 doları | 6 ay içinde
+Satır 183 | Palantir | 45 dolar | yıl sonuna kadar
+Satır 184 | Bakır ton fiyatı | 1 yılda 11.000 dolar | 1 yıl
+Satır 186 | Lityum fiyatları | %40 artar | Yıl sonuna kadar
+Satır 187 | Bügday fiyatları | %15 yükselir | 3 ay içinde
+Satır 188 | Mısır kentali fiyatı | 550 dolar | yıl sonu
+Satır 190 | Şeker ton fiyatı | 650 dolar olur | Yıl sonunda
+Satır 193 | Portföyüm | %80 büyüyecek | Yıl sonuna kadar
+Satır 194 | Nakit Oranı | %15 seviyesine iner | 3 ay içinde
+Satır 195 | Temettü gelirim | 120.000 TL'yi aşacak | bu yıl
+Satır 196 | yatırım fonları | %45 getiri sağlayacak | 6 ayda
+Satır 199 | Asgari Ücret | 22.000 TL olacak | Yıl sonuna kadar
+Satır 200 | Memur maaşları | %28 zamlanır | Yıl sonunda
+Satır 201 | Türkiye GSYİH büyümesi | %3.5 | Bu yıl
+Satır 202 | Kari açık | 25 milyon dolar | Yıl sonuna kadar
+Satır 203 | İhraçat rakamları | 265 milyon dolar | Yıl sonu
+Satır 204 | Turizm geliri | 55 milyar doları aşar | Bu sezon
+Satır 205 | İşsizlik oranı | %9.2 | Yıl sonunda
+Satır 206 | Dolar/TL | 39.50 TL | Yıl sonuna kadar
+Satır 207 | Euro/TL | 37.20 TL | 3 ay içinde
+Satır 208 | Sterlin | 48 TL'ye ulaşır | yıl sonuna kadar
+Satır 209 | Bitcoin dominansı | %58 | 6 ay içinde
+Satır 210 | Toplam kripto piyasa değeri | 3.2 trilyon dolar | Yıl sonuna kadar
+Satır 212 | Optimism | 6.50 dolar | yıl sonuna kadar
+Satır 216 | Dolar | 60 | yıl sonuna kadar
+Satır 219 | Stacks | 4.50 dolara | yıl sonuna kadar
+Satır 220 | Arweave | 45 USD olacak | 3 ay içinde
+Satır 222 | Worldcoin | 12 Dolar | Yıl sonu
+Satır 223 | Kazanç | %50 kazandırır | 3 ay
+Satır 224 | Akbank hissesi | 75 TL | Yıl sonunda
+Satır 225 | İş Bankası | 18 TL görecek | 6 ay içinde
+Satır 226 | Garanti Bankası | 110 TL | yıl sonuna kadar
+Satır 227 | Yapı Kredi Bankası | 35 TL'ye ulaşır | 3 ayda
+Satır 228 | Koç Holding | 240 TL | Yıl sonu
+Satır 229 | Sabancı Holding | 115 TL | 6 ay içinde
+Satır 231 | Turkcell | 90 TL | 3 ay içinde
+Satır 232 | Ford Otosan | 1250 TL | Yıl sonu
+Satır 233 | Tofas | > 380 TL | 6 ay içinde
+Satır 234 | Bitcoin | 180.000 dolar | önümüzdeki 12 ay içinde
+Satır 235 | Ethereum | 8000 dolar seviyesine ulaşır | 2026 sonuna kadar
+Satır 237 | Avax | 180 doları görür | Yıl sonuna kadar
+Satır 238 | Cardano | %60 değer kazanacak | 3 ay
+Satır 239 | Ripple | 3 Dolar | 1 yıl içinde
+Satır 240 | Polkadot | 40 doları aşacak | 6 ay içinde
+Satır 241 | Chainlink | 55 dolar | Yıl sonu
+Satır 244 | THYAO hissesi | 650 TL olacak | yıl sonu
+Satır 245 | TÜPRAŞ | 320 TL | 3 ay içinde
+Satır 246 | ASELS | 150 TL olacak | 1 yıl içinde
+Satır 247 | EREĞLİ | 90 TL | 6 ay içinde
+Satır 249 | KCHOL | 350 TL | 
+Satır 250 | Sahol | 200 TL aşar | 6 ay içinde
+Satır 251 | BİMAS | 550 TL | Yıl sonu
+Satır 252 | MGROS | 800 TL | 1 year
+Satır 253 | Sise | %25 yükselir | 3 ay içinde
+Satır 254 | Dolar kuru | 42 TL seviyesine gelir | Yıl sonunda
+Satır 255 | Euro/TL | 48 TL | 6 ay içinde
+Satır 256 | Gram Altın | 3200 TL | 3 ay içinde
+Satır 258 | Gümüş Gramı | 50 TL | 6 Ay İçinde
+Satır 259 | Gümüş | 40 dolara ulaşır | 1 yıl içinde
+Satır 260 | Brent petrol | > 110 doları aşar | Kış sonu
+Satır 261 | Doğalgaz fiyatları | %40 artış | 3 ayda
+Satır 262 | ABD enflasyonu | %2.0 seviyesine geriler | 6 ay içinde
+Satır 263 | Türkiye enflasyonu | %38 | Yıl sonu
+Satır 264 | FED faizleri | 150 baz puan düşürür | Yıl sonuna kadar
+Satır 265 | Faizler | %45'e çeker | 3 ay içinde
+Satır 266 | EUR/USD Paritesi | 1.18 | Yıl içinde
+Satır 267 | BIST 100 endeksi | 14.000 puanı aşar | 6 ay içinde
+Satır 268 | S&P 500 Endeksi | 6200 puan | Yıl sonunda
+Satır 269 | Nasdaq | %15 değer kazanır | 3 ay içinde
+Satır 270 | Nvidia | 1600 doları görür | Yıl sonuna kadar
+Satır 272 | Microsoft | %10 yükselir | 3 ay
+Satır 273 | Google | 220 dolar | Yıl sonu
+Satır 274 | Meta | 700 dolara ulaşır | 1 yıl içinde
+Satır 275 | Amazon | 240 dolar | 6 ay içinde
+Satır 276 | Tesla | 350 doları | yıl sonuna kadar
+Satır 277 | Netflix | 750 dolar | 3 ay içinde
+Satır 278 | AMD | 280 dolara çıkar | 6 ay içinde
+Satır 279 | Intel | 55 dolar | Yıl sonu
+Satır 280 | Coinbase | %40 prim yapar | 
+Satır 281 | Microstrategy | 3000 USD | 1 year
+Satır 282 | Palantir | 55 dolara | 6 ay içinde
+Satır 283 | Snowflake | 300 doları aşar | Yıl sonunda
+Satır 284 | Bakır | %15 artar | 6 ay içinde
+Satır 285 | Alüminyum | %8 değer kazanır | 3 ayda
+Satır 286 | Platin | 1300 dolar | Yıl sonuna kadar
+Satır 289 | Mısır | %12 artış | yıl sonuna kadar
+Satır 290 | Kahve fiyatları | %30 zamlanır | 3 ay içinde
+Satır 292 | Pamuk | None | 6 ay içinde
+Satır 295 | Temettü Geliri | 200.000 TL | 
+Satır 297 | kira fiyatları | %10 | 3 ayda
+Satır 298 | Asgari Ücret | 25.000 TL | Yıl sonuna kadar
+Satır 299 | Memur maaşları | %35 zamlanır | 6 ay içinde
+Satır 300 | Türkiye GSYİH | %4 | yıl sonunda
+Satır 301 | Cari açık | 18 milyon dolar | 
+Satır 302 | İhracat | 290 milyon dolar | Yıl sonu
+Satır 303 | Turizm geliri | 65 milyon dolar | Bu yıl
+Satır 304 | İşsizlik oranı | %8.8 | 6 ay içinde
+Satır 306 | Bitcoin | %62 | 3 ay içinde
+Satır 308 | Arbitrum | $5 | Yıl sonu
+Satır 310 | Sui | 3.5 doları | 6 ay içinde
+Satır 311 | Aptos | 35 dolar | Yıl sonu
+Satır 312 | Celestia | 60 TL olacak | Yıl içinde
+Satır 314 | Near Protocol | 15 $ | 6 months
+Satır 315 | Dolar | 22 dolar | yıl sonuna kadar
+Satır 316 | Stacks | 6 dolar | 3 ay içinde
+Satır 317 | Fetch.ai | 5 dollars | 6 ay içinde
+Satır 318 | Worldcoin | 20 doları | 1 yıl içinde
+Satır 319 | Dolar | 1.5 | Yıl sonuna kadar
+Satır 321 | İş Bankası | 22 TL'yi aşar | 6 ay içinde
+Satır 322 | Garanti Bankası | 130 TL | Yıl sonuna kadar
+Satır 323 | Yapı Kredi | 45 TL'ye ulaşır | 3 ayda
+Satır 324 | Halkbank | 25 TL olacak | Yıl sonu
+Satır 325 | Vakıfbank | 30 TL görür | 6 ay içinde
+Satır 326 | TSKB | 18 TL | Yıl sonu
+Satır 327 | Alark Holding | %30 prim | 3 ayda
+Satır 328 | Enka İnşaat | 70 TL | 
+Satır 329 | Tekfen | 95 TL'ye ulaşır | Yıl sonuna kadar
+Satır 330 | Tav Havalimanları | 280 TL | 3 ayda
+Satır 331 | Pegasus | 1800 TL görür | Yıl sonunda
+Satır 332 |  Doğuş Otomotiv | 500 TL | 6 ay içinde
+Satır 333 | Ford Otosan | 1400 TL | Yıl sonu
+Satır 335 | Arçelik | 250 TL | 6 ay içinde
+Satır 336 | Vestel | 120 TL'ye ulaşır | Yıl sonuna kadar
+Satır 337 | Petkim | %20 değer kazanır | 
+Satır 338 | Kardemir D | 55 TL | 6 ay içinde
+Satır 339 | Türk Telekom | 70 TL | Yıl sonu
+Satır 341 | Astor Enerji | 180 TL | üç ay içinde
+Satır 342 | Kontrolmatik | 450 TL'ye ulaşır | 
+Satır 343 | Smart Güneş | 120 TL | Yıl sonuna kadar
+Satır 345 | EuroPower | 300 TL | 6 ay içinde
+Satır 346 | Alfas Solar | 200 TL görür | Yıl sonuna kadar
+Satır 347 | Cwne Enerji | 400 TL | 3 ayda
+Satır 349 | Mia Teknoloji | 120 TL | Yıl sonu
+Satır 350 | Reeder Teknoloji | 100 TL | 3 ayda
+Satır 351 | Ebebek | 120 TL görür | 6 ay içinde
+Satır 352 | Tab Gıda | 300 TL | Yıl sonuna kadar
+Satır 354 | Enerya Enerji | 250 TL | 6 ay içinde
+Satır 355 | Taten Enerji | 100 TL | Yıl sonu
+Satır 356 | Altın | 200 TL olacak | 3 ay içinde
+Satır 357 | Hareket Lojistik | 150 TL | 6 ay içinde
+Satır 358 | Borsa İstanbul işlem hacmi | 200 milyon TL olur | Yıl sonu
+Satır 359 | Yabancı Takas Oranı | %45'e çıkar | 6 ay içinde
+Satır 360 | Merkez Bankası rezervleri | 160 milyar dolar | Yıl sonu
+Satır 361 | Kredi derecelendirme notumuz | iki kademe artar | 1 yıl içinde
+Satır 362 | CDS primi | -180 puan | üç ay içinde
+Satır 363 | Konut kredisi faizleri | %2.5 | Yıl sonunda
+Satır 364 | Taşıt kredisi hacmi | %15 azalır | 6 ay içinde
+Satır 368 | Stablecoin | 1 milyar dolar | Yıl sonunda
+Satır 370 | DeFi kilitli varlık değeri | 150 milyon dolar | Yıl sonu
+Satır 372 | Coinbase gelirleri | %25 büyüme | Yıl sonu
+Satır 374 | Tesla teslimat rakamları | 2.5 milyon araç | Yıl sonunda
+Satır 375 | SpaceX |  | 1 year inside
+Satır 377 | Apple hizmet gelirleri | 100 milyon dolar | Yıl sonu
+Satır 378 | Microsoft Azure | %35 | 6 ay içinde
+Satır 379 | Google reklam gelirleri | %12 artış | Yıl sonu
+Satır 381 | Amazon Prime abone sayısı | 250 milyon | 6 ayda
+Satır 384 | Adobe Creative Cloud Geliri | %15 büyür | 6 ay
+Satır 385 | Salesforce | > 40 milyar dolar | Yıl sonunda
+Satır 387 | Intel dökümhane gelirleri | %20 artar | 6 ayda
+Satır 388 | TSMC | %10 verimliliğe ulaşır | yıl sonunda
+Satır 390 | Arm lisans gelirleri | %30 büyüme | Yıl sonu
+Satır 391 | Palantir | %50 artar | 6 ayda
+Satır 392 | Snowflake günlük veri işleme hacmi | %45 yükselir | yıl sonunda
+Satır 393 | Crowdstrike | 5 milyar dolar | yıllık tekrarlayan geliri
+Satır 394 | Palo Alto Networks | %20 artacak | 6 ayda
+Satır 395 | Zscaler bulut trafiği hacmi | %60 artar | yıl sonunda
+Satır 396 | Datadog | %15 yükselir | Yıl
+Satır 397 | MongoDB Atlas | %75'i | yıl sonu
+Satır 398 | Visa temassız ödeme hacmi | %25 artış | 6 ayda
+Satır 399 | Mastercard | %20 büyür | Yıl sonunda
+Satır 400 | JP Morgan | %10 artar | 1 yılda
+Satır 401 | Bank of America | 60 milyon | 6 ayda
+Satır 402 | Goldman Sachs varlık yönetimi hacmi | 3 trilyon dolar | yıl sonunda
+Satır 403 | Morgan Stanley yatırım bankacılığı geliri | %15 yükselir | 1 yılda
+Satır 406 | Novo Nordisk Wegovy | 15 milyar dolar olur | Yıl sonu
+Satır 407 | Pfizer onkoloji gelirleri | %25 artar | Yıl
+Satır 408 | Moderna pipeline gelirleri | 5 milyar doları | Yıl sonu
+Satır 409 | AstraZeneca | 5 adedi | 6 ayda
+Satır 410 | Boeing 737 Max | aylık 50 adet | Yıl sonunda
+Satır 411 | Airbus A321neo sipariş defteri | %10 genişler | Yıl
+Satır 412 | Ferrari | 15.000 adede ulaşır | yıl sonunda
+Satır 413 | Mercedes | %30 | 1 yıl
+Satır 414 | BMW | 15 milyar Euro | yıl sonunda
+Satır 415 | Volkswagen yazılım birimi zararı | %15 azalır | 6 ay içinde
+Satır 416 | Altın | 2750 doları geçer | 3 ay içinde
+Satır 418 | Bitcoin | 135.000 dolar olacak | Yıl sonu
+Satır 420 | Dolar/TL | 34.20 TL seviyesinden başlar | Haftaya
+Satır 421 | Borsa İstanbul | %2.5 artışla | Yarın
+Satır 422 | Enflasyon | %42 | Yıl sonu
+Satır 424 | Bitcoin |  | 2026 sonundaki
+Satır 425 | Ethereum | 5.500 doları test eder | Önümüzdeki 3 ay içinde
+Satır 426 | Dolar | 400 dolar direncini kıracak | Yıl sonuna kadar
+Satır 427 | Avax | 150 dolar seviyesine | kısa vadede
+Satır 428 | Binance Coin | %50 değer kazanacak | 6 ay içinde
+Satır 429 | Ripple | 2.50 dolar | Sene sonuna kadar
+Satır 430 | Cardano | %150 artış | önümüzdeki yıl
+Satır 431 | Dogecoin | 0.80 cent | Q4 sonundaki
+Satır 432 | Polkadot | 35 dolar | 6 ay içinde
+Satır 433 | Chainlink | 50 doları aşar | 
+Satır 434 | THYAO hisseleri | 600 TL seviyesini görür | Yıl sonunda
+Satır 435 | TÜPERS | 300 TL seviyesine | 3 ay içinde
+Satır 437 | EREG | 85 TL | yıl sonuna kadar
+Satır 438 | SASA hissesi | 140 TL | 1 yıl içinde
+Satır 439 | KCHOL | 320 TL seviyesine çıkar | kısa vadede
+Satır 440 | Sahol | 160 TL | Yıl sonu
+Satır 441 | BİMAs | 580 TL | 3 ay içinde
+Satır 442 | MGROS | 750 TL | 6 ay içinde
+Satır 443 | Sise hissesi | 110 TL olacak | Yıl sonu
+Satır 444 | Dolar | 36.50 TL olacak | Haziran sonu
+Satır 445 | Euro/TL | 46 TL'yu bulur | yıl sonuna kadar
+Satır 446 | Enflasyon | %32'ye düşecektir | Önümüzdeki 12 ayda
+Satır 447 | Sterlin | 48 TL seviyesini aşar | kısa vadede
+Satır 452 | Gram altın | 4500 TL | 2026 sonunda
+Satır 454 | Petrol fiyatları | 115 doları aşar | 6 ay içinde
+Satır 456 | Türkiye'rin kredi notu | iki kademe yükselir | 1 yıl içinde
+Satır 457 | İşsizlik oranı | %8.8'de düşer | Yıl sonuna kadar
+Satır 458 | İhraçat rakamları | 310 milyon dolar | 2026 sonu
+Satır 459 | Bütçe açığı | %6 azalır | Yıl sonunda
+Satır 460 | Vergi gelirleri | %15 artışı | 6 ay içinde
+Satır 461 | Turizm gelirleri | 60 milyon dolar | bu yıl
+Satır 462 | USD/JPY paritesi | 138 seviyesine düşer | 3 ayda
+Satır 463 | Bitcoin | %62 | Yıl sonunda
+Satır 465 | Optimism | 9 dolar | Yıl sonuna kadar
+Satır 466 | Sui | %80 değer kazanacak | 
+Satır 467 | Aptos | 45 dolar | 
+Satır 468 | Celestia | 35 dolar | Kısa vadede
+Satır 469 | Dolar | 120 TL | Yıl sonu
+Satır 472 | Stacks | %25 yükseliş yapar | 
+Satır 473 | Worldcoin | 18 dolar | yıl sonuna kadar
+Satır 476 | Microsoft | 520 dolar | kısa vadeli
+Satır 477 | Google | 210 doları | 3 ay içinde
+Satır 478 | Meta | 650 TL | Yıl sonuna kadar
+Satır 479 | Amazon | $230 | 6 ay
+Satır 480 | Tesla | 380 dolar | 
+Satır 481 | Netflix | 720 dolar | 
+Satır 482 | Adobe | 680 dolar | yıl sonu
+Satır 483 | AMD | 260 dolara | 6 ay içinde
+Satır 484 | Intel | 58 dolar olur | Yıl sonuna kadar
+Satır 485 | Broadcom | 1700 dollars | short term
+Satır 486 | TSMC | 220 dolar | 3 ay içinde
+Satır 487 | ASML | 1300 dolar | Yıl sonu
+Satır 488 | ARM | 215 Dolar | 6 Ay içinde
+Satır 490 | Snowflake | 280 | Yıl sonuna kadar
+Satır 491 | Coinbase | 420 Doları | 6 ay içinde
+Satır 492 | Dolar | 2800 | Yıl sonu
+Satır 494 | BIST 100 endeksi | 16.000 puan olacak | Yıl sonunda
+Satır 495 | S&P 500 endeksi | %12 yükselir | 3 ayda
+Satır 496 | Nasdaq 100 | 23,000 puan | Yıl sonu
+Satır 498 | Nikkei 225 | 48.000 puan | kısa vadede
+Satır 501 | Bakır | %25 artacak | 1 yıl içinde
+Satır 502 | Alüminyum ton fiyatı | 3200 dolar | Yıl sonuna kadar
+Satır 503 | Uranyum fiyatları | 160 dolar | 6 ay içinde
+Satır 504 | Büğday fiyatları | %22 yükselir | yıl sonu
+Satır 505 | Mısır fiyatları | %18 artış | 3 ayda
+Satır 507 | Kakao fiyatları | 9.000 doları korur | yıl sonuna kadar
+Satır 508 | Konut fiyatları | %45 artış gösterir | 1 yıl
+Satır 509 | Kira fiyatları | %12 artacak | 6 ay içinde
+Satır 511 | Ofis kiraları | %20 artış | Yıl sonunda
+Satır 512 | yazlik fiyatlar | %60 zamlanar | önümüzdeki yaz
+Satır 513 | Petrol | 110 dolar | 
+Satır 514 | Dolar | 39 TL | 
+Satır 516 | Enflasyon | %38 | Yıl sonu
+Satır 517 | Altın |  | 6 ay
+Satır 519 | Fon Yönetimi | %50 getiri hedefi | 1 yılda
+Satır 520 | Faiz | %4 düşer | Eylül
+Satır 521 | Gümüş | 45 Doları | 
+Satır 522 | Portföyüm | %110 | 
+Satır 523 | Nakit oranım | %8'e düşecek | 3 ay içinde
+Satır 524 | Türk Telekom hissesi | 75 TL seviyesine ulaşır | önümüzdeki 6 ayda
+Satır 525 | Pegasus | 1350 TL | Yıl sonu
+Satır 526 | Koza Altın | %25 değer kazanacak | 3 ay içinde
+Satır 527 | Mavi Giyim | 180 TL direncini kırar | yıl sonuna kadar
+Satır 528 | Aselsan | 200 TL | Önümüzdeki 12 ayda
+Satır 529 | Kontrolmatik | %45 prim | 6 ay içinde
+Satır 530 | Astor Enerji | 145 TL | Kısa vadeli (short-term)
+Satır 531 | Alarko Holding | 175 TL | Yıl sonuna kadar
+Satır 532 | Turkcell | 115 TL | Önümüzdeki 3 ay
+Satır 533 | Migros hissesi | 900 TL'yi aşacak | 1 yıl içinde
+Satır 534 | Şok Marketler | 85 TL | Yıl sonuna kadar
+Satır 535 | Ülker Bisküvi | %30 yükseliş | 6 ay içinde
+Satır 536 | Anadolu Efes | 320 TL | sene sonu
+Satır 537 | Coca Cola İçecek | 950 TL | 3 ayda
+Satır 538 | Tofaş Oto | 420 TL | yıl sonuna kadar
+Satır 539 | Ford Otosan | 1400 TL | Önümüzdeki 6 ayda
+Satır 540 | Borusan Yatırım | %80 değer kazanacak | 1 yıl içinde
+Satır 541 | Oyak Çimento | 95 TL olacak | Yıl sonuna kadar
+Satır 542 | Akçasa | 210 TL | 3 ay içinde
+Satır 543 | Tekfen Holding | > 100 TL | 6 ay içinde
+Satır 544 | Enka İnşaat | 65 TL | Yıl sonu
+Satır 547 | Reeder Teknoloji | 90 TL | 6 ay içinde
+Satır 548 | Mia Teknoloji | 105 TL | Yıl sonuna kadar
+Satır 551 | Europower Enerji | 280 TL | Yıl sonu
+Satır 552 | Alfa Solar | 160 TL olacak | 6 ay içinde
+Satır 553 | Girişim Elektrik | %20 yükselir | 3 ay
+Satır 554 | Bitcoin | 165.000 dolar | 2026 ortasında
+Satır 555 | Ethereum | %15 değer kazanacak | Önümüzdeki ay
+Satır 557 | Avalanche | 145 dolar | yıl sonuna kadar
+Satır 558 | Chainlink | 35 dollars | 3 ay içinde
+Satır 560 | Polygon | 3 dolar seviyesini | önümüzdeki yıl
+Satır 561 | Arbitrum | 3.20 dolar | 6 ay içinde
+Satır 563 | Celestia | 45 dolar | kısa vadede
+Satır 565 | Near Protocol | 14 | Yıl sonuna kadar
+Satır 567 | Toker | 22 dolar | Yıl sonu
+Satır 569 | Sui Network | 2.80 USD | 6 months
+Satır 570 | Aptos | 30 doları görür | Yıl sonuna kadar
+Satır 574 | Nvidia | 1450 dolar | Yıl sonuna kadar
+Satır 575 | Microsoft |  | 6 ay
+Satır 576 | Apple | 275 dolar | Sene sonuna kadar
+Satır 577 | Alphabet hisseleri | %12 değer kazanacak | 3 ay
+Satır 578 | Amazon | 225 dolar | Yıl sonuna kadar
+Satır 580 | Tesla | 310 dolar | Yıl sonu
+Satır 581 | Netflix | 780 dolar | 3 ay içinde
+Satır 582 | Adobe | 720 | 6 ay içinde
+Satır 584 | AMD | 230 dollar | kısa vadede
+Satır 585 | Intel | 62 dolar | Yıl sonu
+Satır 586 | Broadcom | 1550 | 3 ay içinde
+Satır 587 | TSMC | 215 dolar | 6 ay içinde
+Satır 588 | LVMH hisseleri | 920 Euro | Yıl sonuna kadar
+Satır 590 | Ferrari hissesi | 480 Euro | 6 ay içinde
+Satır 591 | Toyota |  | yıl sonuna kadar
+Satır 592 | Samsung Electronics | %15 yükselir | 3 ayda
+Satır 593 | Dolar/TL | 35.80 TL | 3 ay içinde
+Satır 595 | Gram Altın | 3400 TL | Eylül sonuna kadar
+Satır 596 | Ons Altın | 2850 dolar | yıl sonuna kadar
+Satır 597 | Gümüş | 36 Dolar | 6 Ay içinde
+Satır 598 | Brent Petrol | 92 dolar | Yıl sonu
+Satır 599 | Doğalgaz fiyatları | %45 artar | Kış sonuna kadar
+Satır 600 | ABD 10 yıllık tahvil faizi | %3.80 | 3 ayda
+Satır 602 | BIST 100 endeksi |  | 6 ay içinde
+Satır 603 | S&P 500 | 6100 puan olur | Yıl sonuna kadar
+Satır 605 | Almanya Enflasyonu | %1.8'e düşer | Yıl sonuna kadar
+Satır 606 | İngiltere Merkez Bankası | 50 baz puan indirir | Yıl sonuna kadar
+Satır 607 | TCMB politikası fazı | %37.5 | Yıl sonunda
+Satır 608 | Cari açık | 22 milyar dolara geriler | Yıl sonu
+Satır 609 | Türkiye'nin ihracatı | 275 milyon dolar | 1 yıl içinde
+Satır 610 | İşsizlik oranı | %8.6'ya düşer | Yıl sonunda
+Satır 612 | Konut fiyatları | %30 artacak | Yıl sonuna kadar
+Satır 613 |  | %15 | 6 ay içinde
+Satır 619 | Dolar Endeksi | 102 puan | 3 ay içinde
+Satır 622 | Portföyüm | 2 milyon TL sınırını aşacak | Yıl sonunda
+Satır 624 | Bitcoin | 220.000 dolar seviyesine ulaşacak | 2027 başında
+Satır 625 | Ethereum |  | Q3
+Satır 626 | Solana | 600 doları | 1 yıl içinde
+Satır 628 | Chainlink | 48 | Yıl sonuna kadar
+Satır 629 | Polkadot | %35 değer kazanacak | 3 ay içinde
+Satır 630 | Polygon | 2.50 dolar | None
+Satır 631 | Arbitrum | 5.20 dolar | Yıl sonu
+Satır 632 | Optimism | 8 doları aşacak | 6 ay içinde
+Satır 633 | Sui Network | 3.50 $ | None
+Satır 634 | Aptos | 28 doları | yıl sonuna kadar
+Satır 635 | Celestia | %60 prim | öngörülen 6 ay
+Satır 638 | Stacks | 7 doları aşar | 
+Satır 639 | Render Token | 24 Dolar | 6 Ay içinde
+Satır 641 | Worldcoin | 15 $ | 3 ay içinde
+Satır 642 | Sei Network | 1.80 USD | Yıl sonu
+Satır 645 | Blur | 1.50 dolar | Yıl sonuna kadar
+Satır 646 | Arweave | 55 doları aşar | 6 ay içinde
+Satır 648 | Mina Protocol | 2.20 dolar | 3 ay içinde
+Satır 650 | ZetaChain | 3.50 dolar | yıl sonuna kadar
+Satır 651 | Manta Network | %50 kazandırır | 3 ayda
+Satır 652 | Starknet | 4.80 dolar | Yıl sonu
+Satır 653 | LayerZero | 15 dolar | 
+Satır 654 | THYAO hissesi | %5 yükselir | Önümüzdeki hafta
+Satır 655 | Türkiyeye ait petrol ürünlerine ilişkin şirket (TUPRS) | 330 TL | Yıl sonu
+Satır 656 | ASELS | direncini aşacak | kısa vadede
+Satır 658 | Sasa hissesi | 110 TL | Yıl sonunda
+Satır 660 | Sahol | 175 TL | yıl sonu
+Satır 661 | BİMAS | 620 TL | 6 ay içinde
+Satır 662 | MGROS | 850 TL | 
+Satır 663 | SISE | 105 TL olacak | yıl sonuna kadar
+Satır 666 | Doas | 420 TL olacak | 3 ay içinde
+Satır 667 | FROTO | 1600 TL | 6 ay içinde
+Satır 668 | TOASO | 480 TL | yıl sonuna kadar
+Satır 670 | VESBE | 115 TL | Yıl sonu
+Satır 672 | TCELL | 110 TL'i aşar | 3 ay içinde
+Satır 673 | KRDMD | 60 TL | Yıl sonuna kadar
+Satır 674 | PETKM | 38 TL olacak | 6 ay içinde
+Satır 676 | KOZAL | 45 TL | Yıl sonu
+Satır 677 | TKFen | 110 TL | 6 ay içinde
+Satır 678 | Enkai | 75 TL | 3 ay içinde
+Satır 679 | ALARK | 210 TL | yıl sonuna kadar
+Satır 680 | Astor | 190 TL olacak | 6 ay içinde
+Satır 681 | Kontr | 380 TL seviyesine | 
+Satır 682 | SMRTG | 115 TL | yıl sonu
+Satır 683 | Yeotk | 320 TL | 6 ay içinde
+Satır 684 | Eupwr | 240 TL'yi aşar | 3 ay içinde
+Satır 685 | Alfas | 185 TL | Yıl sonuna kadar
+Satır 686 | CWENE | 420 TL | 6 ay içinde
+Satır 688 | SDTTR | 650 TL | yıl sonu
+Satır 689 | MIATK | 115 TL | 
+Satır 691 | EBEBK | 110 TL olacak | yıl sonuna kadar
+Satır 693 | KAYS | 55 TL | 3 ay
+Satır 694 | ENERY | 260 TL | yıl sonu
+Satır 695 | Taten | 90 TL | 6 ay içinde
+Satır 696 | Cvent | 65 TL | 3 ay içinde
+Satır 697 | BVSAN | 160 TL olur | Yıl sonuna kadar
+Satır 698 | Koton | 55 TL | 6 ay içinde
+Satır 699 | LİLAK | 38 TL'ye ulaşır | 3 ayda
+Satır 700 | ALTNY | 180 TL | Yıl sonu
+Satır 701 | HRKET | 130 TL | 6 ay içinde
+Satır 702 | ENTRA | 22 TL | within 3 months
+Satır 703 | PNSUT | 165 TL | yıl sonuna kadar
+Satır 705 | Apple | 300 | Yıl sonuna kadar
+Satır 706 | Dolar | 580 | 6 ay içinde
+Satır 707 | Google | 230 doları aşar | 3 ay içinde
+Satır 708 | Meta |  | Yıl sonuna kadar
+Satır 709 | Amazon | 260 dolar | 6 ay içinde
+Satır 710 | Tesla | 450 dolar | Yıl sonu
+Satır 712 | Adobe | 740 dolar | Yıl sonuna kadar
+Satır 714 | AMD | 260 dollar | 3 ayda
+Satır 715 | Intel | 65 dolar | Yıl sonu
+Satır 716 | Broadcom | 1700 Dolar | 6 ay içinde
+Satır 717 | TSMC | 240 dollar | 3 ay içinde
+Satır 719 | ARM | 240 dolar | 6 ay içinde
+Satır 720 | Palantir | None | None
+Satır 722 | Crowdsrike | 450 dolar | 6 ay içinde
+Satır 723 | Palo Alto Networks | 480 dolar | 3 months
+Satır 724 | Zscaler | 280 dolar | yıl sonuna kadar
+Satır 725 | Datadog | 220 doları | 6 ay içinde
+Satır 726 | MongoDB | $550 | 
+Satır 727 | Coinbase | 480 dolar | Yıl sonu
+Satır 728 | Microstrategy | 3500 Dolar | 6 ay içinde
+Satır 729 | Disney | 180 doları aşar | 3 ay içinde
+Satır 730 | Walmart | 95 dolar | yıl sonuna kadar
+Satır 731 | Costco | 450 dolar | 6 ay içinde
+Satır 733 | McDonalds | 360 dolar | Yıl sonu
+Satır 735 | Pepsi | 215 doları | 3 ay içinde
+Satır 736 | Visa | 380 dolar olacak | Yıl sonuna kadar
+Satır 737 | Mastercard | 600 dolar | 6 ay içinde
+Satır 738 | JP Morgan | 280 Dolar seviyesine ulaşır | 3 ayda
+Satır 741 | Morgan Stanley | 140 TL aşar | 3 ay içinde
+Satır 742 | Eli Lilly | 1150 dolar | yıl sonuna kadar
+Satır 743 | Novo Nordisk | 180 Dolar | 6 ay içinde
+Satır 744 | Dolar/TL | 38.50 TL | 6 ay içinde
+Satır 745 | Euro/TL | 46.80 TL | yıl sonuna kadar
+Satır 746 | Gram Altın | 3600 TL | 3 ay içinde
+Satır 750 | Brent Petrol | 115 dolar | Kış sonuna kadar
+Satır 751 | ABD Enflasyonu | %1.8 | 1 yıl içinde
+Satır 752 | Türkiye Enflasyonu | %35 seviyesine iner | Yıl sonu
+Satır 754 | TCMB faizleri | %32.5'e çeker | Yıl sonuna kadar
+Satır 755 | EUR/USD Paritesi | 1.15 | 3 Ay İçinde
+Satır 756 | GBP/USD | 1.35 | 6 ay içinde
+Satır 757 | USD/JPY | 130 | yıl sonunda
+Satır 759 | S&P 500 endeksi | 6500 puanı aşar | 6 ay içinde
+Satır 760 | Nasdaq 100 | 24.500 puan | Yıl sonu
+Satır 761 | Dax endeksi | %12 prim | 3 ayda
+Satır 762 | Nikkei 225 | 52.000 puan | 6 ay içinde
+Satır 763 | Bakır ton fiyatı | 13.000 dolar | Yıl sonunda
+Satır 764 | Alüminyum | 3200 doları | 6 ay içinde
+Satır 765 | Lityum fiyatları | %65 artış | 1 yılda
+Satır 766 | Uranyum fiyatı | 180 dolar | Yıl sonuna kadar
+Satır 767 | Buğday fiyatları | %30 yükselir | 6 ay içinde
+Satır 768 | Mısır fiyatı | %20 değer kazanır | 3 ayda
+Satır 769 | Kahve fiyatları | %40 artar | Yıl sonuna kadar
+Satır 771 | Kakao | 11.000 dolar seviyesinde | Yıl sonuna kadar
+Satır 772 | Pamuk fiyatı | 1.10 dolar | 3 ay içinde
+Satır 773 | Portföyümün toplam değeri | 5 milyon TL | Yıl sonunda
+Satır 774 | Nakit Oranı | %5'e düşayacak | 1 ay içinde
+Satır 775 | Temettü | 250.000 TL | None
+Satır 776 | Yatırım fonlarım | %130 getiri sağlar | 1 yıl içinde
+Satır 777 | Konut fiyatları | %50 artmış | 2026 sonuna kadar
+Satır 780 | Bireysel emeklilik fonu | %85 büyür | Yıl sonunda
+Satır 781 | Halka Arz Portföyüm | %150 kazandırır | 1 yılda
+Satır 782 | Gelirim | 5.000 dolar | Yıl sonuna kadar
+Satır 783 | Bitcoin | %3 artışla | yarın sabah
+Satır 784 | Borsa İstanbul | 11.200 puanın üzerinde | pazartesi günü
+Satır 786 | ONS Altın | 2.700 Doları test eder | Hafta sonu kadar
+Satır 787 | Ethereum staking | 2 ETH | yıl sonu
+Satır 789 | Enflasyon verisi | %2 tepki verir | Borsa tepki verir
+Satır 790 | Dolar Kuru | %1 geri çekilir | Faiz kararı sonrası
+Satır 792 | Altın | 3100 dolar | Goldman Sachs'ın altın hedefi
+Satır 793 | Analistlerin kâr beklentisi |  | 
+Satır 794 | Faiz beklentisi | %35 | Bölüm 2: H1->2026-06-30, Q2->2026-06-30, H2->2026-12-31
+Satır 795 | Euro | 48 TL | Yıl sonu
+Satır 796 | Gümüş | 1 yılda 50 dolar | Yıl
+Satır 797 | HSBC | %30 büyüme | hedef
+Satır 798 | experts | %10 değer kaybı | beklenti
+Satır 799 | BIST 30 endeksi | 14.500 puan olacak | Yıl sonunda
+Satır 801 | Bitcoin | 110,000 dolar | Haziran sonuna kadar
+Satır 801 | Ethereum | 5,500 dolar | Haziran sonuna kadar
+Satır 803 | Dolar Kuru | 36.50 TL | July
+Satır 803 | Dolar Kuru | 38.20 TL | September
+Satır 804 | THYAO hissesi | 450 TL | 3 ayda
+Satır 804 | THYAO hissesi | 600 TL | yıl sonunda
+Satır 806 | Konut fiyatları | %15 artar | Yaz sonuna kadar
+Satır 806 | Kredi hacmi | %20 daralır | None
+Satır 807 | S&P 500 | 6.300 puanı | Yıl sonunda
+Satır 807 | Nasdaq | 23.500 puanı | Yıl sonunda
+Satır 808 | Faizler | 250 baz puan | Eylül
+Satır 808 | Faizler | 500 baz puan | Aralık
+Satır 809 | Altın | 2.800 dolar | kısa vadede
+Satır 809 | Altın | 3.500 dolar | uzun vadede
+Satır 810 | Apple hisseleri | %20 değer kazanır | 6 ayda
+Satır 810 | Microsoft | %15 değer kazanır | None
+Satır 811 | Asgari Ücret | 26.000 TL | Yıl sonunda
+Satır 811 | Emekli Maaşı | 18.000 TL | Yıl sonunda
+Satır 813 | Solana | 350 dolar | 3 ayda
+Satır 813 | Solana | 550 dolar | Sene sonunda
+Satır 814 | Borsa İstanbul | %1.5 yükselir | None
+Satır 814 | Borsa İstanbul | %4 prim yapar | haftalık bazda
+Satır 815 | Euro/TL | 41 TL | None
+Satır 815 | Euro/TL | 45 TL | yıl sonunda
+Satır 816 | Mevduat faizleri | %35'e düşerken | 6 ayda
+Satır 816 | Borsa İstanbul | 15.000 puan | None
+Satır 817 | Fonlar | %90 getiri sağlar | 1 yıl
+Satır 817 | Hisselerim | %110 getiri sağlar | None
+Satır 818 | Cari açık | 15 milyar dolar | yıl sonunda
+Satır 818 | ihracat | 300 milyon dolar | yıl sonuna kadar
+Satır 819 | Tesla | 250 dolar | Kısa vadede
+Satır 819 | Tesla | 500 dolar | 2026 sonuna kadar
+Satır 821 | BTC | %65'e çıkar | Yıl sonunda
+Satır 821 | Altcoinler | %40 değer kaybeder | 
+Satır 822 | Garanti BBVA | 140 TL | 6 ayda
+Satır 822 | Akbank | 90 TL | None
+Satır 823 | İstihdam oranı | %52'ye çıkar | Yıl sonunda
+Satır 823 | Enflasyon | %30'ا düşer | 
+Satır 825 | Koç Holding | 280 TL | Yıl sonunda
+Satır 825 | Sabancı Holding | 130 TL | Yıl sonunda
+Satır 826 | Konut kredisi faizleri | %1.5'e düşer | 1 yılda
+Satır 826 | Satışlar | %50 artar | 
+Satır 827 | Avax | 100 dolar | 3 ayda
+Satır 827 | Avax | 160 dolar | Yıl sonunda
+Satır 829 | TÜPERS 3 Ayda | 220 TL | 3 ayda
+Satır 829 | EREGİL | 65 TL seviyesini test eder | None
+Satır 830 | Elektrik fiyatları | %30 artar | Kışın
+Satır 830 | Güneş enerjisi yatırımları | %100 büyür | None
+Satır 832 | Kredi notumuz | None | None
+Satır 833 | Aselsan | 110 TL | 
+Satır 834 | Japon Yeni yıl | 0.32 TL | Yıl sonu
+Satır 834 | Sterlin | 52 TL'yi geçer | 
+Satır 835 | Bitcoin Cash | %60 artacak | Yıl
+Satır 835 | Litecoin | %35 artacak | Yıl
+Satır 836 | Otomobil fiyatları | ['%15 ucuzlar', '%25 artış gösterir'] | 6 ayda
+Satır 837 | Amazon | 240 dolar | 6 ay
+Satır 837 | Alphabet | 210 dolar | 6 ay
+Satır 839 | Ford Otosan | 1.600 TL | Yıl
+Satır 839 | Tofaş | 550 TL | Yıl
+Satır 841 | Polygon | 2.20 dolar | 6 ayda
+Satır 841 | Polygon | 3.50 dolar | Yıl sonunda
+Satır 843 | Bütçe gelirleri | 6 trilyon TL | Yıl sonu
+Satır 843 | Giderler | 7 trilyon TL | Yıl sonu
+Satır 844 | LVMH hisseleri | %25 değer kazanır | 1 yılda
+Satır 844 | Hermes | %15 değer kazanır | 1 yılda
+Satır 845 | Gram gümüş | 45 TL | 6 ayda
+Satır 845 | Gram gümüş | 55 TL | Yıl sonunda
+Satır 846 | Arbitrum | 3.5 dolar | 3 ayda
+Satır 846 | Arbitrum | 6 dolar | Yıl sonunda
+Satır 847 | Yurt dışı borç faizi | %3 azalır | 1 yılda
+Satır 847 | CDS primi | 150 puana iner | None
+Satır 848 | Şişecam | 85 TL | kısa vadede
+Satır 848 | Şişecam | 140 TL | orta vadede
+Satır 849 | Kahve fiyatları | %25 zamlanır | 6 ayda
+Satır 849 | Kakao fiyatları | %10 geriler | 
+Satır 851 | Uranyum fiyatları | %50 artar | 1 yılda
+Satır 851 | Nükleer enerji hisseleri | %80 yükselir | 
+Satır 852 | Mavi Giyim | 200 TL | yıl sonu
+Satır 852 | Vakko | 150 TL | yıl sonu
+Satır 854 | Mevduat hacmi | %40 büyür | Yıl
+Satır 854 | Kredi kartı borçluluğu | %15 azalır | Yıl
+Satır 855 | MGROS | 750 TL | None
+Satır 855 | BIMAS | 600 TL | None
+Satır 856 | Dolar | 34.10 TL | yarın
+Satır 856 | Dolar | 34.50 TL | hafta kapanışında
+Satır 857 | Enflasyon hedefi | %15 | 2026
+Satır 857 | Enflasyon hedefi | %8 | 2027
+Satır 858 | TCMB rezervleri | 170 milyon dolar | Yıl sonu
+Satır 858 | net rezervler | 60 milyon dolar | Yıl sonu
+Satır 862 | AMD | 250 dolar | 6 ay
+Satır 862 | Intel | 55 dolar | None
+Satır 864 | Doğuş Otomotiv | 600 TL | 1 yıl
+Satır 864 | None | %15'e çıkar | None
+Satır 865 | Kardemir D | 60 TL | 6 ayda
+Satır 865 | Ereğli Demir Çelik | 80 TL | 
+Satır 866 | Konut fiyatları | %40 artış gösterir | 
+Satır 866 | Konut fiyatları | %50 artış gösterir | 
+Satır 868 | faiz oranları | %40 | Q3 sonu
+Satır 868 | faiz oranları | %35 | Q4 sonu
+Satır 870 | Arsa fiyatları | 2 katına | 
+Satır 870 | Arsa fiyatları | %70 artış | 
+Satır 871 | Altınay Savunma | 250 TL | 6 ayda
+Satır 871 | SDT Savunma | 600 TL | None
+Satır 872 | Astor | 160 TL | 
+Satır 873 | DXY Endeksi | 100 puan düşecek | Yıl sonu
+Satır 873 | Altın ons | 2.900 dolar olur | Yıl sonu
+Satır 874 | Japon Yeni | %10 değer kazanır | Yıl
+Satır 874 | Nikkei endeksi | %5 düşer | Yıl
+Satır 875 | Petkim | 35 TL | Yıl sonunda
+Satır 875 | Tüpraş | 280 TL | Yıl sonunda
+Satır 876 | Apple iPhone | %10 artar | 
+Satır 876 | Servis gelirleri | %20 büyüme kaydeder | 
+Satır 878 | Uber hisseleri | %40 | 1 yılda
+Satır 878 | Lyft hisseleri | %20 | 1 yılda
+Satır 879 | Aselsan sipariş defteri | 15 milyar dolar (Revenue) | 1 year
+Satır 880 | Hava yolu yolcu sayısı | %15 artar | 
+Satır 880 | THYAO kârı | %25 yükselir | 
+Satır 881 | Airbnb oda fiyatları | %20 artar | 
+Satır 882 | Tesla teslimatları | 500 bin | Bu çeyrek
+Satır 882 | Tesla teslimatları | 2 milyon adet | Yıl sonunda
+Satır 883 | Ethereum staking ödülleri | %4'ü düşer | 
+Satır 883 | yakılan miktar | %50 artar | 
+Satır 884 | Visa işlem hacmi | %15 büyür | 1 yılda
+Satır 884 | Kâr marjı | %55 olur | 
+Satır 888 | Paladyum | 1.200 dolar | 6 ayda
+Satır 889 | Mısır fiyatları | %10 Düşer | Hasat sonunda
+Satır 889 | Soya fiyatları | %5 Artar | None
+Satır 891 | Döviz borcu | yarısını (half) | 3 ayda (in 3 months)
+Satır 891 | Döviz borcu | kalanını (the rest) | 6 ayda (in 6 months)
+Satır 894 | BIST 100 günlük hacmi | 250 milyar TL olur | 
+Satır 894 | yabancı payı | %45'е çıkar | 
+Satır 899 | THYAO | 20 milyar dolar | 
+Satır 899 | Pegasus | 5 milyar dolar | 
+Satır 900 | Altın ons fiyatı | 2.650-2.680 dolar | Today and tomorrow
+Satır 901 | Bitcoin | 100.000 dolar | Ay sonu
+Satır 901 | Ethereum | 5.000 doları aşacak | Ay sonu
+Satır 902 | Gram altın | 3.500 TL | 3 ay içinde
+Satır 902 | Gram altın | 4.000 TL | Yıl sonunda
+Satır 903 | Dolar Kuru | 36 TL (Haziran) | Haziran
+Satır 903 | Dolar Kuru | 40 TL (Aralık) | Aralık
+Satır 904 | THYAO hissesi | 400 TL | kısa vadede
+Satır 904 | THYAO hissesi | 600 TL | orta vadede
+Satır 905 | Enflasyon | %35'le düşecek | Yıl sonu
+Satır 905 | Büyüme oranı | %4'le çıkacak | 
+Satır 906 | Konut fiyatları | %20 artarken | 
+Satır 906 | Kira fiyatları | %10 azalacak | 
+Satır 907 | S&P 500 endeksi | 6.000 puanı | Yıl sonunda
+Satır 907 | Nasdaq | 22.000 puanı | Yıl sonunda
+Satır 908 | Faizler | %45'e geriler | 3 ay içinde
+Satır 908 | Faizler | %30'a geriler | 1 yıl içinde
+Satır 909 | Gümüş ons fiyatı | 35 dolar | Yaz sonunda
+Satır 909 | Gümüş ons fiyatı | 45 dolar | Kış sonunda
+Satır 910 | Apple hisseleri | %15 | 
+Satır 910 | Nvidia hissedarı | %40 | 
+Satır 911 | Asgari ücret | 25.000 TL | Yıl sonunda
+Satır 911 |  Açlık sınırı | 20.000 TL'ye çıkar | Yıl sonunda
+Satır 912 | Brent petrol | 90 dolar | 3 ay içinde
+Satır 912 | Brent petrol | 110 dolar | 1 yıl içinde
+Satır 913 | Solana | 250 dolar/Ay sonunda | Ay sonunda
+Satır 913 | Solana | 500 dolar/Yıl sonu | Yıl sonu
+Satır 914 | Borsa İstanbul | %2 yükselirken | yarın
+Satır 914 | Borsa İstanbul | %5 prim yapar | hafta sonuna kadar
+Satır 915 | Euro/TL | 40 TL | Haşan sonunda
+Satır 915 | Euro/TL | 44 TL | Yıl sonunda
+Satır 918 | Dış Ticaret Hacmi | 600 milyon dolar | Yıl sonunda
+Satır 918 | Cari Açık | 20 milyar dolar | Yıl sonunda
+Satır 919 | Tesla hissesi | 200 dolar | kısa vadede
+Satır 919 | Tesla hissesi | 450 dolar | uzun vadede
+Satır 920 | Et fiyatları | %15 zamlanırken | Ay sonunda
+Satır 920 | Süt fiyatları | %10 artacak | Ay sonunda
+Satır 922 | Garanti Bankası | 120 TL | 3 ayda
+Satır 922 | Akbank | 80 TL | seviyesine ulaşır
+Satır 923 | İşsizlik oranı | %8.5''e düşerken | Yıl sonunda
+Satır 923 | İstihdam oranı | %50'ye çıkar | Yıl sonunda
+Satır 924 | Ons altın | 2.700 dolar | 6 ay içinde
+Satır 924 | Ons altın | 3.000 dolar | 1 yıl içinde
+Satır 925 | KCHOL hissesi | 300 TL | yıl sonunda
+Satır 925 | SAHOL hissesi | 150 TL | yıl sonunda
+Satır 926 | Konut satışları | %15 artacak | Önümüzdeki çeyrekte
+Satır 926 | Konut kredisi hacmi | %5 daralacak | 
+Satır 927 | Avax | 80 dolar | 3 ay içinde
+Satır 927 | Avax | 120 dolar | 6 ay içinde
+Satır 929 | TUPRS | 250 TL | 
+Satır 930 | Doğalgaz fiyatları | %25 artarken | kışın
+Satır 930 | Elektrik fiyatları | %15 zamlanır | None
+Satır 931 | Link | 25 dolar | 3 ayda
+Satır 931 | Link | 50 dolar | 1 yılda
+Satır 933 | ASELS hissesi | 100 TL | Kısa vadede
+Satır 933 | ASELS hissesi | 150 TL | Orta vadede
+Satır 936 | Otomobil fiyatları | %10 düşecek | Yıl sonu
+Satır 938 | Çeyrek Altın | 6.000 TL | Yaz sonunda
+Satır 938 | Çeyrek Altın | 7.000 TL | Yıl sonunda
+Satır 939 | Ford Otosan | 1.300 TL olacak | 6 ay içinde
+Satır 939 | Tofaş | 400 TL olacak | None
+Satır 940 | Buğday fiyatları | %15 azalır | Hasat sonundan
+Satır 940 | Ekmek fiyatları | %10 artar | 
+Satır 942 | BIST Banka Endeksi | %40 | Yıl sonuna kadar
+Satır 942 | Sanayi Endeksi | %25 | Yıl sonuna kadar
+Satır 943 | Bütçe açığı | 500 milyar TL | Yıl sonu
+Satır 943 | Vergi gelirleri | 5 trilyon TL'ye çıkar | Yıl sonu
+Satır 945 | Gram | 35 TL | 3 ay içinde
+Satır 945 | Gram | 50 TL | Yıl sonunda
+Satır 946 | Arbitrum | 4 dolar olacak | Yıl sonunda
+Satır 946 | Optimism | 8 dolar görür | Yıl sonunda
+Satır 949 | Kahve fiyatları | %20 zamlanır | 3 ayda
+Satır 949 | Şeker fiyatları | %5 düşer | 
+Satır 950 | Nvidia | 4 trilyon dolar | Yıl sonunda
+Satır 950 | Apple | 3.5 trilyon dolar | Yıl sonunda
+Satır 951 | Bitcoin | 110.000 doları aşacak | Haziran sonunda
+Satır 951 | Ethereum | 5.500 doları aşacak | Haziran sonunda
+Satır 952 | Gram Altın | 4.200 TL | Yıl sonu
+Satır 952 | Gram Gümüş | 65 TL'ye çıkar | Yıl sonu
+Satır 954 | THYAO hissesi | 450 TL | 3 ayda
+Satır 954 | THYAO hissesi | 600 TL | yıl sonunda
+Satır 955 | Enflasyon | %38'ere gerilerken | Q3 sonundan
+Satır 955 | İşsizlik oranı | %9 seviyesinde kalır | -
+Satır 957 | S&P 500 | 6.300 puanı | yıl sonunda
+Satır 957 | Nasdaq | 23.500 puanı | yıl sonunda
+Satır 958 | Faizler | 250 baz puan | Eylül
+Satır 958 | Faizler | 500 baz puan | Aralık
+Satır 961 | Asgari Ücret | 26.000 TL | yıl sonu
+Satır 961 | Emekli Maaşı | 18.000 TL | yıl sonu
+Satır 962 | Brent petrol | 105 dolar | Kış
+Satır 962 | Doğalgaz fiyatları | %40 zamlanır | None
+Satır 963 | Solana | 350 dolar | 3 ayda
+Satır 963 | Solana | 550 dolar | Sene sonunda
+Satır 965 | Euro | 41 TL | None
+Satır 965 | Euro | 45 TL | Yıl sonu
+Satır 966 | Borsa İstanbul | 15.000 puan | 6 ayda
+Satır 967 | Portföyümdeki fonlar | %90 getiri sağlar | 1 yılda
+Satır 967 | hisselerim | %110 getiri sağlar | 1 yılda
+Satır 968 | Cari açık | 15 milyar dolara iner | Yıl sonunda
+Satır 968 | İhracat | 300 milyar dolar olur | 
+Satır 969 | Tesla | 250 dolar | kısa vadede
+Satır 969 | Tesla | 500 dolar | 2026 sonuna kadar
+Satır 971 | BTC | %65 çıkar | Yıl sonu
+Satır 971 | Altcoinler | %40 değer kaybeder | Yıl sonu
+Satır 972 | Garanti BBVA | 140 TL | 
+Satır 972 | Akbank | 90 TL | 
+Satır 973 | İstihdam oranı | %52 | Yıl sonunda
+Satır 973 | Enflasyon | %30 | 
+Satır 975 | Koç Holding | 280 TL | yıl sonunda
+Satır 975 | Sabancı Holding | 130 TL | yıl sonunda
+Satır 976 | Konut kredisi faizleri | %1.5' e düşer | Yıl
+Satır 976 | Satışlar | %50 artar | Yıl
+Satır 977 | Avax | 100 dolar | 3 ayda
+Satır 977 | Avax | 160 dolar | Yıl sonunda
+Satır 978 | Dolar endeksi | 98 puana iner | 6 ayda
+Satır 978 | EUR/USD paritesi | 1.16 olur | None
+Satır 979 | TÜPERS | 220 TL | 3 ay
+Satır 979 | EREGL | 65 TL | None
+Satır 981 | Link | 40 dolar | 6 ay
+Satır 981 | Link | 100 dolar | 2 yıl
+Satır 982 | Kredi Notu | BB artı | Yıl sonu
+Satır 983 | Aselsan | 110 TL | 
+Satır 983 | Aselsan | 250 TL | 
+Satır 984 | Japon Yeni | 0.32 TL | Yıl sonunda
+Satır 984 | Sterlin | > 52 TL | 
+Satır 986 | Otomobil fiyatları | %15 ucuzlar | 6 ayda
+Satır 986 | Talep | %25 artış gösterir | 
+Satır 987 | Amazon | 240 dolar | 6 ayda
+Satır 987 | Alphabet | 210 dolar | None
+Satır 988 | Çeyrek Altın | 6.500 TL | Ağustos
+Satır 988 | Çeyrek Altın | 7.500 TL | Yıl sonu
+Satır 989 | Ford Otosan | 1.600 TL | Yıl
+Satır 989 | Tofaş | 550 TL | Yıl
+Satır 990 | Buğday fiyatları | %25 artar | Yıl sonunda
+Satır 990 | Gübre fiyatları | %10 düşer | 
+Satır 991 | Polygon | 2.20 dolar | 6 ayda
+Satır 991 | Polygon | 3.50 dolar | yıl sonunda
+Satır 993 | Bütçe gelirleri | 6 trilyon TL | Yıl sonunda
+Satır 993 | Bütçe giderleri | 7 trilyon TL | Yıl sonunda
+Satır 994 | LVMH hisseleri | %25 değer kazanır | 1 yılda
+Satır 994 | Hermes | %15 değer kazanır | 1 yılda
+Satır 995 | Gram gümüş |  | 6 ayda
+Satır 995 | Gram gümüş |  | yıl sonunda
+Satır 996 | Arbitrum | 3.5 dolar | 3 ayda
+Satır 996 | Arbitrum | 6 dolar | Yıl sonunda
+Satır 998 | Şişecam | 85 TL | kısa vadede
+Satır 998 | Şişecam | 140 TL | orta vadede
+Satır 999 | Kahve fiyatları | %25 zamlanır | 6 ayda
+Satır 999 | Kakao fiyatları | %10 geriler | 
+Satır 1001 | Uranium fiyatları | %50 artar | yıl sonunda
+Satır 1002 | Mavi Giyim | 200 TL | yıl sonunda
+Satır 1002 | Vakko | 150 TL | yıl sonunda
+Satır 1005 | MGROS | 750 TL | 
+Satır 1005 | BIMAS | 600 TL | 6 ayda
+Satır 1006 | Dolar | 34.10 TL | yarın
+Satır 1006 | Dolar | 34.50 TL | hafta kapanışında
+Satır 1007 | Enflasyon hedefim | %15 | 2026
+Satır 1007 | Enflasyon hedefim | %8 | 2027
+Satır 1011 | Gümüş ons fiyatı | 30 doları | yarın
+Satır 1011 | Gümüş ons fiyatı | 35 doları | ay sonunda
+Satır 1012 | AMD | 250 dolar | 
+Satır 1012 | Intel | 55 dolar | 
+Satır 1013 | Turizm geliri | 65 milyar dolar | Bu yıl
+Satır 1013 | Turist sayısı | 60 milyon | Bu yıl
+Satır 1017 | Bitcoin | 100k doları | bu yıl
+Satır 1017 | Bitcoin | 200k doları | 2027'inde
+Satır 1018 | Faiz oranları | %40 | Q3 sonundan
+Satır 1018 | Faiz oranları | %35 | Q4 sonundan
+Satır 1020 | Arsa fiyatları | 2 katına | 
+Satır 1020 | Arsa fiyatları | %70 artışa | 
+Satır 1021 | Altınay Savunma | 250 TL | 6 ayda
+Satır 1021 | SDT Savunma | 600 TL | None
+Satır 1024 | Japon Yeni | %10 kazandı | Yıl
+Satır 1024 | Nikkei endeksi | %5 düştü | 
+Satır 1025 | Petkim | 35 TL | Yıl sonunda
+Satır 1025 | Tüpraş | 280 TL | Yıl sonunda
+Satır 1027 | Netflix abone sayısı | 5 milyon | 3 ayda
+Satır 1027 | Netflix abone sayısı | 20 milyon artar | Yıl sonunda
+Satır 1028 | Uber hissesi | %40 yükselir | 1 yılda
+Satır 1028 | Lyft hisseleri | %20 yükselir | 1 yılda
+Satır 1030 | Hava yolu yolcu sayısı | %15 artar | bu yıl
+Satır 1030 | THYAO kârı | %25 yükselir | null
+Satır 1031 | Airbnb oda fiyatları | %20 artar | None
+Satır 1031 | doluluk oranları | %90 olur | None
+Satır 1032 | Tesla teslimatı | 500 bin | Bu çeyrek
+Satır 1032 | Tesla teslimatı | 2 milyon adet | Yıl sonu
+Satır 1033 | Ethereum staking ödülleri | %4'е düşer | None
+Satır 1033 | yakılan miktar | %50 artar | None
+Satır 1034 | Visa işlem hacmi | %15 büyür | 1 yılda
+Satır 1034 | Kâr marjı | %55 olur | 
+Satır 1035 | Adobe Cloud | %18 artar | 
+Satır 1035 | net kârı | %22 yükselir | 6 ayda
+Satır 1037 | Morgan Stanley hissesi | %10 artar | None
+Satır 1037 | JP Morgan | %15 prim yapar | None
+Satır 1038 | Paladyum | 1.200 dolar | 6 ayda
+Satır 1038 | Platin | 1.100 dolar | None
+Satır 1039 | Mısır fiyatları | %10 düşer | Hasat sonu
+Satır 1039 | Soya fiyatları | %5 artar | None
+Satır 1040 | Portföyümdeki nakit oranı | %10'a iner | None
+Satır 1040 | Hisse oranı | %70'le çıkar | None
+Satır 1042 | Kredi kartı limitim | 500.000 TL | 1 yılda
+Satır 1042 |  | 100.000 TL | 
+Satır 1044 | BIST 100 | 250 milyar TL olacak | Günlük
+Satır 1044 | Yabancı payı | %45'e çıkar | None
+Satır 1047 | Ferrari satışları | 14 bin adet | yıl sonunda
+Satır 1047 | Kâr | 1.2 milyar Euro | yıl sonunda
+Satır 1048 | Şeker fiyatları | %30 artar | 1 yılda
+Satır 1048 | Çay fiyatları | %40 zamlanır | 
+Satır 1050 | Altın ons fiyatı | 2.650-2.680 doları | Bugün-Yarın
+Satır 1054 | Apple pazar payı | %15 artar | None
+Satır 1055 | Nvidia veri merkezi geliri | 40 milyar dolar | 
+Satır 1055 | H100 satışları | %30 artar | 
+Satır 1057 | Doğalgaz Avrupa fiyatları | %20 Düşer | -
+Satır 1057 | ABD fiyatları | %10 Yükselir | -
+Satır 1058 | Faiz oranı | %35 | Q1 sonu
+Satır 1058 | Faiz oranı | %25 | Q2 sonu
+Satır 1059 | Türkiye CDS primi | 250 puan | today
+Satır 1059 | Türkiye CDS primi | 240 puan | tomorrow
+Satır 1060 | Bakır tonu | ['10.000 doları', '11.000 doları'] | ['bugün', 'gelecek ay']
+Satır 1061 | Konut kredisi aylık faizi | %2 | Eylül
+Satır 1061 | Konut kredisi aylık faizi | %1.5 | Aralık
+Satır 1062 | BIST Banka Endeksi | %5 artışla | haftayı
+Satır 1062 | Sanayi Endeksi | %2 düşüşle | kapatır
+Satır 1063 | Dolar/TL | 34.20 | Bu akşam
+Satır 1063 | Dolar/TL | 34.40 | Yarın akşam
+Satır 1065 | S&P 500 | 5.700 puanı | yarın
+Satır 1065 | Cuma günü | 5.800 puanı | Cuma günü
+Satır 1067 | Asgari Ücret Zammı | %30 | 
+Satır 1067 | Enflasyon Farkı | %15 | 
+Satır 1068 | Bitcoin | %40 artar | 
+Satır 1068 | Açık pozisyonlar | 20 milyar dolar | 
+Satır 1069 | Tesla enerji birimi | 3 milyar dolar | None
+Satır 1069 | karı | %25 artar | None
+Satır 1070 | Google reklam geliri | 250 milyar dolar | yıl sonunda
+Satır 1070 | Google net kârı | 80 milyar dolar | yıl sonunda
+Satır 1071 | Dolar | 45 TL olacak | Ay sonu
+Satır 1071 | Euro | 50 TL olacak | Kesin
+Satır 1075 | Dolar | artacak | 
+Satır 1077 | Hisselerimi | satacağım | yakında
+Satır 1098 | Kripto paralar | riskli ama kazançlı | None
+Satır 1099 | Dolar | 40 TL olacak | Yıl sonunda
+Satır 1106 | Crypto |  | now
+Satır 1111 | Ereğli hissesi | çok düştü | None
+Satır 1116 | Doların ateşi | düşmeyecek | 
+Satır 1128 | Dolar | 40 TL olacak | Yıl sonu
+Satır 1134 | Enflasyon | Beli kırılacak | None
+Satır 1140 | Mevduata | para yatırmak | mantıklı mı?
+Satır 1141 | Borsa yatırımcısı | None | None
+Satır 1149 | Avax | çok yukarıda | None
+Satır 1150 | XRP davası | olumlu sonuçlar | olumlu sonuçlar
+Satır 1176 | Enflasyon | %40'a düşeceği | Rapor
+Satır 1177 | Faiz | artacak | 
+Satır 1178 | Altın | 3000 dolar | 
+Satır 1182 | Dolar | 38 TL | None
+Satır 1184 | Konut fiyatları | %30 artacak | None
+Satır 1185 | Petrol | 100 dolar | 
+Satır 1187 | Fon yöneticileri |  | 
+Satır 1188 | Asgari Ücret | 25 bin TL | 
+Satır 1189 | Ciro | %50 artacak | 
+Satır 1196 | Türkiye'nin kredi notu |  | 
+Satır 1198 | Gıda fiyatları | %15 artacak | 
+Satır 1199 | Sektör temsilcileri | %10 artacak | 
+Satır 1203 | Bitcoin | çökecek (will collapse) | 
+Satır 1205 | Brent Petrolu | 80 dolar | None
+Satır 1206 | Enflasyon |  | 3 yılda
+Satır 1213 | BTC | 150 bin dolar | None
+Satır 1214 | Ethereum | 5000 $ | 
+Satır 1215 | Dolar | 42 TL olacak | 
+Satır 1218 | SISE hissesi | 80 TL | 
+Satır 1221 | Petrol | 120 dolar olacak | OPEC üretimi kısarsa
+Satır 1240 | Borsa | Grafikler | yalan söylemez
+Satır 1269 | Gönderinin trendi | yükselen | None
+Satır 1294 | Banka |  | 
+Satır 1304 | Hızlı tren | artacak | None
