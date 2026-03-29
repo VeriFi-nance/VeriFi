@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     "corsheaders",
     # Local
     "accounts",
+    "posts",
 ]
 
 MIDDLEWARE = [
@@ -121,6 +122,9 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = "static/"
+
+# Admin wallet addresses — only these can change HardClaim status
+ADMIN_ADDRESSES: list[str] = ["0x8C66A1aBF7C949004aF7dE80A3fc0F691538ea74"] # Arda's Ethereum Address
 
 # CORS — allow frontend dev server in development
 CORS_ALLOWED_ORIGINS = [

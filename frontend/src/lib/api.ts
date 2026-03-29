@@ -1,12 +1,16 @@
+import { getToken } from './auth';
+import type { ReviewClaim, PostItem, HardClaimItem, AssetItem } from './types';
+
 const BASE_URL = 'http://localhost:8000';
 
 async function request<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
+  const { headers: optHeaders, ...rest } = options;
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
-    ...options,
+    ...rest,
+    headers: { 'Content-Type': 'application/json', ...optHeaders },
   });
 
   const data = await res.json();
@@ -14,6 +18,11 @@ async function request<T>(
     throw new Error(data.detail ?? 'Request failed');
   }
   return data as T;
+}
+
+function authHeaders(): Record<string, string> {
+  const t = getToken();
+  return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
 export async function register(address: string): Promise<{ access: string }> {
@@ -40,4 +49,70 @@ export async function login(
     method: 'POST',
     body: JSON.stringify({ address, signature, nonce }),
   });
+}
+
+export interface RawClaim {
+  text: string;
+  asset: string;
+  direction: string;
+}
+
+export async function extractClaims(content: string): Promise<RawClaim[]> {
+  return request('/api/posts/extract-claims/', {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ content }),
+  });
+}
+
+export async function createPost(
+  content: string,
+  claims: ReviewClaim[]
+): Promise<PostItem> {
+  return request('/api/posts/', {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ content, claims }),
+  });
+}
+
+export async function getFeed(): Promise<PostItem[]> {
+  return request('/api/posts/');
+}
+
+export async function getHardClaims(): Promise<HardClaimItem[]> {
+  return request('/api/posts/hard-claims/');
+}
+
+export async function getHardClaimsByAddress(address: string): Promise<HardClaimItem[]> {
+  return request(`/api/posts/hard-claims/?address=${encodeURIComponent(address)}`);
+}
+
+export async function createHardClaim(data: {
+  text: string;
+  asset_id: number;
+  direction: string;
+  percentage: number;
+  until: string;
+}): Promise<HardClaimItem> {
+  return request('/api/posts/hard-claims/', {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateHardClaimStatus(
+  id: number,
+  status: string
+): Promise<HardClaimItem> {
+  return request(`/api/posts/hard-claims/${id}/update-status/`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function getAssets(): Promise<AssetItem[]> {
+  return request('/api/posts/assets/');
 }
