@@ -35,10 +35,13 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
   const isRejected = claim.status === 'rejected';
   const days = daysUntil(claim.until);
 
-  // Use percentage as a proxy for community confidence until a vote API exists
-  const believeTrue = claim.percentage;
+  // Target change: the percentage the author claims the asset will move
+  const targetChange = claim.percentage;
+
+  // Community confidence: mock until a real vote API exists
+  const communityConfidence = 62.5;
   const totalVotes = 57;
-  const agreeVotes = Math.round(totalVotes * (believeTrue / 100));
+  const agreeVotes = Math.round(totalVotes * (communityConfidence / 100));
   const disagreeVotes = totalVotes - agreeVotes;
 
   return (
@@ -63,26 +66,33 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
           <StatusBadge status={claim.status} />
         </div>
 
-        {/* ── Row 2: asset + target date ────────────────────────────── */}
+        {/* ── Row 2: asset + target change % + target date ──────────── */}
         <div className="flex items-center gap-2 text-xs text-muted-foreground pl-6">
           <span className="font-mono font-semibold text-foreground">{assetSymbol}</span>
           <span>·</span>
+          <Badge
+            variant={isBullish ? 'success' : 'destructive'}
+            className="text-xs px-1.5 py-0"
+          >
+            {isBullish ? '▲' : '▼'} {targetChange.toFixed(1)}%
+          </Badge>
+          <span>·</span>
           <CalendarDays className="size-3 shrink-0" />
           <span>
-            Target: {new Date(claim.until).toLocaleDateString()} ({days} days left)
+            {new Date(claim.until).toLocaleDateString()} ({days}d left)
           </span>
         </div>
 
-        {/* ── Progress bar ──────────────────────────────────────────── */}
+        {/* ── Community Confidence bar ────────────────────────────────── */}
         <div className="pl-6 space-y-1">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>Community Confidence</span>
-            <span className="font-semibold text-foreground">{believeTrue.toFixed(1)}% believe true</span>
+            <span className="font-semibold text-foreground">{communityConfidence.toFixed(1)}% believe true</span>
           </div>
           <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
             <div
               className="h-full bg-foreground rounded-full transition-all"
-              style={{ width: `${believeTrue}%` }}
+              style={{ width: `${communityConfidence}%` }}
             />
           </div>
           <div className="flex items-center justify-between text-xs text-muted-foreground">

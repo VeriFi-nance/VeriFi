@@ -90,7 +90,7 @@ export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) 
                   )}
                   {c.direction && (
                     <Badge
-                      variant={c.direction.toLowerCase() === 'bullish' ? 'default' : 'destructive'}
+                      variant={c.direction.toLowerCase() === 'bullish' ? 'success' : 'destructive'}
                       className="text-xs"
                     >
                       {c.direction}
