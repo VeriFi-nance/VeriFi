@@ -1,0 +1,426 @@
+\documentclass[a4paper,12pt]{report}
+\usepackage[utf8]{inputenc} % To use Unicode (e.g. Turkish) characters
+\usepackage[T1]{fontenc}
+\renewcommand{\labelenumi}{(\roman{enumi})}
+\usepackage{amsmath, amsthm, amssymb}
+\usepackage{cite}
+\usepackage{url}
+\usepackage{graphicx}
+\usepackage{longtable}
+\graphicspath{{figures/}}
+\usepackage{booktabs}
+
+\begin{document}
+
+% Title Page
+\title{CMPE 492 \\ VeriFi: A Reputation-Based Platform for Verifiable Financial Predictions}
+\author{
+Arda Saygan \\
+Abdurrahman Arslan \\
+\c{C}etin Tiryaki \\
+Volkan Bora Seki \\
+Yusuf An\i{}l Yaz\i{}c\i{} \\ \\
+Advisor: \\
+H\"{u}seyin Birkan Y\i{}lmaz
+}
+\date{}
+\maketitle{}
+\pagenumbering{roman}
+\tableofcontents
+
+% ─────────────────────────────────────────────────────────────────────────────
+\chapter{INTRODUCTION}
+\pagenumbering{arabic}
+
+\section{Broad Impact}
+
+The financial media landscape is plagued by unverifiable claims. Influencers, analysts, and self-proclaimed experts routinely make bold financial predictions on social media with no accountability mechanism. When predictions prove correct they are amplified; when wrong, they are quietly deleted or ignored. This asymmetry erodes public trust and enables misinformation to thrive in financial discourse.
+
+VeriFi addresses this problem by building a social media platform where every financial prediction is cryptographically signed at the time of posting. Because the signature is generated from the author's private key and bound to the claim content, a prediction cannot be retroactively modified or plausibly denied --- even after the original post is deleted. This property, \textit{non-repudiation}, is the core differentiator of VeriFi compared to existing financial social platforms.
+
+The platform benefits several stakeholder groups. Retail investors gain access to a transparent, tamper-proof track record of financial influencers, enabling more informed decisions about whose predictions to follow. Skilled predictors accumulate a credible, verifiable reputation that serves as a professional credential. Researchers and journalists studying financial misinformation gain a public dataset of signed, timestamped predictions with resolution outcomes.
+
+At a societal level, VeriFi promotes financial literacy by shifting discourse toward verifiable, quantified claims and away from vague, unfalsifiable commentary. By making prediction accuracy publicly auditable, the platform creates an economic incentive for quality analysis and a natural disincentive for low-effort, clickbait content.
+
+\section{Ethical Considerations}
+
+Several ethical dimensions require careful attention in the design and operation of VeriFi.
+
+\textbf{Not investment advice.} VeriFi is a reputation-tracking platform, not a financial advisory service. All content is user-generated and not endorsed by the platform operators. The platform displays a prominent disclaimer that no content constitutes investment advice, in compliance with applicable financial regulations.
+
+\textbf{Privacy and data protection.} VeriFi deliberately avoids collecting personally identifiable information (PII). Users are identified solely by their Ethereum wallet address, a pseudonymous identifier derived from a cryptographic key pair. No names, email addresses, phone numbers, or other PII are stored. Post text is deletable by the user to accommodate GDPR and KVKK (Turkish Personal Data Protection Law) rights to erasure. However, the structured claim payload --- the financially verifiable component of a prediction --- persists even after post deletion. This design reflects the principle that while personal commentary may be retracted, quantified public financial claims carry a different epistemic status analogous to a published prediction.
+
+\textbf{AI limitations.} The planned LLM-based claim extraction feature assists users in structuring natural-language posts into verifiable claims. The system is designed so that the LLM serves as an assistant, not a decision-maker: every extracted claim is presented to the user for explicit confirmation, editing, or rejection before publication. The LLM never publishes claims autonomously. The system also flags when a prediction lacks a measurable target or timeframe, prompting the user to provide those fields rather than inferring them, in order to maintain verifiability.
+
+\textbf{Sybil resistance.} A reputation system is only as trustworthy as its identity layer. By anchoring identity to a cryptographic key pair rather than a platform-controlled account, VeriFi ensures that identity manipulation requires actual cryptographic key control. The challenge-response authentication scheme prevents replay attacks. Planned features such as stake-weighted voting for soft claims further raise the economic cost of Sybil attacks.
+
+\textbf{Fairness in resolution.} Claim resolution in v1 is performed by administrators identified by a whitelisted Ethereum address. Automated oracle-based resolution is planned for future milestones. The platform is designed so that resolved claim status cannot revert, and all resolution actions are tied to the admin's cryptographic identity, making resolution decisions auditable.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\chapter{PROJECT DEFINITION AND PLANNING}
+
+\section{Project Definition}
+
+VeriFi is a web-based social media platform for verifiable financial predictions. The central concept is the \textit{Hard Claim}: a quantified, time-bounded financial prediction with the structured fields \texttt{\{asset, direction, percentage, until\}}. Hard claims are cryptographically signed by their author at publication time. When the deadline passes, each claim is resolved as confirmed or rejected by comparing the actual asset price movement against the prediction, either automatically via a financial data oracle or manually by an administrator.
+
+Each user accumulates a \textit{Truth Score}, a global reputation metric derived from the accuracy and difficulty of their resolved claims. The Truth Score is publicly visible, non-editable, and tamper-evident because it is anchored to cryptographically signed claim records.
+
+Authentication is passwordless and wallet-based. Users either generate a native VeriFi wallet (12-word BIP39 mnemonic \cite{bip39}, secp256k1 key derivation via BIP32 \cite{bip32}, private key stored encrypted in browser \texttt{localStorage}) or connect an existing MetaMask wallet. Login uses an EIP-191 personal\_sign challenge-response flow \cite{eip191}: the server issues a single-use nonce, the client signs it with the private key, and the server recovers the signing address for verification. No password is ever stored or transmitted.
+
+The platform is built as a monorepo with a Django REST Framework backend (deployed on Render) and a Vite/React/TypeScript frontend (deployed on Vercel). The database is SQLite in development and PostgreSQL in production.
+
+\textbf{In scope (v1):}
+\begin{itemize}
+    \item Wallet-based authentication (native BIP39 wallet and MetaMask)
+    \item Hard claim creation, feed, and user profiles
+    \item Claim lifecycle management (\texttt{undetermined} $\rightarrow$ \texttt{confirmed} / \texttt{rejected})
+    \item Manual claim resolution by admin
+    \item Cryptographic proof generation and download
+    \item Standalone proof verification page (no login required)
+    \item Truth Score computation and public display
+\end{itemize}
+
+\textbf{Out of scope (v1):}
+\begin{itemize}
+    \item Soft claims and community voting
+    \item Automated oracle-based claim resolution (planned Milestone 3)
+    \item LLM-based automatic claim extraction (stub exists; full feature in progress)
+    \item Domain-specific reputation scores
+    \item Monetization and subscription tiers
+    \item Mobile applications
+    \item Blockchain anchoring / on-chain timestamping
+\end{itemize}
+
+\section{Project Planning}
+
+\subsection{Project Time and Resource Estimation}
+
+The project follows a milestone-driven development schedule aligned with the course calendar. Four milestones and a final senior presentation have been defined.
+
+\begin{table}[thbp]
+\vskip\baselineskip
+\caption[Project Milestones]{Project milestones and their key deliverables.}
+\begin{center}
+\begin{tabular}{|c|l|p{7.5cm}|}
+\hline
+\textbf{Milestone} & \textbf{Date} & \textbf{Deliverables} \\\hline
+M1 & March 8, 2026   & Authentication and identity: native wallet (BIP39/secp256k1), MetaMask integration, challenge-response JWT login, unified login UI \\\hline
+M2 & April 5, 2026   & Core social and claim pipeline: post composer, LLM claim extraction (Agno), claim card UI, signed proof packages, public social feed \\\hline
+M3 & May 17, 2026    & Resolution, reputation and verification: oracle integration (CoinGecko, Yahoo Finance), Truth Score, proof verifier page, feed filtering by asset \\\hline
+Final & June 11, 2026 & End-to-end demo, UI/UX polish, edge case handling, performance pass, final documentation \\\hline
+\end{tabular}
+\label{table:milestones}
+\end{center}
+\end{table}
+
+The team consists of five members, each contributing across frontend and backend work. External resource dependencies include financial data APIs (CoinGecko, Yahoo Finance, Alpha Vantage) for oracle-based resolution, and a locally hosted language model (via LM Studio) for LLM claim extraction.
+
+\subsection{Success Criteria}
+
+The project will be considered successful if the following criteria are met by the final presentation:
+
+\begin{itemize}
+    \item A registered user can create a hard claim; the claim is cryptographically signed and stored.
+    \item A visitor can browse the public claim feed without registering.
+    \item An expired claim can be resolved (confirmed or rejected) and the author's Truth Score is updated accordingly.
+    \item Any third party can download a proof file and verify it on the standalone proof verification page without logging in.
+    \item The system correctly rejects tampered or forged proof files.
+    \item The feed page loads within 2 seconds under typical usage conditions.
+    \item No critical security vulnerabilities exist in the authentication or claim submission flow.
+\end{itemize}
+
+\subsection{Risk Analysis}
+
+\begin{table}[thbp]
+\vskip\baselineskip
+\caption[Risk Analysis]{Identified risks, likelihood, impact, and mitigation strategies.}
+\begin{center}
+\begin{tabular}{|p{3.2cm}|c|c|p{5.5cm}|}
+\hline
+\textbf{Risk} & \textbf{Likelihood} & \textbf{Impact} & \textbf{Mitigation} \\\hline
+Oracle API downtime or rate limiting & Medium & High & Exponential backoff retries; fallback to secondary data source; manual admin resolution as last resort \\\hline
+LLM extraction quality insufficient & High & Medium & v1 ships with manual structured entry form; LLM extraction is an enhancement, not a blocker \\\hline
+Truth Score formula disputes & Medium & Medium & Formula publicly documented and fixed at v1 launch; transparent claim records allow independent verification \\\hline
+Browser \texttt{localStorage} key loss & Medium & High & Mnemonic displayed and backup strongly encouraged at registration; no server-side key recovery by design \\\hline
+Private key leakage from \texttt{localStorage} & Low & Critical & AES-256-GCM encryption with PBKDF2-SHA256 (100{,}000 iterations); key never transmitted to server \\\hline
+GDPR / KVKK compliance & Low & High & No PII collected; post text deletable; claim payloads treated as public reputation data \\\hline
+\end{tabular}
+\label{table:risks}
+\end{center}
+\end{table}
+
+\subsection{Team Work}
+
+The project team consists of five members. Responsibilities are distributed as follows:
+
+\begin{table}[thbp]
+\vskip\baselineskip
+\caption[Team Responsibilities]{Team member responsibilities.}
+\begin{center}
+\begin{tabular}{|l|p{9cm}|}
+\hline
+\textbf{Member} & \textbf{Primary Responsibilities} \\\hline
+Arda Saygan & Backend architecture; hard claim data models and API endpoints; project repository management \\\hline
+Abdurrahman Arslan & MetaMask integration; frontend PostCard and claim card UI components; requirements specification \\\hline
+\c{C}etin Tiryaki & LLM experimentation and benchmarking; claim extraction UI; report contributions \\\hline
+Volkan Bora Seki & AI/LLM infrastructure (Agno + LM Studio); multilingual claim extraction; LLM benchmark design \\\hline
+Yusuf An\i{}l Yaz\i{}c\i{} & Native wallet and key management; cryptographic authentication frontend; midterm report; deployment \\\hline
+\end{tabular}
+\label{table:team}
+\end{center}
+\end{table}
+
+The team holds weekly advisory meetings on Tuesdays (17:30--18:00) with the project advisor. Meeting notes and decisions are recorded in the project GitHub wiki. Rush weekends with concentrated development effort have been scheduled around milestone deadlines.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\chapter{RELATED WORK}
+
+The problem of tracking and verifying financial predictions has been approached from several directions in both industry and academia.
+
+\textbf{Prediction Markets.} Prediction markets are exchange-traded platforms where users buy and sell contracts on future events, with prices reflecting aggregate probability estimates \cite{wolfers2004}. Platforms such as Polymarket and PredictIt allow users to stake real money on event outcomes, providing strong accountability: incorrect predictions result in direct financial loss. While effective for accountability, these systems are regulated as financial instruments in many jurisdictions and do not support the social media dynamics --- posts, feeds, followers, profiles --- that VeriFi targets. Augur \cite{augur2019} extends the model to a decentralised, blockchain-based architecture, but requires on-chain interaction and cryptocurrency holdings, creating a high barrier for casual users.
+
+\textbf{Social Trading Platforms.} eToro and similar platforms allow users to publish and copy investment portfolios, providing a form of reputation tracking based on actual trade performance. However, these platforms require linking real brokerage accounts, making them inaccessible to users who wish to share predictions without executing trades. StockTwits provides a Twitter-like social layer for financial commentary but lacks any systematic verification or scoring mechanism: predictions and outcomes are not tracked.
+
+\textbf{Reputation Systems.} Reputation systems in online communities, such as Stack Overflow's karma system or academic citation indices, have been studied extensively \cite{josang2007}. A key finding is that reputation scores are only as trustworthy as the underlying identity system and the non-repudiability of the actions they measure. VeriFi applies this insight to financial predictions by anchoring reputation to cryptographic identity and signed claim records.
+
+\textbf{Cryptographic Non-Repudiation.} The use of digital signatures for non-repudiation of electronic documents is well established \cite{johnson2001}. Ethereum's EIP-191 personal\_sign standard \cite{eip191} extends this to wallet-based signatures, which VeriFi uses as the foundation of its proof system. The key contribution of VeriFi is applying this mechanism to social media content --- specifically financial predictions --- so that deletion or denial of a claim becomes cryptographically impossible for anyone who has saved the signed proof.
+
+\textbf{LLM-Assisted Structured Extraction.} Recent work on large language model-based information extraction has demonstrated strong performance on converting natural language into structured records \cite{wei2022}. VeriFi uses an LLM (via the Agno framework with a locally hosted model) to assist users in extracting structured \texttt{\{asset, direction, percentage, timeframe\}} tuples from free-form text. A critical design constraint, derived from team discussions, is that the LLM must not infer missing fields --- especially timeframes --- but must prompt the user to supply them explicitly, preserving the verifiability of every published claim.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\chapter{METHODOLOGY}
+
+VeriFi is built as a monorepo web application with clearly separated frontend and backend layers.
+
+\textbf{Backend.} The backend is a REST API built with Django 6 and Django REST Framework (DRF). Authentication uses \texttt{djangorestframework-simplejwt} for JWT issuance and validation, and the \texttt{eth-account} library for Ethereum signature verification. The backend is stateless: no server-side sessions are maintained. All authentication state is encoded in the JWT token. The database is SQLite in development and PostgreSQL in production (Render).
+
+\textbf{Frontend.} The frontend is a React 19 + TypeScript single-page application (SPA) built with Vite 7. UI components use Tailwind CSS v4 and the shadcn/ui component library. Cryptographic operations (BIP39 mnemonic generation, BIP32 key derivation, secp256k1 signing, AES-256-GCM key encryption) are performed entirely client-side using \texttt{@scure/bip39}, \texttt{@scure/bip32}, \texttt{@noble/secp256k1}, and \texttt{@noble/hashes} --- pure TypeScript implementations with no native dependencies. The frontend is deployed on Vercel.
+
+\textbf{Authentication.} The authentication system is passwordless and wallet-based. Two wallet modes are supported: (1) a native VeriFi wallet based on BIP39 mnemonic generation and BIP32/BIP44 key derivation, with the private key stored AES-256-GCM encrypted in browser \texttt{localStorage}; and (2) MetaMask via the EIP-1193 browser extension API. Both modes use an identical EIP-191 personal\_sign challenge-response flow for login, described in full in Section~\ref{sec:auth_design}.
+
+\textbf{Claim Signing.} Every hard claim is cryptographically signed with the author's secp256k1 private key at creation time. The signature covers a canonical JSON serialisation of the claim payload: \texttt{\{author\_address, asset, direction, percentage, until, server\_timestamp\}}. This produces a proof bundle that allows any third party to verify --- using only the standard Ethereum public-key infrastructure --- that a specific user made a specific prediction at a specific time.
+
+\textbf{LLM Claim Extraction.} The system includes a claim extraction endpoint (\texttt{POST /api/posts/extract-claims/}) which, in the planned implementation, will pass post content to an LLM (Agno framework with a locally hosted language model) and return a structured list of detected claims. The LLM output schema is \texttt{\{claims: [\{asset, direction, target\_value, target\_unit, timeframe\_iso, language\}]\}}. Each extracted claim is presented to the user as a Claim Card for explicit confirmation, editing, or rejection before publication. The LLM was benchmarked on a custom dataset of English and Turkish prediction sentences spanning single-claim, multi-claim, and edge-case inputs. As of the midterm, the endpoint returns an empty list (stub); the full implementation is in progress.
+
+\textbf{Oracle-Based Resolution.} Claim resolution will be automated by a scheduled backend job that, upon claim expiry, queries a financial data oracle (CoinGecko for cryptocurrency assets; Yahoo Finance and Alpha Vantage for stocks, forex, and commodities) to determine whether the price movement matched the prediction. The resolution criterion is: did the asset move at least \texttt{percentage}\% in the predicted \texttt{direction} by the \texttt{until} date? Resolution status cannot revert once set, and the resolution is idempotent. This feature is targeted for Milestone 3.
+
+\textbf{Truth Score.} Each user's Truth Score is a single global numeric reputation metric updated automatically on every claim resolution. The formula is designed to weight claim difficulty: harder predictions (wider percentage targets, longer timeframes, more volatile assets) yield greater reputation gains when confirmed and greater penalties when rejected. The exact weighted formula is under active design as an open question (OQ-01 in the project SRS).
+
+% ─────────────────────────────────────────────────────────────────────────────
+\chapter{REQUIREMENTS SPECIFICATION}
+
+The following use cases define the primary interactions with the system.
+
+\textbf{UC-1: Register with Native Wallet.} A new user opens the registration page. The system generates a 12-word BIP39 mnemonic and displays it prominently with instructions to record it. The user sets an encryption passphrase. The system derives a secp256k1 private key via BIP32/BIP44 path \texttt{m/44'/60'/0'/0/0}, derives an Ethereum address (Keccak-256 of uncompressed public key, last 20 bytes), encrypts the private key with AES-256-GCM + PBKDF2-SHA256, stores the ciphertext in browser \texttt{localStorage}, and registers the address with the backend. The backend issues a JWT. The user is now logged in.
+
+\textbf{UC-2: Login with Native Wallet.} A returning user enters their passphrase. The system decrypts the stored private key. A single-use nonce (5-minute TTL) is fetched from the backend. The system signs the nonce using EIP-191 personal\_sign and sends \texttt{\{address, nonce, signature\}} to the backend. The backend recovers the signing address from the signature and verifies it matches the registered address. A new JWT is issued.
+
+\textbf{UC-3: Login with MetaMask.} A user with MetaMask installed clicks the MetaMask login option. The system calls \texttt{eth\_requestAccounts} to retrieve the user's address. If not yet registered, the address is registered automatically. A challenge nonce is fetched and signed via MetaMask's \texttt{personal\_sign} popup. The backend flow is identical to UC-2.
+
+\textbf{UC-4: Create a Hard Claim.} An authenticated user fills out the hard claim form: claim text (natural language), asset (dropdown from the asset API), direction (Bullish or Bearish), expected percentage move (0--100), and deadline (a future date). The system validates all fields server-side and stores the claim with status \texttt{undetermined}, linked to the user's wallet address.
+
+\textbf{UC-5: Browse the Public Feed.} Any user (authenticated or not) opens the feed page. The system loads all hard claims sorted by creation time, newest first. Each PostCard displays: author address, asset, direction, percentage, deadline, and current status badge. The feed is accessible without login.
+
+\textbf{UC-6: Resolve a Hard Claim (Admin).} An administrator (identified by a whitelisted Ethereum address in \texttt{ADMIN\_ADDRESSES}) sends a \texttt{PATCH} request to \texttt{/api/posts/hard-claims/\{id\}/update-status/} with the new status (\texttt{confirmed} or \texttt{rejected}). The backend verifies the caller's JWT address is in the admin whitelist. The status is updated and cannot revert.
+
+\textbf{UC-7: Download and Verify a Proof.} An authenticated user views a confirmed hard claim and clicks ``Download Proof.'' The system generates and downloads a JSON file containing \texttt{\{claim\_payload, signature, wallet\_address, server\_timestamp\}}. Any user can later upload this file to the standalone proof verification page. The verifier reconstructs the signed payload, recovers the signing address from the signature using \texttt{eth\_account.recover\_message()}, and confirms it matches \texttt{wallet\_address}.
+
+\textbf{UC-8: Non-Repudiation of Deleted Post.} A user saves the signed proof of another user's hard claim. The claim author later deletes their post (exercising GDPR / KVKK rights). The post text is removed, but the claim payload record persists in the database. The saved proof remains cryptographically valid. The proof verification page confirms the signature, providing tamper-evident evidence that the prediction was made, regardless of post deletion.
+
+\textbf{UC-9: View User Profile.} Any visitor navigates to a user's profile page by wallet address. The system displays the user's Truth Score, full claim history with resolution outcomes, and proof download links for confirmed claims. No login is required.
+
+\textbf{UC-10: LLM-Assisted Claim Extraction.} An authenticated user writes a natural-language post containing one or more financial predictions. The system submits the post content to the LLM extraction endpoint. The LLM identifies claim candidates and returns structured \texttt{\{asset, direction, percentage, timeframe\}} tuples. If a required field (particularly the timeframe) is missing, the system prompts the user to provide it explicitly rather than inferring it. The user confirms, edits, or rejects each Claim Card before publication.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\chapter{DESIGN}
+
+\section{Information Structure}
+
+The core data models and their relationships are described below.
+
+\textbf{WalletUser} represents a registered user. Fields: \texttt{id} (auto), \texttt{address} (42-character Ethereum address, unique, stored lowercase), \texttt{created\_at}.
+
+\textbf{Asset} represents a tradable financial asset. Fields: \texttt{id}, \texttt{name} (e.g., ``Bitcoin''), \texttt{symbol} (e.g., ``BTC''), \texttt{description} (optional text).
+
+\textbf{HardClaim} is the central entity representing a verifiable financial prediction. Fields: \texttt{id}, \texttt{author} (FK to WalletUser), \texttt{text} (natural-language description), \texttt{asset} (FK to Asset), \texttt{direction} (``Bullish'' or ``Bearish''), \texttt{percentage} (float, 0--100), \texttt{until} (future date, enforced by DB constraint: \texttt{until > created\_at}), \texttt{created\_at}, \texttt{status} (enumeration: \texttt{undetermined} / \texttt{confirmed} / \texttt{rejected}).
+
+\textbf{Post (legacy)} is a free-form social post retained for backward compatibility. Fields: \texttt{id}, \texttt{author} (FK to WalletUser, CASCADE delete), \texttt{content} (max 500 characters), \texttt{created\_at}.
+
+The \texttt{HardClaim} model is the canonical claim structure. The legacy \texttt{Post}/\texttt{Claim} models will be deprecated in a future milestone.
+
+\section{Information Flow}
+
+\textbf{Authentication flow (native wallet):} The browser generates a mnemonic and derives a secp256k1 key pair entirely client-side. The address is registered with the backend via \texttt{POST /api/auth/register/}. On login, the browser requests a nonce from \texttt{GET /api/auth/challenge/}, signs it with the private key (EIP-191), and sends the signature to \texttt{POST /api/auth/login/}. The backend uses \texttt{eth\_account.recover\_message()} to recover the signing address and issues a JWT on match.
+
+\textbf{Claim creation flow:} An authenticated user submits the hard claim form. The frontend sends \texttt{POST /api/posts/hard-claims/} with a Bearer JWT header. The backend validates the JWT, extracts the wallet address as the claim author, validates all claim fields server-side, and stores the record with status \texttt{undetermined}.
+
+\textbf{Claim resolution flow:} After a claim's \texttt{until} date passes, an admin (or, in future milestones, an automated oracle job) submits \texttt{PATCH /api/posts/hard-claims/\{id\}/update-status/}. The backend verifies admin identity, updates status, and triggers Truth Score recalculation for the claim author.
+
+\section{System Design}
+
+The system follows a strict client-server separation. The frontend is a static SPA deployed on Vercel that communicates with the backend exclusively through the REST API over HTTPS. The backend is stateless: all authenticated state is in the JWT token carried by the client. The private key never leaves the browser.
+
+The REST API is organized into two Django apps:
+\begin{itemize}
+    \item \texttt{accounts} --- authentication endpoints: \texttt{/api/auth/register/}, \texttt{/api/auth/challenge/}, \texttt{/api/auth/login/}
+    \item \texttt{posts} --- content endpoints: \texttt{/api/posts/}, \texttt{/api/posts/hard-claims/}, \texttt{/api/posts/assets/}, \texttt{/api/posts/extract-claims/}
+\end{itemize}
+
+Cross-origin requests from the frontend origin (Vercel domain and \texttt{localhost:5173} in development) are handled by \texttt{django-cors-headers}.
+
+\section{Authentication Design}
+\label{sec:auth_design}
+
+The authentication system is designed around the invariant that the private key is never transmitted to or stored by the server. The server only sees a wallet address (a 20-byte Keccak-256 hash of a public key) and a cryptographic signature over a server-issued nonce.
+
+The native VeriFi wallet uses BIP39 (12-word mnemonic, 128 bits of entropy), BIP32/BIP44 key derivation (path \texttt{m/44'/60'/0'/0/0}), and standard Ethereum address derivation. The private key is encrypted with AES-256-GCM using a key derived from the user's passphrase via PBKDF2-SHA256 (100,000 iterations) and stored as a JSON ciphertext object in browser \texttt{localStorage}.
+
+Login uses EIP-191 personal\_sign: the server generates a random hex nonce (32 bytes, 5-minute TTL, single-use), the client signs it, and the server uses \texttt{eth\_account.recover\_message()} to verify the signature. The following table summarises the security properties of both wallet modes.
+
+\begin{table}[thbp]
+\vskip\baselineskip
+\caption[Authentication Security Properties]{Security properties of native wallet vs.\ MetaMask authentication.}
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Property} & \textbf{Native Wallet} & \textbf{MetaMask} \\\hline
+Private key location & \texttt{localStorage} (AES-256-GCM encrypted) & MetaMask encrypted vault \\\hline
+Private key transmitted? & Never & Never \\\hline
+Replay attack protection & Single-use nonce (5-min TTL) & Single-use nonce (5-min TTL) \\\hline
+Signature scheme & EIP-191 personal\_sign (secp256k1) & EIP-191 personal\_sign (secp256k1) \\\hline
+Session mechanism & Stateless JWT (7-day expiry) & Stateless JWT (7-day expiry) \\\hline
+\end{tabular}
+\label{table:auth_security}
+\end{center}
+\end{table}
+
+\section{User Interface Design}
+
+The frontend implements the following main views:
+
+\begin{itemize}
+    \item \textbf{Login / Registration Page}: Wallet generation wizard, mnemonic display, passphrase setup, and MetaMask connect button.
+    \item \textbf{Feed Page}: Public list of hard claims rendered as PostCards, each showing author address, asset, direction, percentage, deadline, and status badge. New Claim dialog accessible to authenticated users.
+    \item \textbf{Post Detail Page}: Expanded view of a single post with all associated hard claims and proof download options.
+    \item \textbf{Profile Page}: User's wallet address (with 60-second timed private key reveal, partially obfuscated), Truth Score, and complete claim history.
+    \item \textbf{Proof Verification Page}: Standalone page (no login required) for uploading and verifying a downloaded proof JSON file.
+    \item \textbf{Post Creation Page}: Free-form text composer with optional LLM-assisted claim extraction.
+    \item \textbf{Claim Review Page}: Displays extracted Claim Cards for user confirmation before publishing.
+\end{itemize}
+
+The design language uses Tailwind CSS v4 utility classes and the shadcn/ui component library for consistent, accessible UI components (buttons, dialogs, badges, alerts, selects, inputs, textareas).
+
+% ─────────────────────────────────────────────────────────────────────────────
+\chapter{IMPLEMENTATION AND TESTING}
+
+\section{Implementation}
+
+As of the midterm (March 2026), the following features are implemented and functional.
+
+\textbf{Authentication system:}
+\begin{itemize}
+    \item Native wallet: BIP39 mnemonic generation, secp256k1 key derivation, passphrase-based AES-256-GCM encryption, \texttt{localStorage} storage, challenge-response JWT login.
+    \item MetaMask: EIP-1193 \texttt{eth\_requestAccounts} and \texttt{personal\_sign} integration using the same backend challenge-response flow.
+    \item Unified login UI supporting both wallet modes on a single page.
+    \item JWT-based session management (7-day token lifetime, stateless).
+    \item Logout: clears JWT, wallet address, and encrypted key from \texttt{localStorage}.
+\end{itemize}
+
+\textbf{Hard claims:}
+\begin{itemize}
+    \item Hard claim creation form with asset dropdown, direction selector, percentage input, and date picker.
+    \item Backend validation: percentage range (0--100), future deadline enforcement (DB-level constraint), authenticated author linking.
+    \item Public hard claim feed rendered as PostCard components.
+    \item Hard claim filtering by author address (\texttt{?address=} query parameter).
+    \item Admin-only manual claim status update endpoint.
+    \item Asset list API with pre-seeded assets (Bitcoin, Ethereum, US Dollar, and others).
+\end{itemize}
+
+\textbf{User interface:}
+\begin{itemize}
+    \item Feed page with PostCard components showing all hard claim fields and status badges.
+    \item Profile page with timed private key reveal (60-second auto-hide, partial obfuscation, copy-to-clipboard).
+    \item Responsive layout with navbar, Tailwind v4 theming, and shadcn/ui components.
+\end{itemize}
+
+\textbf{Pending for upcoming milestones:}
+\begin{itemize}
+    \item Cryptographic proof signing, proof download UI, and standalone proof verification page (Milestone 2).
+    \item Truth Score model, calculation formula, and public display (Milestone 2/3).
+    \item Automated oracle-based claim resolution with exponential-backoff retries (Milestone 3).
+    \item LLM claim extraction (currently a stub returning \texttt{[]}); full implementation in progress.
+    \item Feed filtering by asset (Milestone 3).
+    \item Post text deletion for GDPR / KVKK compliance.
+\end{itemize}
+
+\section{Testing}
+
+\textbf{Security testing.} An XSS vulnerability scan was conducted on 2026-03-17 using XSStrike v3.1.5 targeting both the frontend (\texttt{localhost:5173}) and backend (\texttt{localhost:8000}) at commit \texttt{861894b}. All 28 fuzzer payloads --- including \texttt{<script>}, \texttt{<svg>}, and event handler injections (\texttt{onload}, \texttt{onclick}) --- were blocked. No XSS vulnerabilities were detected. React's automatic content escaping (no \texttt{dangerouslySetInnerHTML} usage) and Django REST Framework's JSON-only response format both contribute to this result.
+
+\textbf{Manual testing.} Authentication flows (native wallet and MetaMask), hard claim creation, and feed display have been tested manually in the development environment. The challenge-response authentication flow has been verified end-to-end: nonce issuance, EIP-191 signing in the browser, server-side \texttt{eth\_account} signature recovery, and JWT issuance.
+
+\textbf{LLM benchmark.} A benchmark dataset has been designed to evaluate LLM claim extraction quality. The dataset contains examples in English and Turkish across four categories: (1) single-claim factual predictions, (2) multi-claim sentences, (3) combined quantitative predictions, and (4) noise / near-miss inputs that should not produce claims (e.g., intent statements, non-quantified commentary). Results will be reported in the final submission.
+
+Automated unit and integration testing with a structured test suite are planned for the upcoming milestones.
+
+\section{Deployment}
+
+The platform is deployed to production:
+\begin{itemize}
+    \item \textbf{Frontend}: Vercel, building from the \texttt{frontend/} directory with \texttt{pnpm build}. Configuration in \texttt{frontend/vercel.json}. SPA routing handled via \texttt{rewrites} config.
+    \item \textbf{Backend}: Render, running \texttt{gunicorn} as the WSGI server. Configuration in \texttt{backend/render.yaml}. Environment variables (\texttt{SECRET\_KEY}, \texttt{DATABASE\_URL}, \texttt{ADMIN\_ADDRESSES}, CORS origins) managed through Render's dashboard.
+    \item \textbf{Database}: SQLite in development; PostgreSQL managed by Render in production.
+\end{itemize}
+
+CORS is configured to permit requests from the Vercel frontend domain in production and from \texttt{localhost:5173} during development.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\chapter{RESULTS}
+
+As of the midterm submission, the authentication system and core hard claim pipeline are fully operational. Users can register and log in with both a native VeriFi wallet and MetaMask, create hard claims through a structured form, and browse the public claim feed. The admin claim resolution mechanism is functional, enabling manual lifecycle management from \texttt{undetermined} to \texttt{confirmed} or \texttt{rejected}. The platform is live in production on Vercel (frontend) and Render (backend).
+
+Milestone 1 (March 8, 2026) was completed on schedule, delivering the full authentication system. The hard claim data model, feed, and basic profile pages were delivered as part of subsequent sprint work ahead of the midterm.
+
+The LLM claim extraction feature is partially implemented. The extraction endpoint exists and is reachable; the LLM benchmark dataset has been designed and populated with English and Turkish examples. Full integration with the Agno framework and a hosted language model is in progress and targeted for Milestone 2.
+
+The cryptographic proof system (signing at claim creation, proof download, and standalone verification) and the Truth Score calculation are the two most significant remaining features of the platform and are targeted for Milestones 2 and 3 respectively.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\chapter{CONCLUSION}
+
+VeriFi aims to bring cryptographic accountability to financial social media --- a domain currently dominated by unverifiable claims and selective recall. By anchoring every prediction to a signed proof tied to a cryptographic wallet identity, the platform makes financial predictions permanently attributable and verifiable, even after the original post is deleted.
+
+At the midterm stage, the core infrastructure is in place: a full wallet-based authentication system supporting both native BIP39 wallets and MetaMask, the hard claim creation and feed pipeline, manual admin resolution, and a live production deployment. The authentication flow represents a significant technical achievement, implementing the full BIP39/BIP32/secp256k1/EIP-191 stack client-side with AES-256-GCM key protection, while maintaining full compatibility with the Ethereum ecosystem.
+
+The remaining work focuses on completing the reputation and proof systems: cryptographic proof signing and download, the standalone verifier page, oracle-based automated resolution, and the Truth Score formula and calculation engine. These features constitute the distinctive value proposition of VeriFi and will be the primary development focus for the second half of the semester.
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\appendix
+\chapter{API REFERENCE}
+
+\begin{table}[thbp]
+\vskip\baselineskip
+\caption[REST API Endpoints]{Full REST API endpoint reference.}
+\begin{center}
+\begin{tabular}{|l|l|l|p{4.5cm}|}
+\hline
+\textbf{Method} & \textbf{Path} & \textbf{Auth} & \textbf{Description} \\\hline
+POST  & \texttt{/api/auth/register/}                               & None        & Register a wallet address; returns JWT \\\hline
+GET   & \texttt{/api/auth/challenge/}                              & None        & Issue a single-use nonce for signing \\\hline
+POST  & \texttt{/api/auth/login/}                                  & None        & Verify EIP-191 signature; issue JWT \\\hline
+GET   & \texttt{/api/posts/}                                       & None        & List all posts \\\hline
+POST  & \texttt{/api/posts/}                                       & Bearer      & Create a new post \\\hline
+POST  & \texttt{/api/posts/extract-claims/}                        & Bearer      & LLM claim extraction (stub) \\\hline
+GET   & \texttt{/api/posts/hard-claims/}                           & None        & List hard claims (filter: \texttt{?address=}) \\\hline
+POST  & \texttt{/api/posts/hard-claims/}                           & Bearer      & Create a new hard claim \\\hline
+PATCH & \texttt{/api/posts/hard-claims/\{id\}/update-status/}      & Bearer (Admin) & Resolve a claim \\\hline
+GET   & \texttt{/api/posts/assets/}                                & None        & List available financial assets \\\hline
+\end{tabular}
+\label{table:api}
+\end{center}
+\end{table}
+
+\end{document}
