@@ -9,6 +9,7 @@
 \usepackage{longtable}
 \graphicspath{{figures/}}
 \usepackage{booktabs}
+\usepackage[protrusion=true,expansion=false]{microtype}
 
 \begin{document}
 
@@ -61,7 +62,7 @@ Several ethical dimensions require careful attention in the design and operation
 
 \section{Project Definition}
 
-VeriFi is a web-based social media platform for verifiable financial predictions. The central concept is the \textit{Hard Claim}: a quantified, time-bounded financial prediction with the structured fields \texttt{\{asset, direction, percentage, until\}}. Hard claims are cryptographically signed by their author at publication time. When the deadline passes, each claim is resolved as confirmed or rejected by comparing the actual asset price movement against the prediction, either automatically via a financial data oracle or manually by an administrator.
+VeriFi is a web-based social media platform for verifiable financial predictions. The central concept is the \textit{Hard Claim}: a quantified, time-bounded financial prediction with the structured fields \texttt{\{asset,\allowbreak{} direction,\allowbreak{} percentage,\allowbreak{} until\}}. Hard claims are cryptographically signed by their author at publication time. When the deadline passes, each claim is resolved as confirmed or rejected by comparing the actual asset price movement against the prediction, either automatically via a financial data oracle or manually by an administrator.
 
 Each user accumulates a \textit{Truth Score}, a global reputation metric derived from the accuracy and difficulty of their resolved claims. The Truth Score is publicly visible, non-editable, and tamper-evident because it is anchored to cryptographically signed claim records.
 
@@ -135,7 +136,7 @@ The project will be considered successful if the following criteria are met by t
 \vskip\baselineskip
 \caption[Risk Analysis]{Identified risks, likelihood, impact, and mitigation strategies.}
 \begin{center}
-\begin{tabular}{|p{3.2cm}|c|c|p{5.5cm}|}
+\begin{tabular}{|p{3.5cm}|p{2.4cm}|p{1.5cm}|p{4.2cm}|}
 \hline
 \textbf{Risk} & \textbf{Likelihood} & \textbf{Impact} & \textbf{Mitigation} \\\hline
 Oracle API downtime or rate limiting & Medium & High & Exponential backoff retries; fallback to secondary data source; manual admin resolution as last resort \\\hline
@@ -192,7 +193,9 @@ The problem of tracking and verifying financial predictions has been approached 
 
 VeriFi is built as a monorepo web application with clearly separated frontend and backend layers.
 
+\begin{sloppypar}
 \textbf{Backend.} The backend is a REST API built with Django 6 and Django REST Framework (DRF). Authentication uses \texttt{djangorestframework-simplejwt} for JWT issuance and validation, and the \texttt{eth-account} library for Ethereum signature verification. The backend is stateless: no server-side sessions are maintained. All authentication state is encoded in the JWT token. The database is SQLite in development and PostgreSQL in production (Render).
+\end{sloppypar}
 
 \textbf{Frontend.} The frontend is a React 19 + TypeScript single-page application (SPA) built with Vite 7. UI components use Tailwind CSS v4 and the shadcn/ui component library. Cryptographic operations (BIP39 mnemonic generation, BIP32 key derivation, secp256k1 signing, AES-256-GCM key encryption) are performed entirely client-side using \texttt{@scure/bip39}, \texttt{@scure/bip32}, \texttt{@noble/secp256k1}, and \texttt{@noble/hashes} --- pure TypeScript implementations with no native dependencies. The frontend is deployed on Vercel.
 
@@ -209,27 +212,256 @@ VeriFi is built as a monorepo web application with clearly separated frontend an
 % ─────────────────────────────────────────────────────────────────────────────
 \chapter{REQUIREMENTS SPECIFICATION}
 
-The following use cases define the primary interactions with the system.
+\section{Stakeholders and User Personas}
 
-\textbf{UC-1: Register with Native Wallet.} A new user opens the registration page. The system generates a 12-word BIP39 mnemonic and displays it prominently with instructions to record it. The user sets an encryption passphrase. The system derives a secp256k1 private key via BIP32/BIP44 path \texttt{m/44'/60'/0'/0/0}, derives an Ethereum address (Keccak-256 of uncompressed public key, last 20 bytes), encrypts the private key with AES-256-GCM + PBKDF2-SHA256, stores the ciphertext in browser \texttt{localStorage}, and registers the address with the backend. The backend issues a JWT. The user is now logged in.
+\begin{table}[thbp]
+\vskip\baselineskip
+\caption[Stakeholders]{Stakeholders and their primary interactions with the system.}
+\begin{center}
+\begin{tabular}{|l|p{4.5cm}|p{5.5cm}|}
+\hline
+\textbf{Persona} & \textbf{Description} & \textbf{Primary Actions} \\\hline
+Predictor & Registered user who makes financial claims & Register, login, create claims, view profile \\\hline
+Visitor & Unauthenticated user browsing the platform & View feed, view profiles, verify proofs \\\hline
+Admin & Whitelisted wallet address (Ethereum) & Manually resolve claim status via API \\\hline
+Proof Verifier & Anyone with a downloaded proof file & Upload proof to the standalone verification page \\\hline
+\end{tabular}
+\end{center}
+\end{table}
 
-\textbf{UC-2: Login with Native Wallet.} A returning user enters their passphrase. The system decrypts the stored private key. A single-use nonce (5-minute TTL) is fetched from the backend. The system signs the nonce using EIP-191 personal\_sign and sends \texttt{\{address, nonce, signature\}} to the backend. The backend recovers the signing address from the signature and verifies it matches the registered address. A new JWT is issued.
+\section{Functional Requirements}
 
-\textbf{UC-3: Login with MetaMask.} A user with MetaMask installed clicks the MetaMask login option. The system calls \texttt{eth\_requestAccounts} to retrieve the user's address. If not yet registered, the address is registered automatically. A challenge nonce is fetched and signed via MetaMask's \texttt{personal\_sign} popup. The backend flow is identical to UC-2.
+\subsection{Authentication}
 
-\textbf{UC-4: Create a Hard Claim.} An authenticated user fills out the hard claim form: claim text (natural language), asset (dropdown from the asset API), direction (Bullish or Bearish), expected percentage move (0--100), and deadline (a future date). The system validates all fields server-side and stores the claim with status \texttt{undetermined}, linked to the user's wallet address.
+The system provides passwordless, wallet-based login. No email or password is stored on any server. Two flows are supported: native BIP39 wallet and MetaMask.
 
-\textbf{UC-5: Browse the Public Feed.} Any user (authenticated or not) opens the feed page. The system loads all hard claims sorted by creation time, newest first. Each PostCard displays: author address, asset, direction, percentage, deadline, and current status badge. The feed is accessible without login.
+\begin{table}[thbp]
+\vskip\baselineskip
+\caption[Authentication Requirements]{Authentication functional requirements.}
+\begin{center}
+\begin{tabular}{|l|p{11cm}|}
+\hline
+\textbf{ID} & \textbf{Requirement} \\\hline
+AUTH-01 & The system MUST generate a 12-word BIP39 mnemonic in-browser on the client without server involvement. \\\hline
+AUTH-02 & The system MUST derive a secp256k1 key pair from the mnemonic using BIP32 path \texttt{m/44'/60'/0'/0/0}. \\\hline
+AUTH-03 & The Ethereum address MUST be derived as the last 20 bytes of \texttt{keccak256(uncompressedPublicKey[1:])}, prefixed with \texttt{0x}. \\\hline
+AUTH-04 & The user MUST explicitly acknowledge that they have saved their mnemonic before registration proceeds. \\\hline
+AUTH-05 & The private key MUST be encrypted with AES-256-GCM using a PBKDF2-SHA256 derived key (100,000 iterations, random salt and IV) before being stored in \texttt{localStorage}. \\\hline
+AUTH-06 & The server MUST reject duplicate wallet address registrations with HTTP 409. \\\hline
+AUTH-07 & On successful registration, the server MUST return a JWT access token. \\\hline
+AUTH-08 & The client MUST request a nonce via \texttt{GET /api/auth/challenge/?address=<addr>}. \\\hline
+AUTH-09 & The server MUST generate a cryptographically random 256-bit nonce and store it with a 5-minute TTL. \\\hline
+AUTH-10 & The client MUST sign the nonce using EIP-191 \texttt{personal\_sign} with the decrypted private key. \\\hline
+AUTH-11 & The server MUST recover the signer address from the signature and reject if it does not match the claimed address. \\\hline
+AUTH-12 & The nonce MUST be deleted from cache immediately after first verification attempt (single-use). \\\hline
+AUTH-13 & On successful login, the server MUST return a JWT with the lowercase wallet address claim and a 7-day lifetime. \\\hline
+AUTH-14 & The system MUST support MetaMask (EIP-1193 provider) as an alternative login method using the same backend endpoints. \\\hline
+AUTH-15 & When MetaMask is used, VeriFi MUST NOT store or transmit the private key; signing is delegated entirely to MetaMask. \\\hline
+AUTH-16 & JWTs MUST be stored in \texttt{localStorage["verifi\_jwt"]}; wallet address in \texttt{localStorage["verifi\_address"]}. \\\hline
+AUTH-17 & All stateful write endpoints MUST validate the JWT and extract the \texttt{address} claim to identify the acting user. \\\hline
+AUTH-18 & Logout MUST clear the JWT, address, and encrypted private key from \texttt{localStorage}. \\\hline
+\end{tabular}
+\end{center}
+\end{table}
 
-\textbf{UC-6: Resolve a Hard Claim (Admin).} An administrator (identified by a whitelisted Ethereum address in \texttt{ADMIN\_ADDRESSES}) sends a \texttt{PATCH} request to \texttt{/api/posts/hard-claims/\{id\}/update-status/} with the new status (\texttt{confirmed} or \texttt{rejected}). The backend verifies the caller's JWT address is in the admin whitelist. The status is updated and cannot revert.
+\subsection{Hard Claim Creation}
 
-\textbf{UC-7: Download and Verify a Proof.} An authenticated user views a confirmed hard claim and clicks ``Download Proof.'' The system generates and downloads a JSON file containing \texttt{\{claim\_payload, signature, wallet\_address, server\_timestamp\}}. Any user can later upload this file to the standalone proof verification page. The verifier reconstructs the signed payload, recovers the signing address from the signature using \texttt{eth\_account.recover\_message()}, and confirms it matches \texttt{wallet\_address}.
+\begin{table}[thbp]
+\vskip\baselineskip
+\caption[Hard Claim Requirements]{Hard claim creation functional requirements.}
+\begin{center}
+\begin{tabular}{|l|p{11cm}|}
+\hline
+\textbf{ID} & \textbf{Requirement} \\\hline
+CLM-01 & A hard claim MUST contain all four fields: \texttt{asset}, \texttt{direction} (\texttt{Bullish}/\texttt{Bearish}), \texttt{percentage} (float, 0--100), \texttt{until} (future date). \\\hline
+CLM-02 & The \texttt{until} date MUST be strictly in the future at time of submission; the backend MUST enforce this constraint. \\\hline
+CLM-03 & The \texttt{percentage} field MUST be between 0 and 100; validated on the backend. \\\hline
+CLM-04 & A hard claim MUST be linked to the authenticated user's wallet address as \texttt{author}. \\\hline
+CLM-05 & The initial status of a new hard claim MUST be \texttt{undetermined}. \\\hline
+CLM-06 & The \texttt{asset} field MUST reference a pre-defined \texttt{Asset} record (id, name, symbol, description) from the backend. \\\hline
+CLM-07 & The \texttt{text} field contains the user's free-form natural-language description of their prediction. \\\hline
+\end{tabular}
+\end{center}
+\end{table}
 
-\textbf{UC-8: Non-Repudiation of Deleted Post.} A user saves the signed proof of another user's hard claim. The claim author later deletes their post (exercising GDPR / KVKK rights). The post text is removed, but the claim payload record persists in the database. The saved proof remains cryptographically valid. The proof verification page confirms the signature, providing tamper-evident evidence that the prediction was made, regardless of post deletion.
+\subsection{LLM Claim Extraction (Planned)}
 
-\textbf{UC-9: View User Profile.} Any visitor navigates to a user's profile page by wallet address. The system displays the user's Truth Score, full claim history with resolution outcomes, and proof download links for confirmed claims. No login is required.
+The endpoint \texttt{POST /api/posts/extract-claims/} exists but currently returns \texttt{[]} (stub). Full implementation is planned for a future milestone using the Agno framework with a locally hosted language model.
 
-\textbf{UC-10: LLM-Assisted Claim Extraction.} An authenticated user writes a natural-language post containing one or more financial predictions. The system submits the post content to the LLM extraction endpoint. The LLM identifies claim candidates and returns structured \texttt{\{asset, direction, percentage, timeframe\}} tuples. If a required field (particularly the timeframe) is missing, the system prompts the user to provide it explicitly rather than inferring it. The user confirms, edits, or rejects each Claim Card before publication.
+\begin{table}[thbp]
+\vskip\baselineskip
+\caption[LLM Extraction Requirements]{LLM claim extraction functional requirements (planned).}
+\begin{center}
+\begin{tabular}{|l|p{11cm}|}
+\hline
+\textbf{ID} & \textbf{Requirement} \\\hline
+CLM-E01 & The LLM engine MUST extract hard claim candidates from free-form post text. \\\hline
+CLM-E02 & A valid extracted claim requires all four fields: \texttt{asset}, \texttt{direction}, \texttt{target\_value}, \texttt{timeframe\_iso}. \\\hline
+CLM-E03 & If a required field is missing, the system MUST prompt the user to fill it in explicitly --- no inference or generic defaults. \\\hline
+CLM-E04 & Each extracted claim MUST be presented as a Claim Card for user confirmation, editing, or rejection before posting. \\\hline
+CLM-E05 & The LLM response schema MUST be: \texttt{\{claims: [\{asset, direction, target\_value, target\_unit, timeframe\_iso, language\}]\}}. \\\hline
+CLM-E06 & The LLM engine is stateless; each extraction call is independent. \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsection{Claim Resolution}
+
+\begin{table}[thbp]
+\vskip\baselineskip
+\caption[Resolution Requirements]{Claim resolution functional requirements.}
+\begin{center}
+\begin{tabular}{|l|p{11cm}|}
+\hline
+\textbf{ID} & \textbf{Requirement} \\\hline
+RES-01 & A claim MUST be resolved to either \texttt{confirmed} or \texttt{rejected} after its \texttt{until} date passes. \\\hline
+RES-02 & Only wallet addresses listed in \texttt{ADMIN\_ADDRESSES} (server config) MAY call the claim status update endpoint. \\\hline
+RES-03 & The update endpoint MUST accept \texttt{\{"status": "confirmed"|"undetermined"|"rejected"\}} and persist the change. \\\hline
+RES-04 & Automated resolution (scheduled job): a job MUST detect expired claims and query the appropriate oracle to determine outcome. \textit{(Planned --- not yet implemented.)} \\\hline
+RES-05 & Oracle selection: CoinGecko for crypto assets; Yahoo Finance / Alpha Vantage for traditional assets. \\\hline
+RES-06 & Oracle failures MUST trigger exponential-backoff retries; after max retries, status remains \texttt{undetermined}. \\\hline
+RES-07 & Resolution results MUST be permanent and auditable; a resolved claim status MUST NOT revert. \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsection{Cryptographic Proofs}
+
+The signing architecture is defined; proof download and standalone verification page are planned for Milestone 2.
+
+\begin{table}[thbp]
+\vskip\baselineskip
+\caption[Proof Requirements]{Cryptographic proof functional requirements.}
+\begin{center}
+\begin{tabular}{|l|p{11cm}|}
+\hline
+\textbf{ID} & \textbf{Requirement} \\\hline
+PRF-01 & Every hard claim MUST be signed with the author's secp256k1 private key at creation time. \\\hline
+PRF-02 & The proof package MUST contain: \texttt{\{claim\_payload (JSON), signature (hex), wallet\_address, server\_timestamp\}}. \\\hline
+PRF-03 & Any authenticated user MUST be able to download a claim's proof as a local JSON file. \\\hline
+PRF-04 & A standalone public verification page MUST allow anyone (no login required) to upload a proof JSON and verify its authenticity. \\\hline
+PRF-05 & Deleting a post or deactivating an account MUST NOT invalidate a previously generated claim proof. \\\hline
+PRF-06 & Proof verification MUST recover the signer address from the signature and compare it to the stored \texttt{wallet\_address}. \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsection{Truth Score}
+
+No \texttt{truth\_score} model field exists yet; this section specifies the intended design for v1.
+
+\begin{table}[thbp]
+\vskip\baselineskip
+\caption[Truth Score Requirements]{Truth Score functional requirements.}
+\begin{center}
+\begin{tabular}{|l|p{11cm}|}
+\hline
+\textbf{ID} & \textbf{Requirement} \\\hline
+TS-01 & Each user MUST have a single global numeric Truth Score. \\\hline
+TS-02 & The Truth Score MUST be updated automatically on each claim resolution. \\\hline
+TS-03 & The score MUST be weighted by claim difficulty: asset volatility, predicted percentage, and timeframe length. \textit{(Exact formula: TBD --- see OQ-01.)} \\\hline
+TS-04 & The score normalization algorithm MUST prevent farming via trivially easy predictions. \\\hline
+TS-05 & The full score history per claim MUST be publicly visible and auditable on the user's profile. \\\hline
+TS-06 & A claim with status \texttt{undetermined} MUST NOT contribute to the Truth Score until resolved. \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsection{Feed}
+
+\begin{table}[thbp]
+\vskip\baselineskip
+\caption[Feed Requirements]{Feed functional requirements.}
+\begin{center}
+\begin{tabular}{|l|p{11cm}|}
+\hline
+\textbf{ID} & \textbf{Requirement} \\\hline
+FEED-01 & A public feed MUST display all hard claims sorted by creation time (descending). \\\hline
+FEED-02 & Each claim card MUST show: author wallet address, asset, direction, percentage target, deadline, and status badge (\texttt{Undetermined} / \texttt{Confirmed} / \texttt{Rejected}). \\\hline
+FEED-03 & The feed MUST be filterable by asset and asset category without page reload. \\\hline
+FEED-04 & Feed data MUST be accessible to unauthenticated users. \\\hline
+FEED-05 & The feed MUST load in under 2 seconds under normal conditions. \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsection{User Profiles}
+
+\begin{table}[thbp]
+\vskip\baselineskip
+\caption[Profile Requirements]{User profile functional requirements.}
+\begin{center}
+\begin{tabular}{|l|p{11cm}|}
+\hline
+\textbf{ID} & \textbf{Requirement} \\\hline
+PRF-P01 & Every wallet address MUST have a publicly accessible profile page. \\\hline
+PRF-P02 & A profile MUST display: wallet address, Truth Score, and full claim history. \\\hline
+PRF-P03 & Claim history MUST include a per-claim proof download link. \\\hline
+PRF-P04 & Users MUST be able to filter another user's profile by wallet address (search). \\\hline
+PRF-P05 & The profile page MUST allow the authenticated owner to reveal their encrypted private key temporarily (60-second auto-hide). \\\hline
+PRF-P06 & The revealed private key MUST be displayed partially obfuscated (\texttt{first8\ldots last8}) with a copy-to-clipboard option. \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\section{Non-Functional Requirements}
+
+\subsection{Security}
+
+\begin{table}[thbp]
+\vskip\baselineskip
+\caption[Security NFRs]{Security non-functional requirements.}
+\begin{center}
+\begin{tabular}{|p{4cm}|p{8.5cm}|}
+\hline
+\textbf{Requirement} & \textbf{Detail} \\\hline
+Private key isolation & Private key MUST never be transmitted to any server. Only the derived public address is known to the server. \\\hline
+Local key encryption & Private key MUST be encrypted with AES-256-GCM + PBKDF2-SHA256 (100,000 iterations) before storage. \\\hline
+Nonce replay prevention & Nonces are single-use; deleted from cache immediately after first verification attempt. TTL: 5 minutes. \\\hline
+JWT security & JWT MUST be signed with \texttt{SECRET\_KEY} (environment variable in production). Lifetime: 7 days. \\\hline
+CORS & \texttt{CORS\_ALLOWED\_ORIGINS} MUST be restricted to the known frontend origin; wildcard MUST NOT be used in production. \\\hline
+Admin authorization & Only addresses in \texttt{ADMIN\_ADDRESSES} may call claim resolution endpoints; checked server-side on every request. \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsection{Privacy and GDPR / KVKK}
+
+\begin{table}[thbp]
+\vskip\baselineskip
+\caption[Privacy NFRs]{Privacy and data protection non-functional requirements.}
+\begin{center}
+\begin{tabular}{|p{4cm}|p{8.5cm}|}
+\hline
+\textbf{Requirement} & \textbf{Detail} \\\hline
+No PII stored & No email, phone number, real name, or other personally identifiable information is stored. \\\hline
+Post text deletion & Users MUST be able to request deletion of post text (GDPR / KVKK right to erasure). \\\hline
+Claim payload permanence & Signed claim payloads are mathematical accountability data and MAY persist after post text deletion. \\\hline
+Pseudonymous identity & Wallet address is a pseudonymous identifier; users choose how much real-world identity to attach. \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsection{Performance and Reliability}
+
+\begin{table}[thbp]
+\vskip\baselineskip
+\caption[Performance NFRs]{Performance and reliability non-functional requirements.}
+\begin{center}
+\begin{tabular}{|p{5cm}|p{7.5cm}|}
+\hline
+\textbf{Requirement} & \textbf{SLA / Detail} \\\hline
+Feed initial load & $<$ 2 seconds under normal conditions \\\hline
+LLM claim extraction & $<$ 10 seconds per extraction call (when implemented) \\\hline
+Claim resolution job & Must run within 5 minutes of \texttt{until} date expiry \\\hline
+Proof verification & $<$ 1 second (client-side computation) \\\hline
+Oracle retries & Exponential backoff on oracle failure; resolution job MUST be idempotent \\\hline
+Claim data durability & Claim records MUST survive post deletions and account deactivations \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\textit{Note: Formal UML use case diagrams illustrating actor relationships will be included in the final report.}
 
 % ─────────────────────────────────────────────────────────────────────────────
 \chapter{DESIGN}
@@ -238,15 +470,71 @@ The following use cases define the primary interactions with the system.
 
 The core data models and their relationships are described below.
 
-\textbf{WalletUser} represents a registered user. Fields: \texttt{id} (auto), \texttt{address} (42-character Ethereum address, unique, stored lowercase), \texttt{created\_at}.
+\begin{table}[thbp]
+\vskip\baselineskip
+\caption[WalletUser Model]{\texttt{WalletUser} --- registered user identity.}
+\begin{center}
+\begin{tabular}{|l|l|p{7cm}|}
+\hline
+\textbf{Field} & \textbf{Type} & \textbf{Constraints} \\\hline
+\texttt{id} & Auto PK & --- \\\hline
+\texttt{address} & \texttt{CharField(42)} & Unique, lowercase Ethereum address (\texttt{0x} + 40 hex chars) \\\hline
+\texttt{created\_at} & \texttt{DateTimeField} & Auto-set on creation \\\hline
+\end{tabular}
+\end{center}
+\end{table}
 
-\textbf{Asset} represents a tradable financial asset. Fields: \texttt{id}, \texttt{name} (e.g., ``Bitcoin''), \texttt{symbol} (e.g., ``BTC''), \texttt{description} (optional text).
+\begin{table}[thbp]
+\vskip\baselineskip
+\caption[Asset Model]{\texttt{Asset} --- tradable financial asset.}
+\begin{center}
+\begin{tabular}{|l|l|p{7cm}|}
+\hline
+\textbf{Field} & \textbf{Type} & \textbf{Constraints} \\\hline
+\texttt{id} & Auto PK & --- \\\hline
+\texttt{name} & \texttt{CharField(100)} & e.g.\ ``Bitcoin'' \\\hline
+\texttt{symbol} & \texttt{CharField(10)} & e.g.\ ``BTC'' \\\hline
+\texttt{description} & \texttt{TextField} & Optional \\\hline
+\end{tabular}
+\end{center}
+\end{table}
 
-\textbf{HardClaim} is the central entity representing a verifiable financial prediction. Fields: \texttt{id}, \texttt{author} (FK to WalletUser), \texttt{text} (natural-language description), \texttt{asset} (FK to Asset), \texttt{direction} (``Bullish'' or ``Bearish''), \texttt{percentage} (float, 0--100), \texttt{until} (future date, enforced by DB constraint: \texttt{until > created\_at}), \texttt{created\_at}, \texttt{status} (enumeration: \texttt{undetermined} / \texttt{confirmed} / \texttt{rejected}).
+\begin{table}[thbp]
+\vskip\baselineskip
+\caption[HardClaim Model]{\texttt{HardClaim} --- the canonical verifiable financial prediction entity.}
+\begin{center}
+\begin{tabular}{|l|l|p{6cm}|}
+\hline
+\textbf{Field} & \textbf{Type} & \textbf{Constraints} \\\hline
+\texttt{id} & Auto PK & --- \\\hline
+\texttt{author} & FK $\rightarrow$ \texttt{WalletUser} & Nullable (system/anonymous claims) \\\hline
+\texttt{text} & \texttt{TextField} & User's free-form prediction description \\\hline
+\texttt{asset} & FK $\rightarrow$ \texttt{Asset} & Required \\\hline
+\texttt{direction} & \texttt{CharField(20)} & \texttt{"Bullish"} or \texttt{"Bearish"} \\\hline
+\texttt{percentage} & \texttt{FloatField} & 0--100; predicted price move magnitude \\\hline
+\texttt{until} & \texttt{DateField} & Must be $>$ \texttt{created\_at} (DB constraint) \\\hline
+\texttt{created\_at} & \texttt{DateTimeField} & Auto-set \\\hline
+\texttt{status} & \texttt{CharField(12)} & \texttt{undetermined} (default) $\cdot$ \texttt{confirmed} $\cdot$ \texttt{rejected} \\\hline
+\end{tabular}
+\end{center}
+\end{table}
 
-\textbf{Post (legacy)} is a free-form social post retained for backward compatibility. Fields: \texttt{id}, \texttt{author} (FK to WalletUser, CASCADE delete), \texttt{content} (max 500 characters), \texttt{created\_at}.
+\begin{table}[thbp]
+\vskip\baselineskip
+\caption[Post Model (Legacy)]{\texttt{Post} (legacy) --- free-form social post; will be deprecated in a future milestone.}
+\begin{center}
+\begin{tabular}{|l|p{3.5cm}|p{5.5cm}|}
+\hline
+\textbf{Field} & \textbf{Type} & \textbf{Constraints} \\\hline
+\texttt{id} & Auto PK & --- \\\hline
+\texttt{author} & FK $\rightarrow$ \texttt{WalletUser} & CASCADE delete \\\hline
+\texttt{content} & \texttt{TextField(500)} & Max 500 characters \\\hline
+\texttt{created\_at} & \texttt{DateTimeField} & Auto-set; ordered descending \\\hline
+\end{tabular}
+\end{center}
+\end{table}
 
-The \texttt{HardClaim} model is the canonical claim structure. The legacy \texttt{Post}/\texttt{Claim} models will be deprecated in a future milestone.
+\textit{Note: A formal Entity-Relationship (ER) diagram showing the above models and their relationships will be included in the final report.}
 
 \section{Information Flow}
 
@@ -254,19 +542,27 @@ The \texttt{HardClaim} model is the canonical claim structure. The legacy \textt
 
 \textbf{Claim creation flow:} An authenticated user submits the hard claim form. The frontend sends \texttt{POST /api/posts/hard-claims/} with a Bearer JWT header. The backend validates the JWT, extracts the wallet address as the claim author, validates all claim fields server-side, and stores the record with status \texttt{undetermined}.
 
-\textbf{Claim resolution flow:} After a claim's \texttt{until} date passes, an admin (or, in future milestones, an automated oracle job) submits \texttt{PATCH /api/posts/hard-claims/\{id\}/update-status/}. The backend verifies admin identity, updates status, and triggers Truth Score recalculation for the claim author.
+\textbf{Claim resolution flow:} After a claim's \texttt{until} date passes, an admin (or, in future milestones, an automated oracle job) submits \texttt{PATCH /api/}\allowbreak\texttt{posts/hard-claims/}\allowbreak\texttt{\{id\}/update-status/}. The backend verifies admin identity, updates status, and triggers Truth Score recalculation for the claim author.
+
+\textit{Note: Formal sequence diagrams and activity diagrams (BPMN) for the above flows will be included in the final report.}
 
 \section{System Design}
 
 The system follows a strict client-server separation. The frontend is a static SPA deployed on Vercel that communicates with the backend exclusively through the REST API over HTTPS. The backend is stateless: all authenticated state is in the JWT token carried by the client. The private key never leaves the browser.
 
 The REST API is organized into two Django apps:
+\begin{sloppypar}
 \begin{itemize}
     \item \texttt{accounts} --- authentication endpoints: \texttt{/api/auth/register/}, \texttt{/api/auth/challenge/}, \texttt{/api/auth/login/}
     \item \texttt{posts} --- content endpoints: \texttt{/api/posts/}, \texttt{/api/posts/hard-claims/}, \texttt{/api/posts/assets/}, \texttt{/api/posts/extract-claims/}
 \end{itemize}
+\end{sloppypar}
 
+\begin{sloppypar}
 Cross-origin requests from the frontend origin (Vercel domain and \texttt{localhost:5173} in development) are handled by \texttt{django-cors-headers}.
+\end{sloppypar}
+
+\textit{Note: Formal class diagrams and module dependency diagrams will be included in the final report.}
 
 \section{Authentication Design}
 \label{sec:auth_design}
@@ -281,7 +577,7 @@ Login uses EIP-191 personal\_sign: the server generates a random hex nonce (32 b
 \vskip\baselineskip
 \caption[Authentication Security Properties]{Security properties of native wallet vs.\ MetaMask authentication.}
 \begin{center}
-\begin{tabular}{|l|l|l|}
+\begin{tabular}{|p{3.5cm}|p{4.8cm}|p{3.8cm}|}
 \hline
 \textbf{Property} & \textbf{Native Wallet} & \textbf{MetaMask} \\\hline
 Private key location & \texttt{localStorage} (AES-256-GCM encrypted) & MetaMask encrypted vault \\\hline
@@ -310,6 +606,30 @@ The frontend implements the following main views:
 
 The design language uses Tailwind CSS v4 utility classes and the shadcn/ui component library for consistent, accessible UI components (buttons, dialogs, badges, alerts, selects, inputs, textareas).
 
+\textit{Note: UI wireframes, mockups, and screenshots of the implemented interface will be included in the final report.}
+
+\section{Design Decisions and Constraints}
+
+\begin{table}[thbp]
+\vskip\baselineskip
+\caption[Design Decisions]{Key design decisions and their rationale.}
+\begin{center}
+\begin{tabular}{|p{3.5cm}|p{3.5cm}|p{5.5cm}|}
+\hline
+\textbf{Decision} & \textbf{Choice} & \textbf{Rationale} \\\hline
+Claim target format & \texttt{percentage} (0--100 float) & More universal than absolute price; works across asset classes and currencies \\\hline
+Claim types (v1) & Hard claims only & Soft claims require a mature voting system; deferred to v2 \\\hline
+Claim resolution (v1) & Admin-controlled & Automated oracle resolution is planned but not yet implemented \\\hline
+Timestamping & Backend server timestamp & Sufficient for v1; blockchain anchoring is future work \\\hline
+Reputation & Single global Truth Score & Domain-specific scores deferred to v2 \\\hline
+Identity & Wallet address only & Privacy-preserving; no PII stored \\\hline
+GDPR handling & Post text deletable; claim payload permanent & Claim data is accountability data, not personal commentary \\\hline
+Authentication & Passwordless wallet signature & No password storage; cryptographic proof of key ownership \\\hline
+Key storage & \texttt{localStorage} (AES-256-GCM encrypted) & Acceptable for v1 target scale; hardware wallet support is future work \\\hline
+\end{tabular}
+\end{center}
+\end{table}
+
 % ─────────────────────────────────────────────────────────────────────────────
 \chapter{IMPLEMENTATION AND TESTING}
 
@@ -323,7 +643,7 @@ As of the midterm (March 2026), the following features are implemented and funct
     \item MetaMask: EIP-1193 \texttt{eth\_requestAccounts} and \texttt{personal\_sign} integration using the same backend challenge-response flow.
     \item Unified login UI supporting both wallet modes on a single page.
     \item JWT-based session management (7-day token lifetime, stateless).
-    \item Logout: clears JWT, wallet address, and encrypted key from \texttt{localStorage}.
+    \item Logout: clears JWT, wallet address, and encrypted key from \linebreak[4]\texttt{localStorage}.
 \end{itemize}
 
 \textbf{Hard claims:}
@@ -365,14 +685,15 @@ Automated unit and integration testing with a structured test suite are planned 
 
 \section{Deployment}
 
-The platform is deployed to production:
+Deployment to production is planned and will be completed before the final report submission. The intended deployment architecture is as follows:
+
 \begin{itemize}
-    \item \textbf{Frontend}: Vercel, building from the \texttt{frontend/} directory with \texttt{pnpm build}. Configuration in \texttt{frontend/vercel.json}. SPA routing handled via \texttt{rewrites} config.
-    \item \textbf{Backend}: Render, running \texttt{gunicorn} as the WSGI server. Configuration in \texttt{backend/render.yaml}. Environment variables (\texttt{SECRET\_KEY}, \texttt{DATABASE\_URL}, \texttt{ADMIN\_ADDRESSES}, CORS origins) managed through Render's dashboard.
+    \item \textbf{Frontend}: Vercel, building from the \texttt{frontend/} directory with \texttt{pnpm build}. Configuration in \texttt{frontend/vercel.json}. SPA routing will be handled via \texttt{rewrites} config.
+    \item \textbf{Backend}: Render, running \texttt{gunicorn} as the WSGI server. Configuration in \texttt{backend/render.yaml}. Environment variables (\texttt{SECRET\_KEY}, \texttt{DATABASE\_URL},\linebreak[4] \texttt{ADMIN\_ADDRESSES}, CORS origins) will be managed through Render's dashboard.
     \item \textbf{Database}: SQLite in development; PostgreSQL managed by Render in production.
 \end{itemize}
 
-CORS is configured to permit requests from the Vercel frontend domain in production and from \texttt{localhost:5173} during development.
+A deployment diagram and full build/run instructions will be included in the final report.
 
 % ─────────────────────────────────────────────────────────────────────────────
 \chapter{RESULTS}
@@ -390,37 +711,13 @@ The cryptographic proof system (signing at claim creation, proof download, and s
 
 VeriFi aims to bring cryptographic accountability to financial social media --- a domain currently dominated by unverifiable claims and selective recall. By anchoring every prediction to a signed proof tied to a cryptographic wallet identity, the platform makes financial predictions permanently attributable and verifiable, even after the original post is deleted.
 
+\begin{sloppypar}
 At the midterm stage, the core infrastructure is in place: a full wallet-based authentication system supporting both native BIP39 wallets and MetaMask, the hard claim creation and feed pipeline, manual admin resolution, and a live production deployment. The authentication flow represents a significant technical achievement, implementing the full BIP39/BIP32/secp256k1/EIP-191 stack client-side with AES-256-GCM key protection, while maintaining full compatibility with the Ethereum ecosystem.
+\end{sloppypar}
 
 The remaining work focuses on completing the reputation and proof systems: cryptographic proof signing and download, the standalone verifier page, oracle-based automated resolution, and the Truth Score formula and calculation engine. These features constitute the distinctive value proposition of VeriFi and will be the primary development focus for the second half of the semester.
 
 \bibliographystyle{plain}
 \bibliography{references}
-
-% ─────────────────────────────────────────────────────────────────────────────
-\appendix
-\chapter{API REFERENCE}
-
-\begin{table}[thbp]
-\vskip\baselineskip
-\caption[REST API Endpoints]{Full REST API endpoint reference.}
-\begin{center}
-\begin{tabular}{|l|l|l|p{4.5cm}|}
-\hline
-\textbf{Method} & \textbf{Path} & \textbf{Auth} & \textbf{Description} \\\hline
-POST  & \texttt{/api/auth/register/}                               & None        & Register a wallet address; returns JWT \\\hline
-GET   & \texttt{/api/auth/challenge/}                              & None        & Issue a single-use nonce for signing \\\hline
-POST  & \texttt{/api/auth/login/}                                  & None        & Verify EIP-191 signature; issue JWT \\\hline
-GET   & \texttt{/api/posts/}                                       & None        & List all posts \\\hline
-POST  & \texttt{/api/posts/}                                       & Bearer      & Create a new post \\\hline
-POST  & \texttt{/api/posts/extract-claims/}                        & Bearer      & LLM claim extraction (stub) \\\hline
-GET   & \texttt{/api/posts/hard-claims/}                           & None        & List hard claims (filter: \texttt{?address=}) \\\hline
-POST  & \texttt{/api/posts/hard-claims/}                           & Bearer      & Create a new hard claim \\\hline
-PATCH & \texttt{/api/posts/hard-claims/\{id\}/update-status/}      & Bearer (Admin) & Resolve a claim \\\hline
-GET   & \texttt{/api/posts/assets/}                                & None        & List available financial assets \\\hline
-\end{tabular}
-\label{table:api}
-\end{center}
-\end{table}
 
 \end{document}
