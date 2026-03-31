@@ -10,6 +10,9 @@
 \graphicspath{{figures/}}
 \usepackage{booktabs}
 \usepackage[protrusion=true,expansion=false]{microtype}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, fit, calc, decorations.markings, backgrounds}
+\usepackage{float}
 
 \begin{document}
 
@@ -36,6 +39,10 @@ H\"{u}seyin Birkan Y\i{}lmaz
 \section{Broad Impact}
 
 The financial media landscape is plagued by unverifiable claims. Influencers, analysts, and self-proclaimed experts routinely make bold financial predictions on social media with no accountability mechanism. When predictions prove correct they are amplified; when wrong, they are quietly deleted or ignored. This asymmetry erodes public trust and enables misinformation to thrive in financial discourse.
+
+Consider a concrete example. A popular financial influencer on Twitter (X) posts: ``Bitcoin will crash 50\% by next Friday --- sell everything now.'' Thousands of followers see the post and some act on it. When Bitcoin instead rises sharply, the influencer quietly deletes the tweet and later claims he never made such a prediction. A retail investor who lost money following the advice has no recourse: the tweet is gone, there is no proof it ever existed, and the influencer's public track record remains unblemished. On existing platforms this pattern repeats daily, because there is no technical mechanism to hold predictors accountable after deletion. The influencer's reputation is built entirely on selectively showcasing correct calls while erasing incorrect ones --- a survivorship bias that misleads followers at scale.
+
+Now imagine the same scenario on VeriFi. When the influencer posts his prediction, the platform separates the social commentary from the structured financial claim --- ``Bitcoin, Bearish, 50\%, by next Friday'' --- and cryptographically signs the claim with the influencer's private key. A skeptical follower clicks \textit{Save Proof} and downloads the signed claim to their local device. When the prediction fails and the influencer deletes the post, the social text disappears (respecting the right to erasure), but the mathematical proof persists. The follower uploads the saved proof to VeriFi's public verification page, the system confirms the cryptographic signature matches the influencer's wallet, and the failed prediction is permanently recorded in the influencer's Truth Score. Deletion does not equal deniability.
 
 VeriFi addresses this problem by building a social media platform where every financial prediction is cryptographically signed at the time of posting. Because the signature is generated from the author's private key and bound to the claim content, a prediction cannot be retroactively modified or plausibly denied --- even after the original post is deleted. This property, \textit{non-repudiation}, is the core differentiator of VeriFi compared to existing financial social platforms.
 
@@ -461,7 +468,75 @@ Claim data durability & Claim records MUST survive post deletions and account de
 \end{center}
 \end{table}
 
-\textit{Note: Formal UML use case diagrams illustrating actor relationships will be included in the final report.}
+\begin{figure}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    actor/.style={
+        rectangle, minimum width=1.8cm, minimum height=0.8cm,
+        draw, font=\small\bfseries, align=center
+    },
+    usecase/.style={
+        ellipse, draw, minimum width=2.8cm, minimum height=1cm,
+        font=\small, align=center, text width=2.4cm
+    },
+    arr/.style={-{Stealth[length=2mm]}, thick},
+    dasharr/.style={-{Stealth[length=2mm]}, dashed, thick},
+]
+
+% System boundary
+\node[draw, dashed, rounded corners=8pt, minimum width=10cm, minimum height=14cm,
+      label={[font=\large\bfseries]above:VeriFi System}] (sys) at (6.5,0) {};
+
+% Actors (left side)
+\node[actor] (predictor) at (-1.5, 3)  {Predictor};
+\node[actor] (visitor)   at (-1.5, -1) {Visitor};
+
+% Actors (right side)
+\node[actor] (admin)    at (14.5, 2)  {Admin};
+\node[actor] (verifier) at (14.5, -2) {Proof\\Verifier};
+
+% Use cases
+\node[usecase] (register) at (4, 5.5)   {Register Wallet};
+\node[usecase] (login)    at (9, 5.5)   {Login (Challenge--Response)};
+\node[usecase] (create)   at (4, 3)     {Create Hard Claim};
+\node[usecase] (sign)     at (9, 3)     {Sign Claim};
+\node[usecase] (feed)     at (4, 0.5)   {Browse Claim Feed};
+\node[usecase] (profile)  at (9, 0.5)   {View Profile \& Truth Score};
+\node[usecase] (download) at (4, -2)    {Download Proof};
+\node[usecase] (verify)   at (9, -2)    {Verify Proof};
+\node[usecase] (resolve)  at (9, -4.5)  {Resolve Claim};
+\node[usecase] (extract)  at (4, -4.5)  {LLM Claim Extraction};
+
+% Predictor associations
+\draw[arr] (predictor) -- (register);
+\draw[arr] (predictor) -- (login);
+\draw[arr] (predictor) -- (create);
+\draw[arr] (predictor) -- (feed);
+\draw[arr] (predictor) -- (profile);
+\draw[arr] (predictor) -- (download);
+
+% Visitor associations
+\draw[arr] (visitor) -- (feed);
+\draw[arr] (visitor) -- (profile);
+\draw[arr] (visitor) -- (verify);
+
+% Admin associations
+\draw[arr] (admin) -- (login);
+\draw[arr] (admin) -- (resolve);
+
+% Verifier associations
+\draw[arr] (verifier) -- (verify);
+
+% <<include>> relationships
+\draw[dasharr] (create) -- node[above, font=\scriptsize, sloped] {$\ll$include$\gg$} (sign);
+\draw[dasharr] (create) -- node[below, font=\scriptsize, sloped] {$\ll$extend$\gg$} (extract);
+
+\end{tikzpicture}%
+}
+\caption[Use Case Diagram]{UML use case diagram showing actor--system interactions.}
+\label{fig:use_case}
+\end{figure}
 
 % ─────────────────────────────────────────────────────────────────────────────
 \chapter{DESIGN}
@@ -534,7 +609,73 @@ The core data models and their relationships are described below.
 \end{center}
 \end{table}
 
-\textit{Note: A formal Entity-Relationship (ER) diagram showing the above models and their relationships will be included in the final report.}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    entity/.style={
+        rectangle, draw, thick, minimum width=3.4cm, minimum height=0.8cm,
+        font=\small\bfseries, fill=black!8
+    },
+    attr/.style={
+        rectangle, draw, thin, minimum width=3.4cm, minimum height=0.55cm,
+        font=\scriptsize\ttfamily, anchor=north
+    },
+]
+
+% WalletUser entity (top-left)
+\node[entity] (wu) at (0, 0) {WalletUser};
+\node[attr] (wu1) at (0, -0.4) {PK: id};
+\node[attr] (wu2) at (0, -0.95) {address (unique)};
+\node[attr] (wu3) at (0, -1.5) {created\_at};
+\node[draw, thin, fit=(wu)(wu1)(wu2)(wu3), inner sep=0pt] {};
+
+% Asset entity (top-right)
+\node[entity] (asset) at (8, 0) {Asset};
+\node[attr] (a1) at (8, -0.4)  {PK: id};
+\node[attr] (a2) at (8, -0.95) {name};
+\node[attr] (a3) at (8, -1.5)  {symbol};
+\node[attr] (a4) at (8, -2.05) {description};
+\node[draw, thin, fit=(asset)(a1)(a2)(a3)(a4), inner sep=0pt] {};
+
+% Post (Legacy) entity (bottom-left)
+\node[entity] (post) at (-3, -5.5) {Post (Legacy)};
+\node[attr] (p1) at (-3, -5.9)  {PK: id};
+\node[attr] (p2) at (-3, -6.45) {FK: author\_id};
+\node[attr] (p3) at (-3, -7.0)  {content};
+\node[attr] (p4) at (-3, -7.55) {created\_at};
+\node[draw, thin, fit=(post)(p1)(p2)(p3)(p4), inner sep=0pt] {};
+
+% HardClaim entity (bottom-right)
+\node[entity] (hc) at (4.5, -5.5) {HardClaim};
+\node[attr] (hc1) at (4.5, -5.9) {PK: id};
+\node[attr] (hc2) at (4.5, -6.45) {FK: author\_id};
+\node[attr] (hc3) at (4.5, -7.0) {FK: asset\_id};
+\node[attr] (hc4) at (4.5, -7.55) {text, direction};
+\node[attr] (hc5) at (4.5, -8.1) {percentage, until};
+\node[attr] (hc6) at (4.5, -8.65) {status, created\_at};
+\node[draw, thin, fit=(hc)(hc1)(hc2)(hc3)(hc4)(hc5)(hc6), inner sep=0pt] {};
+
+% Post.author -> WalletUser (straight vertical line)
+\draw[thick, -{Stealth[length=2.5mm]}]
+    (-3, -5.1) -- node[left, font=\scriptsize, pos=0.3] {N} node[left, font=\scriptsize, pos=0.7] {1} (-3, -1.8)
+    -- node[above, font=\scriptsize] {author} (0, -1.8);
+
+% HardClaim.author -> WalletUser (L-shaped)
+\draw[thick, -{Stealth[length=2.5mm]}]
+    (3.3, -5.1) -- node[left, font=\scriptsize, pos=0.2] {N}  (3.3, -3.5)
+    -- node[above, font=\scriptsize] {author} (0.5, -3.5)
+    -- node[left, font=\scriptsize, pos=0.7] {1} (0.5, -1.8);
+
+% HardClaim.asset -> Asset (L-shaped)
+\draw[thick, -{Stealth[length=2.5mm]}]
+    (5.7, -5.1) -- node[right, font=\scriptsize, pos=0.2] {N} (5.7, -3.5)
+    -- node[above, font=\scriptsize] {asset} (8, -3.5)
+    -- node[right, font=\scriptsize, pos=0.7] {1} (8, -2.35);
+
+\end{tikzpicture}
+\caption[Entity-Relationship Diagram]{Entity-Relationship diagram of the core data models. \texttt{HardClaim} references both \texttt{WalletUser} (author) and \texttt{Asset}. \texttt{Post} (legacy) also references \texttt{WalletUser}.}
+\label{fig:er_diagram}
+\end{figure}
 
 \section{Information Flow}
 
@@ -544,7 +685,170 @@ The core data models and their relationships are described below.
 
 \textbf{Claim resolution flow:} After a claim's \texttt{until} date passes, an admin (or, in future milestones, an automated oracle job) submits \texttt{PATCH /api/}\allowbreak\texttt{posts/hard-claims/}\allowbreak\texttt{\{id\}/update-status/}. The backend verifies admin identity, updates status, and triggers Truth Score recalculation for the claim author.
 
-\textit{Note: Formal sequence diagrams and activity diagrams (BPMN) for the above flows will be included in the final report.}
+% --- Sequence Diagram 1: Native Wallet Registration & Login ---
+\begin{figure}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    arr/.style={-{Stealth[length=2mm]}, thick},
+    msg/.style={font=\scriptsize},
+    note/.style={font=\scriptsize\itshape, text width=3.4cm, align=left},
+    header/.style={rectangle, draw, thick, fill=black!8, minimum width=2.4cm, minimum height=0.7cm, font=\small\bfseries},
+]
+% Lifelines
+\node[header] (bh) at (0,0) {Browser (SPA)};
+\node[header] (lh) at (6,0) {localStorage};
+\node[header] (sh) at (12,0) {Django Backend};
+
+\draw[dashed] (0,-0.35) -- ++(0,-19);
+\draw[dashed] (6,-0.35) -- ++(0,-19);
+\draw[dashed] (12,-0.35) -- ++(0,-19);
+
+% --- Registration ---
+\draw[thick, fill=black!6] (-2.5,-0.9) rectangle (14.5,-1.3);
+\node[font=\small\bfseries] at (6,-1.1) {Registration};
+
+% 1
+\node[msg, anchor=east] at (-0.2,-1.9) {1.};
+\node[note, anchor=west] at (0.2,-1.8) {Generate BIP39 mnemonic\\Derive key (BIP32)\\Derive address (keccak256)};
+
+% 2
+\draw[arr] (0,-3.0) -- node[msg, above] {2. Encrypt key (AES-256-GCM)} (6,-3.0);
+\draw[arr, dashed] (6,-3.5) -- node[msg, above] {store \{ciphertext, salt, iv\}} (0,-3.5);
+
+% 3
+\draw[arr] (0,-4.3) -- node[msg, above] {3. POST /register/ \{address\}} (12,-4.3);
+\node[note, anchor=west] at (12.3,-4.7) {Check duplicate\\Create WalletUser};
+\draw[arr, dashed] (12,-5.4) -- node[msg, above] {201 \{access: JWT\}} (0,-5.4);
+
+% 4
+\draw[arr] (0,-6.1) -- node[msg, above] {4. Store JWT + address} (6,-6.1);
+
+% --- Login ---
+\draw[thick, fill=black!6] (-2.5,-7.0) rectangle (14.5,-7.4);
+\node[font=\small\bfseries] at (6,-7.2) {Login (Challenge--Response)};
+
+% 5
+\draw[arr] (0,-8.1) -- node[msg, above] {5. GET /challenge/?address=0x\ldots} (12,-8.1);
+\node[note, anchor=west] at (12.3,-8.5) {Generate 256-bit nonce\\Cache (5-min TTL)};
+\draw[arr, dashed] (12,-9.3) -- node[msg, above] {200 \{nonce\}} (0,-9.3);
+
+% 6
+\draw[arr] (0,-10.1) -- node[msg, above] {6. Decrypt private key} (6,-10.1);
+\draw[arr, dashed] (6,-10.6) -- node[msg, above] {decrypted key} (0,-10.6);
+
+% 7
+\node[note, anchor=east] at (-0.2,-11.4) {7. EIP-191 personal\_sign\\$\rightarrow$ 65-byte signature};
+
+% 8
+\draw[arr] (0,-12.4) -- node[msg, above] {8. POST /login/ \{address, nonce, sig\}} (12,-12.4);
+\node[note, anchor=west] at (12.3,-12.8) {Delete nonce (single-use)\\recover\_message(sig)\\Verify address match};
+\draw[arr, dashed] (12,-13.8) -- node[msg, above] {200 \{access: JWT\}} (0,-13.8);
+
+% 9
+\draw[arr] (0,-14.6) -- node[msg, above] {9. Store JWT} (6,-14.6);
+
+\end{tikzpicture}%
+}
+\caption[Native Wallet Sequence Diagram]{Sequence diagram for native wallet registration and challenge--response login.}
+\label{fig:seq_native}
+\end{figure}
+
+% --- Sequence Diagram 2: MetaMask Registration & Login ---
+\begin{figure}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    arr/.style={-{Stealth[length=2mm]}, thick},
+    msg/.style={font=\scriptsize},
+    note/.style={font=\scriptsize\itshape, text width=3.4cm, align=left},
+    header/.style={rectangle, draw, thick, fill=black!8, minimum width=2.4cm, minimum height=0.7cm, font=\small\bfseries},
+]
+% Lifelines
+\node[header] (bh) at (0,0) {Browser (SPA)};
+\node[header] (mh) at (6,0) {MetaMask};
+\node[header] (sh) at (12,0) {Django Backend};
+
+\draw[dashed] (0,-0.35) -- ++(0,-14);
+\draw[dashed] (6,-0.35) -- ++(0,-14);
+\draw[dashed] (12,-0.35) -- ++(0,-14);
+
+% --- Registration ---
+\draw[thick, fill=black!6] (-2.5,-0.9) rectangle (14.5,-1.3);
+\node[font=\small\bfseries] at (6,-1.1) {Registration};
+
+\draw[arr] (0,-1.9) -- node[msg, above] {1. eth\_requestAccounts} (6,-1.9);
+\draw[arr, dashed] (6,-2.4) -- node[msg, above] {[``0xABCD\ldots1234'']} (0,-2.4);
+
+\draw[arr] (0,-3.2) -- node[msg, above] {2. POST /register/ \{address\}} (12,-3.2);
+\node[note, anchor=west] at (12.3,-3.5) {Create WalletUser};
+\draw[arr, dashed] (12,-4.1) -- node[msg, above] {201 \{access: JWT\}} (0,-4.1);
+
+% --- Login ---
+\draw[thick, fill=black!6] (-2.5,-5.0) rectangle (14.5,-5.4);
+\node[font=\small\bfseries] at (6,-5.2) {Login (Challenge--Response via MetaMask)};
+
+\draw[arr] (0,-6.1) -- node[msg, above] {3. GET /challenge/?address=0x\ldots} (12,-6.1);
+\node[note, anchor=west] at (12.3,-6.5) {Generate nonce\\Cache (5-min TTL)};
+\draw[arr, dashed] (12,-7.2) -- node[msg, above] {200 \{nonce\}} (0,-7.2);
+
+\draw[arr] (0,-8.0) -- node[msg, above] {4. personal\_sign(nonce, addr)} (6,-8.0);
+\node[note, anchor=west] at (6.3,-8.4) {User approves\\in MetaMask popup};
+\draw[arr, dashed] (6,-9.1) -- node[msg, above] {signature (hex)} (0,-9.1);
+
+\draw[arr] (0,-9.9) -- node[msg, above] {5. POST /login/ \{address, nonce, sig\}} (12,-9.9);
+\node[note, anchor=west] at (12.3,-10.3) {Delete nonce\\Recover address\\Verify match};
+\draw[arr, dashed] (12,-11.2) -- node[msg, above] {200 \{access: JWT\}} (0,-11.2);
+
+\end{tikzpicture}%
+}
+\caption[MetaMask Sequence Diagram]{Sequence diagram for MetaMask registration and login. The private key never leaves the MetaMask vault.}
+\label{fig:seq_metamask}
+\end{figure}
+
+% --- Sequence Diagram 3: Hard Claim Creation ---
+\begin{figure}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    arr/.style={-{Stealth[length=2mm]}, thick},
+    msg/.style={font=\scriptsize},
+    note/.style={font=\scriptsize\itshape, text width=3.5cm, align=left},
+]
+% Lifelines
+\node[rectangle, draw, thick, fill=black!8, minimum width=2.6cm, font=\small\bfseries] (uh) at (0,0) {Predictor (Browser)};
+\node[rectangle, draw, thick, fill=black!8, minimum width=2.2cm, font=\small\bfseries] (sh) at (7,0) {Django Backend};
+\node[rectangle, draw, thick, fill=black!8, minimum width=2.2cm, font=\small\bfseries] (dh) at (13,0) {PostgreSQL};
+
+\draw[dashed, thick] (uh.south) -- ++(0,-9.5);
+\draw[dashed, thick] (sh.south) -- ++(0,-9.5);
+\draw[dashed, thick] (dh.south) -- ++(0,-9.5);
+
+% 1. Fill form
+\node[note, anchor=east] at (-0.3,-1.2) {1. Fill claim form\\(asset, direction, \%, until)};
+
+% 2. POST
+\draw[arr] (0,-2.2) -- node[msg, above] {2. POST /hard-claims/ \{Bearer JWT, claim fields\}} (7,-2.2);
+
+% 3-4. Validate
+\node[note, anchor=west] at (7.3,-2.8) {3. Validate JWT\\extract address as author};
+\node[note, anchor=west] at (7.3,-3.8) {4. Validate: percentage\\0--100, until $>$ now};
+
+% 5. Insert
+\draw[arr] (7,-4.8) -- node[msg, above] {5. INSERT HardClaim (status=undetermined)} (13,-4.8);
+\draw[arr, dashed] (13,-5.2) -- node[msg, above] {OK} (7,-5.2);
+
+% Response
+\draw[arr, dashed] (7,-5.8) -- node[msg, above] {201 \{hard\_claim object\}} (0,-5.8);
+
+% 6. Display
+\node[note, anchor=east] at (-0.3,-6.6) {6. Display new claim\\card on feed};
+
+\end{tikzpicture}%
+}
+\caption[Hard Claim Creation Sequence]{Sequence diagram for hard claim creation. The backend validates all fields and stores the claim with initial status \texttt{undetermined}.}
+\label{fig:seq_claim}
+\end{figure}
 
 \section{System Design}
 
@@ -562,7 +866,51 @@ The REST API is organized into two Django apps:
 Cross-origin requests from the frontend origin (Vercel domain and \texttt{localhost:5173} in development) are handled by \texttt{django-cors-headers}.
 \end{sloppypar}
 
-\textit{Note: Formal class diagrams and module dependency diagrams will be included in the final report.}
+\begin{figure}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    comp/.style={
+        rectangle, draw, thick, rounded corners=4pt,
+        minimum width=3.8cm, minimum height=1.6cm,
+        font=\small, align=center, fill=black!5
+    },
+    arr/.style={-{Stealth[length=2.5mm]}, thick},
+    darr/.style={{Stealth[length=2.5mm]}-{Stealth[length=2.5mm]}, thick},
+]
+
+% Row 1: main components
+\node[comp] (frontend) at (0, 0)
+    {\textbf{Browser SPA}\\React 19 + Vite 7\\Tailwind v4 + shadcn/ui\\Deployed: Vercel};
+
+\node[comp] (backend) at (6.5, 0)
+    {\textbf{Django REST API}\\DRF + SimpleJWT\\eth\_account\\Deployed: Render};
+
+\node[comp] (oracle) at (13, 0)
+    {\textbf{Oracle APIs}\\CoinGecko\\Yahoo Finance};
+
+% Row 2: storage and services
+\node[comp] (local) at (0, -3.5)
+    {\textbf{localStorage}\\Encrypted key\\JWT + Address};
+
+\node[comp] (db) at (6.5, -3.5)
+    {\textbf{PostgreSQL}\\WalletUser, Asset\\HardClaim, Post};
+
+\node[comp] (llm) at (13, -3.5)
+    {\textbf{LLM Engine}\\Agno + LM Studio\\(Planned)};
+
+% Arrows
+\draw[darr] (frontend) -- node[above, font=\scriptsize] {HTTPS / REST} node[below, font=\scriptsize] {Bearer JWT} (backend);
+\draw[darr] (frontend) -- node[left, font=\scriptsize] {read/write} (local);
+\draw[darr] (backend) -- node[left, font=\scriptsize] {SQL} (db);
+\draw[arr] (backend) -- node[above, font=\scriptsize] {price queries} (oracle);
+\draw[arr] (backend) -- node[left, font=\scriptsize] {extract} (llm);
+
+\end{tikzpicture}%
+}
+\caption[System Architecture]{High-level system architecture. The frontend communicates with the stateless backend over HTTPS; the private key never leaves the browser.}
+\label{fig:architecture}
+\end{figure}
 
 \section{Authentication Design}
 \label{sec:auth_design}
@@ -589,6 +937,102 @@ Session mechanism & Stateless JWT (7-day expiry) & Stateless JWT (7-day expiry) 
 \label{table:auth_security}
 \end{center}
 \end{table}
+
+Figure~\ref{fig:login_flowchart} presents the combined authentication flowchart, showing how the system routes a user through either the native wallet or MetaMask path before converging on the shared challenge--response verification.
+
+\begin{figure}[H]
+\centering
+\resizebox{0.85\textwidth}{!}{%
+\begin{tikzpicture}[
+    startstop/.style={
+        rectangle, rounded corners=8pt, draw, thick,
+        minimum width=3.5cm, minimum height=0.8cm,
+        font=\small\bfseries, fill=black!8
+    },
+    process/.style={
+        rectangle, draw, thick,
+        minimum width=3.8cm, minimum height=0.8cm,
+        font=\small, align=center, fill=black!4
+    },
+    decision/.style={
+        diamond, draw, thick, aspect=2.5,
+        font=\small, align=center, fill=black!4,
+        inner sep=1pt
+    },
+    arr/.style={-{Stealth[length=2.5mm]}, thick},
+]
+
+% Start
+\node[startstop] (start) at (0, 0) {User Opens App};
+
+% Decision: wallet type
+\node[decision] (wallettype) at (0, -2) {Wallet\\type?};
+
+% ============ MetaMask branch (RIGHT) ============
+\node[process] (mmreq) at (5.5, -2) {eth\_requestAccounts};
+\node[process] (mmaddr) at (5.5, -3.8) {Receive address from\\MetaMask};
+
+% ============ Native branch (LEFT) ============
+\node[decision] (existing) at (-5.5, -2) {Existing\\wallet?};
+
+% New wallet sub-branch (down from existing)
+\node[process] (gen) at (-5.5, -4.2) {Generate BIP39 mnemonic\\Derive key (BIP32)};
+\node[process] (enc) at (-5.5, -6.2) {Encrypt key (AES-256-GCM)\\Store in localStorage};
+\node[process] (reg) at (-5.5, -8.2) {POST /register/};
+
+% Returning wallet sub-branch (further left)
+\node[process] (pass) at (-10.5, -4.2) {Enter passphrase};
+\node[process] (dec) at (-10.5, -6.2) {Decrypt key from\\localStorage};
+
+% ============ Shared path (CENTER) ============
+\node[process] (challenge) at (0, -6.2) {GET /challenge/\\Receive nonce};
+\node[decision] (signtype) at (0, -8.5) {Signing\\method?};
+\node[process] (nsign) at (-5, -10.5) {EIP-191 sign with\\decrypted private key};
+\node[process] (msign) at (5, -10.5) {MetaMask\\personal\_sign popup};
+\node[process] (login) at (0, -12.5) {POST /login/\\(address, nonce, signature)};
+\node[decision] (valid) at (0, -14.8) {Signature\\valid?};
+\node[process] (jwt) at (0, -17) {Receive JWT};
+\node[startstop] (end) at (0, -18.8) {Authenticated};
+\node[process] (reject) at (6, -14.8) {Login rejected};
+
+% ============ Arrows ============
+\draw[arr] (start) -- (wallettype);
+
+% MetaMask branch
+\draw[arr] (wallettype) -- node[above, font=\scriptsize] {MetaMask} (mmreq);
+\draw[arr] (mmreq) -- (mmaddr);
+\draw[arr] (mmaddr.south) -- ++(0,-0.5) -| (challenge.east);
+
+% Native branch
+\draw[arr] (wallettype) -- node[above, font=\scriptsize] {Native} (existing);
+
+% New wallet
+\draw[arr] (existing) -- node[right, font=\scriptsize] {No} (gen);
+\draw[arr] (gen) -- (enc);
+\draw[arr] (enc) -- (reg);
+\draw[arr] (reg.east) -- ++(2.5,0) |- (challenge.west);
+
+% Existing wallet
+\draw[arr] (existing) -- node[above, font=\scriptsize] {Yes} (pass);
+\draw[arr] (pass) -- (dec);
+\draw[arr] (dec.east) -- ++(2.0,0) |- (challenge.west);
+
+% Shared flow
+\draw[arr] (challenge) -- (signtype);
+\draw[arr] (signtype) -- node[above, font=\scriptsize] {Native} (nsign);
+\draw[arr] (signtype) -- node[above, font=\scriptsize] {MetaMask} (msign);
+\draw[arr] (nsign) |- (login);
+\draw[arr] (msign) |- (login);
+\draw[arr] (login) -- (valid);
+\draw[arr] (valid) -- node[right, font=\scriptsize] {Yes} (jwt);
+\draw[arr] (jwt) -- (end);
+\draw[arr] (valid) -- node[above, font=\scriptsize] {No} (reject);
+
+\end{tikzpicture}%
+}
+\caption[Authentication Flowchart]{Combined authentication flowchart showing native wallet and MetaMask login paths converging at the shared EIP-191 challenge--response verification.}
+\label{fig:login_flowchart}
+\end{figure}
 
 \section{User Interface Design}
 
