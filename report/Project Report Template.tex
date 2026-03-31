@@ -233,6 +233,7 @@ Visitor & Unauthenticated user browsing the platform & View feed, view profiles,
 Admin & Whitelisted wallet address (Ethereum) & Manually resolve claim status via API \\\hline
 Proof Verifier & Anyone with a downloaded proof file & Upload proof to the standalone verification page \\\hline
 \end{tabular}
+\label{table:stakeholders}
 \end{center}
 \end{table}
 
@@ -268,6 +269,7 @@ AUTH-16 & JWTs MUST be stored in \texttt{localStorage["verifi\_jwt"]}; wallet ad
 AUTH-17 & All stateful write endpoints MUST validate the JWT and extract the \texttt{address} claim to identify the acting user. \\\hline
 AUTH-18 & Logout MUST clear the JWT, address, and encrypted private key from \texttt{localStorage}. \\\hline
 \end{tabular}
+\label{table:auth_req}
 \end{center}
 \end{table}
 
@@ -288,6 +290,7 @@ CLM-05 & The initial status of a new hard claim MUST be \texttt{undetermined}. \
 CLM-06 & The \texttt{asset} field MUST reference a pre-defined \texttt{Asset} record (id, name, symbol, description) from the backend. \\\hline
 CLM-07 & The \texttt{text} field contains the user's free-form natural-language description of their prediction. \\\hline
 \end{tabular}
+\label{table:claim_req}
 \end{center}
 \end{table}
 
@@ -309,6 +312,7 @@ CLM-E04 & Each extracted claim MUST be presented as a Claim Card for user confir
 CLM-E05 & The LLM response schema MUST be: \texttt{\{claims: [\{asset, direction, target\_value, target\_unit, timeframe\_iso, language\}]\}}. \\\hline
 CLM-E06 & The LLM engine is stateless; each extraction call is independent. \\\hline
 \end{tabular}
+\label{table:llm_req}
 \end{center}
 \end{table}
 
@@ -329,6 +333,7 @@ RES-05 & Oracle selection: CoinGecko for crypto assets; Yahoo Finance / Alpha Va
 RES-06 & Oracle failures MUST trigger exponential-backoff retries; after max retries, status remains \texttt{undetermined}. \\\hline
 RES-07 & Resolution results MUST be permanent and auditable; a resolved claim status MUST NOT revert. \\\hline
 \end{tabular}
+\label{table:resolution_req}
 \end{center}
 \end{table}
 
@@ -350,6 +355,7 @@ PRF-04 & A standalone public verification page MUST allow anyone (no login requi
 PRF-05 & Deleting a post or deactivating an account MUST NOT invalidate a previously generated claim proof. \\\hline
 PRF-06 & Proof verification MUST recover the signer address from the signature and compare it to the stored \texttt{wallet\_address}. \\\hline
 \end{tabular}
+\label{table:proof_req}
 \end{center}
 \end{table}
 
@@ -371,6 +377,7 @@ TS-04 & The score normalization algorithm MUST prevent farming via trivially eas
 TS-05 & The full score history per claim MUST be publicly visible and auditable on the user's profile. \\\hline
 TS-06 & A claim with status \texttt{undetermined} MUST NOT contribute to the Truth Score until resolved. \\\hline
 \end{tabular}
+\label{table:truth_req}
 \end{center}
 \end{table}
 
@@ -389,6 +396,7 @@ FEED-03 & The feed MUST be filterable by asset and asset category without page r
 FEED-04 & Feed data MUST be accessible to unauthenticated users. \\\hline
 FEED-05 & The feed MUST load in under 2 seconds under normal conditions. \\\hline
 \end{tabular}
+\label{table:feed_req}
 \end{center}
 \end{table}
 
@@ -408,6 +416,7 @@ PRF-P04 & Users MUST be able to filter another user's profile by wallet address 
 PRF-P05 & The profile page MUST allow the authenticated owner to reveal their encrypted private key temporarily (60-second auto-hide). \\\hline
 PRF-P06 & The revealed private key MUST be displayed partially obfuscated (\texttt{first8\ldots last8}) with a copy-to-clipboard option. \\\hline
 \end{tabular}
+\label{table:profile_req}
 \end{center}
 \end{table}
 
@@ -429,6 +438,7 @@ JWT security & JWT MUST be signed with \texttt{SECRET\_KEY} (environment variabl
 CORS & \texttt{CORS\_ALLOWED\_ORIGINS} MUST be restricted to the known frontend origin; wildcard MUST NOT be used in production. \\\hline
 Admin authorization & Only addresses in \texttt{ADMIN\_ADDRESSES} may call claim resolution endpoints; checked server-side on every request. \\\hline
 \end{tabular}
+\label{table:security_nfr}
 \end{center}
 \end{table}
 
@@ -446,6 +456,7 @@ Post text deletion & Users MUST be able to request deletion of post text (GDPR /
 Claim payload permanence & Signed claim payloads are mathematical accountability data and MAY persist after post text deletion. \\\hline
 Pseudonymous identity & Wallet address is a pseudonymous identifier; users choose how much real-world identity to attach. \\\hline
 \end{tabular}
+\label{table:privacy_nfr}
 \end{center}
 \end{table}
 
@@ -465,6 +476,7 @@ Proof verification & $<$ 1 second (client-side computation) \\\hline
 Oracle retries & Exponential backoff on oracle failure; resolution job MUST be idempotent \\\hline
 Claim data durability & Claim records MUST survive post deletions and account deactivations \\\hline
 \end{tabular}
+\label{table:performance_nfr}
 \end{center}
 \end{table}
 
@@ -485,11 +497,11 @@ Claim data durability & Claim records MUST survive post deletions and account de
 ]
 
 % System boundary
-\node[draw, dashed, rounded corners=8pt, minimum width=10cm, minimum height=14cm,
+\node[draw, dashed, rounded corners=8pt, minimum width=10cm, minimum height=10cm,
       label={[font=\large\bfseries]above:VeriFi System}] (sys) at (6.5,0) {};
 
 % Actors (left side)
-\node[actor] (predictor) at (-1.5, 3)  {Predictor};
+\node[actor] (predictor) at (-1.5, 2.5)  {Predictor};
 \node[actor] (visitor)   at (-1.5, -1) {Visitor};
 
 % Actors (right side)
@@ -497,16 +509,16 @@ Claim data durability & Claim records MUST survive post deletions and account de
 \node[actor] (verifier) at (14.5, -2) {Proof\\Verifier};
 
 % Use cases
-\node[usecase] (register) at (4, 5.5)   {Register Wallet};
-\node[usecase] (login)    at (9, 5.5)   {Login (Challenge--Response)};
-\node[usecase] (create)   at (4, 3)     {Create Hard Claim};
-\node[usecase] (sign)     at (9, 3)     {Sign Claim};
+\node[usecase] (register) at (4, 4.5)   {Register Wallet};
+\node[usecase] (login)    at (9, 4.5)   {Login (Challenge--Response)};
+\node[usecase] (create)   at (4, 2.5)   {Create Hard Claim};
+\node[usecase] (sign)     at (9, 2.5)   {Sign Claim};
 \node[usecase] (feed)     at (4, 0.5)   {Browse Claim Feed};
 \node[usecase] (profile)  at (9, 0.5)   {View Profile \& Truth Score};
-\node[usecase] (download) at (4, -2)    {Download Proof};
-\node[usecase] (verify)   at (9, -2)    {Verify Proof};
-\node[usecase] (resolve)  at (9, -4.5)  {Resolve Claim};
-\node[usecase] (extract)  at (4, -4.5)  {LLM Claim Extraction};
+\node[usecase] (download) at (4, -1.5)  {Download Proof};
+\node[usecase] (verify)   at (9, -1.5)  {Verify Proof};
+\node[usecase] (resolve)  at (9, -3.5)  {Resolve Claim};
+\node[usecase] (extract)  at (4, -3.5)  {LLM Claim Extraction};
 
 % Predictor associations
 \draw[arr] (predictor) -- (register);
@@ -556,6 +568,7 @@ The core data models and their relationships are described below.
 \texttt{address} & \texttt{CharField(42)} & Unique, lowercase Ethereum address (\texttt{0x} + 40 hex chars) \\\hline
 \texttt{created\_at} & \texttt{DateTimeField} & Auto-set on creation \\\hline
 \end{tabular}
+\label{table:walletuser_model}
 \end{center}
 \end{table}
 
@@ -571,6 +584,7 @@ The core data models and their relationships are described below.
 \texttt{symbol} & \texttt{CharField(10)} & e.g.\ ``BTC'' \\\hline
 \texttt{description} & \texttt{TextField} & Optional \\\hline
 \end{tabular}
+\label{table:asset_model}
 \end{center}
 \end{table}
 
@@ -591,6 +605,7 @@ The core data models and their relationships are described below.
 \texttt{created\_at} & \texttt{DateTimeField} & Auto-set \\\hline
 \texttt{status} & \texttt{CharField(12)} & \texttt{undetermined} (default) $\cdot$ \texttt{confirmed} $\cdot$ \texttt{rejected} \\\hline
 \end{tabular}
+\label{table:hardclaim_model}
 \end{center}
 \end{table}
 
@@ -606,6 +621,7 @@ The core data models and their relationships are described below.
 \texttt{content} & \texttt{TextField(500)} & Max 500 characters \\\hline
 \texttt{created\_at} & \texttt{DateTimeField} & Auto-set; ordered descending \\\hline
 \end{tabular}
+\label{table:post_model}
 \end{center}
 \end{table}
 
@@ -1071,6 +1087,7 @@ GDPR handling & Post text deletable; claim payload permanent & Claim data is acc
 Authentication & Passwordless wallet signature & No password storage; cryptographic proof of key ownership \\\hline
 Key storage & \texttt{localStorage} (AES-256-GCM encrypted) & Acceptable for v1 target scale; hardware wallet support is future work \\\hline
 \end{tabular}
+\label{table:design_decisions}
 \end{center}
 \end{table}
 
