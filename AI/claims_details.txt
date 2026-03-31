@@ -1,0 +1,15 @@
+{entity: market, quantity: unknown, period: unspecified}
+{entity: market, quantity: unknown, period: unspecified}
+{entity: dolar, quantity: 7 milyar, period: unspecified}
+{entity: Dolar, quantity: unknown, period: unspecified}
+{entity: Dolar, quantity: unknown, period: unspecified}
+{entity: dolar, quantity: 21 milyar, period: unspecified}
+{entity: market, quantity: unknown, period: unspecified}
+{entity: market, quantity: unknown, period: unspecified}
+{entity: market, quantity: unknown, period: unspecified}
+{entity: Bitcoin, quantity: 71 bin, period: unspecified}
+{entity: dolar, quantity: 65 bin, period: unspecified}
+{entity: market, quantity: unknown, period: unspecified}
+{entity: market, quantity: unknown, period: quarter}
+{entity: market, quantity: unknown, period: unspecified}
+{entity: market, quantity: 1 billion, period: unspecified}
