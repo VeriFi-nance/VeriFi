@@ -1117,6 +1117,53 @@ As of the midterm (March 2026), the following features are implemented and funct
     \item Post text deletion for GDPR / KVKK compliance.
 \end{itemize}
 
+\section{AI-Integrated Claim Extraction Engine}
+
+As part of the VeriFi project, a specialized AI engine was developed to transform unstructured financial text into verifiable ``Hard Claims.'' This section details the framework selection, iterative development, and benchmarking processes conducted as of March 2026.
+
+\subsection{Framework Research and Selection}
+
+A comprehensive evaluation of Large Language Model (LLM) orchestration frameworks was performed to identify the most suitable architecture for niche financial claim extraction. The following frameworks were researched:
+\begin{itemize}
+    \item \textbf{MLX \& Ollama:} Evaluated for local inference capabilities.
+    \item \textbf{LlamaIndex \& Langchain:} Analyzed for their broad RAG (Retrieval-Augmented Generation) capabilities.
+    \item \textbf{Agno (formerly Phidata):} Selected as the primary framework due to its lightweight agentic architecture. Agno's superior support for structured Pydantic outputs and its specialized focus on agentic workflows aligned perfectly with the project's requirement for high-precision data extraction.
+\end{itemize}
+
+\subsection{Implementation and Prompt Engineering}
+
+The development of the extraction agent followed an evolutionary approach:
+\begin{enumerate}
+    \item \textbf{Initial Phase:} A baseline extractor was implemented using standard completion calls to identify simple financial entities.
+    \item \textbf{Advanced System Prompting:} The system prompt was iteratively refined into a robust instruction set. This version incorporates few-shot prompting and strict schema enforcement to ensure that extracted claims include all necessary metadata (asset, direction, percentage, and deadline) while minimizing hallucinations in noisy text.
+\end{enumerate}
+
+\subsection{Model Benchmarking and Evaluation}
+
+A multi-stage testing protocol was established to determine the optimal model for production.
+
+\begin{sloppypar}
+\textbf{Phase 1: Exploratory Testing (20-Sample Base Instruction).}
+The following models were tested using a curated set of 20 complex financial sentences:
+\textit{zai-org/glm-4.6v-flash, mistralai/ministral-8b, deepseek/deepseek-r1-0528-qwen, liquid/lfm2.5-1.2b, ministral-3-8b-instruct, allenai/olmocr-2-7b, qwen2.5-7b-instruct-1m, hermes-3-llama-3.1-8b, gemma-3-27b-it, qwen/qwen3-vl-8b, qwen/qwen3.5-9b, meta-llama-3-8b-instruct,} and \textit{google/gemma-3-4b.}
+\end{sloppypar}
+
+During this phase, \textbf{hermes-3-llama-3.1-8b} exhibited the highest instruction-following capability and structural consistency.
+
+\textbf{Phase 2: Synthetic Scale Testing.}
+A larger dataset consisting of 1{,}000 AI-generated samples was used to stress-test the extraction logic. In this scaled environment, \textbf{ministral-3-8b-instruct} emerged as the most efficient model, balancing high extraction accuracy with optimized token usage.
+
+\subsection{Current Work: The Golden Dataset}
+
+To ensure the system's reliability against professional-grade financial discourse, work has commenced on a ``Golden Dataset.'' This dataset moves beyond synthetic data and is curated from high-authority real-world sources, including:
+\begin{itemize}
+    \item Corporate annual reports and bank summary statements.
+    \item Central Bank publications and monetary policy reports.
+    \item Financial analyses from institutions such as \textbf{Goldman Sachs}.
+    \item Opinions and forecasts from prominent economists and financial columnists.
+\end{itemize}
+The objective of this dataset is to fine-tune the extraction agent's ability to isolate ``hard claims'' from the nuanced and often hedged language of professional financial reporting.
+
 \section{Testing}
 
 \textbf{Security testing.} An XSS vulnerability scan was conducted on 2026-03-17 using XSStrike v3.1.5 targeting both the frontend (\texttt{localhost:5173}) and backend (\texttt{localhost:8000}) at commit \texttt{861894b}. All 28 fuzzer payloads --- including \texttt{<script>}, \texttt{<svg>}, and event handler injections (\texttt{onload}, \texttt{onclick}) --- were blocked. No XSS vulnerabilities were detected. React's automatic content escaping (no \texttt{dangerouslySetInnerHTML} usage) and Django REST Framework's JSON-only response format both contribute to this result.
