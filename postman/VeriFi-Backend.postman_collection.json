@@ -1,0 +1,403 @@
+{
+  "info": {
+    "name": "VeriFi Backend",
+    "_postman_id": "65cc9438-34f4-4a19-b9b7-a9e2da2b7cc9",
+    "description": "Postman collection for the current VeriFi Django backend. Register/Login requests automatically store JWTs into collection variables for later requests.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://127.0.0.1:8001" },
+    { "key": "user_address", "value": "0x742d35cc6634c0532925a3b844bc454e4438f44e" },
+    { "key": "admin_address", "value": "0x8c66a1abf7c949004af7de80a3fc0f691538ea74" },
+    { "key": "login_address", "value": "0x742d35cc6634c0532925a3b844bc454e4438f44e" },
+    { "key": "signature_hex", "value": "" },
+    { "key": "challenge_nonce", "value": "" },
+    { "key": "user_token", "value": "" },
+    { "key": "admin_token", "value": "" },
+    { "key": "last_claim_id", "value": "1" },
+    { "key": "last_post_id", "value": "1" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "var data = pm.response.json();",
+                  "if (data.access) {",
+                  "  pm.collectionVariables.set('user_token', data.access);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"address\": \"{{user_address}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/register/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "register", ""]
+            }
+          }
+        },
+        {
+          "name": "Register Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "var data = pm.response.json();",
+                  "if (data.access) {",
+                  "  pm.collectionVariables.set('admin_token', data.access);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"address\": \"{{admin_address}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/register/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "register", ""]
+            }
+          }
+        },
+        {
+          "name": "Get Challenge",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "var data = pm.response.json();",
+                  "if (data.nonce) {",
+                  "  pm.collectionVariables.set('challenge_nonce', data.nonce);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/auth/challenge/?address={{login_address}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "challenge", ""],
+              "query": [
+                { "key": "address", "value": "{{login_address}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Login With Signature",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "var data = pm.response.json();",
+                  "if (data.access) {",
+                  "  pm.collectionVariables.set('user_token', data.access);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"address\": \"{{login_address}}\",\n  \"signature\": \"{{signature_hex}}\",\n  \"nonce\": \"{{challenge_nonce}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/login/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "login", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Assets",
+      "item": [
+        {
+          "name": "List Assets",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/posts/assets/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "posts", "assets", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Hard Claims",
+      "item": [
+        {
+          "name": "List Hard Claims",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/posts/hard-claims/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "posts", "hard-claims", ""]
+            }
+          }
+        },
+        {
+          "name": "List Hard Claims By Address",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/posts/hard-claims/?address={{user_address}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "posts", "hard-claims", ""],
+              "query": [
+                { "key": "address", "value": "{{user_address}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Hard Claim",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "var data = pm.response.json();",
+                  "if (data.id) {",
+                  "  pm.collectionVariables.set('last_claim_id', String(data.id));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                { "key": "token", "value": "{{user_token}}", "type": "string" }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"BTC will rise at least 5% over the next month\",\n  \"asset_id\": 1,\n  \"direction\": \"bullish\",\n  \"percentage\": 5.0,\n  \"until\": \"2026-05-10\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/posts/hard-claims/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "posts", "hard-claims", ""]
+            }
+          }
+        },
+        {
+          "name": "Preview Last Hard Claim Resolution",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                { "key": "token", "value": "{{admin_token}}", "type": "string" }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"preview\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/posts/hard-claims/{{last_claim_id}}/resolve/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "posts", "hard-claims", "{{last_claim_id}}", "resolve", ""]
+            }
+          }
+        },
+        {
+          "name": "Resolve Last Hard Claim",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                { "key": "token", "value": "{{admin_token}}", "type": "string" }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/posts/hard-claims/{{last_claim_id}}/resolve/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "posts", "hard-claims", "{{last_claim_id}}", "resolve", ""]
+            }
+          }
+        },
+        {
+          "name": "Manual Update Last Hard Claim Status",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                { "key": "token", "value": "{{admin_token}}", "type": "string" }
+              ]
+            },
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"confirmed\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/posts/hard-claims/{{last_claim_id}}/update-status/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "posts", "hard-claims", "{{last_claim_id}}", "update-status", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Legacy Posts",
+      "item": [
+        {
+          "name": "List Posts",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/posts/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "posts", ""]
+            }
+          }
+        },
+        {
+          "name": "Create Post",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "var data = pm.response.json();",
+                  "if (data.id) {",
+                  "  pm.collectionVariables.set('last_post_id', String(data.id));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                { "key": "token", "value": "{{user_token}}", "type": "string" }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"BTC still looks bullish over the next quarter.\",\n  \"claims\": []\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/posts/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "posts", ""]
+            }
+          }
+        },
+        {
+          "name": "Extract Claims (Stub Contract)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                { "key": "token", "value": "{{user_token}}", "type": "string" }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"BTC will go up 10% by June\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/posts/extract-claims/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "posts", "extract-claims", ""]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
