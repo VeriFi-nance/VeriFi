@@ -29,9 +29,32 @@ class Claim(models.Model):
 
 
 class Asset(models.Model):
+    class MarketType(models.TextChoices):
+        CRYPTO = "crypto"
+        FOREX = "forex"
+        COMMODITY = "commodity"
+        EQUITY = "equity"
+        INDEX = "index"
+
+    class Provider(models.TextChoices):
+        COINGECKO = "coingecko"
+        YFINANCE = "yfinance"
+
     name = models.CharField(max_length=100)
     symbol = models.CharField(max_length=10)
     description = models.TextField(blank=True)
+    market_type = models.CharField(
+        max_length=20,
+        choices=MarketType.choices,
+        default=MarketType.CRYPTO,
+    )
+    provider = models.CharField(
+        max_length=20,
+        choices=Provider.choices,
+        default=Provider.COINGECKO,
+    )
+    provider_symbol = models.CharField(max_length=50, blank=True, default="")
+    quote_currency = models.CharField(max_length=10, default="USD")
 
     def __str__(self):
         return self.name
@@ -61,4 +84,3 @@ class HardClaim(models.Model):
 
     def __str__(self):
         return f"{self.asset} {self.direction}: {self.text[:40]}"
-

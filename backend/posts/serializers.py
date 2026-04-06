@@ -27,7 +27,16 @@ class ClaimInputSerializer(serializers.Serializer):
 class AssetSerializer(serializers.ModelSerializer):
     class Meta:
         model = Asset
-        fields = ["id", "name", "symbol", "description"]
+        fields = [
+            "id",
+            "name",
+            "symbol",
+            "description",
+            "market_type",
+            "provider",
+            "provider_symbol",
+            "quote_currency",
+        ]
 
 class HardClaimInputSerializer(serializers.Serializer):
     text = serializers.CharField()
