@@ -116,6 +116,22 @@ def _fetch_coingecko_price(provider_symbol: str, quote_currency: str, at_dt: dat
     return float(nearest[1])
 
 
+def _fetch_coingecko_peak(
+    provider_symbol: str, quote_currency: str, from_dt: datetime, to_dt: datetime, direction: str
+) -> float:
+    """Fetch the highest (bullish) or lowest (bearish) price in the given range."""
+    start = int(from_dt.timestamp())
+    end = int(to_dt.timestamp())
+    params = urlencode({"vs_currency": quote_currency.lower(), "from": start, "to": end})
+    url = f"https://api.coingecko.com/api/v3/coins/{provider_symbol}/market_chart/range?{params}"
+    payload = _http_get_json(url)
+    prices = payload.get("prices")
+    if not prices:
+        raise ResolutionError("PROVIDER_NO_PRICE_DATA", "CoinGecko returned no price data for range.")
+    values = [float(p[1]) for p in prices]
+    return max(values) if direction == "bullish" else min(values)
+
+
 def _fetch_yfinance_price(provider_symbol: str, at_dt: datetime) -> float:
     day_start = datetime.combine(at_dt.date(), time.min, tzinfo=timezone.utc)
     day_end = day_start + timedelta(days=1)
@@ -147,6 +163,38 @@ def _fetch_yfinance_price(provider_symbol: str, at_dt: datetime) -> float:
     raise ResolutionError("PROVIDER_NO_PRICE_DATA", "Yahoo Finance returned only null close prices.")
 
 
+def _fetch_yfinance_peak(
+    provider_symbol: str, from_dt: datetime, to_dt: datetime, direction: str
+) -> float:
+    """Fetch the highest high (bullish) or lowest low (bearish) over the date range."""
+    params = urlencode(
+        {
+            "period1": int(from_dt.timestamp()),
+            "period2": int(to_dt.timestamp()),
+            "interval": "1d",
+            "includePrePost": "false",
+            "events": "history",
+        }
+    )
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{provider_symbol}?{params}"
+    payload = _http_get_json(url)
+    chart = payload.get("chart", {})
+    results = chart.get("result") or []
+    if not results:
+        raise ResolutionError("PROVIDER_NO_PRICE_DATA", "Yahoo Finance returned no price data for range.")
+
+    indicators = results[0].get("indicators", {})
+    quotes = indicators.get("quote") or []
+    if not quotes:
+        raise ResolutionError("PROVIDER_NO_PRICE_DATA", "Yahoo Finance returned no OHLC data for range.")
+
+    key = "high" if direction == "bullish" else "low"
+    values = [float(v) for v in (quotes[0].get(key) or []) if v is not None]
+    if not values:
+        raise ResolutionError("PROVIDER_NO_PRICE_DATA", f"Yahoo Finance returned no {key} prices for range.")
+    return max(values) if direction == "bullish" else min(values)
+
+
 def fetch_price_for_time(instrument: dict[str, Any], at_dt: datetime) -> float:
     provider = instrument["provider"]
     provider_symbol = instrument["provider_symbol"]
@@ -156,6 +204,22 @@ def fetch_price_for_time(instrument: dict[str, Any], at_dt: datetime) -> float:
         return _fetch_coingecko_price(provider_symbol, quote_currency, at_dt)
     if provider == Asset.Provider.YFINANCE:
         return _fetch_yfinance_price(provider_symbol, at_dt)
+
+    raise ResolutionError("UNSUPPORTED_PROVIDER", f"Provider '{provider}' is not supported.")
+
+
+def fetch_peak_price(
+    instrument: dict[str, Any], from_dt: datetime, to_dt: datetime, direction: str
+) -> float:
+    """Fetch the most favorable price in [from_dt, to_dt] for the given direction."""
+    provider = instrument["provider"]
+    provider_symbol = instrument["provider_symbol"]
+    quote_currency = instrument["quote_currency"]
+
+    if provider == Asset.Provider.COINGECKO:
+        return _fetch_coingecko_peak(provider_symbol, quote_currency, from_dt, to_dt, direction)
+    if provider == Asset.Provider.YFINANCE:
+        return _fetch_yfinance_peak(provider_symbol, from_dt, to_dt, direction)
 
     raise ResolutionError("UNSUPPORTED_PROVIDER", f"Provider '{provider}' is not supported.")
 
@@ -175,7 +239,7 @@ def fetch_due_price(resolution_request: dict[str, Any]) -> float:
 def evaluate_claim(
     resolution_request: dict[str, Any],
     reference_price: float,
-    due_price: float,
+    peak_price: float,
 ) -> dict[str, Any]:
     target = resolution_request["target"]
     if target["kind"] != "percentage":
@@ -190,23 +254,23 @@ def evaluate_claim(
             "Reference price must be greater than zero.",
         )
 
-    change_pct = ((due_price - reference_price) / reference_price) * 100
+    change_pct = ((peak_price - reference_price) / reference_price) * 100
     threshold = float(target["value"])
     direction = target["direction"]
 
     if direction == "bullish":
         confirmed = change_pct >= threshold
         reason = (
-            "due_price met or exceeded bullish percentage target"
+            "peak price met or exceeded bullish percentage target within timeframe"
             if confirmed
-            else "due_price did not reach bullish percentage target"
+            else "peak price did not reach bullish percentage target within timeframe"
         )
     else:
         confirmed = change_pct <= (-threshold)
         reason = (
-            "due_price met or exceeded bearish percentage target"
+            "trough price met or exceeded bearish percentage target within timeframe"
             if confirmed
-            else "due_price did not reach bearish percentage target"
+            else "trough price did not reach bearish percentage target within timeframe"
         )
 
     return {
@@ -223,7 +287,7 @@ def evaluate_claim(
         "target": target,
         "prices": {
             "reference": _round_decimal(reference_price),
-            "due": _round_decimal(due_price),
+            "peak": _round_decimal(peak_price),
             "currency": resolution_request["instrument"]["quote_currency"],
         },
         "computed_change_pct": _round_decimal(change_pct),
@@ -235,8 +299,17 @@ def evaluate_claim(
 def preview_resolution(hard_claim: HardClaim) -> dict[str, Any]:
     resolution_request = normalize_claim_for_resolution(hard_claim)
     reference_price = fetch_reference_price(resolution_request)
-    due_price = fetch_due_price(resolution_request)
-    return evaluate_claim(resolution_request, reference_price, due_price)
+    direction = resolution_request["target"]["direction"]
+    reference_at = datetime.fromisoformat(
+        resolution_request["reference_at"].replace("Z", "+00:00")
+    )
+    due_at = datetime.fromisoformat(
+        resolution_request["due_at"].replace("Z", "+00:00")
+    )
+    peak_price = fetch_peak_price(
+        resolution_request["instrument"], reference_at, due_at, direction
+    )
+    return evaluate_claim(resolution_request, reference_price, peak_price)
 
 
 def resolve_hard_claim(hard_claim: HardClaim) -> dict[str, Any]:

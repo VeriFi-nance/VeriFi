@@ -8,7 +8,7 @@ from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from accounts.models import WalletUser
 from .models import Post, Asset, HardClaim
-from .resolution import ResolutionError, fetch_due_price, fetch_reference_price, normalize_claim_for_resolution
+from .resolution import ResolutionError, fetch_peak_price, fetch_reference_price, normalize_claim_for_resolution
 
 
 class HardClaimAPITestCase(APITestCase):
@@ -327,9 +327,9 @@ class HardClaimResolveApiTestCase(APITestCase):
             "status": "confirmed",
             "instrument": {"symbol": "BTC", "provider": "coingecko", "provider_symbol": "bitcoin"},
             "target": {"kind": "percentage", "direction": "bullish", "value": 10.0, "unit": "percent"},
-            "prices": {"reference": 70000.0, "due": 78100.0, "currency": "USD"},
+            "prices": {"reference": 70000.0, "peak": 78100.0, "currency": "USD"},
             "computed_change_pct": 11.57,
-            "evaluation_reason": "due_price met or exceeded bullish percentage target",
+            "evaluation_reason": "peak price met or exceeded bullish percentage target within timeframe",
             "resolved_at": "2026-05-01T09:00:00Z",
         }
 
@@ -341,10 +341,12 @@ class HardClaimResolveApiTestCase(APITestCase):
         self.assertEqual(response.data["status"], "confirmed")
         mock_resolve.assert_called_once()
 
+    @patch("posts.resolution._fetch_coingecko_peak")
     @patch("posts.resolution._fetch_coingecko_price")
-    def test_actual_resolution_persists_status_and_returns_computed_payload(self, mock_fetch):
+    def test_actual_resolution_persists_status_and_returns_computed_payload(self, mock_ref, mock_peak):
         claim = self._make_claim(asset=self.crypto_asset, direction="bullish", percentage=10.0)
-        mock_fetch.side_effect = [70000.0, 78100.0]
+        mock_ref.return_value = 70000.0
+        mock_peak.return_value = 78100.0
 
         with self.settings(ADMIN_ADDRESSES=[self.admin_address]):
             self._auth(self.admin_user)
@@ -353,7 +355,7 @@ class HardClaimResolveApiTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["status"], "confirmed")
         self.assertEqual(response.data["prices"]["reference"], 70000.0)
-        self.assertEqual(response.data["prices"]["due"], 78100.0)
+        self.assertEqual(response.data["prices"]["peak"], 78100.0)
         self.assertAlmostEqual(response.data["computed_change_pct"], 11.57, places=2)
         claim.refresh_from_db()
         self.assertEqual(claim.status, "confirmed")
@@ -369,9 +371,9 @@ class HardClaimResolveApiTestCase(APITestCase):
             "status": "confirmed",
             "instrument": {"symbol": "BTC", "provider": "coingecko", "provider_symbol": "bitcoin"},
             "target": {"kind": "percentage", "direction": "bearish", "value": 12.0, "unit": "percent"},
-            "prices": {"reference": 70000.0, "due": 60000.0, "currency": "USD"},
+            "prices": {"reference": 70000.0, "peak": 60000.0, "currency": "USD"},
             "computed_change_pct": -14.29,
-            "evaluation_reason": "due_price met or exceeded bearish percentage target",
+            "evaluation_reason": "trough price met or exceeded bearish percentage target within timeframe",
             "resolved_at": "2026-05-01T09:00:00Z",
         }
 
@@ -393,9 +395,9 @@ class HardClaimResolveApiTestCase(APITestCase):
             "status": "rejected",
             "instrument": {"symbol": "BTC", "provider": "coingecko", "provider_symbol": "bitcoin"},
             "target": {"kind": "percentage", "direction": "bullish", "value": 25.0, "unit": "percent"},
-            "prices": {"reference": 70000.0, "due": 74000.0, "currency": "USD"},
+            "prices": {"reference": 70000.0, "peak": 74000.0, "currency": "USD"},
             "computed_change_pct": 5.71,
-            "evaluation_reason": "due_price did not reach bullish percentage target",
+            "evaluation_reason": "peak price did not reach bullish percentage target within timeframe",
             "resolved_at": "2026-05-01T09:00:00Z",
         }
 
@@ -478,31 +480,43 @@ class HardClaimResolveApiTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["error_code"], "UNSUPPORTED_PROVIDER")
 
+    @patch("posts.resolution._fetch_coingecko_peak")
     @patch("posts.resolution._fetch_coingecko_price")
-    def test_coingecko_provider_is_used_for_crypto(self, mock_fetch):
+    def test_coingecko_provider_is_used_for_crypto(self, mock_price, mock_peak):
         claim = self._make_claim(asset=self.crypto_asset)
-        mock_fetch.return_value = 70000.0
+        mock_price.return_value = 70000.0
+        mock_peak.return_value = 78000.0
 
         payload = normalize_claim_for_resolution(claim)
         reference_price = fetch_reference_price(payload)
-        due_price = fetch_due_price(payload)
+        from datetime import datetime, timezone as tz
+        ref_at = datetime.fromisoformat(payload["reference_at"].replace("Z", "+00:00"))
+        due_at = datetime.fromisoformat(payload["due_at"].replace("Z", "+00:00"))
+        peak_price = fetch_peak_price(payload["instrument"], ref_at, due_at, "bullish")
 
         self.assertEqual(reference_price, 70000.0)
-        self.assertEqual(due_price, 70000.0)
-        self.assertEqual(mock_fetch.call_count, 2)
+        self.assertEqual(peak_price, 78000.0)
+        mock_price.assert_called_once()
+        mock_peak.assert_called_once()
 
+    @patch("posts.resolution._fetch_yfinance_peak")
     @patch("posts.resolution._fetch_yfinance_price")
-    def test_yfinance_provider_is_used_for_non_crypto(self, mock_fetch):
+    def test_yfinance_provider_is_used_for_non_crypto(self, mock_price, mock_peak):
         claim = self._make_claim(asset=self.forex_asset)
-        mock_fetch.return_value = 1.12
+        mock_price.return_value = 1.12
+        mock_peak.return_value = 1.15
 
         payload = normalize_claim_for_resolution(claim)
         reference_price = fetch_reference_price(payload)
-        due_price = fetch_due_price(payload)
+        from datetime import datetime, timezone as tz
+        ref_at = datetime.fromisoformat(payload["reference_at"].replace("Z", "+00:00"))
+        due_at = datetime.fromisoformat(payload["due_at"].replace("Z", "+00:00"))
+        peak_price = fetch_peak_price(payload["instrument"], ref_at, due_at, "bullish")
 
         self.assertEqual(reference_price, 1.12)
-        self.assertEqual(due_price, 1.12)
-        self.assertEqual(mock_fetch.call_count, 2)
+        self.assertEqual(peak_price, 1.15)
+        mock_price.assert_called_once()
+        mock_peak.assert_called_once()
 
     @patch("posts.views.resolve_hard_claim")
     def test_malformed_provider_response_bubbles_as_structured_error(self, mock_resolve):
