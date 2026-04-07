@@ -2,12 +2,12 @@ from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from accounts.models import WalletUser
 from .models import Post, Claim, HardClaim, Asset
 from .serializers import PostSerializer, ClaimInputSerializer, HardClaimInputSerializer, HardClaimSerializer, AssetSerializer
+from .resolution import CONTRACT_VERSION, ResolutionError, preview_resolution, resolve_hard_claim
 
 
 MOCK_CLAIMS = [
@@ -24,6 +24,16 @@ def _get_wallet_user(request) -> WalletUser | None:
         return WalletUser.objects.get(address=token.get("address", "").lower())
     except Exception:
         return None
+
+
+def _require_admin_user(request) -> WalletUser | Response:
+    user = _get_wallet_user(request)
+    if user is None:
+        return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+    admin_addresses = {address.lower() for address in settings.ADMIN_ADDRESSES}
+    if user.address.lower() not in admin_addresses:
+        return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
+    return user
 
 
 class PostListCreateView(APIView):
@@ -74,7 +84,7 @@ class ExtractClaimsView(APIView):
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
 
         # TODO: integrate LLM claim extraction (#29)
-        return Response([])
+        return Response({"version": CONTRACT_VERSION, "claims": []})
     
 class AssetListView(APIView):
     authentication_classes = []
@@ -128,12 +138,9 @@ class HardClaimView(APIView):
         return Response(HardClaimSerializer(hard_claim).data, status=status.HTTP_201_CREATED)
 
     def patch(self, request, pk):
-        user = _get_wallet_user(request)
-        if user is None:
-            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
-
-        if user.address not in settings.ADMIN_ADDRESSES:
-            return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
+        admin_user = _require_admin_user(request)
+        if isinstance(admin_user, Response):
+            return admin_user
 
         try:
             hard_claim = HardClaim.objects.get(pk=pk)
@@ -150,3 +157,28 @@ class HardClaimView(APIView):
         hard_claim.status = new_status
         hard_claim.save()
         return Response(HardClaimSerializer(hard_claim).data)
+
+
+class HardClaimResolveView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, pk):
+        admin_user = _require_admin_user(request)
+        if isinstance(admin_user, Response):
+            return admin_user
+
+        try:
+            hard_claim = HardClaim.objects.select_related("asset").get(pk=pk)
+        except HardClaim.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        preview_flag = request.data.get("preview", False)
+        preview_only = preview_flag is True or str(preview_flag).lower() in {"1", "true", "yes"}
+
+        try:
+            result = preview_resolution(hard_claim) if preview_only else resolve_hard_claim(hard_claim)
+        except ResolutionError as exc:
+            return Response(exc.to_payload(), status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(result)

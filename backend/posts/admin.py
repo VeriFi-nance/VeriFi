@@ -28,8 +28,9 @@ class ClaimAdmin(admin.ModelAdmin):
 
 @admin.register(Asset)
 class AssetAdmin(admin.ModelAdmin):
-    list_display = ["id", "name", "symbol"]
-    search_fields = ["name", "symbol"]
+    list_display = ["id", "name", "symbol", "market_type", "provider", "provider_symbol", "quote_currency"]
+    list_filter = ["market_type", "provider", "quote_currency"]
+    search_fields = ["name", "symbol", "provider_symbol"]
 
 
 @admin.register(HardClaim)

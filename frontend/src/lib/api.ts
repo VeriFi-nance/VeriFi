@@ -1,5 +1,5 @@
 import { getToken } from './auth';
-import type { ReviewClaim, PostItem, HardClaimItem, AssetItem } from './types';
+import type { ReviewClaim, PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse } from './types';
 
 const BASE_URL = 'http://localhost:8000';
 
@@ -57,7 +57,7 @@ export interface RawClaim {
   direction: string;
 }
 
-export async function extractClaims(content: string): Promise<RawClaim[]> {
+export async function extractClaims(content: string): Promise<ExtractClaimsResponse> {
   return request('/api/posts/extract-claims/', {
     method: 'POST',
     headers: authHeaders(),
