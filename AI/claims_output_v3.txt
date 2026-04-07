@@ -1,0 +1,309 @@
+S&P 500, Yıl Sonu, %12|
+|S&P 500, 2026 sonu, %12|S&P 500, 2027 sonu, %10|
+|
+S&P 500, Yıl Sonu, %12|
+|Brent, Q3 2026, <$80/b|Brent, 2026 sonu, ~$70/b|
+|Brent, 2027 sonu, $64/barrel|
+|Brent, 2026 sonu, 13.6 milyon varil/gün|Brent, 2027 sonu, 13.8 milyon varil/gün|
+|
+|Brent, 2026 Y2, 72|
+Entity: Euro/USD, Period: End of December 2026, Quantity: 1.14|
+|
+|
+|Bankacılık Sektörü, Gelecek, %46|Sanayi Sektörleri, Gelecek, %36|Holdingler, Gelecek, %62|
+|TÜFE,%26-27,Q2|
+Varlık, Vade, Miktar|
+GSYH, 2025, %3,7|GSYH, 2026, %3,5
+|Cari Açık, 2025 Yılı, 22.5 Milyar Dolar|Cari Açık, 2026 Yılı, 32 Milyar Dolar|
+Entity: Fed policy rates, ECB rates
+Period: mid-2025
+Quantity: 4%, 2%
+|
+|GSYH, 2024 sonu, 311.8 trilyon dolar|
+|
+|S&P 500, 2023 sonu, %122|
+|
+|S&P 500, Yıl sonu, %10–20|
+Varlık: Politika Faizi, Vade: 2026 sonu, Miktar: %28,5|
+|S&P 500, 1Ç sonu, %35|S&P 500, 2Ç sonu, %32,5|S&P 500, 3Ç sonu, %30,5|S&P 500, 4Ç sonu, %28,5|
+GSYH, 2025, %3,75|GSYH, 2026, %3,90
+|S&P 500, 2026 sonu, +5pp y/y|Varlık, Vade, Miktar|
+|GSYH, 2026 sonu, %6|VAFÖK, 2026 sonu, %6,8|
+|S&P 500, 2026 sonu, %6|S&P 500, 2026 sonu, %6 reel gelir büyümesi|
+|VAFÖK, 2026 sonu, %18,5|
+|Hayat sigortası prim üretimi, 2026 sonu, %50|Bireysel emeklilik varlıkları, 2026 sonu, %42|Özkaynak karlılığı, 2026 sonu, %50|Temettü verimliliği, 2026 sonu, %8|
+|Aksa Enerji, 2026 sonu, 1 GW|Aksa Enerji, 2026 sonu, +5pp y/y|Aksa Enerji, 2026 sonu, %40|
+|S&P 500, 2026 sonu, %3|S&P 500, 2026 sonu, %18|
+|Cobra II, 4Ç25, 278|Romanya, 2025, %15|Romanya, 2025, %8|
+|Brent, Q3 2026, <$80/b|Brent, 2026 sonu, $70/b|
+|Brent, 2027, $64/b|
+|U.S. crude oil, 2026 end, 13.6 million barrels per day|U.S. crude oil, 2027 end, 13.8 million barrels per day|
+|Henry Hub, 2026, 3.80 MMBtu|Henry Hub, 2027, 3.90 MMBtu|
+|Natural Gas, 2026, 121 Bcf/d|Natural Gas, 2027, 124 Bcf/d|
+|U.S. natural gas, March 2026, 1,840 Bcf|
+|U.S., 2026, 1.2%|U.S., 2027, 3.1%|U.S., 2026, -7%
+|Short Rates, 2026, 3.50%-3.75%|Long Rates, 2026, 4.00%-4.50%
+|S&P 500, 2024 yıl sonu, %44|S&P 500, 2025 yıl sonu, %21|
+|
+Entity: UAE real GDP
+Period: 2026
+Quantity: 5.6%
+|
+|Bae, 2026 sonu, %1.8|Bae, 2027 sonu, %2.0|
+GSYH, 2026, %3.3|
+|GSYH, 2026 sonu, %1.8|
+Entity: US output, Period: 2026, Quantity: 2.4%|Entity: US output, Period: 2027, Quantity: 2.0%
+Entity: Growth in emerging markets and developing economies
+Period: 2026
+Quantity: 4.2%
+|
+|
+|GSYH, 2026 sonu, %3.3|GSYH, 2027 sonu, %3.2|İleri ekonomiler, 2026 sonu, %1.8|İleri ekonomiler, 2027 sonu, %1.7|
+|ABD ekonomisi, 2026 sonu, %2.4|ABD ekonomisi, 2027 sonu, %2.0|Euro bölgesi, 2026 sonu, %1.3|Euro bölgesi, 2027 sonu, %1.4|
+Varlık, Vade, Miktar|
+|GSYH, 2026 sonu, %1.3|GSYH, 2027 sonu, %1.4|
+Entity: Japan's economy
+Period: 2026
+Quantity: 0.7%
+|
+Varlık, Vade, Miktar|
+|GSYH, 2026 sonu, %6.4|
+Varlık, Vade, Miktar|
+Brent, 2Q26, $91/b|
+|Brent, 2026 sonu, 1.9 milyon varil/gün|Brent, 2027 sonu, 3.0 milyon varil/gün|
+|Brent, 4Q26, $70/b|Brent, 2027, $64/b|
+Varlık, Vade, Miktar|
+|Cari Açık/GSYH, 2026, %1,3|
+|S&P 500, 2026 sonu, 2.8 milyar USD|Turizm, 2026, 4.0 milyar USD|
+|S&P 500, 2026-2028, %4|
+|S&P 500, 2026 sonu, %29|
+|S&P 500, 2026 sonu, %25.7|
+|S&P 500, 2026 sonu, %8.4|
+Varlık, Vade, Miktar|
+|
+|
+|GSYH, 2024 sonu, %3.1|GSYH, 2025 sonu, %3.2|
+|
+|GSYH, 2026 sonu, %3.3|GSYH, 2027 sonu, %3.2|
+|
+|Advanced economies, 2026 end, 1.8%|Advanced economies, 2027 end, 1.7%
+Entity: United States, Period: 2026, Quantity: 2.4%|
+|GSYH, 2027 sonu, %2.0|
+|Euro Bölgesi, 2026, %1.3|Euro Bölgesi, 2027, %1.4|
+|Japan, 2025, 1.1%|Japan, 2026, 0.7%|Japan, 2027, 0.6%
+|
+|GSYH, 2027 sonu, %4.0|
+|GSYH, 2026 sonu, %6.4|GSYH, 2027 sonu, %6.4|
+S&P 500, 2026 sonu, 6500|
+|S&P 500, 2026 sonu, %12|
+Brent, H2 2026, 88|
+BIST-100, 2026 yıl sonu, 18200|
+Gold, December 2026, 12%|
+GSYH, 2026, %3,2|
+Entity: Euro/USD, Period: End of 2026, Quantity: 1.15|
+Varlık, Vade, Miktar|
+NASDAQ-100, Q4 2026, 22000|
+Varlık, Vade, Miktar|
+Varlık, Vade, Miktar|
+|GSYH, 2026 yılı, %2,5|
+|
+|Bim Birleşik Mağazalar, 2026 sonu, 650 TL|
+Bank of England, December 2026, 4.0%|
+|GSYH, 2026 yılı, %3,0|
+Copper, 2026 sonu, 10500|
+|Turkish Airlines, 2026 end, 110 billion TL|
+Entity: Japanese Yen, Period: Q3 2026, Quantity: 138|
+|Gram Altın, 2026 Sonu, 3.800 TL|
+DAX, 2026 sonu, 19500|
+Varlık, Vade, Miktar|
+Entity: ECB deposit facility rate, Period: December 2026, Quantity: 2.25%|
+|Türkiye Brüt Döviz Rezervleri, 2026 sonu, 160 milyar TL|
+Bitcoin, mid-2027, 120000$|
+|Koç Holding, 2026 yıl sonu, 320 TL|
+|Iron Ore, 2026 fiscal year, $95/t|
+|S&P 500, 2026 sonu, %9.2|
+FTSE 100, 2026 sonu, 8800|
+|Tüpraş, 2026 yılı sonu, %14|
+Entity: USD/ZAR, Period: Q4 2026, Quantity: 17.20|
+|Türkiye, 2026 yılı sonu, 280 milyar dolar|
+|Natural Gas, 2026, $3.50/MMBtu|
+Varlık, Vade, Miktar|
+Entity: 2-year German Bunds
+Period: June 2026
+Quantity: 2.1%
+
+|
+|Türkiye, 2026 sonu, 190 baz puan|
+Ethereum, 2026 sonu, 5500$|
+|Ereğli Demir Çelik, 2026 sonu, 8,5 milyon ton|
+Entity: Australian Dollar
+Period: 2026
+Quantity: 0.70
+
+|
+|Sanayi Üretim Endeksi, 2026 Yılı, %4,5|
+CAC 40, December 2026, 8200|
+Varlık, Vade, Miktar|
+Fed Funds Rate, 2026 yıl sonu, 3.25%-3.50%|
+|M3, 2026 sonu, %22|
+Platinum, 2026 sonu, $1,100/oz|
+|Sabancı Holding, 2026 sonu, %20|
+Entity: USD/CNY
+Period: mid-2026
+Quantity: 7.10
+
+|
+|Enerji İthalatı, 2026, 65 milyar dolar|
+Nikkei 225, 2026 sonu, 42000|
+|Şişecam, 2026 sonu, 240 milyar TL|
+Aluminum, 2026 sonu, 2550|
+|Reel Efektif Döviz Kuru, 2026 Sonu, 68|
+Varlık, Vade, Miktar|
+|Migros, 2026 sonu, %7,5|
+GDP, 2026, %1.8|
+|GSYH, 2026 yıl sonu, %2,8|
+|WTI, Q1 2027, 78|
+|Ford Otosan, 2026 sonu, 650000|
+Entity: Canadian Dollar, Period: 2026 sonu, Quantity: 1.32|
+|
+|GSYH, 2026 sonu, %40|
+Coffee, December 2026, -8%|
+|Yapı Kredi, 2026 sonu, %85|
+GSYH, 2026-27, %6.5|
+|Sert Filtre, Vade=2026 yılı, Miktar=14 milyar dolar|
+MSCI Emerging Markets, 2026, %15|
+Varlık: Tofaş, Vade: 2026 yılı, Miktar: %12|
+Varlık, Vade, Miktar|
+Varlık, Vade, Miktar|
+|Cocoa, 2026 season, 6200/t|
+|Arçelik, 2026 sonu, 2.2x|
+Mexican Peso, year-end 2026, 19.50|
+|Sert Filtre, Vade, Miktar|
+Shanghai Composite, 2026 sonu, 3400|
+Varlık, Vade, Miktar|
+Entity: 10-year UK Gilts
+Period: December 2026
+Quantity: 3.9%
+
+|
+|Perakende Satış Hacmi, 2026 Yılı, %5,2|
+|Soybean, Q4 2026, 1150|
+Varlık, Vade, Miktar|
+Entity: Brazilian Real, Period: 2026, Quantity: 4.90|
+|Türkiye, 2026 sonu, 185 milyar dolar|
+Bloomberg Commodity Index, 2026, %7|
+|Enka İnşaat, 2026 sonu, 2,8 milyar dolar|
+Entity: South Korean Won
+Period: mid-2026
+Quantity: 1,310
+
+|
+|Türkiye, 2026 yılı, %115|
+|Corn, 2026 harvest, $4.60 per bushel|
+|Ülker Bisküvi, 2026 sonu, %40|
+Gold, 2026 sonu, 78|
+Bankacılık sektörü, 2026 sonu|%2,8|
+Euro Stoxx 50, 2026, 5200|
+|Kardemir, 2026 sonu, 65 milyar TL|
+Entity: Australian cash rate
+Period: June 2026
+Quantity: 4.1%
+|
+|SABİT SERMAYE YATIRIMLARI, 2026 YILI, %4,2|
+|Wheat, year-end 2026, 640 per bushel|
+|Mavi Giyim, 2026 sonu, %35|
+Entity: USD/IDR
+Period: Q3 2026
+Quantity: 15,400|
+
+(Note: While "USD" is a currency and not strictly an economic entity like S&P 500 or GSYH, it fits the broad definition of an entity in financial claims. If this were to be rejected, the output would be "|".)
+|Bankacılık Sektörü, 2026 Sonu, 22 Trilyon TL|
+Varlık, Vade, Miktar|
+|Anadolu Efes, 2026 sonu, 130 milyon hektolitre|
+Singapore, 2026, 2.4%|
+|
+|Palladium, 2026 fiscal year, $1,050/oz|
+|Kocaer Çelik, 2026 sonu, 1,2 milyar dolar|
+Entity: 10-year Japanese Government Bonds
+Period: 2026
+Quantity: 1.1%
+
+|
+Varlık, Vade, Miktar|
+S&P/TSX Composite, December 2026, 24000|
+|Otomotiv segmenti, 2026 yılı sonu, 950.000 adet|
+Varlık, Vade, Miktar|
+Varlık, Vade, Miktar|
+Zinc, 2026 sonu, 2800|
+|Tav Havalimanları, 2026 sonu, 115 milyon|
+Thailand, 2026, 3.1%|
+|Türkiye Brüt Dış Borç Stoku, 2026 Sonu, %44|
+Entity: USD/TRY
+Period: 2026
+Quantity: 41.20
+
+|
+|Coca-Cola İçecek, 2026 sonu, %21|
+Global High Yield Bond, 2026, 50bps|
+|
+|Dolar-SDR, 2025 sonu, 1.351|Dolar-SDR, 2026 sonu, 1.373|Dolar-Euro, 2025 sonu, 1.130|Dolar-Euro, 2026 sonu, 1.167|Yen-Dolar, 2025 sonu, 147.7|Yen-Dolar, 2026 sonu, 145.3
+|Brent, 2025 sonu, 68.92|Brent, 2026 sonu, 65.84|
+|United States, 2025, 4.3%|United States, 2026, 3.7%
+|United States, 2025, 4.3%|United States, 2026, 4.1%|euro area, 2025, 2.5%|euro area, 2026, 2.6%
+|Global Growth, 2026, 2.8%|
+|
+|Fed, March, 50bp|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|
+|S&P 500, Q4, %12|
+|
+|
+|
+|
+|
+|
+|
+|
