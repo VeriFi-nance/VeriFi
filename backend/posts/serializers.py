@@ -30,10 +30,10 @@ class AssetSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "symbol", "description"]
 
 class HardClaimInputSerializer(serializers.Serializer):
-    text = serializers.CharField()
+    text = serializers.CharField(allow_blank=True, required=False, default='')
     asset_id = serializers.IntegerField()
     direction = serializers.CharField(allow_blank=True, default="")
-    percentage = serializers.FloatField(min_value=0, max_value=100)
+    percentage = serializers.FloatField(min_value=0)
     until = serializers.DateField()
     status = serializers.ChoiceField(choices=["confirmed", "undetermined", "rejected"], default="undetermined")
 
@@ -47,4 +47,4 @@ class HardClaimSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = HardClaim
-        fields = ["id", "author_address", "text", "asset", "direction", "percentage", "until", "created_at", "status"]
+        fields = ["id", "author_address", "asset", "direction", "percentage", "until", "created_at", "status"]
