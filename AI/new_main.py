@@ -1,6 +1,10 @@
 import os
 from agno.agent import Agent
 from agno.models.openai import OpenAIChat
+import re
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+from datetime import datetime, timedelta
 
 # VeriFi V3: Gelişmiş Mermi Ayıklayıcı (Pro-Extractor)
 # Bu Agent, "Dolar 50 Lira" halüsinasyonunu kırmak ve gürültüyü (noise) 
