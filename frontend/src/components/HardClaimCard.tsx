@@ -1,4 +1,6 @@
-import { useNavigate } from 'react-router-dom';
+import { CalendarDays } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import type { HardClaimItem, AssetItem } from '@/lib/types';
 
 export function truncateAddress(addr: string | null) {
@@ -7,62 +9,74 @@ export function truncateAddress(addr: string | null) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
+function daysUntil(dateStr: string): number {
+  const diff = new Date(dateStr).getTime() - Date.now();
+  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+}
+
+/** Compact single-row claim card — no text body */
 export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets: AssetItem[] }) {
-  const navigate = useNavigate();
   const asset = assets.find((a) => a.id === claim.asset);
   const assetSymbol = asset?.symbol ?? `#${claim.asset}`;
   const isBullish = claim.direction.toLowerCase() === 'bullish';
-
   const isConfirmed = claim.status === 'confirmed';
   const isRejected = claim.status === 'rejected';
+  const days = daysUntil(claim.until);
+  const targetChange = claim.percentage;
 
-  const cardClass = isConfirmed
-    ? 'border-green-500 hover:bg-muted/30'
-    : isRejected
-    ? 'border-red-500 hover:bg-muted/30 opacity-60'
-    : 'border-border hover:bg-muted/30';
-
-  const directionClass = isBullish ? 'text-green-500' : 'text-red-500';
-
-  const statusClass = isConfirmed
-    ? 'text-green-500 font-semibold'
-    : isRejected
-    ? 'text-red-500 font-semibold'
-    : 'text-muted-foreground font-semibold';
+  // Community confidence: mock until a real vote API exists
+  const communityConfidence = 62.5;
 
   return (
-    <div className={`flex items-center gap-4 rounded-lg border-2 px-4 py-3 transition-colors ${cardClass}`}>
-      <div className={`flex flex-col items-center justify-center min-w-[52px] gap-0.5 ${directionClass}`}>
-        <span className="text-xl leading-none">{isBullish ? '▲' : '▼'}</span>
-        <span className="text-sm font-bold leading-none">{assetSymbol}</span>
-        <span className="text-xs font-semibold leading-none">{claim.percentage}%</span>
-      </div>
+    <div
+      className={cn(
+        'flex items-center gap-2.5 rounded-lg border px-3.5 py-2.5 bg-card text-card-foreground transition-shadow hover:shadow-sm',
+        isConfirmed && 'border-emerald-500/60',
+        isRejected && 'border-red-500/60 opacity-70',
+        !isConfirmed && !isRejected && 'border-border'
+      )}
+    >
+      {/* Direction dot */}
+      <span
+        className={cn(
+          'size-2 rounded-full shrink-0',
+          isBullish ? 'bg-emerald-500' : 'bg-red-500'
+        )}
+      />
 
-      <div className="flex-1 min-w-0">
-        <p className={`text-sm font-medium leading-snug line-clamp-2 ${isRejected ? 'text-muted-foreground' : ''}`}>
-          {claim.text}
-        </p>
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
-          {claim.author_address ? (
-            <button
-              onClick={() => navigate(`/app/user/${claim.author_address}`)}
-              className="font-mono hover:underline"
-            >
-              {truncateAddress(claim.author_address)}
-            </button>
-          ) : (
-            <span className="font-mono">Anonymous</span>
-          )}
-          <span>·</span>
-          <span>{new Date(claim.created_at).toLocaleDateString()}</span>
-          <span>·</span>
-          <span>until {new Date(claim.until).toLocaleDateString()}</span>
+      {/* Asset symbol */}
+      <span className="font-mono font-semibold text-xs text-foreground shrink-0">{assetSymbol}</span>
+
+      {/* Direction + percentage badge */}
+      <Badge
+        variant={isBullish ? 'success' : 'destructive'}
+        className="text-[10px] px-1.5 py-0 shrink-0"
+      >
+        {isBullish ? '▲' : '▼'} {targetChange.toFixed(1)}%
+      </Badge>
+
+      {/* Separator */}
+      <span className="text-muted-foreground/40 text-xs">·</span>
+
+      {/* Date */}
+      <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+        <CalendarDays className="size-3" />
+        {new Date(claim.until).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+        {days > 0 && <span className="text-[10px] opacity-60">({days}d)</span>}
+      </span>
+
+      {/* Community confidence — inline mini bar */}
+      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+        <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
+          {communityConfidence.toFixed(0)}%
+        </span>
+        <div className="h-1 flex-1 rounded-full bg-muted overflow-hidden min-w-[32px]">
+          <div
+            className="h-full bg-foreground/70 rounded-full transition-all"
+            style={{ width: `${communityConfidence}%` }}
+          />
         </div>
       </div>
-
-      <span className={`text-xs capitalize shrink-0 ${statusClass}`}>
-        {claim.status}
-      </span>
     </div>
   );
 }

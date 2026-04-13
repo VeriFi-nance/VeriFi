@@ -48,7 +48,6 @@ export interface PostItem {
 export interface HardClaimItem {
   id: number;
   author_address: string | null;
-  text: string;
   asset: number;
   direction: string;
   percentage: number;

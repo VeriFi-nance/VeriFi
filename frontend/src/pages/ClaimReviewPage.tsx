@@ -108,7 +108,7 @@ function ClaimCard({ claim, onChange }: ClaimCardProps) {
           )}
           {claim.direction && (
             <Badge
-              variant={claim.direction.toLowerCase() === 'bullish' ? 'default' : 'destructive'}
+              variant={claim.direction.toLowerCase() === 'bullish' ? 'success' : 'destructive'}
             >
               {claim.direction}
             </Badge>
