@@ -86,13 +86,14 @@ export function NewPostModal({ open, onOpenChange, onPosted }: NewPostModalProps
     setSubmitting(true);
     try {
       // 1. Create the post (no attached claims on the post itself)
-      await createPost(content.trim(), []);
+      const newPost = await createPost(content.trim(), []);
 
-      // 2. Create each HardClaim separately
+      // 2. Create each HardClaim, linked to the new post
       await Promise.all(
         claims.map((c) =>
           createHardClaim({
             asset_id: parseInt(c.asset_id, 10),
+            post_id: newPost.id,
             direction: c.direction,
             percentage: parseFloat(c.percentage),
             until: c.until,

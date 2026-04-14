@@ -41,7 +41,7 @@ class PostListCreateView(APIView):
     permission_classes = []
 
     def get(self, request):
-        posts = Post.objects.prefetch_related("claims").all()
+        posts = Post.objects.prefetch_related("claims", "hard_claims").all()
         return Response(PostSerializer(posts, many=True).data)
 
     def post(self, request):
@@ -115,16 +115,26 @@ class HardClaimView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         data = serializer.validated_data
 
-        # Validate that asset exist
+        # Validate that asset exists
         try:
             asset = Asset.objects.get(id=data["asset_id"])
         except Asset.DoesNotExist as e:
             return Response({"detail": f"Invalid reference: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
-        
+
+        # Resolve optional post reference
+        post_obj = None
+        post_id = data.get("post_id")
+        if post_id is not None:
+            try:
+                post_obj = Post.objects.get(id=post_id)
+            except Post.DoesNotExist:
+                return Response({"detail": f"Post {post_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
+
         # Create HardClaim object in the database with the given data
         try:
             hard_claim = HardClaim.objects.create(
                 author=user,
+                post=post_obj,
                 text=data["text"],
                 asset=asset,
                 direction=data.get("direction", ""),
