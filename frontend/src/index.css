@@ -117,8 +117,32 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    }
+  }
+  html {
+    overflow-y: scroll; /* Always show scrollbar to prevent layout shift */
+  }
   body {
     @apply bg-background text-foreground;
-    }
+  }
+}
+
+/* Custom Minimal Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--muted-foreground);
 }
