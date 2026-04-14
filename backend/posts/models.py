@@ -67,7 +67,6 @@ class HardClaim(models.Model):
 
     author = models.ForeignKey(WalletUser, on_delete=models.CASCADE, related_name="hard_claims", null=True, blank=True)
     post = models.ForeignKey(Post, on_delete=models.SET_NULL, null=True, blank=True, related_name="hard_claims")
-    text = models.TextField(blank=True, default='')
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE, blank=False, null=False)
     direction = models.CharField(max_length=20, blank=True, default="") # this will be binary, 1 up, 0 down
     percentage = models.FloatField(blank=False, null=False) # this will be a percentage value between 0 and 100
@@ -84,6 +83,5 @@ class HardClaim(models.Model):
         ]
 
     def __str__(self):
-        label = self.text[:40] if self.text else f"{self.direction} {self.percentage}%"
-        return f"{self.asset} {self.direction}: {label}"
+        return f"{self.asset} {self.direction}: {self.percentage}%"
 
