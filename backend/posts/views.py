@@ -125,7 +125,6 @@ class HardClaimView(APIView):
         try:
             hard_claim = HardClaim.objects.create(
                 author=user,
-                text=data["text"],
                 asset=asset,
                 direction=data.get("direction", ""),
                 percentage=data["percentage"],

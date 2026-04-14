@@ -39,7 +39,6 @@ class AssetSerializer(serializers.ModelSerializer):
         ]
 
 class HardClaimInputSerializer(serializers.Serializer):
-    text = serializers.CharField(allow_blank=True, required=False, default='')
     asset_id = serializers.IntegerField()
     direction = serializers.CharField(allow_blank=True, default="")
     percentage = serializers.FloatField(min_value=0)

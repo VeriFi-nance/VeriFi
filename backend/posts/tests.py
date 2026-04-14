@@ -43,7 +43,6 @@ class HardClaimAPITestCase(APITestCase):
         """Test successfully creating a hard claim."""
         url = reverse('hard-claims')
         data = {
-            'text': 'Bitcoin will reach $100,000 by end of 2025',
             'asset_id': self.asset.id,
             'direction': 'bullish',
             'percentage': 25.0,
@@ -59,7 +58,6 @@ class HardClaimAPITestCase(APITestCase):
         # Assert response data contains expected fields
         self.assertIn('id', response.data)
         self.assertIn('author_address', response.data)
-        self.assertIn('text', response.data)
         self.assertIn('asset', response.data)
         self.assertIn('direction', response.data)
         self.assertIn('percentage', response.data)
@@ -67,7 +65,6 @@ class HardClaimAPITestCase(APITestCase):
         self.assertIn('status', response.data)
 
         # Assert response values
-        self.assertEqual(response.data['text'], 'Bitcoin will reach $100,000 by end of 2025')
         self.assertEqual(response.data['direction'], 'bullish')
         self.assertEqual(response.data['percentage'], 25.0)
         self.assertEqual(response.data['until'], '2027-12-31')
@@ -78,7 +75,6 @@ class HardClaimAPITestCase(APITestCase):
         hard_claim = HardClaim.objects.get(id=response.data['id'])
         self.assertEqual(hard_claim.author, self.wallet_user)
         self.assertEqual(hard_claim.asset, self.asset)
-        self.assertEqual(hard_claim.text, 'Bitcoin will reach $100,000 by end of 2025')
         self.assertEqual(hard_claim.direction, 'bullish')
         self.assertEqual(hard_claim.percentage, 25.0)
         self.assertEqual(str(hard_claim.until), '2027-12-31')
@@ -120,7 +116,6 @@ class HardClaimAPITestCase(APITestCase):
         
         url = reverse('hard-claims')
         data = {
-            'text': 'Bitcoin will reach $100,000 by end of 2025',
             'asset_id': self.asset.id,
             'direction': 'bullish',
             'percentage': 25.0,
@@ -152,7 +147,6 @@ class HardClaimUpdateStatusTestCase(APITestCase):
         )
         self.hard_claim = HardClaim.objects.create(
             author=self.regular_user,
-            text="BTC to $100k",
             asset=self.asset,
             direction="bullish",
             percentage=20.0,
@@ -221,7 +215,6 @@ class HardClaimResolutionContractTestCase(APITestCase):
         due_date = (timezone.now() - timedelta(days=1)).date()
         hard_claim = HardClaim.objects.create(
             author=self.user,
-            text="BTC up 10%",
             asset=self.asset,
             direction="bullish",
             percentage=10.0,
@@ -248,7 +241,6 @@ class HardClaimResolutionContractTestCase(APITestCase):
         due_date = (timezone.now() - timedelta(days=1)).date()
         hard_claim = HardClaim.objects.create(
             author=self.user,
-            text="BTC up 10%",
             asset=self.asset,
             direction="bullish",
             percentage=10.0,
@@ -299,7 +291,6 @@ class HardClaimResolveApiTestCase(APITestCase):
         due_date = (timezone.now() - timedelta(days=days_past_due)).date()
         hard_claim = HardClaim.objects.create(
             author=self.regular_user,
-            text="Resolve me",
             asset=asset,
             direction=direction,
             percentage=percentage,
@@ -409,7 +400,6 @@ class HardClaimResolveApiTestCase(APITestCase):
     def test_resolve_rejects_before_due_date(self):
         claim = HardClaim.objects.create(
             author=self.regular_user,
-            text="Future claim",
             asset=self.crypto_asset,
             direction="bullish",
             percentage=10.0,
