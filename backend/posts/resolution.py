@@ -315,7 +315,7 @@ def preview_resolution(hard_claim: HardClaim) -> dict[str, Any]:
     peak_price = fetch_peak_price(
         resolution_request["instrument"], reference_at, due_at, direction
     )
-    return evaluate_claim(resolution_request, reference_price, reference_url, due_price, due_url)
+    return evaluate_claim(resolution_request, reference_price, reference_url, due_price, due_url, peak_price)
 
 
 def resolve_hard_claim(hard_claim: HardClaim) -> dict[str, Any]:

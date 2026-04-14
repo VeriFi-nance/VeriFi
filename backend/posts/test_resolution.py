@@ -60,14 +60,14 @@ class ResolutionTests(TestCase):
 
     def test_evaluate_claim_bullish_confirmed(self):
         req = normalize_claim_for_resolution(self.claim)
-        result = evaluate_claim(req, 100.0, "http://ref.url", 115.0, "http://due.url")
+        result = evaluate_claim(req, 100.0, "http://ref.url", 105.0, "http://due.url", 115.0)
         self.assertEqual(result["status"], HardClaim.Status.CONFIRMED)
         self.assertEqual(result["computed_change_pct"], 15.0)
 
     def test_evaluate_claim_bullish_rejected(self):
         req = normalize_claim_for_resolution(self.claim)
         # 5% increase is less than 10% threshold
-        result = evaluate_claim(req, 100.0, "http://ref.url", 105.0, "http://due.url")
+        result = evaluate_claim(req, 100.0, "http://ref.url", 95.0, "http://due.url", 105.0)
         self.assertEqual(result["status"], HardClaim.Status.REJECTED)
 
     def test_evaluate_claim_bearish_confirmed(self):
@@ -75,7 +75,7 @@ class ResolutionTests(TestCase):
         self.claim.save()
         req = normalize_claim_for_resolution(self.claim)
         # Wait: change = (85 - 100) / 100 = -15%. Target is bearish 10%. -15 <= -10 is True.
-        result = evaluate_claim(req, 100.0, "http://ref.url", 85.0, "http://due.url")
+        result = evaluate_claim(req, 100.0, "http://ref.url", 95.0, "http://due.url", 85.0)
         self.assertEqual(result["status"], HardClaim.Status.CONFIRMED)
         self.assertEqual(result["computed_change_pct"], -15.0)
 
@@ -84,14 +84,16 @@ class ResolutionTests(TestCase):
         self.claim.save()
         req = normalize_claim_for_resolution(self.claim)
         # -5% does not meet strictly -10% or more drop.
-        result = evaluate_claim(req, 100.0, "http://ref.url", 95.0, "http://due.url")
+        result = evaluate_claim(req, 100.0, "http://ref.url", 110.0, "http://due.url", 95.0)
         self.assertEqual(result["status"], HardClaim.Status.REJECTED)
 
+    @patch("posts.resolution.fetch_peak_price")
     @patch("posts.resolution.fetch_due_price")
     @patch("posts.resolution.fetch_reference_price")
-    def test_resolve_hard_claim_success_logging(self, mock_ref, mock_due):
+    def test_resolve_hard_claim_success_logging(self, mock_ref, mock_due, mock_peak):
         mock_ref.return_value = (1000.0, "http://mock.ref")
         mock_due.return_value = (1100.0, "http://mock.due")
+        mock_peak.return_value = 1100.0
 
         result = resolve_hard_claim(self.claim)
         
