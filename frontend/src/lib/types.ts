@@ -43,11 +43,13 @@ export interface PostItem {
   content: string;
   created_at: string;
   claims: ClaimItem[];
+  hard_claims: HardClaimItem[];
 }
 
 export interface HardClaimItem {
   id: number;
   author_address: string | null;
+  post_id: number | null;
   asset: number;
   direction: string;
   percentage: number;

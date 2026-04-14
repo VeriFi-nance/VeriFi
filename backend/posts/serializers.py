@@ -9,14 +9,6 @@ class ClaimSerializer(serializers.ModelSerializer):
         fields = ["id", "text", "asset", "direction", "status"]
 
 
-class PostSerializer(serializers.ModelSerializer):
-    author_address = serializers.CharField(source="author.address", read_only=True)
-    claims = ClaimSerializer(many=True, read_only=True)
-
-    class Meta:
-        model = Post
-        fields = ["id", "author_address", "content", "created_at", "claims"]
-
 
 class ClaimInputSerializer(serializers.Serializer):
     text = serializers.CharField()
@@ -40,6 +32,7 @@ class AssetSerializer(serializers.ModelSerializer):
 
 class HardClaimInputSerializer(serializers.Serializer):
     asset_id = serializers.IntegerField()
+    post_id = serializers.IntegerField(required=False, allow_null=True, default=None)
     direction = serializers.CharField(allow_blank=True, default="")
     percentage = serializers.FloatField(min_value=0)
     until = serializers.DateField()
@@ -55,4 +48,13 @@ class HardClaimSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = HardClaim
-        fields = ["id", "author_address", "asset", "direction", "percentage", "until", "created_at", "status"]
+        fields = ["id", "author_address", "post_id", "asset", "direction", "percentage", "until", "created_at", "status"]
+
+class PostSerializer(serializers.ModelSerializer):
+    author_address = serializers.CharField(source="author.address", read_only=True)
+    claims = ClaimSerializer(many=True, read_only=True)
+    hard_claims = HardClaimSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Post
+        fields = ["id", "author_address", "content", "created_at", "claims", "hard_claims"]
