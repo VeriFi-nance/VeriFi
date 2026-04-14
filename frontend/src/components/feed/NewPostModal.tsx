@@ -66,8 +66,15 @@ export function NewPostModal({ open, onOpenChange, onPosted }: NewPostModalProps
       return;
     }
     const pct = parseFloat(draft.percentage);
-    if (isNaN(pct) || pct <= 0 || pct > 1000) {
-      setError('Percentage must be between 0 and 1000.');
+    if (isNaN(pct) || pct < 0.1 || pct > 1000) {
+      setError('Percentage must be between 0.1 and 1000.');
+      return;
+    }
+    
+    // Ensure the date is strictly in the future (tomorrow or later) to match backend constraints
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (draft.until <= todayStr) {
+      setError('Target date must be tomorrow or later.');
       return;
     }
     setError('');
