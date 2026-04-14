@@ -31,7 +31,6 @@ class AssetSerializer(serializers.ModelSerializer):
         ]
 
 class HardClaimInputSerializer(serializers.Serializer):
-    text = serializers.CharField(allow_blank=True, required=False, default='')
     asset_id = serializers.IntegerField()
     post_id = serializers.IntegerField(required=False, allow_null=True, default=None)
     direction = serializers.CharField(allow_blank=True, default="")

@@ -89,7 +89,6 @@ export async function getHardClaimsByAddress(address: string): Promise<HardClaim
 }
 
 export async function createHardClaim(data: {
-  text?: string;
   asset_id: number;
   post_id?: number;
   direction: string;
