@@ -7,7 +7,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from .models import Asset, HardClaim
+from .models import Asset, HardClaim, HardClaimEvent
 
 
 CONTRACT_VERSION = "1.0"
@@ -103,7 +103,7 @@ def _http_get_json(url: str) -> dict[str, Any]:
         raise ResolutionError("PROVIDER_INVALID_JSON", "Provider returned malformed JSON.") from exc
 
 
-def _fetch_coingecko_price(provider_symbol: str, quote_currency: str, at_dt: datetime) -> float:
+def _fetch_coingecko_price(provider_symbol: str, quote_currency: str, at_dt: datetime) -> tuple[float, str]:
     start = int((at_dt - timedelta(hours=12)).timestamp())
     end = int((at_dt + timedelta(hours=12)).timestamp())
     params = urlencode({"vs_currency": quote_currency.lower(), "from": start, "to": end})
@@ -113,10 +113,10 @@ def _fetch_coingecko_price(provider_symbol: str, quote_currency: str, at_dt: dat
     if not prices:
         raise ResolutionError("PROVIDER_NO_PRICE_DATA", "CoinGecko returned no price data.")
     nearest = min(prices, key=lambda item: abs((item[0] / 1000) - at_dt.timestamp()))
-    return float(nearest[1])
+    return float(nearest[1]), url
 
 
-def _fetch_yfinance_price(provider_symbol: str, at_dt: datetime) -> float:
+def _fetch_yfinance_price(provider_symbol: str, at_dt: datetime) -> tuple[float, str]:
     day_start = datetime.combine(at_dt.date(), time.min, tzinfo=timezone.utc)
     day_end = day_start + timedelta(days=1)
     params = urlencode(
@@ -143,11 +143,11 @@ def _fetch_yfinance_price(provider_symbol: str, at_dt: datetime) -> float:
 
     for close in closes:
         if close is not None:
-            return float(close)
+            return float(close), url
     raise ResolutionError("PROVIDER_NO_PRICE_DATA", "Yahoo Finance returned only null close prices.")
 
 
-def fetch_price_for_time(instrument: dict[str, Any], at_dt: datetime) -> float:
+def fetch_price_for_time(instrument: dict[str, Any], at_dt: datetime) -> tuple[float, str]:
     provider = instrument["provider"]
     provider_symbol = instrument["provider_symbol"]
     quote_currency = instrument["quote_currency"]
@@ -160,14 +160,14 @@ def fetch_price_for_time(instrument: dict[str, Any], at_dt: datetime) -> float:
     raise ResolutionError("UNSUPPORTED_PROVIDER", f"Provider '{provider}' is not supported.")
 
 
-def fetch_reference_price(resolution_request: dict[str, Any]) -> float:
+def fetch_reference_price(resolution_request: dict[str, Any]) -> tuple[float, str]:
     reference_at = datetime.fromisoformat(
         resolution_request["reference_at"].replace("Z", "+00:00")
     )
     return fetch_price_for_time(resolution_request["instrument"], reference_at)
 
 
-def fetch_due_price(resolution_request: dict[str, Any]) -> float:
+def fetch_due_price(resolution_request: dict[str, Any]) -> tuple[float, str]:
     due_at = datetime.fromisoformat(resolution_request["due_at"].replace("Z", "+00:00"))
     return fetch_price_for_time(resolution_request["instrument"], due_at)
 
@@ -175,7 +175,9 @@ def fetch_due_price(resolution_request: dict[str, Any]) -> float:
 def evaluate_claim(
     resolution_request: dict[str, Any],
     reference_price: float,
+    reference_url: str,
     due_price: float,
+    due_url: str,
 ) -> dict[str, Any]:
     target = resolution_request["target"]
     if target["kind"] != "percentage":
@@ -223,7 +225,9 @@ def evaluate_claim(
         "target": target,
         "prices": {
             "reference": _round_decimal(reference_price),
+            "reference_url": reference_url,
             "due": _round_decimal(due_price),
+            "due_url": due_url,
             "currency": resolution_request["instrument"]["quote_currency"],
         },
         "computed_change_pct": _round_decimal(change_pct),
@@ -234,13 +238,23 @@ def evaluate_claim(
 
 def preview_resolution(hard_claim: HardClaim) -> dict[str, Any]:
     resolution_request = normalize_claim_for_resolution(hard_claim)
-    reference_price = fetch_reference_price(resolution_request)
-    due_price = fetch_due_price(resolution_request)
-    return evaluate_claim(resolution_request, reference_price, due_price)
+    reference_price, reference_url = fetch_reference_price(resolution_request)
+    due_price, due_url = fetch_due_price(resolution_request)
+    return evaluate_claim(resolution_request, reference_price, reference_url, due_price, due_url)
 
 
 def resolve_hard_claim(hard_claim: HardClaim) -> dict[str, Any]:
     result = preview_resolution(hard_claim)
     hard_claim.status = result["status"]
     hard_claim.save(update_fields=["status"])
+    
+    HardClaimEvent.objects.create(
+        hard_claim=hard_claim,
+        event_type=HardClaimEvent.EventType.RESOLUTION,
+        details={
+            "prices": result["prices"],
+            "computed_change_pct": result["computed_change_pct"],
+            "evaluation_reason": result["evaluation_reason"]
+        }
+    )
     return result

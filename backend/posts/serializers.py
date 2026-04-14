@@ -1,6 +1,6 @@
 from datetime import date
 from rest_framework import serializers
-from .models import Asset, Post, Claim, HardClaim
+from .models import Asset, Post, Claim, HardClaim, HardClaimEvent
 
 
 class ClaimSerializer(serializers.ModelSerializer):
@@ -44,12 +44,18 @@ class HardClaimInputSerializer(serializers.Serializer):
             raise serializers.ValidationError("'until' must be a future date.")
         return value
 
+class HardClaimEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HardClaimEvent
+        fields = ["id", "event_type", "timestamp", "details"]
+
 class HardClaimSerializer(serializers.ModelSerializer):
     author_address = serializers.CharField(source="author.address", read_only=True, allow_null=True)
+    events = HardClaimEventSerializer(many=True, read_only=True)
 
     class Meta:
         model = HardClaim
-        fields = ["id", "author_address", "post_id", "asset", "direction", "percentage", "until", "created_at", "status"]
+        fields = ["id", "author_address", "post_id", "asset", "direction", "percentage", "until", "created_at", "status", "events"]
 
 class PostSerializer(serializers.ModelSerializer):
     author_address = serializers.CharField(source="author.address", read_only=True)

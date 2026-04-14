@@ -87,3 +87,20 @@ class HardClaim(models.Model):
         label = self.text[:40] if self.text else f"{self.direction} {self.percentage}%"
         return f"{self.asset} {self.direction}: {label}"
 
+
+class HardClaimEvent(models.Model):
+    class EventType(models.TextChoices):
+        CREATION = "creation"
+        PRICE_CHECK = "price_check"
+        RESOLUTION = "resolution"
+
+    hard_claim = models.ForeignKey(HardClaim, on_delete=models.CASCADE, related_name="events")
+    event_type = models.CharField(max_length=20, choices=EventType.choices)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    details = models.JSONField(blank=True, default=dict)
+
+    class Meta:
+        ordering = ["timestamp"]
+
+    def __str__(self):
+        return f"{self.event_type} at {self.timestamp} for claim {self.hard_claim.id}"

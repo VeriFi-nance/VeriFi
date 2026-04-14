@@ -142,6 +142,12 @@ class HardClaimView(APIView):
                 until=data["until"],
                 status=data.get("status", "undetermined"),
             )
+            from .models import HardClaimEvent
+            HardClaimEvent.objects.create(
+                hard_claim=hard_claim,
+                event_type=HardClaimEvent.EventType.CREATION,
+                details={}
+            )
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
