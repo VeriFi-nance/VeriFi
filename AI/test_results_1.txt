@@ -1,0 +1,300 @@
+[1] INPUT: Bitcoin kısa vadede 95000 USD olur.
+1. pay=BTC | payda=USD | value=95000.0 | deadline=2026-05-23 | status=HARD_CLAIM
+
+[2] INPUT: Apple hisseleri yıl sonunda 250 USD seviyesine ulaşır.
+1. pay=AAPL | payda=USD | value=250.0 | deadline=2026-12-31 | status=HARD_CLAIM
+
+[3] INPUT: USD/TRY paritesi orta vadede 45.50 seviyesini görecek.
+1. pay=USD | payda=TRY | value=45.5 | deadline=2027-04-23 | status=HARD_CLAIM
+
+[4] INPUT: Ethereum haftaya 4200 USD bandını geçer.
+1. pay=ETH | payda=USD | value=4200.0 | deadline=2026-04-30 | status=HARD_CLAIM
+
+[5] INPUT: Tesla orta vadede 300 USD hedef fiyatına sahip.
+1. pay=TSLA | payda=USD | value=300.0 | deadline=2027-04-23 | status=HARD_CLAIM
+
+[6] INPUT: Dolar kuru yıl sonu itibarıyla 42 TRY olacaktır.
+1. pay=USD | payda=TRY | value=42.0 | deadline=2026-12-31 | status=HARD_CLAIM
+
+[7] INPUT: NVDA için kısa vadeli beklentim 950 USD.
+1. pay=NVDA | payda=USD | value=950.0 | deadline=2026-05-23 | status=HARD_CLAIM
+
+[8] INPUT: SOL/USD paritesi 3 ay içinde 200 değerine ulaşır.
+1. pay=SOL | payda=USD | value=200.0 | deadline=2026-07-22 | status=HARD_CLAIM
+
+[9] INPUT: Microsoft 2026 sonunda 500 USD olur.
+1. pay=MSFT | payda=USD | value=500.0 | deadline=2026-12-31 | status=HARD_CLAIM
+
+[10] INPUT: Avax kısa vadede 60 USD hedefliyor.
+1. pay=AVAX | payda=USD | value=60.0 | deadline=2026-05-23 | status=HARD_CLAIM
+
+[11] INPUT: Google hissesi orta vadede 180 USD bandına yerleşir.
+1. pay=GOOGL | payda=USD | value=180.0 | deadline=2027-04-23 | status=HARD_CLAIM
+
+[12] INPUT: GBP/USD paritesi yıl sonunda 1.35 seviyesini test eder.
+1. pay=GBP | payda=USD | value=1.35 | deadline=2026-12-31 | status=HARD_CLAIM
+
+[13] INPUT: BTC 2027 başında 150000 USD olur.
+1. pay=BTC | payda=USD | value=150000.0 | deadline=2027-12-31 | status=HARD_CLAIM
+
+[14] INPUT: Amazon kısa vadede 210 USD seviyesine çıkar.
+1. pay=AMZN | payda=USD | value=210.0 | deadline=2026-05-23 | status=HARD_CLAIM
+
+[15] INPUT: Meta orta vadede 600 USD hedef fiyatla izlenmeli.
+1. pay=META | payda=USD | value=600.0 | deadline=2027-04-23 | status=HARD_CLAIM
+
+[16] INPUT: Netflix yıl sonuna kadar 700 USD olur.
+1. pay=NFLX | payda=USD | value=700.0 | deadline=2026-12-31 | status=HARD_CLAIM
+
+[17] INPUT: Doge kısa vadede 0.50 USD seviyesini aşar.
+1. pay=DOGE | payda=USD | value=0.5 | deadline=2026-05-23 | status=HARD_CLAIM
+
+[18] INPUT: XRP orta vadede 2 USD bandına oturur.
+1. pay=XRP | payda=USD | value=2.0 | deadline=2027-04-23 | status=HARD_CLAIM
+
+[19] INPUT: AMD hissesi haftaya 200 USD olur.
+1. pay=AMD | payda=USD | value=200.0 | deadline=2026-04-30 | status=HARD_CLAIM
+
+[20] INPUT: Intel kısa vadede 45 USD hedefliyor.
+1. pay=INTC | payda=USD | value=45.0 | deadline=2026-05-23 | status=HARD_CLAIM
+
+[21] INPUT: Coinbase orta vadede 300 USD olur.
+1. pay=COIN | payda=USD | value=300.0 | deadline=2027-04-23 | status=HARD_CLAIM
+
+[22] INPUT: Paypal yıl sonunda 85 USD seviyesine gelir.
+1. pay=PYPL | payda=USD | value=85.0 | deadline=2026-12-31 | status=HARD_CLAIM
+
+[23] INPUT: Palantir kısa vadede 35 USD olur.
+1. pay=PLTR | payda=USD | value=35.0 | deadline=2026-05-23 | status=HARD_CLAIM
+
+[24] INPUT: Uber orta vadede 90 USD seviyesini görür.
+1. pay=UBER | payda=USD | value=90.0 | deadline=2027-04-23 | status=HARD_CLAIM
+
+[25] INPUT: Disney yıl sonuna kadar 130 USD olur.
+1. pay=DIS | payda=USD | value=130.0 | deadline=2026-12-31 | status=HARD_CLAIM
+
+[26] INPUT: BTC/EUR paritesi haftaya 85000 seviyesini aşar.
+1. pay=BTC | payda=EUR | value=85000.0 | deadline=2026-04-30 | status=HARD_CLAIM
+
+[27] INPUT: ETH/TRY orta vadede 150000 bandına gelir.
+1. pay=ETH | payda=TRY | value=150000.0 | deadline=2027-04-23 | status=HARD_CLAIM
+
+[28] INPUT: Link kısa vadede 25 USD olur.
+1. pay=LINK | payda=USD | value=25.0 | deadline=2026-05-23 | status=HARD_CLAIM
+
+[29] INPUT: Dot yıl sonunda 15 USD seviyesine çıkar.
+1. pay=DOT | payda=USD | value=15.0 | deadline=2026-12-31 | status=HARD_CLAIM
+
+[30] INPUT: Ada orta vadede 1.20 USD olur.
+1. pay=ADA | payda=USD | value=1.2 | deadline=2027-04-23 | status=HARD_CLAIM
+
+[31] INPUT: Dolar/Frank paritesi kısa vadede 0.90 CHF olur.
+1. pay=USD | payda=CHF | value=0.9 | deadline=2026-05-23 | status=HARD_CLAIM
+
+[32] INPUT: Yen orta vadede 155 JPY/USD seviyesini görür.
+1. pay=JPY | payda=USD | value=155.0 | deadline=2027-04-23 | status=HARD_CLAIM
+
+[33] INPUT: CNY/TRY paritesi yıl sonunda 6.50 olur.
+1. pay=CNY | payda=TRY | value=6.5 | deadline=2026-12-31 | status=HARD_CLAIM
+
+[34] INPUT: AUD/USD kısa vadede 0.70 bandına yerleşir.
+1. pay=AUD | payda=USD | value=0.7 | deadline=2026-05-23 | status=HARD_CLAIM
+
+[35] INPUT: CAD orta vadede 1.40 USD olur.
+1. pay=CAD | payda=USD | value=1.4 | deadline=2027-04-23 | status=HARD_CLAIM
+
+[36] INPUT: NZD/USD yıl sonunda 0.65 seviyesine gelir.
+1. pay=NZD | payda=USD | value=0.65 | deadline=2026-12-31 | status=HARD_CLAIM
+
+[37] INPUT: XRP/TRY kısa vadede 35 seviyesini aşar.
+1. pay=XRP | payda=TRY | value=35.0 | deadline=2026-05-23 | status=HARD_CLAIM
+
+[38] INPUT: Solana yıl sonunda 250 USD olur.
+1. pay=SOL | payda=USD | value=250.0 | deadline=2026-12-31 | status=HARD_CLAIM
+
+[39] INPUT: BNB kısa vadede 700 USD hedefliyor.
+1. pay=BNB | payda=USD | value=700.0 | deadline=2026-05-23 | status=HARD_CLAIM
+
+[40] INPUT: AVAX yıl sonunda 120 USD olur.
+1. pay=AVAX | payda=USD | value=120.0 | deadline=2026-12-31 | status=HARD_CLAIM
+
+[41] INPUT: Bitcoin will reach 98000 USD in the short term.
+1. pay=BTC | payda=USD | value=98000.0 | deadline=2026-05-23 | status=HARD_CLAIM
+
+[42] INPUT: Apple stock will hit 260 USD by year-end.
+1. pay=AAPL | payda=USD | value=260.0 | deadline=2026-12-31 | status=HARD_CLAIM
+
+[43] INPUT: USD/TRY will test 46.20 in the medium term.
+1. pay=USD | payda=TRY | value=46.2 | deadline=2027-04-23 | status=HARD_CLAIM
+
+[44] INPUT: Ethereum will move above 4300 USD next week.
+1. pay=ETH | payda=USD | value=4300.0 | deadline=2026-04-30 | status=HARD_CLAIM
+
+[45] INPUT: Tesla has a medium-term target of 320 USD.
+1. pay=TSLA | payda=USD | value=320.0 | deadline=2027-04-23 | status=HARD_CLAIM
+
+[46] INPUT: The dollar rate will be 43 TRY by the end of the year.
+1. pay=USD | payda=TRY | value=43.0 | deadline=null | status=POSSIBLE_CLAIM
+
+[47] INPUT: NVDA is expected to reach 980 USD in the short term.
+1. pay=NVDA | payda=USD | value=980.0 | deadline=2026-05-23 | status=HARD_CLAIM
+
+[48] INPUT: SOL/USD will reach 210 within 3 months.
+1. pay=SOL | payda=USD | value=3.0 | deadline=null | status=POSSIBLE_CLAIM
+
+[49] INPUT: Microsoft will be 520 USD by end of 2026.
+1. pay=MSFT | payda=USD | value=520.0 | deadline=2026-12-31 | status=HARD_CLAIM
+
+[50] INPUT: AVAX targets 70 USD in the short term.
+1. pay=AVAX | payda=USD | value=70.0 | deadline=2026-05-23 | status=HARD_CLAIM
+
+[51] INPUT: Google stock settles at 185 USD in the medium term.
+1. pay=GOOGL | payda=USD | value=185.0 | deadline=2027-04-23 | status=HARD_CLAIM
+
+[52] INPUT: GBP/USD will test 1.37 by year-end.
+1. pay=GBP | payda=USD | value=1.37 | deadline=2026-12-31 | status=HARD_CLAIM
+
+[53] INPUT: BTC will be 155000 USD at the beginning of 2027.
+1. pay=BTC | payda=USD | value=155000.0 | deadline=null | status=POSSIBLE_CLAIM
+
+[54] INPUT: Amazon rises to 215 USD in the short term.
+1. pay=AMZN | payda=USD | value=215.0 | deadline=2026-05-23 | status=HARD_CLAIM
+
+[55] INPUT: Meta should be tracked with a 620 USD medium-term target.
+1. pay=META | payda=USD | value=620.0 | deadline=2027-04-23 | status=HARD_CLAIM
+
+[56] INPUT: Netflix reaches 720 USD by the end of the year.
+1. pay=NFLX | payda=USD | value=720.0 | deadline=2026-12-31 | status=HARD_CLAIM
+
+[57] INPUT: DOGE will break 0.55 USD in the short term.
+1. pay=DOGE | payda=USD | value=0.55 | deadline=2026-05-23 | status=HARD_CLAIM
+
+[58] INPUT: XRP stabilizes around 2.2 USD in the medium term.
+1. pay=XRP | payda=USD | value=2.2 | deadline=2027-04-23 | status=HARD_CLAIM
+
+[59] INPUT: AMD will be 210 USD next week.
+1. pay=AMD | payda=USD | value=210.0 | deadline=2026-04-30 | status=HARD_CLAIM
+
+[60] INPUT: Intel targets 48 USD in the short term.
+1. pay=INTC | payda=USD | value=48.0 | deadline=2026-05-23 | status=HARD_CLAIM
+
+[61] INPUT: Coinbase reaches 320 USD in the medium term.
+1. pay=COIN | payda=USD | value=320.0 | deadline=2027-04-23 | status=HARD_CLAIM
+
+[62] INPUT: PayPal will be 88 USD by year-end.
+1. pay=PYPL | payda=USD | value=88.0 | deadline=2026-12-31 | status=HARD_CLAIM
+
+[63] INPUT: Palantir reaches 38 USD in the short term.
+1. pay=PLTR | payda=USD | value=38.0 | deadline=2026-05-23 | status=HARD_CLAIM
+
+[64] INPUT: Uber sees 95 USD in the medium term.
+1. pay=UBER | payda=USD | value=95.0 | deadline=2027-04-23 | status=HARD_CLAIM
+
+[65] INPUT: Disney will be 135 USD by end of year.
+1. pay=DIS | payda=USD | value=135.0 | deadline=2026-12-31 | status=HARD_CLAIM
+
+[66] INPUT: BTC/EUR will cross 87000 next week.
+1. pay=BTC | payda=EUR | value=87000.0 | deadline=2026-04-30 | status=HARD_CLAIM
+
+[67] INPUT: ETH/TRY reaches 160000 in the medium term.
+1. pay=ETH | payda=TRY | value=160000.0 | deadline=2027-04-23 | status=HARD_CLAIM
+
+[68] INPUT: LINK will be 27 USD in the short term.
+1. pay=LINK | payda=USD | value=27.0 | deadline=2026-05-23 | status=HARD_CLAIM
+
+[69] INPUT: DOT climbs to 16 USD by year-end.
+1. pay=DOT | payda=USD | value=16.0 | deadline=2026-12-31 | status=HARD_CLAIM
+
+[70] INPUT: ADA will be 1.30 USD in the medium term.
+1. pay=ADA | payda=USD | value=1.3 | deadline=2027-04-23 | status=HARD_CLAIM
+
+[71] INPUT: USD/CHF reaches 0.92 in the short term.
+1. pay=USD | payda=CHF | value=0.92 | deadline=2026-05-23 | status=HARD_CLAIM
+
+[72] INPUT: JPY/USD will see 0.0068 in the medium term.
+1. pay=JPY | payda=USD | value=0.0068 | deadline=2027-04-23 | status=HARD_CLAIM
+
+[73] INPUT: CNY/TRY reaches 6.8 by year-end.
+1. pay=CNY | payda=TRY | value=6.8 | deadline=2026-12-31 | status=HARD_CLAIM
+
+[74] INPUT: AUD/USD settles at 0.72 in the short term.
+1. pay=AUD | payda=USD | value=0.72 | deadline=2026-05-23 | status=HARD_CLAIM
+
+[75] INPUT: CAD will be 1.45 USD in the medium term.
+1. pay=CAD | payda=USD | value=1.45 | deadline=2027-04-23 | status=HARD_CLAIM
+
+[76] INPUT: NZD/USD reaches 0.67 by year-end.
+1. pay=NZD | payda=USD | value=0.67 | deadline=2026-12-31 | status=HARD_CLAIM
+
+[77] INPUT: XRP/TRY crosses 38 in the short term.
+1. pay=XRP | payda=TRY | value=38.0 | deadline=2026-05-23 | status=HARD_CLAIM
+
+[78] INPUT: Solana reaches 270 USD by year-end.
+1. pay=SOL | payda=USD | value=270.0 | deadline=2026-12-31 | status=HARD_CLAIM
+
+[79] INPUT: BNB targets 760 USD in the short term.
+1. pay=BNB | payda=USD | value=760.0 | deadline=2026-05-23 | status=HARD_CLAIM
+
+[80] INPUT: USD/JPY will exceed 162 by year-end.
+1. pay=USD | payda=JPY | value=162.0 | deadline=2026-12-31 | status=HARD_CLAIM
+
+[81] INPUT: Bitcoin 100000 olacak.
+1. pay=BTC | payda=null | value=100000.0 | deadline=null | status=POSSIBLE_CLAIM
+
+[82] INPUT: Apple hissesi kısa vadede 300 bandına çıkar.
+1. pay=AAPL | payda=null | value=300.0 | deadline=2026-05-23 | status=POSSIBLE_CLAIM
+
+[83] INPUT: Dolar yıl sonunda 50 bandını geçer.
+1. pay=USD | payda=null | value=50.0 | deadline=2026-12-31 | status=POSSIBLE_CLAIM
+
+[84] INPUT: Ethereum 5000 USD hedefliyor.
+1. pay=ETH | payda=USD | value=5000.0 | deadline=null | status=POSSIBLE_CLAIM
+
+[85] INPUT: Tesla 400 doları görecek.
+1. pay=TSLA | payda=USD | value=400.0 | deadline=null | status=POSSIBLE_CLAIM
+
+[86] INPUT: Solana haftaya 300 olur.
+1. pay=SOL | payda=null | value=300.0 | deadline=2026-04-30 | status=POSSIBLE_CLAIM
+
+[87] INPUT: NVDA 1200 USD seviyesine gelir.
+1. pay=NVDA | payda=USD | value=1200.0 | deadline=null | status=POSSIBLE_CLAIM
+
+[88] INPUT: Microsoft orta vadede 600 seviyesini test eder.
+1. pay=MSFT | payda=null | value=600.0 | deadline=2027-04-23 | status=POSSIBLE_CLAIM
+
+[89] INPUT: BTC 120000 patates olur.
+1. pay=BTC | payda=null | value=120000.0 | deadline=null | status=POSSIBLE_CLAIM
+
+[90] INPUT: Doge 1 olur.
+1. pay=DOGE | payda=null | value=1.0 | deadline=null | status=POSSIBLE_CLAIM
+
+[91] INPUT: Bitcoin will be 110000.
+1. pay=BTC | payda=null | value=110000.0 | deadline=null | status=POSSIBLE_CLAIM
+
+[92] INPUT: Apple stock moves to 310 in the short term.
+1. pay=AAPL | payda=null | value=310.0 | deadline=2026-05-23 | status=POSSIBLE_CLAIM
+
+[93] INPUT: Dollar will pass 52 by year-end.
+1. pay=USD | payda=null | value=52.0 | deadline=2026-12-31 | status=POSSIBLE_CLAIM
+
+[94] INPUT: Ethereum targets 5200 USD.
+1. pay=ETH | payda=USD | value=5200.0 | deadline=null | status=POSSIBLE_CLAIM
+
+[95] INPUT: Tesla will see 420 dollars.
+1. pay=TSLA | payda=null | value=420.0 | deadline=null | status=POSSIBLE_CLAIM
+
+[96] INPUT: Solana will be 320 next week.
+1. pay=SOL | payda=null | value=320.0 | deadline=2026-04-30 | status=POSSIBLE_CLAIM
+
+[97] INPUT: NVDA reaches 1250 USD.
+1. pay=NVDA | payda=USD | value=1250.0 | deadline=null | status=POSSIBLE_CLAIM
+
+[98] INPUT: Microsoft tests 650 in the medium term.
+1. pay=MSFT | payda=null | value=650.0 | deadline=2027-04-23 | status=POSSIBLE_CLAIM
+
+[99] INPUT: BTC goes to 130000 potatoes.
+1. pay=BTC | payda=null | value=130000.0 | deadline=null | status=POSSIBLE_CLAIM
+
+[100] INPUT: DOGE will be 1.2.
+1. pay=DOGE | payda=null | value=1.2 | deadline=null | status=POSSIBLE_CLAIM
+

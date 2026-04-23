@@ -1,0 +1,300 @@
+[1] INPUT: Bitcoin kısa vadede 103000 dolar olur.
+1. pay=BTC | payda=USD | value=103000.0 | value_type=PRICE | deadline=2026-05-23 | status=HARD_CLAIM
+
+[2] INPUT: Etheriyum orta vadede 6200 dollar olur.
+1. pay=ETH | payda=USD | value=6200.0 | value_type=PRICE | deadline=2027-04-23 | status=HARD_CLAIM
+
+[3] INPUT: Solana yıl sonunda 320 USD olur.
+1. pay=SOL | payda=USD | value=320.0 | value_type=PRICE | deadline=2026-12-31 | status=HARD_CLAIM
+
+[4] INPUT: Binance coin kısa vadede 860 dolar olur.
+1. pay=COIN | payda=USD | value=860.0 | value_type=PRICE | deadline=2026-05-23 | status=HARD_CLAIM
+
+[5] INPUT: Apple hissesi orta vadede 290 dolar olur.
+1. pay=AAPL | payda=USD | value=290.0 | value_type=PRICE | deadline=2027-04-23 | status=HARD_CLAIM
+
+[6] INPUT: Microsof yıl sonunda 640 dolar olur.
+1. pay=MSFT | payda=USD | value=640.0 | value_type=PRICE | deadline=2026-12-31 | status=HARD_CLAIM
+
+[7] INPUT: Gogle kısa vadede 260 dollar olur.
+1. pay=GOOGL | payda=USD | value=260.0 | value_type=PRICE | deadline=2026-05-23 | status=HARD_CLAIM
+
+[8] INPUT: Amazn orta vadede 275 dolar olur.
+1. pay=AMZN | payda=USD | value=275.0 | value_type=PRICE | deadline=2027-04-23 | status=HARD_CLAIM
+
+[9] INPUT: Nvida yıl sonunda 1400 USD olur.
+1. pay=NVDA | payda=USD | value=1400.0 | value_type=PRICE | deadline=2026-12-31 | status=HARD_CLAIM
+
+[10] INPUT: Tesl haftaya 360 dolar olur.
+1. pay=TSLA | payda=USD | value=360.0 | value_type=PRICE | deadline=2026-04-30 | status=HARD_CLAIM
+
+[11] INPUT: Meta hissesi orta vadede 780 USD olur.
+1. pay=META | payda=USD | value=780.0 | value_type=PRICE | deadline=2027-04-23 | status=HARD_CLAIM
+
+[12] INPUT: Netfliix yıl sonunda 930 dollar olur.
+1. pay=NFLX | payda=USD | value=930.0 | value_type=PRICE | deadline=2026-12-31 | status=HARD_CLAIM
+
+[13] INPUT: USD/TRY orta vadede 49.10 olur.
+1. pay=USD | payda=TRY | value=49.1 | value_type=PRICE | deadline=2027-04-23 | status=HARD_CLAIM
+
+[14] INPUT: EUR/USD kısa vadede 1.22 olur.
+1. pay=EUR | payda=USD | value=1.22 | value_type=PRICE | deadline=2026-05-23 | status=HARD_CLAIM
+
+[15] INPUT: GBP/USD yıl sonunda 1.45 olur.
+1. pay=GBP | payda=USD | value=1.45 | value_type=PRICE | deadline=2026-12-31 | status=HARD_CLAIM
+
+[16] INPUT: Bitcoin will reach 110000 dollars in the short term.
+1. pay=BTC | payda=USD | value=110000.0 | value_type=PRICE | deadline=2026-05-23 | status=HARD_CLAIM
+
+[17] INPUT: Etherium will hit 6800 doller in the medium term.
+1. pay=ETH | payda=USD | value=6800.0 | value_type=PRICE | deadline=2027-04-23 | status=HARD_CLAIM
+
+[18] INPUT: Solana will be 360 USD by year-end.
+1. pay=SOL | payda=USD | value=360.0 | value_type=PRICE | deadline=2026-12-31 | status=HARD_CLAIM
+
+[19] INPUT: Binance coin will be 920 dollars in the short term.
+1. pay=COIN | payda=USD | value=920.0 | value_type=PRICE | deadline=2026-05-23 | status=HARD_CLAIM
+
+[20] INPUT: Apple stock will be 305 dollars in the medium term.
+1. pay=AAPL | payda=USD | value=305.0 | value_type=PRICE | deadline=2027-04-23 | status=HARD_CLAIM
+
+[21] INPUT: Microsof will be 670 dollars by year-end.
+1. pay=MSFT | payda=USD | value=670.0 | value_type=PRICE | deadline=2026-12-31 | status=HARD_CLAIM
+
+[22] INPUT: Gogle will hit 270 dollars in the short term.
+1. pay=GOOGL | payda=USD | value=270.0 | value_type=PRICE | deadline=2026-05-23 | status=HARD_CLAIM
+
+[23] INPUT: Amazn will reach 285 dollars in the medium term.
+1. pay=AMZN | payda=USD | value=285.0 | value_type=PRICE | deadline=2027-04-23 | status=HARD_CLAIM
+
+[24] INPUT: Nvida will be 1450 dollars by year-end.
+1. pay=NVDA | payda=USD | value=1450.0 | value_type=PRICE | deadline=2026-12-31 | status=HARD_CLAIM
+
+[25] INPUT: Tesl will be 375 dollars next week.
+1. pay=TSLA | payda=USD | value=375.0 | value_type=PRICE | deadline=2026-04-30 | status=HARD_CLAIM
+
+[26] INPUT: Meta will be 820 USD in the medium term.
+1. pay=META | payda=USD | value=820.0 | value_type=PRICE | deadline=2027-04-23 | status=HARD_CLAIM
+
+[27] INPUT: Netflix will hit 960 USD by year-end.
+1. pay=NFLX | payda=USD | value=960.0 | value_type=PRICE | deadline=2026-12-31 | status=HARD_CLAIM
+
+[28] INPUT: USD/JPY will test 170 in the short term.
+1. pay=USD | payda=JPY | value=170.0 | value_type=PRICE | deadline=2026-05-23 | status=HARD_CLAIM
+
+[29] INPUT: AUD/USD will be 0.79 in the medium term.
+1. pay=AUD | payda=USD | value=0.79 | value_type=PRICE | deadline=2027-04-23 | status=HARD_CLAIM
+
+[30] INPUT: CNY/TRY will be 7.60 by year-end.
+1. pay=CNY | payda=TRY | value=7.6 | value_type=PRICE | deadline=2026-12-31 | status=HARD_CLAIM
+
+[31] INPUT: Bitcoin doler bazında yıl sonunda %12 artacak.
+1. pay=BTC | payda=USD | value=12.0 | value_type=PERCENTAGE_UP | deadline=2026-12-31 | status=HARD_CLAIM
+
+[32] INPUT: Etheriyum dolar karşısında orta vadede yüzde 9 yükselecek.
+1. pay=ETH | payda=USD | value=9.0 | value_type=PERCENTAGE_UP | deadline=2027-04-23 | status=HARD_CLAIM
+
+[33] INPUT: Solana BTC bazında kısa vadede %7 düşecek.
+1. pay=SOL | payda=BTC | value=7.0 | value_type=PERCENTAGE_DOWN | deadline=2026-05-23 | status=HARD_CLAIM
+
+[34] INPUT: Binance coin lira karşısında yıl sonunda yüzde 15 değer kazanacak.
+1. pay=COIN | payda=TRY | value=15.0 | value_type=PERCENTAGE_UP | deadline=2026-12-31 | status=HARD_CLAIM
+
+[35] INPUT: XRP USD bazında kısa vadede %6 artış gösterecek.
+1. pay=XRP | payda=USD | value=6.0 | value_type=PERCENTAGE_UP | deadline=2026-05-23 | status=HARD_CLAIM
+
+[36] INPUT: ADA EUR karşısında orta vadede yüzde 4 azalış yaşayacak.
+1. pay=ADA | payda=EUR | value=4.0 | value_type=PERCENTAGE_DOWN | deadline=2027-04-23 | status=HARD_CLAIM
+
+[37] INPUT: AVAX dolar bazında haftaya %5 yükselecek.
+1. pay=AVAX | payda=USD | value=5.0 | value_type=PERCENTAGE_UP | deadline=2026-04-30 | status=HARD_CLAIM
+
+[38] INPUT: DOGE BTC karşısında kısa vadede yüzde 11 düşecek.
+1. pay=DOGE | payda=BTC | value=11.0 | value_type=PERCENTAGE_DOWN | deadline=2026-05-23 | status=HARD_CLAIM
+
+[39] INPUT: DOT USD bazında yıl sonunda %8 artacak.
+1. pay=DOT | payda=USD | value=8.0 | value_type=PERCENTAGE_UP | deadline=2026-12-31 | status=HARD_CLAIM
+
+[40] INPUT: LINK TRY karşısında orta vadede yüzde 10 değer kazanacak.
+1. pay=LINK | payda=TRY | value=10.0 | value_type=PERCENTAGE_UP | deadline=2027-04-23 | status=HARD_CLAIM
+
+[41] INPUT: Apple dolar bazında yıl sonunda %13 artacak.
+1. pay=AAPL | payda=USD | value=13.0 | value_type=PERCENTAGE_UP | deadline=2026-12-31 | status=HARD_CLAIM
+
+[42] INPUT: Microsof avro karşısında kısa vadede yüzde 3 düşecek.
+1. pay=MSFT | payda=EUR | value=3.0 | value_type=PERCENTAGE_DOWN | deadline=2026-05-23 | status=HARD_CLAIM
+
+[43] INPUT: Gogle dolar bazında orta vadede %5 artış yaşayacak.
+1. pay=GOOGL | payda=USD | value=5.0 | value_type=PERCENTAGE_UP | deadline=2027-04-23 | status=HARD_CLAIM
+
+[44] INPUT: Amazn lira karşısında yıl sonunda yüzde 14 yükselecek.
+1. pay=AMZN | payda=TRY | value=14.0 | value_type=PERCENTAGE_UP | deadline=2026-12-31 | status=HARD_CLAIM
+
+[45] INPUT: Nvida dolar bazında kısa vadede %9 düşecek.
+1. pay=NVDA | payda=USD | value=9.0 | value_type=PERCENTAGE_DOWN | deadline=2026-05-23 | status=HARD_CLAIM
+
+[46] INPUT: Bitcoin will rise by 12% against USD by year-end.
+1. pay=BTC | payda=USD | value=12.0 | value_type=PERCENTAGE_UP | deadline=2026-12-31 | status=HARD_CLAIM
+
+[47] INPUT: Etheriyum will increase 8 percent versus dollar in the medium term.
+1. pay=ETH | payda=USD | value=8.0 | value_type=PERCENTAGE_UP | deadline=2027-04-23 | status=HARD_CLAIM
+
+[48] INPUT: Solana will drop 6% against BTC in the short term.
+1. pay=SOL | payda=BTC | value=6.0 | value_type=PERCENTAGE_DOWN | deadline=2026-05-23 | status=HARD_CLAIM
+
+[49] INPUT: Binance coin will gain 14% against lira by year-end.
+1. pay=COIN | payda=TRY | value=14.0 | value_type=PERCENTAGE_UP | deadline=2026-12-31 | status=HARD_CLAIM
+
+[50] INPUT: XRP will increase 5% versus USD next week.
+1. pay=XRP | payda=USD | value=5.0 | value_type=PERCENTAGE_UP | deadline=2026-04-30 | status=HARD_CLAIM
+
+[51] INPUT: ADA will fall 4 percent against EUR in the medium term.
+1. pay=ADA | payda=EUR | value=4.0 | value_type=PERCENTAGE_DOWN | deadline=2027-04-23 | status=HARD_CLAIM
+
+[52] INPUT: AVAX will rise 7% against USD in the short term.
+1. pay=AVAX | payda=USD | value=7.0 | value_type=PERCENTAGE_UP | deadline=2026-05-23 | status=HARD_CLAIM
+
+[53] INPUT: DOGE will drop 10% versus BTC by year-end.
+1. pay=DOGE | payda=BTC | value=10.0 | value_type=PERCENTAGE_DOWN | deadline=2026-12-31 | status=HARD_CLAIM
+
+[54] INPUT: DOT will gain 9% against USD in the medium term.
+1. pay=DOT | payda=USD | value=9.0 | value_type=PERCENTAGE_UP | deadline=2027-04-23 | status=HARD_CLAIM
+
+[55] INPUT: LINK will increase 11 percent against TRY in the short term.
+1. pay=LINK | payda=TRY | value=11.0 | value_type=PERCENTAGE_UP | deadline=2026-05-23 | status=HARD_CLAIM
+
+[56] INPUT: Apple will rise 6% against dollar by year-end.
+1. pay=AAPL | payda=USD | value=6.0 | value_type=PERCENTAGE_UP | deadline=2026-12-31 | status=HARD_CLAIM
+
+[57] INPUT: Microsof will decline 3% versus euro in the short term.
+1. pay=MSFT | payda=EUR | value=3.0 | value_type=PERCENTAGE_UP | deadline=2026-05-23 | status=HARD_CLAIM
+
+[58] INPUT: Gogle will gain 4 percent against dollar in the medium term.
+1. pay=GOOGL | payda=USD | value=4.0 | value_type=PERCENTAGE_UP | deadline=2027-04-23 | status=HARD_CLAIM
+
+[59] INPUT: Amazn will rise 8% against lira by year-end.
+1. pay=AMZN | payda=TRY | value=8.0 | value_type=PERCENTAGE_UP | deadline=2026-12-31 | status=HARD_CLAIM
+
+[60] INPUT: Nvida will drop 5% versus dollar in the short term.
+1. pay=NVDA | payda=USD | value=5.0 | value_type=PERCENTAGE_DOWN | deadline=2026-05-23 | status=HARD_CLAIM
+
+[61] INPUT: Bitcoin %10 artacak.
+1. pay=BTC | payda=null | value=10.0 | value_type=PERCENTAGE_UP | deadline=null | status=POSSIBLE_CLAIM
+
+[62] INPUT: Etheriyum yüzde 8 düşecek.
+1. pay=ETH | payda=null | value=8.0 | value_type=PERCENTAGE_DOWN | deadline=null | status=POSSIBLE_CLAIM
+
+[63] INPUT: Solana 420 USD olacak.
+1. pay=SOL | payda=USD | value=420.0 | value_type=PRICE | deadline=null | status=POSSIBLE_CLAIM
+
+[64] INPUT: BNB 980 olacak.
+1. pay=BNB | payda=null | value=980.0 | value_type=PRICE | deadline=null | status=POSSIBLE_CLAIM
+
+[65] INPUT: Apple %6 yükselecek.
+1. pay=AAPL | payda=null | value=6.0 | value_type=PERCENTAGE_UP | deadline=null | status=POSSIBLE_CLAIM
+
+[66] INPUT: Microsof 720 bandını test eder.
+1. pay=MSFT | payda=null | value=720.0 | value_type=PRICE | deadline=null | status=POSSIBLE_CLAIM
+
+[67] INPUT: Gogle yüzde 5 azalır.
+1. pay=GOOGL | payda=null | value=5.0 | value_type=PERCENTAGE_UP | deadline=null | status=POSSIBLE_CLAIM
+
+[68] INPUT: Amazn 310 dolar görür.
+1. pay=AMZN | payda=USD | value=310.0 | value_type=PRICE | deadline=null | status=POSSIBLE_CLAIM
+
+[69] INPUT: Nvida %9 artış yaşayacak.
+1. pay=NVDA | payda=null | value=9.0 | value_type=PERCENTAGE_UP | deadline=null | status=POSSIBLE_CLAIM
+
+[70] INPUT: Tesl 450 olur.
+1. pay=TSLA | payda=null | value=450.0 | value_type=PRICE | deadline=null | status=POSSIBLE_CLAIM
+
+[71] INPUT: Bitcoin will rise 10%.
+1. pay=BTC | payda=null | value=10.0 | value_type=PERCENTAGE_UP | deadline=null | status=POSSIBLE_CLAIM
+
+[72] INPUT: Etherium will drop 7 percent.
+1. pay=ETH | payda=null | value=7.0 | value_type=PERCENTAGE_DOWN | deadline=null | status=POSSIBLE_CLAIM
+
+[73] INPUT: Solana will be 420.
+1. pay=SOL | payda=null | value=420.0 | value_type=PRICE | deadline=null | status=POSSIBLE_CLAIM
+
+[74] INPUT: BNB will hit 980 USD.
+1. pay=BNB | payda=USD | value=980.0 | value_type=PRICE | deadline=null | status=POSSIBLE_CLAIM
+
+[75] INPUT: Apple will gain 6%.
+1. pay=AAPL | payda=null | value=6.0 | value_type=PERCENTAGE_UP | deadline=null | status=POSSIBLE_CLAIM
+
+[76] INPUT: Microsof will test 720.
+1. pay=MSFT | payda=null | value=720.0 | value_type=PRICE | deadline=null | status=POSSIBLE_CLAIM
+
+[77] INPUT: Gogle will decline 5 percent.
+1. pay=GOOGL | payda=null | value=5.0 | value_type=PERCENTAGE_UP | deadline=null | status=POSSIBLE_CLAIM
+
+[78] INPUT: Amazn reaches 310 dollars.
+1. pay=AMZN | payda=USD | value=310.0 | value_type=PRICE | deadline=null | status=POSSIBLE_CLAIM
+
+[79] INPUT: Nvida will increase 9%.
+1. pay=NVDA | payda=null | value=9.0 | value_type=PERCENTAGE_UP | deadline=null | status=POSSIBLE_CLAIM
+
+[80] INPUT: Tesl will be 450.
+1. pay=TSLA | payda=null | value=450.0 | value_type=PRICE | deadline=null | status=POSSIBLE_CLAIM
+
+[81] INPUT: Bugun ofisteki sunumu guncelleyip ekibe yolladim.
+No valid claims extracted.
+
+[82] INPUT: Yarin sabah spor yapip sonra markete gidecegim.
+No valid claims extracted.
+
+[83] INPUT: Kedim tum gun pencere kenarinda uyudu.
+No valid claims extracted.
+
+[84] INPUT: Bu hafta sonu ailece sinemaya gitmeyi planliyoruz.
+No valid claims extracted.
+
+[85] INPUT: Toplantinin notlarini paylasir misin lutfen?
+No valid claims extracted.
+
+[86] INPUT: Mutfakta kahve makinesi yine bozuldu.
+No valid claims extracted.
+
+[87] INPUT: The weather is perfect for a long walk.
+No valid claims extracted.
+
+[88] INPUT: Please update the project timeline document.
+No valid claims extracted.
+
+[89] INPUT: Our designer finalized the new landing page colors.
+No valid claims extracted.
+
+[90] INPUT: I forgot my notebook at home today.
+No valid claims extracted.
+
+[91] INPUT: Haftalik raporu aksama kadar tamamlayacagim.
+No valid claims extracted.
+
+[92] INPUT: Yeni kitapligin montaji bekledigimden uzun surdu.
+No valid claims extracted.
+
+[93] INPUT: Could you send me the meeting link?
+No valid claims extracted.
+
+[94] INPUT: The office internet was unstable this morning.
+No valid claims extracted.
+
+[95] INPUT: Bugun sadece e-postalari temizlemekle ugrastim.
+No valid claims extracted.
+
+[96] INPUT: We need to reorder printer paper for next week.
+No valid claims extracted.
+
+[97] INPUT: Arkadaslarla aksam yemekte bulusacagiz.
+No valid claims extracted.
+
+[98] INPUT: The onboarding checklist needs one more review.
+No valid claims extracted.
+
+[99] INPUT: Bahcedeki cicekler bu ay cok hizli buyudu.
+No valid claims extracted.
+
+[100] INPUT: Can you review the grammar in this paragraph?
+No valid claims extracted.
+

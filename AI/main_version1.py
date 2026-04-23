@@ -1,9 +1,8 @@
 from datetime import datetime, timedelta
-from typing import Optional, List, Literal
+from typing import Optional, List
 import os
 import re
 import json
-from difflib import get_close_matches
 from pydantic import BaseModel, Field, field_validator
 from agno.agent import Agent
 from agno.models.openai import OpenAIChat
@@ -25,10 +24,6 @@ class FinancialClaim(BaseModel):
     pay: str = Field(description="Numerator. Whitelist ticker sembolü (Örn: BTC).")
     payda: Optional[str] = Field(None, description="Denominator. Sadece whitelist'te varsa.")
     value: float = Field(description="Saf sayısal miktar.")
-    value_type: Literal["PRICE", "PERCENTAGE_UP", "PERCENTAGE_DOWN"] = Field(
-        default="PRICE",
-        description="Value type: PRICE, PERCENTAGE_UP, or PERCENTAGE_DOWN.",
-    )
     deadline: Optional[str] = Field(None, description="ISO formatlı tarih.")
     status: str = Field(description="'HARD_CLAIM' veya 'POSSIBLE_CLAIM'")
 
@@ -52,7 +47,6 @@ class RawClaim(BaseModel):
     pay: Optional[str] = None
     payda: Optional[str] = None
     value: Optional[float] = None
-    value_type: Optional[str] = None
     deadline: Optional[str] = None
     status: Optional[str] = None
 
@@ -89,11 +83,8 @@ verifi_agent = Agent(
         "   - TR: '2026 yıl sonu', '2026 sonunda', 'yıl sonuna kadar' => 2026-12-31 (or current year if year missing)",
         "   - EN: 'end of 2026', 'by year-end 2026' => 2026-12-31",
         "   - TR+EN relative: haftaya/next week, kısa-short, orta-medium, uzun-long term, N day/month/year => convert to date.",
-        "4. Use value_type: PRICE, PERCENTAGE_UP, PERCENTAGE_DOWN.",
-        "   - If text indicates percentage rise (% / yuzde / artis / yukselecek / deger kazanacak / rise / increase / gain), use PERCENTAGE_UP.",
-        "   - If text indicates percentage drop (% / yuzde / azalis / dusecek / fall / decrease / drop), use PERCENTAGE_DOWN.",
-        "5. HARD_CLAIM only when pay, payda, value, deadline are all present (4/4). Otherwise POSSIBLE_CLAIM.",
-        "6. Return only schema fields. Never include timeframe.",
+        "4. If payda is outside whitelist, set payda=null and status='POSSIBLE_CLAIM'.",
+        "5. Return only schema fields. Never include timeframe.",
     ],
 )
 
@@ -104,7 +95,7 @@ raw_verifi_agent = Agent(
     instructions=[
         f"Today date: {today_str}.",
         "Extract financial claims from Turkish or English text.",
-        "Return ONLY JSON with this shape: {'claims':[{'pay':..., 'payda':..., 'value':..., 'value_type':..., 'deadline':..., 'status':...}]}",
+        "Return ONLY JSON with this shape: {'claims':[{'pay':..., 'payda':..., 'value':..., 'deadline':..., 'status':...}]}",
         "If uncertain, still provide best-effort fields; leave unknown fields null.",
         "Do not add extra keys, explanations, markdown, or timeframe.",
     ],
@@ -224,12 +215,8 @@ def map_asset_token(token: str) -> Optional[str]:
         "us dollar": "USD",
         "u.s. dollar": "USD",
         "dollar": "USD",
-        "dolr": "USD",
-        "doller": "USD",
-        "dolarrr": "USD",
         "avro": "EUR",
         "euro": "EUR",
-        "euor": "EUR",
         "sterlin": "GBP",
         "ingiliz sterlini": "GBP",
         "pound": "GBP",
@@ -255,17 +242,8 @@ def map_asset_token(token: str) -> Optional[str]:
         "renminbi": "CNY",
         # Crypto
         "bitcoin": "BTC",
-        "bitcoın": "BTC",
-        "bitcon": "BTC",
-        "btcoin": "BTC",
         "ethereum": "ETH",
-        "ether": "ETH",
-        "etherium": "ETH",
-        "etheriyum": "ETH",
-        "etheryum": "ETH",
-        "ethirium": "ETH",
         "solana": "SOL",
-        "solona": "SOL",
         "binance coin": "BNB",
         "bnb coin": "BNB",
         "ripple": "XRP",
@@ -292,33 +270,10 @@ def map_asset_token(token: str) -> Optional[str]:
         "uber": "UBER",
         "disney": "DIS",
         "walt disney": "DIS",
-        "microsof": "MSFT",
-        "gogle": "GOOGL",
-        "amazn": "AMZN",
-        "nvida": "NVDA",
-        "tesl": "TSLA",
-        "netfliix": "NFLX",
     }
 
     mapped = ticker_map.get(normalized) or alias_map.get(normalized) or upper
-    if mapped in TOTAL_WHITELIST:
-        return mapped
-
-    # Fuzzy fallback for common human typos.
-    candidate_pool = list(alias_map.keys()) + list(ticker_map.keys())
-    close = get_close_matches(normalized, candidate_pool, n=1, cutoff=0.82)
-    if close:
-        close_key = close[0]
-        mapped = alias_map.get(close_key) or ticker_map.get(close_key)
-        if mapped in TOTAL_WHITELIST:
-            return mapped
-
-    # Multi-token fallback: check each token independently (e.g., "ether fiyatı").
-    for part in normalized.split():
-        mapped_part = alias_map.get(part) or ticker_map.get(part)
-        if mapped_part in TOTAL_WHITELIST:
-            return mapped_part
-    return None
+    return mapped if mapped in TOTAL_WHITELIST else None
 
 
 def extract_deadline(text: str) -> Optional[str]:
@@ -427,68 +382,6 @@ def _extract_best_numeric_value(text: str) -> tuple[Optional[float], int]:
         return None, -1
 
 
-def _extract_percentage_value(text: str) -> tuple[Optional[float], int]:
-    """Extract percentage amount from patterns like %10, 10%, yüzde 10."""
-    percent_patterns = [
-        r"%\s*(\d+(?:[.,]\d+)?)",
-        r"(\d+(?:[.,]\d+)?)\s*%",
-        r"y[uü]zde\s*(\d+(?:[.,]\d+)?)",
-        r"(\d+(?:[.,]\d+)?)\s*percent",
-    ]
-    lowered = text.lower()
-    for pattern in percent_patterns:
-        m = re.search(pattern, lowered, flags=re.IGNORECASE)
-        if not m:
-            continue
-        try:
-            return float(m.group(1).replace(",", ".")), m.end()
-        except ValueError:
-            continue
-    return None, -1
-
-
-def _detect_value_type(text: str, raw_value_type: Optional[str] = None) -> str:
-    """Infer value type from explicit raw type or language cues."""
-    if raw_value_type in {"PRICE", "PERCENTAGE_UP", "PERCENTAGE_DOWN"}:
-        return raw_value_type
-
-    lowered = text.lower()
-    up_keywords = [
-        "artış", "artis", "yükselecek", "yukselecek", "değer kazanacak", "deger kazanacak",
-        "increase", "rise", "up", "gain", "higher",
-    ]
-    down_keywords = [
-        "azalış", "azalis", "düşecek", "dusecek", "değer kaybedecek", "deger kaybedecek",
-        "decrease", "drop", "fall", "down", "lower",
-    ]
-    has_percent = "%" in lowered or "yüzde" in lowered or "yuzde" in lowered or "percent" in lowered
-    if has_percent or any(k in lowered for k in up_keywords + down_keywords):
-        if any(k in lowered for k in down_keywords):
-            return "PERCENTAGE_DOWN"
-        return "PERCENTAGE_UP"
-    return "PRICE"
-
-
-def _extract_base_payda_from_text(text: str) -> Optional[str]:
-    """Extract explicit denominator/base clues for percentage claims."""
-    lowered = text.lower()
-    base_patterns = [
-        r"([A-Za-zÇĞİÖŞÜçğıöşü]{2,15})\s+baz[ıi]nda",
-        r"([A-Za-zÇĞİÖŞÜçğıöşü]{2,15})\s+kar[sş][ıi]s[ıi]nda",
-        r"against\s+([A-Za-zÇĞİÖŞÜçğıöşü]{2,15})",
-        r"versus\s+([A-Za-zÇĞİÖŞÜçğıöşü]{2,15})",
-        r"vs\.?\s*([A-Za-zÇĞİÖŞÜçğıöşü]{2,15})",
-    ]
-    for pattern in base_patterns:
-        m = re.search(pattern, lowered, flags=re.IGNORECASE)
-        if not m:
-            continue
-        mapped = map_asset_token(m.group(1))
-        if mapped:
-            return mapped
-    return None
-
-
 def _extract_primary_asset(text: str) -> Optional[str]:
     tokens = re.findall(r"[A-Za-zÇĞİÖŞÜçğıöşü]+", text)
     # First check unigrams then bigrams/trigrams for aliases like "us dollar".
@@ -547,35 +440,27 @@ def _resolve_assets_from_prompt_or_raw(
 
 def normalize_raw_claim(raw_claim: RawClaim, prompt: str) -> Optional[FinancialClaim]:
     """Convert permissive AI output into strict final schema."""
-    value_type = _detect_value_type(prompt, raw_claim.value_type)
-    if value_type in {"PERCENTAGE_UP", "PERCENTAGE_DOWN"}:
-        value, value_end = _extract_percentage_value(prompt)
-    else:
-        value = _resolve_value_from_prompt_or_raw(prompt, raw_claim.value)
-        _, value_end = _extract_best_numeric_value(prompt)
+    value = _resolve_value_from_prompt_or_raw(prompt, raw_claim.value)
     if value is None:
         return None
 
     value_with_unit, unit_payda, value_end = _extract_value_with_payda(prompt)
-    if value_with_unit is not None and value_type == "PRICE":
+    if value_with_unit is not None:
         value = value_with_unit
     pay, payda = _resolve_assets_from_prompt_or_raw(prompt, raw_claim.pay, raw_claim.payda, value_end)
     if not payda and unit_payda and unit_payda != pay:
         payda = unit_payda
-    if value_type in {"PERCENTAGE_UP", "PERCENTAGE_DOWN"} and not payda:
-        payda = _extract_base_payda_from_text(prompt)
     if not pay:
         return None
 
     deadline = extract_deadline(prompt) or raw_claim.deadline
-    status = "HARD_CLAIM" if (pay is not None and payda is not None and value is not None and deadline is not None) else "POSSIBLE_CLAIM"
+    status = "HARD_CLAIM" if deadline and payda else "POSSIBLE_CLAIM"
 
     try:
         return FinancialClaim(
             pay=pay,
             payda=payda,
             value=float(value),
-            value_type=value_type,
             deadline=deadline,
             status=status,
         )
@@ -587,14 +472,9 @@ def rule_based_claims_from_prompt(prompt: str) -> List[FinancialClaim]:
     """Deterministic fallback extraction for common financial claim patterns."""
     text = prompt.strip()
     deadline = extract_deadline(text)
-    value_type = _detect_value_type(text, None)
     pay, payda = _extract_pair_assets(text)
 
-    if value_type in {"PERCENTAGE_UP", "PERCENTAGE_DOWN"}:
-        value, value_end = _extract_percentage_value(text)
-        unit_payda = None
-    else:
-        value, unit_payda, value_end = _extract_value_with_payda(text)
+    value, unit_payda, value_end = _extract_value_with_payda(text)
     if value is None:
         value, value_end = _extract_best_numeric_value(text)
     if value is None:
@@ -609,16 +489,13 @@ def rule_based_claims_from_prompt(prompt: str) -> List[FinancialClaim]:
         payda = _extract_payda_near_value(text, value_end, pay)
     if not payda and unit_payda and unit_payda != pay:
         payda = unit_payda
-    if value_type in {"PERCENTAGE_UP", "PERCENTAGE_DOWN"} and not payda:
-        payda = _extract_base_payda_from_text(text)
 
-    status = "HARD_CLAIM" if (pay is not None and payda is not None and value is not None and deadline is not None) else "POSSIBLE_CLAIM"
+    status = "HARD_CLAIM" if deadline and payda else "POSSIBLE_CLAIM"
     return [
         FinancialClaim(
             pay=pay,
             payda=payda,
             value=value,
-            value_type=value_type,
             deadline=deadline,
             status=status,
         )
@@ -641,7 +518,6 @@ def analyze_prompt_to_claims(prompt: str) -> List[FinancialClaim]:
                     pay=claim.pay,
                     payda=claim.payda,
                     value=claim.value,
-                    value_type=claim.value_type,
                     deadline=claim.deadline,
                     status=claim.status,
                 ),
@@ -684,8 +560,7 @@ def run_verifi(prompt: str):
             deadline = extracted_deadline or claim.deadline
             line = (
                 f"{idx}. pay={claim.pay} | payda={claim.payda or 'null'} | "
-                f"value={claim.value} | value_type={claim.value_type} | "
-                f"deadline={deadline or 'null'} | status={claim.status}"
+                f"value={claim.value} | deadline={deadline or 'null'} | status={claim.status}"
             )
             f.write(line + "\n")
 
@@ -711,8 +586,7 @@ def run_test_cases(test_cases: List[str], output_file: str = "test_results.txt")
                 deadline = extracted_deadline or claim.deadline
                 line = (
                     f"{claim_idx}. pay={claim.pay} | payda={claim.payda or 'null'} | "
-                    f"value={claim.value} | value_type={claim.value_type} | "
-                    f"deadline={deadline or 'null'} | status={claim.status}"
+                    f"value={claim.value} | deadline={deadline or 'null'} | status={claim.status}"
                 )
                 f.write(line + "\n")
             f.write("\n")
@@ -721,154 +595,119 @@ def run_test_cases(test_cases: List[str], output_file: str = "test_results.txt")
 
 
 if __name__ == "__main__":
-    def to_multisentence_inputs(claims: List[str], lang: str) -> List[str]:
-        """Wrap claim text with realistic extra context (>=3 sentences)."""
-        if lang == "tr":
-            return [
-                (
-                    "Sabah ekip toplantısında önce ürün yol haritasını konuştuk. "
-                    f"Sonra piyasaya dair görüşümü paylaştım: {claim} "
-                    "Yine de risk yönetimi için pozisyonu kademeli açmayı planlıyorum."
-                )
-                for claim in claims
-            ]
-        return [
-            (
-                "In the morning sync we first reviewed product milestones. "
-                f"Then I shared one market view: {claim} "
-                "Even so, I would size positions gradually because volatility is still high."
-            )
-            for claim in claims
-        ]
-
-    price_claims_tr = [
-        "Bitcoin kısa vadede 103000 dolar olur.",
-        "Etheriyum orta vadede 6200 dollar olur.",
-        "Solana yıl sonunda 320 USD olur.",
-        "Binance coin kısa vadede 860 dolar olur.",
-        "Apple hissesi orta vadede 290 dolar olur.",
-        "Microsof yıl sonunda 640 dolar olur.",
-        "Gogle kısa vadede 260 dollar olur.",
-        "Amazn orta vadede 275 dolar olur.",
-        "Nvida yıl sonunda 1400 USD olur.",
-        "Tesl haftaya 360 dolar olur.",
-        "Meta hissesi orta vadede 780 USD olur.",
-        "Netfliix yıl sonunda 930 dollar olur.",
-        "USD/TRY orta vadede 49.10 olur.",
-        "EUR/USD kısa vadede 1.22 olur.",
-        "GBP/USD yıl sonunda 1.45 olur.",
-    ]
-    price_claims_en = [
-        "Bitcoin will reach 110000 dollars in the short term.",
-        "Etherium will hit 6800 doller in the medium term.",
-        "Solana will be 360 USD by year-end.",
-        "Binance coin will be 920 dollars in the short term.",
-        "Apple stock will be 305 dollars in the medium term.",
-        "Microsof will be 670 dollars by year-end.",
-        "Gogle will hit 270 dollars in the short term.",
-        "Amazn will reach 285 dollars in the medium term.",
-        "Nvida will be 1450 dollars by year-end.",
-        "Tesl will be 375 dollars next week.",
-        "Meta will be 820 USD in the medium term.",
-        "Netflix will hit 960 USD by year-end.",
-        "USD/JPY will test 170 in the short term.",
-        "AUD/USD will be 0.79 in the medium term.",
-        "CNY/TRY will be 7.60 by year-end.",
-    ]
-    price_claims = to_multisentence_inputs(price_claims_tr, "tr") + to_multisentence_inputs(price_claims_en, "en")
-
-    percent_claims_tr = [
-        "Bitcoin doler bazında yıl sonunda %12 artacak.",
-        "Etheriyum dolar karşısında orta vadede yüzde 9 yükselecek.",
-        "Solana BTC bazında kısa vadede %7 düşecek.",
-        "Binance coin lira karşısında yıl sonunda yüzde 15 değer kazanacak.",
-        "XRP USD bazında kısa vadede %6 artış gösterecek.",
-        "ADA EUR karşısında orta vadede yüzde 4 azalış yaşayacak.",
-        "AVAX dolar bazında haftaya %5 yükselecek.",
-        "DOGE BTC karşısında kısa vadede yüzde 11 düşecek.",
-        "DOT USD bazında yıl sonunda %8 artacak.",
-        "LINK TRY karşısında orta vadede yüzde 10 değer kazanacak.",
-        "Apple dolar bazında yıl sonunda %13 artacak.",
-        "Microsof avro karşısında kısa vadede yüzde 3 düşecek.",
-        "Gogle dolar bazında orta vadede %5 artış yaşayacak.",
-        "Amazn lira karşısında yıl sonunda yüzde 14 yükselecek.",
-        "Nvida dolar bazında kısa vadede %9 düşecek.",
-    ]
-    percent_claims_en = [
-        "Bitcoin will rise by 12% against USD by year-end.",
-        "Etheriyum will increase 8 percent versus dollar in the medium term.",
-        "Solana will drop 6% against BTC in the short term.",
-        "Binance coin will gain 14% against lira by year-end.",
-        "XRP will increase 5% versus USD next week.",
-        "ADA will fall 4 percent against EUR in the medium term.",
-        "AVAX will rise 7% against USD in the short term.",
-        "DOGE will drop 10% versus BTC by year-end.",
-        "DOT will gain 9% against USD in the medium term.",
-        "LINK will increase 11 percent against TRY in the short term.",
-        "Apple will rise 6% against dollar by year-end.",
-        "Microsof will decline 3% versus euro in the short term.",
-        "Gogle will gain 4 percent against dollar in the medium term.",
-        "Amazn will rise 8% against lira by year-end.",
-        "Nvida will drop 5% versus dollar in the short term.",
-    ]
-    percent_claims = to_multisentence_inputs(percent_claims_tr, "tr") + to_multisentence_inputs(percent_claims_en, "en")
-
-    possible_percentage_tr = [
-        "Bitcoin %10 artacak.",
-        "Etheriyum yüzde 8 düşecek.",
-        "Apple %6 yükselecek.",
-        "Gogle yüzde 5 azalır.",
-        "Nvida %9 artış yaşayacak.",
-        "Dolar %4 değer kazanacak.",
-        "Avro yüzde 3 düşecek.",
-        "Solana %12 yükselecek.",
-    ]
-    possible_percentage_en = [
-        "Bitcoin will rise 10%.",
-        "Etherium will drop 7 percent.",
-        "Apple will gain 6%.",
-        "Gogle will decline 5 percent.",
-        "Nvida will increase 9%.",
-        "Dollar will rise 4%.",
-        "Euro will fall 3 percent.",
-    ]
-    possible_percentage_claims = to_multisentence_inputs(possible_percentage_tr, "tr") + to_multisentence_inputs(possible_percentage_en, "en")
-
-    possible_price_tr = [
-        "Solana 420 USD olacak.",
-        "BNB 980 olacak.",
-        "Microsof 720 bandını test eder.",
-        "Amazn 310 dolar görür.",
-        "Tesl 450 olur.",
-        "Bitcoin 125000 olur.",
-        "Etheriyum 7500 dolar olur.",
-        "Apple 340 olur.",
-    ]
-    possible_price_en = [
-        "Solana will be 420.",
-        "BNB will hit 980 USD.",
-        "Microsof will test 720.",
-        "Amazn reaches 310 dollars.",
-        "Tesl will be 450.",
-        "Bitcoin will be 125000.",
-        "Etherium will be 7500 dollars.",
-    ]
-    possible_price_claims = to_multisentence_inputs(possible_price_tr, "tr") + to_multisentence_inputs(possible_price_en, "en")
-
-    noise_cases = [
-        "Sabah erkenden yürüyüşe çıktım. Ofise dönünce e-postaları yanıtladım. Akşam da arkadaşlarımla buluştum.",
-        "Bugün sadece tasarım revizyonlarını konuştuk. Ürün metinlerinde dil birliği eksikti. Yarın tekrar gözden geçireceğiz.",
-        "Toplantı beklenenden kısa sürdü. Herkes görev listesini güncelledi. Sonra sprint planını kapattık.",
-        "The weather was cloudy in the morning. I spent the afternoon fixing documentation typos. Tonight I will read a novel.",
-        "We discussed onboarding friction in user interviews. The team proposed three UX changes. Final decisions will be made tomorrow.",
-        "Yeni kahve makinesi sonunda geldi. Mutfakta küçük bir düzenleme yaptık. Herkes öğleden sonra daha enerjikti.",
-        "I reviewed pull requests for two hours. Then I prepared release notes for the mobile app. Nothing else happened today.",
-        "Hafta sonu için gezi planı yaptık. Otel rezervasyonunu tamamladık. Yolculuk listesini de hazırladık.",
-        "The design team requested new icon variants. Marketing asked for copy tweaks on the homepage. Support also shared user feedback.",
-        "Ofiste internet bir süre yavaştı. Teknik ekip modemleri yeniden başlattı. Akşam üstü bağlantı normale döndü.",
+    tr_hard_claims = [
+        "Bitcoin kısa vadede 95000 USD olur.",
+        "Apple hisseleri yıl sonunda 250 USD seviyesine ulaşır.",
+        "USD/TRY paritesi orta vadede 45.50 seviyesini görecek.",
+        "Ethereum haftaya 4200 USD bandını geçer.",
+        "Tesla orta vadede 300 USD hedef fiyatına sahip.",
+        "Dolar kuru yıl sonu itibarıyla 42 TRY olacaktır.",
+        "NVDA için kısa vadeli beklentim 950 USD.",
+        "SOL/USD paritesi 3 ay içinde 200 değerine ulaşır.",
+        "Microsoft 2026 sonunda 500 USD olur.",
+        "Avax kısa vadede 60 USD hedefliyor.",
+        "Google hissesi orta vadede 180 USD bandına yerleşir.",
+        "GBP/USD paritesi yıl sonunda 1.35 seviyesini test eder.",
+        "BTC 2027 başında 150000 USD olur.",
+        "Amazon kısa vadede 210 USD seviyesine çıkar.",
+        "Meta orta vadede 600 USD hedef fiyatla izlenmeli.",
+        "Netflix yıl sonuna kadar 700 USD olur.",
+        "Doge kısa vadede 0.50 USD seviyesini aşar.",
+        "XRP orta vadede 2 USD bandına oturur.",
+        "AMD hissesi haftaya 200 USD olur.",
+        "Intel kısa vadede 45 USD hedefliyor.",
+        "Coinbase orta vadede 300 USD olur.",
+        "Paypal yıl sonunda 85 USD seviyesine gelir.",
+        "Palantir kısa vadede 35 USD olur.",
+        "Uber orta vadede 90 USD seviyesini görür.",
+        "Disney yıl sonuna kadar 130 USD olur.",
+        "BTC/EUR paritesi haftaya 85000 seviyesini aşar.",
+        "ETH/TRY orta vadede 150000 bandına gelir.",
+        "Link kısa vadede 25 USD olur.",
+        "Dot yıl sonunda 15 USD seviyesine çıkar.",
+        "Ada orta vadede 1.20 USD olur.",
+        "Dolar/Frank paritesi kısa vadede 0.90 CHF olur.",
+        "Yen orta vadede 155 JPY/USD seviyesini görür.",
+        "CNY/TRY paritesi yıl sonunda 6.50 olur.",
+        "AUD/USD kısa vadede 0.70 bandına yerleşir.",
+        "CAD orta vadede 1.40 USD olur.",
+        "NZD/USD yıl sonunda 0.65 seviyesine gelir.",
+        "XRP/TRY kısa vadede 35 seviyesini aşar.",
+        "Solana yıl sonunda 250 USD olur.",
+        "BNB kısa vadede 700 USD hedefliyor.",
+        "AVAX yıl sonunda 120 USD olur.",
     ]
 
-    test_cases = price_claims + percent_claims + possible_percentage_claims + possible_price_claims + noise_cases
+    en_hard_claims = [
+        "Bitcoin will reach 98000 USD in the short term.",
+        "Apple stock will hit 260 USD by year-end.",
+        "USD/TRY will test 46.20 in the medium term.",
+        "Ethereum will move above 4300 USD next week.",
+        "Tesla has a medium-term target of 320 USD.",
+        "The dollar rate will be 43 TRY by the end of the year.",
+        "NVDA is expected to reach 980 USD in the short term.",
+        "SOL/USD will reach 210 within 3 months.",
+        "Microsoft will be 520 USD by end of 2026.",
+        "AVAX targets 70 USD in the short term.",
+        "Google stock settles at 185 USD in the medium term.",
+        "GBP/USD will test 1.37 by year-end.",
+        "BTC will be 155000 USD at the beginning of 2027.",
+        "Amazon rises to 215 USD in the short term.",
+        "Meta should be tracked with a 620 USD medium-term target.",
+        "Netflix reaches 720 USD by the end of the year.",
+        "DOGE will break 0.55 USD in the short term.",
+        "XRP stabilizes around 2.2 USD in the medium term.",
+        "AMD will be 210 USD next week.",
+        "Intel targets 48 USD in the short term.",
+        "Coinbase reaches 320 USD in the medium term.",
+        "PayPal will be 88 USD by year-end.",
+        "Palantir reaches 38 USD in the short term.",
+        "Uber sees 95 USD in the medium term.",
+        "Disney will be 135 USD by end of year.",
+        "BTC/EUR will cross 87000 next week.",
+        "ETH/TRY reaches 160000 in the medium term.",
+        "LINK will be 27 USD in the short term.",
+        "DOT climbs to 16 USD by year-end.",
+        "ADA will be 1.30 USD in the medium term.",
+        "USD/CHF reaches 0.92 in the short term.",
+        "JPY/USD will see 0.0068 in the medium term.",
+        "CNY/TRY reaches 6.8 by year-end.",
+        "AUD/USD settles at 0.72 in the short term.",
+        "CAD will be 1.45 USD in the medium term.",
+        "NZD/USD reaches 0.67 by year-end.",
+        "XRP/TRY crosses 38 in the short term.",
+        "Solana reaches 270 USD by year-end.",
+        "BNB targets 760 USD in the short term.",
+        "USD/JPY will exceed 162 by year-end.",
+    ]
+
+    tr_possible_claims = [
+        "Bitcoin 100000 olacak.",
+        "Apple hissesi kısa vadede 300 bandına çıkar.",
+        "Dolar yıl sonunda 50 bandını geçer.",
+        "Ethereum 5000 USD hedefliyor.",
+        "Tesla 400 doları görecek.",
+        "Solana haftaya 300 olur.",
+        "NVDA 1200 USD seviyesine gelir.",
+        "Microsoft orta vadede 600 seviyesini test eder.",
+        "BTC 120000 patates olur.",
+        "Doge 1 olur.",
+    ]
+
+    en_possible_claims = [
+        "Bitcoin will be 110000.",
+        "Apple stock moves to 310 in the short term.",
+        "Dollar will pass 52 by year-end.",
+        "Ethereum targets 5200 USD.",
+        "Tesla will see 420 dollars.",
+        "Solana will be 320 next week.",
+        "NVDA reaches 1250 USD.",
+        "Microsoft tests 650 in the medium term.",
+        "BTC goes to 130000 potatoes.",
+        "DOGE will be 1.2.",
+    ]
+
+    test_cases = tr_hard_claims + en_hard_claims + tr_possible_claims + en_possible_claims
 
     if len(test_cases) != 100:
         raise ValueError(f"Expected 100 test cases, got {len(test_cases)}")

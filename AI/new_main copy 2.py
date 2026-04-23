@@ -721,27 +721,7 @@ def run_test_cases(test_cases: List[str], output_file: str = "test_results.txt")
 
 
 if __name__ == "__main__":
-    def to_multisentence_inputs(claims: List[str], lang: str) -> List[str]:
-        """Wrap claim text with realistic extra context (>=3 sentences)."""
-        if lang == "tr":
-            return [
-                (
-                    "Sabah ekip toplantısında önce ürün yol haritasını konuştuk. "
-                    f"Sonra piyasaya dair görüşümü paylaştım: {claim} "
-                    "Yine de risk yönetimi için pozisyonu kademeli açmayı planlıyorum."
-                )
-                for claim in claims
-            ]
-        return [
-            (
-                "In the morning sync we first reviewed product milestones. "
-                f"Then I shared one market view: {claim} "
-                "Even so, I would size positions gradually because volatility is still high."
-            )
-            for claim in claims
-        ]
-
-    price_claims_tr = [
+    price_claims = [
         "Bitcoin kısa vadede 103000 dolar olur.",
         "Etheriyum orta vadede 6200 dollar olur.",
         "Solana yıl sonunda 320 USD olur.",
@@ -757,8 +737,6 @@ if __name__ == "__main__":
         "USD/TRY orta vadede 49.10 olur.",
         "EUR/USD kısa vadede 1.22 olur.",
         "GBP/USD yıl sonunda 1.45 olur.",
-    ]
-    price_claims_en = [
         "Bitcoin will reach 110000 dollars in the short term.",
         "Etherium will hit 6800 doller in the medium term.",
         "Solana will be 360 USD by year-end.",
@@ -775,9 +753,8 @@ if __name__ == "__main__":
         "AUD/USD will be 0.79 in the medium term.",
         "CNY/TRY will be 7.60 by year-end.",
     ]
-    price_claims = to_multisentence_inputs(price_claims_tr, "tr") + to_multisentence_inputs(price_claims_en, "en")
 
-    percent_claims_tr = [
+    percent_claims = [
         "Bitcoin doler bazında yıl sonunda %12 artacak.",
         "Etheriyum dolar karşısında orta vadede yüzde 9 yükselecek.",
         "Solana BTC bazında kısa vadede %7 düşecek.",
@@ -793,8 +770,6 @@ if __name__ == "__main__":
         "Gogle dolar bazında orta vadede %5 artış yaşayacak.",
         "Amazn lira karşısında yıl sonunda yüzde 14 yükselecek.",
         "Nvida dolar bazında kısa vadede %9 düşecek.",
-    ]
-    percent_claims_en = [
         "Bitcoin will rise by 12% against USD by year-end.",
         "Etheriyum will increase 8 percent versus dollar in the medium term.",
         "Solana will drop 6% against BTC in the short term.",
@@ -811,64 +786,54 @@ if __name__ == "__main__":
         "Amazn will rise 8% against lira by year-end.",
         "Nvida will drop 5% versus dollar in the short term.",
     ]
-    percent_claims = to_multisentence_inputs(percent_claims_tr, "tr") + to_multisentence_inputs(percent_claims_en, "en")
 
-    possible_percentage_tr = [
+    possible_claims = [
         "Bitcoin %10 artacak.",
         "Etheriyum yüzde 8 düşecek.",
-        "Apple %6 yükselecek.",
-        "Gogle yüzde 5 azalır.",
-        "Nvida %9 artış yaşayacak.",
-        "Dolar %4 değer kazanacak.",
-        "Avro yüzde 3 düşecek.",
-        "Solana %12 yükselecek.",
-    ]
-    possible_percentage_en = [
-        "Bitcoin will rise 10%.",
-        "Etherium will drop 7 percent.",
-        "Apple will gain 6%.",
-        "Gogle will decline 5 percent.",
-        "Nvida will increase 9%.",
-        "Dollar will rise 4%.",
-        "Euro will fall 3 percent.",
-    ]
-    possible_percentage_claims = to_multisentence_inputs(possible_percentage_tr, "tr") + to_multisentence_inputs(possible_percentage_en, "en")
-
-    possible_price_tr = [
         "Solana 420 USD olacak.",
         "BNB 980 olacak.",
+        "Apple %6 yükselecek.",
         "Microsof 720 bandını test eder.",
+        "Gogle yüzde 5 azalır.",
         "Amazn 310 dolar görür.",
+        "Nvida %9 artış yaşayacak.",
         "Tesl 450 olur.",
-        "Bitcoin 125000 olur.",
-        "Etheriyum 7500 dolar olur.",
-        "Apple 340 olur.",
-    ]
-    possible_price_en = [
+        "Bitcoin will rise 10%.",
+        "Etherium will drop 7 percent.",
         "Solana will be 420.",
         "BNB will hit 980 USD.",
+        "Apple will gain 6%.",
         "Microsof will test 720.",
+        "Gogle will decline 5 percent.",
         "Amazn reaches 310 dollars.",
+        "Nvida will increase 9%.",
         "Tesl will be 450.",
-        "Bitcoin will be 125000.",
-        "Etherium will be 7500 dollars.",
     ]
-    possible_price_claims = to_multisentence_inputs(possible_price_tr, "tr") + to_multisentence_inputs(possible_price_en, "en")
 
     noise_cases = [
-        "Sabah erkenden yürüyüşe çıktım. Ofise dönünce e-postaları yanıtladım. Akşam da arkadaşlarımla buluştum.",
-        "Bugün sadece tasarım revizyonlarını konuştuk. Ürün metinlerinde dil birliği eksikti. Yarın tekrar gözden geçireceğiz.",
-        "Toplantı beklenenden kısa sürdü. Herkes görev listesini güncelledi. Sonra sprint planını kapattık.",
-        "The weather was cloudy in the morning. I spent the afternoon fixing documentation typos. Tonight I will read a novel.",
-        "We discussed onboarding friction in user interviews. The team proposed three UX changes. Final decisions will be made tomorrow.",
-        "Yeni kahve makinesi sonunda geldi. Mutfakta küçük bir düzenleme yaptık. Herkes öğleden sonra daha enerjikti.",
-        "I reviewed pull requests for two hours. Then I prepared release notes for the mobile app. Nothing else happened today.",
-        "Hafta sonu için gezi planı yaptık. Otel rezervasyonunu tamamladık. Yolculuk listesini de hazırladık.",
-        "The design team requested new icon variants. Marketing asked for copy tweaks on the homepage. Support also shared user feedback.",
-        "Ofiste internet bir süre yavaştı. Teknik ekip modemleri yeniden başlattı. Akşam üstü bağlantı normale döndü.",
+        "Bugun ofisteki sunumu guncelleyip ekibe yolladim.",
+        "Yarin sabah spor yapip sonra markete gidecegim.",
+        "Kedim tum gun pencere kenarinda uyudu.",
+        "Bu hafta sonu ailece sinemaya gitmeyi planliyoruz.",
+        "Toplantinin notlarini paylasir misin lutfen?",
+        "Mutfakta kahve makinesi yine bozuldu.",
+        "The weather is perfect for a long walk.",
+        "Please update the project timeline document.",
+        "Our designer finalized the new landing page colors.",
+        "I forgot my notebook at home today.",
+        "Haftalik raporu aksama kadar tamamlayacagim.",
+        "Yeni kitapligin montaji bekledigimden uzun surdu.",
+        "Could you send me the meeting link?",
+        "The office internet was unstable this morning.",
+        "Bugun sadece e-postalari temizlemekle ugrastim.",
+        "We need to reorder printer paper for next week.",
+        "Arkadaslarla aksam yemekte bulusacagiz.",
+        "The onboarding checklist needs one more review.",
+        "Bahcedeki cicekler bu ay cok hizli buyudu.",
+        "Can you review the grammar in this paragraph?",
     ]
 
-    test_cases = price_claims + percent_claims + possible_percentage_claims + possible_price_claims + noise_cases
+    test_cases = price_claims + percent_claims + possible_claims + noise_cases
 
     if len(test_cases) != 100:
         raise ValueError(f"Expected 100 test cases, got {len(test_cases)}")
