@@ -46,6 +46,13 @@ export interface PostItem {
   hard_claims: HardClaimItem[];
 }
 
+export interface HardClaimEvent {
+  id: number;
+  event_type: 'creation' | 'price_check' | 'resolution';
+  timestamp: string;
+  details: any;
+}
+
 export interface HardClaimItem {
   id: number;
   author_address: string | null;
@@ -56,6 +63,7 @@ export interface HardClaimItem {
   until: string;
   created_at: string;
   status: string;
+  events?: HardClaimEvent[];
 }
 
 export interface AssetItem {

@@ -211,7 +211,7 @@ export default function ProfilePage() {
       )}
 
       {/* Hard Claims */}
-      <div className="space-y-2">
+      <div className="space-y-2 max-w-md mx-auto w-full">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
           Your Claims
         </h2>
@@ -224,9 +224,11 @@ export default function ProfilePage() {
         )}
       </div>
 
-      <Button variant="destructive" onClick={handleLogout} className="w-full">
-        Log out
-      </Button>
+      <div className="max-w-md pt-4 mx-auto w-full">
+        <Button variant="destructive" onClick={handleLogout} className="w-full">
+          Log out
+        </Button>
+      </div>
     </div>
   );
 }

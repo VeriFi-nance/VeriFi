@@ -81,6 +81,7 @@
 }
 
 .dark {
+    color-scheme: dark;
     --background: oklch(0.145 0 0);
     --foreground: oklch(0.985 0 0);
     --card: oklch(0.205 0 0);
@@ -118,11 +119,24 @@
   * {
     @apply border-border outline-ring/50;
   }
-  html {
-    overflow-y: scroll; /* Always show scrollbar to prevent layout shift */
-  }
-  body {
+  html, body {
     @apply bg-background text-foreground;
+  }
+  
+  /* Disable window scrolling to prevent Radix UI from measuring and compensating for a scrollbar */
+  body {
+    overflow: hidden !important; 
+    padding-right: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  /* Move all scrolling to the root element. Modal overlays (which are injected into the body) 
+     will natively sit on top of this element AND its scrollbar, properly darkening it. */
+  #root {
+    height: 100vh;
+    height: 100dvh;
+    overflow-y: scroll;
+    scrollbar-gutter: stable;
   }
 }
 

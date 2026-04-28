@@ -137,31 +137,34 @@ export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) 
       </Card>
 
       {/* ── Claims side panel — flex sibling, shrinks the post card only when needed ── */}
+      {/* Wrapping in relative absolute to prevent extending row height */}
       <div
         className={[
-          'flex-shrink-0 overflow-hidden transition-all duration-300 ease-in-out',
-          claimsOpen ? 'w-80 opacity-100' : 'w-0 opacity-0',
+          'flex-shrink-0 transition-all duration-300 ease-in-out relative z-10',
+          claimsOpen ? 'w-80 opacity-100 pointer-events-auto' : 'w-0 opacity-0 pointer-events-none',
         ].join(' ')}
         aria-hidden={!claimsOpen}
       >
-        {/* Inner panel — fixed width so content doesn't rewrap during animation */}
-        <div className="w-80 bg-card border rounded-xl shadow-lg p-3 space-y-2">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground px-0.5">
-            Claims
-          </p>
-          {hardClaims.map((hc, i) => (
-            <div
-              key={hc.id}
-              style={{
-                transitionDelay: claimsOpen ? `${i * 50}ms` : '0ms',
-                transform: claimsOpen ? 'translateY(0)' : 'translateY(-6px)',
-                opacity: claimsOpen ? 1 : 0,
-                transition: 'transform 280ms ease, opacity 280ms ease',
-              }}
-            >
-              <HardClaimCard claim={hc} assets={assets} />
-            </div>
-          ))}
+        <div className="absolute top-0 left-0 w-full overflow-hidden pb-6">
+          {/* Inner panel — fixed width so content doesn't rewrap during animation */}
+          <div className="w-80 bg-card border rounded-xl shadow-lg p-3 space-y-2">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground px-0.5">
+              Claims
+            </p>
+            {hardClaims.map((hc, i) => (
+              <div
+                key={hc.id}
+                style={{
+                  transitionDelay: claimsOpen ? `${i * 50}ms` : '0ms',
+                  transform: claimsOpen ? 'translateY(0)' : 'translateY(-6px)',
+                  opacity: claimsOpen ? 1 : 0,
+                  transition: 'transform 280ms ease, opacity 280ms ease',
+                }}
+              >
+                <HardClaimCard claim={hc} assets={assets} />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
