@@ -103,6 +103,11 @@ export function ClaimLogModal({ isOpen, onClose, claim, assets }: ClaimLogModalP
                         <span className="font-mono">{truncateAddress(claim.author_address)}</span>
                       </p>
                     )}
+                    {isCreation && (
+                      <Badge variant="outline" className="mt-1 font-mono text-[10px] uppercase">
+                        Target Date: {claim.until}
+                      </Badge>
+                    )}
                   </div>
 
                   {/* Resolution Details */}
@@ -113,7 +118,7 @@ export function ClaimLogModal({ isOpen, onClose, claim, assets }: ClaimLogModalP
                       )}
                       
                       {event.details.prices && (
-                        <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t">
+                        <div className="grid grid-cols-3 gap-2 mt-2 pt-2 border-t">
                           <div>
                             <span className="text-muted-foreground">Ref Price: </span>
                             <span className="font-mono">${event.details.prices.reference}</span>
@@ -133,6 +138,10 @@ export function ClaimLogModal({ isOpen, onClose, claim, assets }: ClaimLogModalP
                                 source
                               </a>
                             )}
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Peak Price: </span>
+                            <span className="font-mono">${event.details.prices.peak}</span>
                           </div>
                         </div>
                       )}

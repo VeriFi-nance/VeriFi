@@ -89,11 +89,12 @@ def generate_and_save_historical_claims():
             until=one_month_ago.date()
         )
         
-        HardClaimEvent.objects.create(
+        event_1 = HardClaimEvent.objects.create(
             hard_claim=claim_1,
             event_type=HardClaimEvent.EventType.CREATION,
             details={"note": "Auto-generated historical claim (Target: Will pass)"}
         )
+        HardClaimEvent.objects.filter(id=event_1.id).update(timestamp=two_months_ago)
         print(f"Saved Correct Claim with ID {claim_1.id} (Post {post_1.id}): {symbol} {direction_1} {target_pct_1}%")
 
         # --- GENERATE CLAIM 2 (Guaranteed to be Rejected later) ---
@@ -125,11 +126,12 @@ def generate_and_save_historical_claims():
             until=one_month_ago.date()
         )
 
-        HardClaimEvent.objects.create(
+        event_2 = HardClaimEvent.objects.create(
             hard_claim=claim_2,
             event_type=HardClaimEvent.EventType.CREATION,
             details={"note": "Auto-generated historical claim (Target: Will fail)"}
         )
+        HardClaimEvent.objects.filter(id=event_2.id).update(timestamp=two_months_ago)
         print(f"Saved Incorrect Claim with ID {claim_2.id} (Post {post_2.id}): {symbol} {direction_2} {target_pct_2}%")
         print("-" * 40)
 
