@@ -7,6 +7,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from django.conf import settings
+
 from .models import Asset, HardClaim, HardClaimEvent
 
 
@@ -90,8 +92,11 @@ def normalize_claim_for_resolution(hard_claim: HardClaim) -> dict[str, Any]:
     }
 
 
-def _http_get_json(url: str) -> dict[str, Any]:
-    request = Request(url, headers={"Accept": "application/json", "User-Agent": "VeriFi/1.0"})
+def _http_get_json(url: str, extra_headers: dict[str, str] | None = None) -> dict[str, Any]:
+    headers = {"Accept": "application/json", "User-Agent": "VeriFi/1.0"}
+    if extra_headers:
+        headers.update(extra_headers)
+    request = Request(url, headers=headers)
     try:
         with urlopen(request, timeout=15) as response:
             return json.loads(response.read().decode("utf-8"))
@@ -103,12 +108,18 @@ def _http_get_json(url: str) -> dict[str, Any]:
         raise ResolutionError("PROVIDER_INVALID_JSON", "Provider returned malformed JSON.") from exc
 
 
+def _coingecko_headers() -> dict[str, str]:
+    """Return auth headers for CoinGecko if an API key is configured."""
+    key = getattr(settings, "COINGECKO_API_KEY", "")
+    return {"x-cg-demo-api-key": key} if key else {}
+
+
 def _fetch_coingecko_price(provider_symbol: str, quote_currency: str, at_dt: datetime) -> tuple[float, str]:
     start = int((at_dt - timedelta(hours=12)).timestamp())
     end = int((at_dt + timedelta(hours=12)).timestamp())
     params = urlencode({"vs_currency": quote_currency.lower(), "from": start, "to": end})
     url = f"https://api.coingecko.com/api/v3/coins/{provider_symbol}/market_chart/range?{params}"
-    payload = _http_get_json(url)
+    payload = _http_get_json(url, _coingecko_headers())
     prices = payload.get("prices")
     if not prices:
         raise ResolutionError("PROVIDER_NO_PRICE_DATA", "CoinGecko returned no price data.")
@@ -123,7 +134,7 @@ def _fetch_coingecko_peak(
     end = int(to_dt.timestamp())
     params = urlencode({"vs_currency": quote_currency.lower(), "from": start, "to": end})
     url = f"https://api.coingecko.com/api/v3/coins/{provider_symbol}/market_chart/range?{params}"
-    payload = _http_get_json(url)
+    payload = _http_get_json(url, _coingecko_headers())
     prices = payload.get("prices")
     if not prices:
         raise ResolutionError("PROVIDER_NO_PRICE_DATA", "CoinGecko returned no price data for range.")

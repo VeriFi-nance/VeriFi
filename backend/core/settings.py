@@ -10,10 +10,24 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load .env file from the backend root (stdlib only, no extra dependency)
+_env_path = BASE_DIR / ".env"
+if _env_path.is_file():
+    with open(_env_path) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _key, _, _val = _line.partition("=")
+                os.environ.setdefault(_key.strip(), _val.strip())
+
+# Third-party API keys (loaded from .env)
+COINGECKO_API_KEY: str = os.environ.get("COINGECKO_API_KEY", "")
 
 
 # Quick-start development settings - unsuitable for production
