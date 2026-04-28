@@ -197,3 +197,43 @@ class HardClaimResolveView(APIView):
             return Response(exc.to_payload(), status=status.HTTP_400_BAD_REQUEST)
 
         return Response(result)
+
+
+class PostResolveView(APIView):
+    """Resolve all undetermined HardClaims attached to a given Post."""
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, pk):
+        admin_user = _require_admin_user(request)
+        if isinstance(admin_user, Response):
+            return admin_user
+
+        try:
+            post_obj = Post.objects.get(pk=pk)
+        except Post.DoesNotExist:
+            return Response({"detail": "Post not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        claims = post_obj.hard_claims.select_related("asset").filter(
+            status=HardClaim.Status.UNDETERMINED
+        )
+        if not claims.exists():
+            return Response(
+                {"detail": "No undetermined hard claims on this post."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        preview_flag = request.data.get("preview", False)
+        preview_only = preview_flag is True or str(preview_flag).lower() in {"1", "true", "yes"}
+
+        results = []
+        errors = []
+        for claim in claims:
+            try:
+                result = preview_resolution(claim) if preview_only else resolve_hard_claim(claim)
+                results.append(result)
+            except ResolutionError as exc:
+                errors.append({"claim_id": claim.id, **exc.to_payload()})
+
+        return Response({"resolved": results, "errors": errors})
+
