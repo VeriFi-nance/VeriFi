@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { TrendingUp } from 'lucide-react';
+import { LineChart } from 'lucide-react';
 import { HardClaimCard, truncateAddress } from '@/components/HardClaimCard';
 import type { PostItem, HardClaimItem, AssetItem } from '@/lib/types';
 
@@ -39,7 +39,7 @@ export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) 
     <div className="flex items-start gap-3">
 
       {/* ── Post card ─────────────────────────────────────────────── */}
-      <Card className="flex-1 max-w-2xl min-w-0 hover:shadow-md transition-shadow duration-200 gap-0 py-0 overflow-hidden">
+      <Card className="flex-1 max-w-2xl min-w-0 hover:shadow-md transition-shadow duration-200 gap-0 py-0 overflow-hidden rounded-2xl">
 
         {/* ── Header ────────────────────────────────────────────── */}
         <div className="flex items-center gap-3 px-5 pt-5 pb-3">
@@ -70,21 +70,21 @@ export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) 
             {new Date(post.created_at).toLocaleDateString()}
           </time>
 
-          {/* Claims toggle — TrendingUp icon + "Claims N" label */}
+          {/* Claims toggle — LineChart icon + "Claims N" label */}
           {hasClaims && (
             <button
               onClick={() => setClaimsOpen((o) => !o)}
               className={[
-                'ml-1 flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs font-semibold',
+                'ml-1 flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold',
                 'transition-all duration-200 shrink-0',
                 claimsOpen
                   ? 'bg-foreground text-background border-foreground'
-                  : 'bg-background text-muted-foreground border-border hover:border-foreground/40 hover:text-foreground',
+                  : 'bg-background text-muted-foreground border-foreground/20 hover:border-foreground/40 hover:text-foreground',
               ].join(' ')}
               title={claimsOpen ? 'Hide claims' : 'View claims'}
               aria-expanded={claimsOpen}
             >
-              <TrendingUp className="size-3.5 shrink-0" />
+              <LineChart className="size-3.5 shrink-0" />
               <span>Claims {hardClaims.length}</span>
             </button>
           )}
