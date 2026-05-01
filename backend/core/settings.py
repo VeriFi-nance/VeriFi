@@ -126,6 +126,10 @@ STATIC_URL = "static/"
 # Admin wallet addresses — only these can change HardClaim status
 ADMIN_ADDRESSES: list[str] = ["0x8C66A1aBF7C949004aF7dE80A3fc0F691538ea74"] # Arda's Ethereum Address
 
+import os
+# Twelve Data API key for stock/forex/commodity OHLC fallback (free tier: 800 calls/day)
+TWELVE_DATA_API_KEY = os.environ.get("TWELVE_DATA_API_KEY", "4117d86e953d4430bfc7003d72d9ed97")
+
 # CORS — allow frontend dev server in development
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
