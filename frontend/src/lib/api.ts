@@ -1,5 +1,5 @@
 import { getToken } from './auth';
-import type { ReviewClaim, PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse } from './types';
+import type { ReviewClaim, PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData } from './types';
 
 const BASE_URL = 'http://localhost:8000';
 
@@ -115,4 +115,8 @@ export async function updateHardClaimStatus(
 
 export async function getAssets(): Promise<AssetItem[]> {
   return request('/api/posts/assets/');
+}
+
+export async function getClaimChartData(claimId: number): Promise<ClaimChartData> {
+  return request(`/api/posts/hard-claims/${claimId}/chart-data/`);
 }
