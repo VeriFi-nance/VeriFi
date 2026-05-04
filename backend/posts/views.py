@@ -7,13 +7,8 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from accounts.models import WalletUser
 from .models import Post, Claim, HardClaim, Asset
 from .serializers import PostSerializer, ClaimInputSerializer, HardClaimInputSerializer, HardClaimSerializer, AssetSerializer
+from .claim_extraction import rule_based_claims_from_prompt
 from .resolution import CONTRACT_VERSION, ResolutionError, preview_resolution, resolve_hard_claim
-
-
-MOCK_CLAIMS = [
-    {"text": "Bitcoin will reach $200,000 by end of 2025.", "asset": "BTC", "direction": "bullish"},
-    {"text": "Ethereum will outperform the market next quarter.", "asset": "ETH", "direction": "bullish"},
-]
 
 
 def _get_wallet_user(request) -> WalletUser | None:
@@ -83,8 +78,12 @@ class ExtractClaimsView(APIView):
         if user is None:
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
 
-        # TODO: integrate LLM claim extraction (#29)
-        return Response({"version": CONTRACT_VERSION, "claims": []})
+        content = request.data.get("content", "").strip()
+        if not content:
+            return Response({"detail": "content is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        claims = rule_based_claims_from_prompt(content)
+        return Response({"version": CONTRACT_VERSION, "claims": [c.to_dict() for c in claims]})
     
 class AssetListView(APIView):
     authentication_classes = []
