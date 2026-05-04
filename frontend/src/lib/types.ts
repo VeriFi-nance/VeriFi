@@ -6,22 +6,13 @@ export interface ReviewClaim {
 }
 
 export interface ExtractedClaimContract {
-  source_text: string;
-  instrument: {
-    display_symbol: string;
-    normalized_symbol: string;
-    market_type: string;
-  };
-  target: {
-    kind: 'percentage' | 'exact_price';
-    direction: string;
-    value: number;
-    unit: string;
-  };
-  due_at: string;
-  confidence: number;
-  language: string;
-  needs_user_confirmation: boolean;
+  pay: string;
+  payda: string | null;
+  value: number;
+  value_type: 'PRICE' | 'PERCENTAGE_UP' | 'PERCENTAGE_DOWN';
+  deadline: string | null;
+  status: 'HARD_CLAIM' | 'POSSIBLE_CLAIM';
+  text: string;
 }
 
 export interface ExtractClaimsResponse {

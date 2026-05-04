@@ -1,29 +1,44 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { createPost } from '@/lib/api';
+import { extractClaims } from '@/lib/api';
+import type { ReviewClaim } from '@/lib/types';
+import type { ExtractedClaimContract } from '@/lib/types';
 
 const MAX_CHARS = 500;
 const WARN_THRESHOLD = 450;
 
+function toReviewClaim(c: ExtractedClaimContract): ReviewClaim {
+  return {
+    text: c.text,
+    asset: c.pay,
+    direction: c.value_type === 'PERCENTAGE_DOWN' ? 'bearish' : 'bullish',
+    status: 'confirmed',
+  };
+}
+
 export default function PostCreationPage() {
   const navigate = useNavigate();
-  const [content, setContent] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const location = useLocation();
+  const restored = (location.state as { restoredContent?: string } | null)?.restoredContent ?? '';
+
+  const [content, setContent] = useState(restored);
+  const [extracting, setExtracting] = useState(false);
   const [error, setError] = useState('');
 
-  async function handleSubmit() {
+  async function handleNext() {
     if (!content.trim()) return;
     setError('');
-    setSubmitting(true);
+    setExtracting(true);
     try {
-      await createPost(content, []);
-      navigate('/app', { replace: true });
+      const response = await extractClaims(content);
+      const claims: ReviewClaim[] = response.claims.map(toReviewClaim);
+      navigate('/app/post/review', { state: { content, claims } });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create post');
-      setSubmitting(false);
+      setError(e instanceof Error ? e.message : 'Failed to extract claims');
+      setExtracting(false);
     }
   }
 
@@ -67,10 +82,10 @@ export default function PostCreationPage() {
 
       <Button
         className="w-full"
-        disabled={!content.trim() || overLimit || submitting}
-        onClick={handleSubmit}
+        disabled={!content.trim() || overLimit || extracting}
+        onClick={handleNext}
       >
-        {submitting ? 'Posting…' : 'Post'}
+        {extracting ? 'Analysing…' : 'Next'}
       </Button>
     </div>
   );

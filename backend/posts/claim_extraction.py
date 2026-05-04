@@ -71,6 +71,19 @@ class FinancialClaim:
     status: str              # "HARD_CLAIM" | "POSSIBLE_CLAIM"
 
     def to_dict(self) -> dict:
+        if self.value_type == "PERCENTAGE_UP":
+            value_str = f"+{self.value}%"
+        elif self.value_type == "PERCENTAGE_DOWN":
+            value_str = f"-{self.value}%"
+        else:
+            value_str = str(self.value)
+
+        parts = [self.pay, "→", value_str]
+        if self.payda:
+            parts.append(self.payda)
+        if self.deadline:
+            parts += ["by", self.deadline]
+
         return {
             "pay": self.pay,
             "payda": self.payda,
@@ -78,6 +91,7 @@ class FinancialClaim:
             "value_type": self.value_type,
             "deadline": self.deadline,
             "status": self.status,
+            "text": " ".join(parts),
         }
 
 
