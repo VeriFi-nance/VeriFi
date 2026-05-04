@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -8,9 +8,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { PenSquare, Plus, X, TrendingUp, TrendingDown, CalendarDays } from 'lucide-react';
-import { createPost, createHardClaim, getAssets } from '@/lib/api';
+import { createPost, createHardClaim, getAssets, extractClaims } from '@/lib/api';
 import { isAuthenticated } from '@/lib/auth';
-import type { AssetItem } from '@/lib/types';
+import type { AssetItem, ReviewClaim, ExtractedClaimContract } from '@/lib/types';
+
+const DEBOUNCE_MS = 700;
+
+function toReviewClaim(c: ExtractedClaimContract): ReviewClaim {
+  return {
+    text: c.text,
+    asset: c.pay,
+    direction: c.value_type === 'PERCENTAGE_DOWN' ? 'bearish' : 'bullish',
+    status: 'confirmed',
+  };
+}
 
 const MAX_CHARS = 500;
 
@@ -41,18 +52,51 @@ export function NewPostModal({ open, onOpenChange, onPosted }: NewPostModalProps
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  const [extractedClaims, setExtractedClaims] = useState<ReviewClaim[]>([]);
+  const [extracting, setExtracting] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     if (open) {
       getAssets().then(setAssets).catch(console.error);
     }
   }, [open]);
 
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!content.trim()) {
+      setExtractedClaims([]);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      setExtracting(true);
+      try {
+        const response = await extractClaims(content);
+        setExtractedClaims(response.claims.map(toReviewClaim));
+      } catch {
+        setExtractedClaims([]);
+      } finally {
+        setExtracting(false);
+      }
+    }, DEBOUNCE_MS);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [content]);
+
   function resetModal() {
     setContent('');
     setClaims([]);
+    setExtractedClaims([]);
     setShowClaimForm(false);
     setDraft(emptyDraft());
     setError('');
+  }
+
+  function toggleExtracted(idx: number) {
+    setExtractedClaims((prev) =>
+      prev.map((c, i) =>
+        i === idx ? { ...c, status: c.status === 'rejected' ? 'confirmed' : 'rejected' } : c
+      )
+    );
   }
 
   function handleClose(val: boolean) {
@@ -92,8 +136,8 @@ export function NewPostModal({ open, onOpenChange, onPosted }: NewPostModalProps
     setError('');
     setSubmitting(true);
     try {
-      // 1. Create the post (no attached claims on the post itself)
-      const newPost = await createPost(content.trim(), []);
+      // 1. Create the post with any auto-extracted soft claims
+      const newPost = await createPost(content.trim(), extractedClaims);
 
       // 2. Create each HardClaim, linked to the new post
       await Promise.all(
@@ -159,6 +203,41 @@ export function NewPostModal({ open, onOpenChange, onPosted }: NewPostModalProps
               {remaining} / {MAX_CHARS}
             </p>
           </div>
+
+          {/* ── Auto-extracted claims ───────────────────────── */}
+          {(extracting || extractedClaims.length > 0) && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                {extracting ? 'Analysing…' : 'Detected Claims'}
+              </p>
+              {extractedClaims.map((c, i) => (
+                <div
+                  key={i}
+                  className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-opacity ${
+                    c.status === 'rejected' ? 'opacity-40' : 'bg-muted/30'
+                  }`}
+                >
+                  <span
+                    className={`size-2 rounded-full shrink-0 ${
+                      c.direction === 'bullish' ? 'bg-emerald-500' : 'bg-red-500'
+                    }`}
+                  />
+                  <span className={`flex-1 text-xs truncate ${c.status === 'rejected' ? 'line-through text-muted-foreground' : ''}`}>
+                    {c.text}
+                  </span>
+                  <Badge variant={c.direction === 'bullish' ? 'success' : 'destructive'} className="text-[10px] px-1.5 py-0 shrink-0">
+                    {c.direction === 'bullish' ? '▲' : '▼'} {c.asset}
+                  </Badge>
+                  <button
+                    onClick={() => toggleExtracted(i)}
+                    className="size-5 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors text-xs shrink-0"
+                  >
+                    {c.status === 'rejected' ? '↩' : <X className="size-3" />}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* ── Added claims ────────────────────────────────── */}
           {claims.length > 0 && (
