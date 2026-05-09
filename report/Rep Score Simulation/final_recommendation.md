@@ -4,7 +4,7 @@ Auto-built by `simulator.py`. Re-run any time to refresh.
 
 ## In one paragraph
 
-We compared three ways to pay out a YES/NO claim. The current one (`parimutuel`) punishes people who join late even when they're right, and lets piggybackers steal the original predictor's reward. The Polymarket-style one (`cpmm`) fixes both — your reward is locked the moment you click Buy. CPMM does **not** by itself solve the rich-user problem (early whales still profit), so we add a per-claim stake cap of 50 rep per user. We also tested a daily energy token to stop the leaderboard from running away from new users. **Final pick: CPMM payouts + 50-rep per-claim cap + daily energy token.**
+We compared three ways to pay out a YES/NO claim. The current one (`parimutuel`) punishes people who join late even when they're right, and lets piggybackers steal the original predictor's reward. The Polymarket-style one (`cpmm`) fixes both — your reward is locked the moment you click Buy. v2 spec keeps **fixed 10-rep stake, 1 position per user per claim, 1 ENERGY per stake**, so whales literally cannot exist — no rich user can place more than 10 rep on a single claim. A daily energy token stops the leaderboard from running away from new users. **Final pick: CPMM payouts + fixed 10-rep stake + 1-position rule + daily energy token.**
 
 ## The three payout systems (plain words)
 
@@ -72,45 +72,23 @@ Tiny example: claim is at YES = 50%. You spend 10 rep on YES. CPMM gives you ~19
 
 **Takeaway:** parimutuel pays contrarians more in absolute terms (they split a huge pool of losers among 20 people). CPMM pays less per contrarian but it's deterministic and never zero. Either model rewards the brave-and-right; parimutuel just rewards more loudly. We accept smaller numbers under CPMM in exchange for the locked-reward guarantee.
 
-## Scenario 5 — the whale (honest version)
+## Scenario 5 — first-mover advantage (whales are impossible by design)
 
-**Story (a):** One rich user spams 10 YES bets in a row before anyone else trades. Then 20 normal-sized users come in (10 YES, 10 NO). YES wins.
+**Why no whale scenario:** v2 spec is **fixed 10 rep per stake, one position per user per claim, 1 ENERGY per stake**. A user cannot put more than 10 rep on any single claim no matter how rich they are. So "whale" reduces to "the same 10-rep buyer as everyone else." Whale problem doesn't exist. ✅
 
-| Model | Whale ROI | Small YES buyer ROI | Final YES price |
+**What still exists is first-mover advantage.** Being early when price is near 50/50 gives you more shares per rep than being late when price is near 95%. That's a feature — it rewards conviction under uncertainty. We just want to make sure later buyers don't get *negative* returns when they're correct.
+
+**Story:** 21 users buy YES one by one (each fixed 10 rep). Then 10 NO buyers come right at the end. Truth = YES.
+
+| Model | First YES (#1) ROI | Median YES (#11) ROI | Last YES (#21) ROI |
 |---|---|---|---|
-| parimutuel | **+65%** | +35% | 60% |
-| late_adoption | **+55%** | +45% | 60% |
-| cpmm | **+62%** | +42% | 53% |
+| parimutuel | +90% | +42% | +27% |
+| late_adoption | +61% | +46% | +41% |
+| cpmm | +92% | +46% | +39% |
 
-![whale](charts/05_whale.png)
+![first_mover](charts/05_first_mover.png)
 
-**Honest reading:** CPMM does **not** punish whales here. CPMM gives the whale **62% ROI** vs 65% under parimutuel. CPMM slippage makes each *next* whale buy more expensive but doesn't undo the advantage of being first. The earliest shares were cheap.
-
-**Story (b):** What if v2's *one-position-per-user* rule is enforced? Whale must use a single 100-rep stake. CPMM only.
-
-| Whale strategy | Whale ROI | Small YES buyer ROI |
-|---|---|---|
-| 10 stakes × 10 rep (loophole) | **+62%** | +42% |
-| 1 stake × 100 rep (v2 rule) | **+67%** | +42% |
-
-**Real takeaway:** the one-position rule **does not** fix whale dominance — single big buys are actually slightly *more* efficient than spamming small ones (67% vs 62% ROI). The whale's edge comes from being **first when the price was cheap**, not from buy splitting. CPMM slippage is bounded by the virtual seed `L`; with `L=100`, a 100-rep buy moves price from 50% to ~60% — not enough to wipe out the early-entry advantage.
-
-**Actual fixes (any one of these works):**
-- **Per-claim stake cap.** Cap any single user's total rep at `L/2 = 50` per claim. Forces big bettors to spread across claims, where their bets don't compound.
-- **Quadratic stake cost.** `n` rep of exposure costs `n²/100` rep. Single 100-rep buy costs 100; single 200-rep buy costs 400. Heavy bettors pay supra-linear cost.
-- **Larger virtual seed `L`.** Raising `L` from 100 to 1000 dilutes early-entry advantage (price moves less per rep). Trade-off: bigger house subsidy budget.
-- **Time-locked entry window.** Open a claim with a 1-hour 'auction' phase where all buys settle at one fair price (uniform-price auction); CPMM begins after.
-
-**Recommendation for v2:** add a per-claim cap of **50 rep per user** (matching L/2). Cheap to implement, doesn't break the share-locking property, and visibly limits the whale advantage. The one-position-per-user rule alone is not enough.
-
-**Story (c):** v2 + 50-rep-per-claim cap enforced. Whale wants to push 100 rep but is rejected at 50.
-
-| Strategy | Whale ROI | Whale total profit | Small YES buyer ROI |
-|---|---|---|---|
-| 100 rep, no cap | +67% | +66.7 rep | +42% |
-| 50 rep, cap enforced | +75% | +37.5 rep | +48% |
-
-Whale total profit drops from **66.7 → 37.5 rep** (roughly half), and the other 50 rep stays in the whale's wallet — they can use it on a different claim, where it doesn't compound with their first bet. Cap-based fix preserves CPMM's locked-reward and copy-trade-immunity guarantees while blunting the whale's per-claim leverage.
+**Reading:** both models reward earlier buyers more, which is fair. The question is *how steep* the gradient is. Parimutuel drops 90% → 27% (a 63-point gap); CPMM drops 92% → 39% (52-point gap). Similar slope when the pool is balanced, but Scenario 2 (mostly winning side, few losers) is where parimutuel breaks: late buyers go *negative* there because the pool can't fund all the winners' weights. CPMM always pays late-correct buyers something positive — that's the locked-reward guarantee.
 
 ## Scenario 6 — does the leaderboard run away?
 
@@ -130,13 +108,14 @@ Run it twice: once with no daily limit (you can stake every claim), once with a 
 
 ## Quick-glance comparison
 
+Under v2 spec — fixed 10-rep stake, 1 position per user per claim, 1 ENERGY per stake.
+
 | Problem | parimutuel | late_adopt | cpmm | cpmm+energy |
 |---|---|---|---|---|
-| Right-but-late user loses rep | ❌ severe | ✅ fixed | ✅ fixed | ✅ |
-| Followers steal influencer's reward | ❌ | ❌ | ✅ | ✅ |
-| Whale spam (10 small stakes) | ROI ~65% | ROI ~55% | ROI ~62% | ROI ~62% (no fix) |
-| Whale single big stake | n/a | n/a | ROI ~67% (worse!) | ROI ~57% with 50-rep cap |
-| Reward known the moment you click buy | ❌ | ❌ | ✅ | ✅ |
+| Right-but-late user loses rep | ❌ severe (46%) | ✅ fixed | ✅ fixed | ✅ |
+| Followers steal influencer's reward | ❌ (~96%) | ❌ | ✅ | ✅ |
+| Reward known at buy time | ❌ | ❌ | ✅ | ✅ |
+| Whale dominance | n/a (fixed 10-rep + 1-position rule blocks it) | n/a | n/a | n/a |
 | Top users runaway leaderboard | ❌ | ❌ | ❌ | ✅ |
 | Needs house to seed virtual liquidity | — | — | small (~100 rep/claim) | small |
 | Free daily token = sybil farming risk | — | — | — | ⚠ needs age gate |
@@ -147,15 +126,10 @@ Run it twice: once with no daily limit (you can stake every claim), once with a 
 **1. Replace the parimutuel pool with CPMM (Polymarket-style) shares.**
 
 - Each claim starts with virtual liquidity Y₀ = N₀ = 100 (price = 50/50).
-- Buying YES with `r` rep gives you `r + (Y+r)·r/(N+2r)` YES shares.
+- Each stake is **fixed 10 rep**, **1 position per user per claim**, **1 ENERGY per stake**. These v2 rules mean nobody can be a whale — no per-claim cap needed.
+- Buying YES with 10 rep gives you `10 + (Y+10)·10/(N+20)` YES shares.
 - Each share pays 1 rep if your side wins, 0 if not. **Reward locked at buy time.**
-- House (admin reserve) covers up to ~100 rep of subsidy per claim. Cap on total open claims keeps total exposure bounded.
-
-**1b. Per-claim stake cap = 50 rep per user (= L/2).**
-
-- One position per user per claim (already in Model C spec).
-- Maximum rep on that position: 50. Larger requested stakes rejected at API.
-- Without this cap, a user with 1000 rep can drop the whole pile on one claim and soak up most of the early-entry advantage. With the cap, that user has to spread across 20 claims, where the early advantage doesn't compound.
+- House (admin reserve) covers up to ~100 rep of subsidy per claim. Cap total open claims to bound exposure.
 
 **2. Add a daily energy token.**
 
