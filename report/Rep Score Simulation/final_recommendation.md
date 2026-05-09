@@ -2,33 +2,54 @@
 
 Auto-built by `simulator.py`. Re-run any time to refresh.
 
+> All numbers below come from `python3 simulator.py`. The simulator implements the three numbered models that have working math (C, D, E). Models A and B were rejected on paper before any code was written.
+
+## All the models we discussed
+
+Numbering kept consistent with the [v1 wiki page](https://github.com/ArdaSaygan/VeriFi/wiki/Reputation-Score-System) and [Arda's notes.md on the rep_score_simulator branch](https://github.com/ArdaSaygan/VeriFi/blob/rep_score_simulator/report/Rep%20Score%20Simulation/notes.md).
+
+| # | Name | Where it came from | Status |
+|---|---|---|---|
+| **A** | Accuracy-score formula | v1 wiki (Reputation-Score-System) | ❌ rejected — needs hand-tuned per-asset coefficients, no social layer |
+| **B** | Rep + airdropped token | v1 wiki (Reputation-Score-System) | ❌ rejected as redundant in v1; revisited as Model F below |
+| **C** | Split-the-pot (parimutuel) | v1 wiki — currently implemented | ⚠ has the late-adoption and copy-trade problems |
+| **D** | Late-adoption variant of C | Arda's `notes.md` on `rep_score_simulator` | ✅ fixes the late-loss problem but not the copy-trade dilution |
+| **E** | Stock-market-style (CPMM) | This branch — new proposal | ✅ fixes both problems; reward is locked when you bet |
+| **F** | E + daily energy token | This branch — final pick for v2 | ✅ E plus a daily activity cap so the leaderboard stays competitive |
+
+This report focuses on C, D, E, and F. A and B were dropped before implementation — see the v1 wiki for the original reasoning.
+
 ## In one paragraph
 
-We compared three ways to pay out a YES/NO claim. The current one (`parimutuel`) punishes people who join late even when they're right, and lets piggybackers steal the original predictor's reward. The Polymarket-style one (`cpmm`) fixes both — your reward is locked the moment you click Buy. v2 spec keeps **fixed 10-rep stake, 1 position per user per claim, 1 ENERGY per stake**, so whales literally cannot exist — no rich user can place more than 10 rep on a single claim. A daily energy token stops the leaderboard from running away from new users. **Final pick: CPMM payouts + fixed 10-rep stake + 1-position rule + daily energy token.**
+We compared **Model C** (the current split-the-pot system), **Model D** (Arda's late-adoption fix), and **Model E** (a stock-market-style payout). Model C punishes people who join late even when they're right, and lets piggybackers steal the original predictor's reward. Model E fixes both — your reward is locked the moment you click Buy. v2 keeps the existing rules **fixed 10-rep stake, 1 bet per user per claim**, so whales literally cannot exist. We add a **daily energy token** to stop the leaderboard from running away from new users — combined system is **Model F**. **Final pick: Model F = Model E (CPMM) + fixed 10-rep stake + 1-position rule + daily energy token.**
 
-## The three payout systems (plain words)
+## What each payout model does (plain words)
 
-**Parimutuel (current Model C):** like a horse-track betting pool. Everyone who picks the winning side splits all the rep that was bet. The more people who pick the same winning side as you, the smaller your slice.
+**Model C — split-the-pot (the current system).** Like a horse-track betting pool. Everyone who picks the winning side splits all the rep that was bet. The more people who picked your winning side, the smaller your slice. Earlier buyers get bigger slices because of an internal weight formula.
 
-**Late-adoption variant (Arda's idea):** same as parimutuel, but you get back your own 10 rep guaranteed, then split the *losers'* rep. Stops you from losing money when you're right but late.
+**Model D — late-adoption variant (Arda's idea).** Same as C, but winners get back their own 10 rep guaranteed, then split *only the losers'* rep. Stops you from losing rep when you're right but late.
 
-**CPMM (Polymarket-style):** like a stock market. Each claim has a YES share price and a NO share price (always summing to 1). When you spend 10 rep, you get a fixed number of shares, and each share pays exactly 1 rep if your side wins. Your maximum reward is decided the moment you buy. New buyers move the price for *future* buyers, not for you.
+**Model E — stock-market-style (CPMM, Polymarket).** Like a stock market. Each claim has a YES share price and a NO share price (always summing to 1). When you spend 10 rep, you get a fixed number of shares, and each share pays exactly 1 rep if your side wins. Your maximum reward is decided the moment you buy. New buyers move the price for *future* buyers, not for you.
 
-Tiny example: claim is at YES = 50%. You spend 10 rep on YES. CPMM gives you ~19.2 shares. If YES wins → you get 19.2 rep (profit +9.2). If a friend buys 10 more YES after you, the price climbs to ~58%. You still get 19.2 rep. Your friend gets fewer shares because they paid a higher price. That's the whole idea.
+**Model F — Model E + daily energy token.** Same payouts as E, plus a separate daily allowance (`energy`) that limits how many bets each user can place per day. Energy is not bought, sold, or earned — it just shows up at midnight. Stops high-skill users from owning the leaderboard within days.
+
+Tiny example for Model E: claim is at YES = 50%. You spend 10 rep on YES. The system gives you ~19.2 YES shares. If YES wins → you get 19.2 rep (profit +9.2). If a friend buys 10 more YES after you, the price climbs to ~58%. **You still get 19.2 rep.** Your friend gets fewer shares because they paid a higher price. That's the whole idea.
 
 ## Scenario 1 — sanity check
 
-**Story:** 100 random users, half pick YES half pick NO, no skill, coin-flip outcome. We just want to see the models don't blow up.
+**Story:** 100 random users, half pick YES half pick NO, no skill, coin-flip outcome. Just to make sure none of the models break.
+
+> *Gini = 0–1 inequality measure (0 = everyone equal, 1 = one user has everything). Lower is more even.*
 
 | Model | Profit spread (Gini) | People right but lost rep | Avg profit |
 |---|---|---|---|
-| parimutuel | 0.52 | 0% | -0.00 |
-| late_adoption | 0.51 | 0% | -0.00 |
-| cpmm | 0.52 | 0% | +0.32 |
+| C — split-the-pot | 0.52 | 0% | -0.00 |
+| D — late-adoption (Arda) | 0.51 | 0% | -0.00 |
+| E — stock-market (CPMM) | 0.52 | 0% | +0.32 |
 
 ![balanced](charts/01_balanced.png)
 
-**Takeaway:** all three behave fine on a fair coin flip. The interesting differences show up in the next scenarios.
+**Takeaway:** all three behave normally on a fair coin flip. The interesting differences show up in the next scenarios.
 
 ## Scenario 2 — "I was right but I lost rep"
 
@@ -36,9 +57,9 @@ Tiny example: claim is at YES = 50%. You spend 10 rep on YES. CPMM gives you ~19
 
 | Model | % of correct latecomers who LOST rep |
 |---|---|
-| parimutuel (current) | **46%** ← almost half |
-| late_adoption | 0% |
-| cpmm (Polymarket) | **0%** ← nobody |
+| **C** — split-the-pot (current) | **46%** ← almost half |
+| **D** — late-adoption (Arda) | 0% |
+| **E** — stock-market (CPMM) | **0%** ← nobody |
 
 ![late_adoption](charts/02_late_adoption.png)
 
@@ -50,13 +71,13 @@ Tiny example: claim is at YES = 50%. You spend 10 rep on YES. CPMM gives you ~19
 
 | Model | Alice alone | Alice + 30 copiers | Drop in Alice's profit |
 |---|---|---|---|
-| parimutuel | +100.0 rep | +3.9 rep | 96% |
-| late_adoption | +100.0 rep | +3.4 rep | 97% |
-| cpmm | +9.2 rep | +9.2 rep | 0% |
+| C — split-the-pot | +100.0 rep | +3.9 rep | 96% |
+| D — late-adoption (Arda) | +100.0 rep | +3.4 rep | 97% |
+| E — stock-market (CPMM) | +9.2 rep | +9.2 rep | 0% |
 
 ![copy_trade](charts/03_copy_trade.png)
 
-**Takeaway:** parimutuel cuts Alice's reward by **96%** when 30 people copy her — she's punished for having followers. CPMM cuts it by **0%** — her payout was locked the second she bought. Copiers still profit, just less per head because they bought at a worse price. Everybody happy.
+**Takeaway:** Model C cuts Alice's reward by **96%** when 30 people copy her — she's punished for having followers. Model E cuts it by **0%** — her payout was locked the second she bought. Copiers still profit, just less per head because they bought at a worse price.
 
 ## Scenario 4 — going against the crowd
 
@@ -64,13 +85,13 @@ Tiny example: claim is at YES = 50%. You spend 10 rep on YES. CPMM gives you ~19
 
 | Model | Average contrarian profit | Best contrarian profit |
 |---|---|---|
-| parimutuel | +40.0 rep | +50.1 rep |
-| late_adoption | +40.0 rep | +48.1 rep |
-| cpmm | +17.1 rep | +18.4 rep |
+| C — split-the-pot | +40.0 rep | +50.1 rep |
+| D — late-adoption (Arda) | +40.0 rep | +48.1 rep |
+| E — stock-market (CPMM) | +17.1 rep | +18.4 rep |
 
 ![skewed](charts/04_skewed.png)
 
-**Takeaway:** parimutuel pays contrarians more in absolute terms (they split a huge pool of losers among 20 people). CPMM pays less per contrarian but it's deterministic and never zero. Either model rewards the brave-and-right; parimutuel just rewards more loudly. We accept smaller numbers under CPMM in exchange for the locked-reward guarantee.
+**Takeaway:** Model C pays contrarians more rep in absolute numbers (they split a huge pool of losers among 20 people). Model E pays less per contrarian but it's fully predictable and never zero. Either model rewards the brave-and-right; C just rewards more loudly. We accept smaller numbers under E in exchange for the locked-reward guarantee.
 
 ## Scenario 5 — first-mover advantage (whales are impossible by design)
 
@@ -82,59 +103,62 @@ Tiny example: claim is at YES = 50%. You spend 10 rep on YES. CPMM gives you ~19
 
 | Model | First YES (#1) ROI | Median YES (#11) ROI | Last YES (#21) ROI |
 |---|---|---|---|
-| parimutuel | +90% | +42% | +27% |
-| late_adoption | +61% | +46% | +41% |
-| cpmm | +92% | +46% | +39% |
+| C — split-the-pot | +90% | +42% | +27% |
+| D — late-adoption (Arda) | +61% | +46% | +41% |
+| E — stock-market (CPMM) | +92% | +46% | +39% |
 
 ![first_mover](charts/05_first_mover.png)
 
-**Reading:** both models reward earlier buyers more, which is fair. The question is *how steep* the gradient is. Parimutuel drops 90% → 27% (a 63-point gap); CPMM drops 92% → 39% (52-point gap). Similar slope when the pool is balanced, but Scenario 2 (mostly winning side, few losers) is where parimutuel breaks: late buyers go *negative* there because the pool can't fund all the winners' weights. CPMM always pays late-correct buyers something positive — that's the locked-reward guarantee.
+**Reading:** both models reward earlier buyers more, which is fair. The question is *how steep* the gradient is. Model C drops 90% → 27% (a 63-point gap); Model E drops 92% → 39% (52-point gap). Similar slope when the pool is balanced. The real difference shows up in scenario 2 (mostly winners, few losers): Model C goes *negative* for late buyers; Model E always stays positive — that's the locked-reward guarantee.
 
 ## Scenario 6 — does the leaderboard run away?
 
-**Story:** simulate 30 days. 50 users with random skill levels. 20 claims open per day. We watch how spread out the rep balances become.
+**Story:** simulate 30 days. 50 users with random skill levels. 20 claims open per day. Both runs use Model E payouts. We watch how spread out the rep balances become.
 
-Run it twice: once with no daily limit (you can stake every claim), once with a daily energy token (3 staking-credits per day, can save up to 4).
+First run = **Model E alone** (no daily limit, you can bet on every claim). Second run = **Model F** (E + daily energy token, 3 staking-credits per day, save up to 4).
 
-| Setup | Top user rep | Bottom user rep | Spread (Gini) |
+| Setup | Top user rep | Bottom user rep | Spread (Gini, lower = more even) |
 |---|---|---|---|
-| No daily limit | 2710 | 1 | 0.64 |
-| With energy token | 791 | 0 | 0.42 |
+| **E** alone (no daily limit) | 2710 | 1 | 0.64 |
+| **F** (E + energy token) | 791 | 0 | 0.42 |
 
 ![multiday](charts/06_multiday_energy.png)
 ![rep_trajectories](charts/07_rep_trajectories.png)
 
-**Takeaway:** without the energy gate, the top user's rep balloons to **2710** — about **3.4× higher** than under the energy gate (791). The energy token doesn't stop skilled users from winning; it just caps how many bets they can place per day. Result: the leaderboard stays competitive instead of being locked by a few power users on day 1.
+**Takeaway:** without the energy gate (Model E alone), the top user's rep balloons to **2710** — about **3.4× higher** than under Model F (791). The energy token doesn't stop skilled users from winning; it just caps how many bets they can place per day. The leaderboard stays competitive instead of being locked by a few power users on day 1.
 
 ## Quick-glance comparison
 
-Under v2 spec — fixed 10-rep stake, 1 position per user per claim, 1 ENERGY per stake.
+All four assume v2 hard rules: fixed 10-rep stake, 1 bet per user per claim, 1 energy per bet.
 
-| Problem | parimutuel | late_adopt | cpmm | cpmm+energy |
-|---|---|---|---|---|
-| Right-but-late user loses rep | ❌ severe (46%) | ✅ fixed | ✅ fixed | ✅ |
-| Followers steal influencer's reward | ❌ (~96%) | ❌ | ✅ | ✅ |
-| Reward known at buy time | ❌ | ❌ | ✅ | ✅ |
-| Whale dominance | n/a (fixed 10-rep + 1-position rule blocks it) | n/a | n/a | n/a |
-| Top users runaway leaderboard | ❌ | ❌ | ❌ | ✅ |
-| Needs house to seed virtual liquidity | — | — | small (~100 rep/claim) | small |
-| Free daily token = sybil farming risk | — | — | — | ⚠ needs age gate |
+| Problem | A (rejected) | B (rejected) | C (current) | D (Arda) | E (CPMM) | F (E + energy) |
+|---|---|---|---|---|---|---|
+| Right-but-late user loses rep | n/a | n/a | ❌ severe (46%) | ✅ fixed | ✅ fixed | ✅ fixed |
+| Followers steal predictor's reward | n/a | n/a | ❌ (~96%) | ❌ | ✅ | ✅ |
+| Reward known the moment you bet | n/a | n/a | ❌ | ❌ | ✅ | ✅ |
+| Whale dominance | n/a | n/a | impossible (rule) | impossible | impossible | impossible |
+| Top users runaway leaderboard | n/a | n/a | ❌ | ❌ | ❌ | ✅ |
+| House seed liquidity needed | — | — | — | — | small (~100 rep/claim) | small |
+| Free daily token sybil risk | — | — | — | — | — | ⚠ needs 7-day account-age gate |
 
+A: arbitrary per-asset accuracy formula. B: rep + token but with token gating *staking* (rejected as redundant). v1 wiki has the original A/B reasoning.
 
-## Final recommendation
+## Final recommendation — adopt Model F
 
-**1. Replace the parimutuel pool with CPMM (Polymarket-style) shares.**
+Model F = Model E (CPMM payouts) + the v1 spec's hard rules + a daily energy token.
 
-- Each claim starts with virtual liquidity Y₀ = N₀ = 100 (price = 50/50).
-- Each stake is **fixed 10 rep**, **1 position per user per claim**, **1 ENERGY per stake**. These v2 rules mean nobody can be a whale — no per-claim cap needed.
+**1. Replace Model C (split-the-pot) with Model E (stock-market-style).**
+
+- Each claim starts with two virtual pools of 100 shares each (Y₀ = N₀ = 100). Initial price = 50/50.
+- Each bet is **fixed 10 rep**, **1 bet per user per claim**, **1 energy per bet**. These v1 rules already make whales impossible — no per-claim cap needed.
 - Buying YES with 10 rep gives you `10 + (Y+10)·10/(N+20)` YES shares.
 - Each share pays 1 rep if your side wins, 0 if not. **Reward locked at buy time.**
-- House (admin reserve) covers up to ~100 rep of subsidy per claim. Cap total open claims to bound exposure.
+- House (admin reserve) covers up to ~100 rep of subsidy per claim. Cap total open claims to bound the platform's exposure.
 
-**2. Add a daily energy token.**
+**2. Add a daily energy token (this is what makes Model F different from E).**
 
-- Every user gets 3 ENERGY at midnight. Maximum balance = 4 (so saving up beyond 1 day is impossible).
-- Buying into a claim costs 1 ENERGY. Creating a claim costs 2.
+- Every user gets 3 energy at midnight. Maximum balance = 4 (so saving up beyond 1 day is impossible).
+- Betting on a claim costs 1 energy. Creating a claim costs 2.
 - Energy is not tradeable, not refundable, not buyable.
 - Effect: even the most active user can place ~3 bets/day. New users always have the same daily allowance as veterans.
 
@@ -146,10 +170,10 @@ Under v2 spec — fixed 10-rep stake, 1 position per user per claim, 1 ENERGY pe
 
 **4. What this changes in the wiki/code.**
 
-- Drop the `weight = 1/entry_price` parimutuel formula entirely.
+- Drop Model C's `weight = 1/entry_price` formula entirely.
 - Replace `distribute_pool()` with `redeem_shares()` (1 rep per winning share).
-- Add `Position` model (replaces `ClaimStake`): `shares` field locked at create-time.
-- Add `energy`, `energy_cap`, `last_grant` to `WalletUser`.
+- Add `Position` model (replaces `ClaimStake`): `shares` field locked at bet time.
+- Add `energy`, `energy_cap`, `last_grant` fields to `WalletUser`.
 - Profile UI shows: rep, accuracy %, energy / cap.
 - Claim card shows: live YES/NO price, *your locked payout if correct*.
 
@@ -161,9 +185,9 @@ Under v2 spec — fixed 10-rep stake, 1 position per user per claim, 1 ENERGY pe
 
 ## Numbers in a nutshell
 
-- CPMM cuts "right-but-lost" cases from **46% to 0%**.
-- CPMM cuts copy-trade dilution from **96% to 0%**.
-- Energy token compresses leaderboard spread by **~34%** (Gini 0.64 → 0.42).
+- Going from Model C to E cuts "right-but-lost" cases from **46% to 0%**.
+- Going from C to E cuts copy-trade dilution from **96% to 0%**.
+- Going from E to F (adding the energy token) compresses the leaderboard spread by **~34%** (Gini 0.64 → 0.42).
 
 ## Things still to decide
 

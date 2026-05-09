@@ -604,51 +604,80 @@ def write_report(balanced, late, copy, skewed, first_mover, multiday_no, multida
 
     A("# Reputation System — What We Tried, What Works\n")
     A("Auto-built by `simulator.py`. Re-run any time to refresh.\n")
+    A("> All numbers below come from `python3 simulator.py`. The simulator implements the "
+      "three numbered models that have working math (C, D, E). Models A and B were "
+      "rejected on paper before any code was written.\n")
+
+    # ------------------------------------------------------------------
+    A("## All the models we discussed\n")
+    A("Numbering kept consistent with the [v1 wiki page](https://github.com/ArdaSaygan/VeriFi/wiki/Reputation-Score-System) "
+      "and [Arda's notes.md on the rep_score_simulator branch](https://github.com/ArdaSaygan/VeriFi/blob/rep_score_simulator/report/Rep%20Score%20Simulation/notes.md).\n")
+    A("| # | Name | Where it came from | Status |")
+    A("|---|---|---|---|")
+    A("| **A** | Accuracy-score formula | v1 wiki (Reputation-Score-System) | ❌ rejected — needs hand-tuned per-asset coefficients, no social layer |")
+    A("| **B** | Rep + airdropped token | v1 wiki (Reputation-Score-System) | ❌ rejected as redundant in v1; revisited as Model F below |")
+    A("| **C** | Split-the-pot (parimutuel) | v1 wiki — currently implemented | ⚠ has the late-adoption and copy-trade problems |")
+    A("| **D** | Late-adoption variant of C | Arda's `notes.md` on `rep_score_simulator` | ✅ fixes the late-loss problem but not the copy-trade dilution |")
+    A("| **E** | Stock-market-style (CPMM) | This branch — new proposal | ✅ fixes both problems; reward is locked when you bet |")
+    A("| **F** | E + daily energy token | This branch — final pick for v2 | ✅ E plus a daily activity cap so the leaderboard stays competitive |")
+    A("\nThis report focuses on C, D, E, and F. A and B were dropped before implementation — "
+      "see the v1 wiki for the original reasoning.\n")
 
     # ------------------------------------------------------------------
     A("## In one paragraph\n")
-    A("We compared three ways to pay out a YES/NO claim. The current one (`parimutuel`) "
+    A("We compared **Model C** (the current split-the-pot system), **Model D** (Arda's "
+      "late-adoption fix), and **Model E** (a stock-market-style payout). Model C "
       "punishes people who join late even when they're right, and lets piggybackers steal "
-      "the original predictor's reward. The Polymarket-style one (`cpmm`) fixes both — "
-      "your reward is locked the moment you click Buy. v2 spec keeps **fixed 10-rep "
-      "stake, 1 position per user per claim, 1 ENERGY per stake**, so whales literally "
-      "cannot exist — no rich user can place more than 10 rep on a single claim. A daily "
-      "energy token stops the leaderboard from running away from new users. **Final pick: "
-      "CPMM payouts + fixed 10-rep stake + 1-position rule + daily energy token.**\n")
+      "the original predictor's reward. Model E fixes both — your reward is locked the "
+      "moment you click Buy. v2 keeps the existing rules **fixed 10-rep stake, 1 bet per "
+      "user per claim**, so whales literally cannot exist. We add a **daily energy "
+      "token** to stop the leaderboard from running away from new users — combined system "
+      "is **Model F**. **Final pick: Model F = Model E (CPMM) + fixed 10-rep stake + "
+      "1-position rule + daily energy token.**\n")
 
     # ------------------------------------------------------------------
-    A("## The three payout systems (plain words)\n")
+    A("## What each payout model does (plain words)\n")
 
-    A("**Parimutuel (current Model C):** like a horse-track betting pool. Everyone who picks "
-      "the winning side splits all the rep that was bet. The more people who pick the same "
-      "winning side as you, the smaller your slice.\n")
+    A("**Model C — split-the-pot (the current system).** Like a horse-track betting pool. "
+      "Everyone who picks the winning side splits all the rep that was bet. The more "
+      "people who picked your winning side, the smaller your slice. Earlier buyers get "
+      "bigger slices because of an internal weight formula.\n")
 
-    A("**Late-adoption variant (Arda's idea):** same as parimutuel, but you get back your "
-      "own 10 rep guaranteed, then split the *losers'* rep. Stops you from losing money "
-      "when you're right but late.\n")
+    A("**Model D — late-adoption variant (Arda's idea).** Same as C, but winners get back "
+      "their own 10 rep guaranteed, then split *only the losers'* rep. Stops you from "
+      "losing rep when you're right but late.\n")
 
-    A("**CPMM (Polymarket-style):** like a stock market. Each claim has a YES share price "
-      "and a NO share price (always summing to 1). When you spend 10 rep, you get a fixed "
-      "number of shares, and each share pays exactly 1 rep if your side wins. Your maximum "
-      "reward is decided the moment you buy. New buyers move the price for *future* buyers, "
-      "not for you.\n")
+    A("**Model E — stock-market-style (CPMM, Polymarket).** Like a stock market. Each "
+      "claim has a YES share price and a NO share price (always summing to 1). When you "
+      "spend 10 rep, you get a fixed number of shares, and each share pays exactly 1 rep "
+      "if your side wins. Your maximum reward is decided the moment you buy. New buyers "
+      "move the price for *future* buyers, not for you.\n")
 
-    A("Tiny example: claim is at YES = 50%. You spend 10 rep on YES. CPMM gives you ~19.2 "
-      "shares. If YES wins → you get 19.2 rep (profit +9.2). If a friend buys 10 more YES "
-      "after you, the price climbs to ~58%. You still get 19.2 rep. Your friend gets fewer "
-      "shares because they paid a higher price. That's the whole idea.\n")
+    A("**Model F — Model E + daily energy token.** Same payouts as E, plus a separate "
+      "daily allowance (`energy`) that limits how many bets each user can place per day. "
+      "Energy is not bought, sold, or earned — it just shows up at midnight. Stops "
+      "high-skill users from owning the leaderboard within days.\n")
+
+    A("Tiny example for Model E: claim is at YES = 50%. You spend 10 rep on YES. The "
+      "system gives you ~19.2 YES shares. If YES wins → you get 19.2 rep (profit +9.2). "
+      "If a friend buys 10 more YES after you, the price climbs to ~58%. **You still get "
+      "19.2 rep.** Your friend gets fewer shares because they paid a higher price. That's "
+      "the whole idea.\n")
 
     # ------------------------------------------------------------------
     A("## Scenario 1 — sanity check\n")
     A("**Story:** 100 random users, half pick YES half pick NO, no skill, coin-flip outcome. "
-      "We just want to see the models don't blow up.\n")
+      "Just to make sure none of the models break.\n")
+    A("> *Gini = 0–1 inequality measure (0 = everyone equal, 1 = one user has everything). "
+      "Lower is more even.*\n")
     A("| Model | Profit spread (Gini) | People right but lost rep | Avg profit |")
     A("|---|---|---|---|")
+    label_map = {'parimutuel': 'C — split-the-pot', 'late_adoption': 'D — late-adoption (Arda)', 'cpmm': 'E — stock-market (CPMM)'}
     for n, r in balanced.items():
-        A(f"| {n} | {r['gini']:.2f} | {r['cb_lost']*100:.0f}% | {r['mean_profit']:+.2f} |")
+        A(f"| {label_map.get(n, n)} | {r['gini']:.2f} | {r['cb_lost']*100:.0f}% | {r['mean_profit']:+.2f} |")
     A("\n![balanced](charts/01_balanced.png)\n")
-    A("**Takeaway:** all three behave fine on a fair coin flip. The interesting differences "
-      "show up in the next scenarios.\n")
+    A("**Takeaway:** all three behave normally on a fair coin flip. The interesting "
+      "differences show up in the next scenarios.\n")
 
     # ------------------------------------------------------------------
     A("## Scenario 2 — \"I was right but I lost rep\"\n")
@@ -661,9 +690,9 @@ def write_report(balanced, late, copy, skewed, first_mover, multiday_no, multida
     cpmm_late = late['cpmm']['cb_lost'] * 100
     A(f"| Model | % of correct latecomers who LOST rep |")
     A("|---|---|")
-    A(f"| parimutuel (current) | **{pari:.0f}%** ← almost half |")
-    A(f"| late_adoption | {late['late_adoption']['cb_lost']*100:.0f}% |")
-    A(f"| cpmm (Polymarket) | **{cpmm_late:.0f}%** ← nobody |")
+    A(f"| **C** — split-the-pot (current) | **{pari:.0f}%** ← almost half |")
+    A(f"| **D** — late-adoption (Arda) | {late['late_adoption']['cb_lost']*100:.0f}% |")
+    A(f"| **E** — stock-market (CPMM) | **{cpmm_late:.0f}%** ← nobody |")
     A("\n![late_adoption](charts/02_late_adoption.png)\n")
     A(f"**Takeaway:** under today's parimutuel, ~{pari:.0f}% of people who bet on the "
       f"winning side *still lost rep* because their slice of the pool was tiny vs the early "
@@ -681,12 +710,12 @@ def write_report(balanced, late, copy, skewed, first_mover, multiday_no, multida
     A("| Model | Alice alone | Alice + 30 copiers | Drop in Alice's profit |")
     A("|---|---|---|---|")
     for n, r in copy.items():
-        A(f"| {n} | {r['influencer_solo']:+.1f} rep | {r['influencer_with_copiers']:+.1f} rep | {r['dilution_pct']:.0f}% |")
+        A(f"| {label_map.get(n, n)} | {r['influencer_solo']:+.1f} rep | {r['influencer_with_copiers']:+.1f} rep | {r['dilution_pct']:.0f}% |")
     A("\n![copy_trade](charts/03_copy_trade.png)\n")
-    A(f"**Takeaway:** parimutuel cuts Alice's reward by **{pari_dil:.0f}%** when 30 people "
-      f"copy her — she's punished for having followers. CPMM cuts it by **{cpmm_dil:.0f}%** — "
-      f"her payout was locked the second she bought. Copiers still profit, just less per "
-      f"head because they bought at a worse price. Everybody happy.\n")
+    A(f"**Takeaway:** Model C cuts Alice's reward by **{pari_dil:.0f}%** when 30 people "
+      f"copy her — she's punished for having followers. Model E cuts it by **{cpmm_dil:.0f}%** "
+      "— her payout was locked the second she bought. Copiers still profit, just less per "
+      "head because they bought at a worse price.\n")
 
     # ------------------------------------------------------------------
     A("## Scenario 4 — going against the crowd\n")
@@ -695,13 +724,13 @@ def write_report(balanced, late, copy, skewed, first_mover, multiday_no, multida
     A("| Model | Average contrarian profit | Best contrarian profit |")
     A("|---|---|---|")
     for n, r in skewed.items():
-        A(f"| {n} | {r['contrarian_mean_profit']:+.1f} rep | {r['contrarian_max']:+.1f} rep |")
+        A(f"| {label_map.get(n, n)} | {r['contrarian_mean_profit']:+.1f} rep | {r['contrarian_max']:+.1f} rep |")
     A("\n![skewed](charts/04_skewed.png)\n")
-    A("**Takeaway:** parimutuel pays contrarians more in absolute terms (they split a huge "
-      "pool of losers among 20 people). CPMM pays less per contrarian but it's deterministic "
-      "and never zero. Either model rewards the brave-and-right; parimutuel just rewards "
-      "more loudly. We accept smaller numbers under CPMM in exchange for the locked-reward "
-      "guarantee.\n")
+    A("**Takeaway:** Model C pays contrarians more rep in absolute numbers (they split a "
+      "huge pool of losers among 20 people). Model E pays less per contrarian but it's "
+      "fully predictable and never zero. Either model rewards the brave-and-right; C just "
+      "rewards more loudly. We accept smaller numbers under E in exchange for the "
+      "locked-reward guarantee.\n")
 
     # ------------------------------------------------------------------
     A("## Scenario 5 — first-mover advantage (whales are impossible by design)\n")
@@ -718,74 +747,79 @@ def write_report(balanced, late, copy, skewed, first_mover, multiday_no, multida
     A("| Model | First YES (#1) ROI | Median YES (#11) ROI | Last YES (#21) ROI |")
     A("|---|---|---|---|")
     for n, r in first_mover.items():
-        A(f"| {n} | {r['first_yes_roi']*100:+.0f}% | {r['median_yes_roi']*100:+.0f}% | {r['last_yes_roi']*100:+.0f}% |")
+        A(f"| {label_map.get(n, n)} | {r['first_yes_roi']*100:+.0f}% | {r['median_yes_roi']*100:+.0f}% | {r['last_yes_roi']*100:+.0f}% |")
     A("\n![first_mover](charts/05_first_mover.png)\n")
     pari_drop = first_mover['parimutuel']['first_yes_roi'] - first_mover['parimutuel']['last_yes_roi']
     cpmm_drop = first_mover['cpmm']['first_yes_roi'] - first_mover['cpmm']['last_yes_roi']
     A(f"**Reading:** both models reward earlier buyers more, which is fair. The question "
-      f"is *how steep* the gradient is. Parimutuel drops "
+      f"is *how steep* the gradient is. Model C drops "
       f"{first_mover['parimutuel']['first_yes_roi']*100:.0f}% → "
       f"{first_mover['parimutuel']['last_yes_roi']*100:.0f}% "
-      f"(a {pari_drop*100:.0f}-point gap); CPMM drops "
+      f"(a {pari_drop*100:.0f}-point gap); Model E drops "
       f"{first_mover['cpmm']['first_yes_roi']*100:.0f}% → "
       f"{first_mover['cpmm']['last_yes_roi']*100:.0f}% "
-      f"({cpmm_drop*100:.0f}-point gap). Similar slope when the pool is balanced, but "
-      "Scenario 2 (mostly winning side, few losers) is where parimutuel breaks: late buyers "
-      "go *negative* there because the pool can't fund all the winners' weights. CPMM "
-      "always pays late-correct buyers something positive — that's the locked-reward "
-      "guarantee.\n")
+      f"({cpmm_drop*100:.0f}-point gap). Similar slope when the pool is balanced. The "
+      "real difference shows up in scenario 2 (mostly winners, few losers): Model C goes "
+      "*negative* for late buyers; Model E always stays positive — that's the "
+      "locked-reward guarantee.\n")
 
     # ------------------------------------------------------------------
     A("## Scenario 6 — does the leaderboard run away?\n")
     A(f"**Story:** simulate {multiday_no['days']} days. 50 users with random skill levels. "
-      f"20 claims open per day. We watch how spread out the rep balances become.\n")
-    A("Run it twice: once with no daily limit (you can stake every claim), once with a "
-      "daily energy token (3 staking-credits per day, can save up to 4).\n")
+      f"20 claims open per day. Both runs use Model E payouts. We watch how spread out "
+      "the rep balances become.\n")
+    A("First run = **Model E alone** (no daily limit, you can bet on every claim). "
+      "Second run = **Model F** (E + daily energy token, 3 staking-credits per day, "
+      "save up to 4).\n")
 
-    A("| Setup | Top user rep | Bottom user rep | Spread (Gini) |")
+    A("| Setup | Top user rep | Bottom user rep | Spread (Gini, lower = more even) |")
     A("|---|---|---|---|")
     rep_a = multiday_no['final_rep']; rep_b = multiday_yes['final_rep']
-    A(f"| No daily limit | {max(rep_a):.0f} | {min(rep_a):.0f} | {gini(rep_a):.2f} |")
-    A(f"| With energy token | {max(rep_b):.0f} | {min(rep_b):.0f} | {gini(rep_b):.2f} |")
+    A(f"| **E** alone (no daily limit) | {max(rep_a):.0f} | {min(rep_a):.0f} | {gini(rep_a):.2f} |")
+    A(f"| **F** (E + energy token) | {max(rep_b):.0f} | {min(rep_b):.0f} | {gini(rep_b):.2f} |")
     A("\n![multiday](charts/06_multiday_energy.png)")
     A("![rep_trajectories](charts/07_rep_trajectories.png)\n")
     ratio = max(rep_a) / max(rep_b) if max(rep_b) > 0 else 0
-    A(f"**Takeaway:** without the energy gate, the top user's rep balloons to "
-      f"**{max(rep_a):.0f}** — about **{ratio:.1f}× higher** than under the energy gate "
-      f"({max(rep_b):.0f}). The energy token doesn't stop skilled users from winning; it "
-      f"just caps how many bets they can place per day. Result: the leaderboard stays "
-      f"competitive instead of being locked by a few power users on day 1.\n")
+    A(f"**Takeaway:** without the energy gate (Model E alone), the top user's rep "
+      f"balloons to **{max(rep_a):.0f}** — about **{ratio:.1f}× higher** than under "
+      f"Model F ({max(rep_b):.0f}). The energy token doesn't stop skilled users from "
+      "winning; it just caps how many bets they can place per day. The leaderboard stays "
+      "competitive instead of being locked by a few power users on day 1.\n")
 
     # ------------------------------------------------------------------
     A("## Quick-glance comparison\n")
-    A("Under v2 spec — fixed 10-rep stake, 1 position per user per claim, 1 ENERGY per stake.\n")
-    A("| Problem | parimutuel | late_adopt | cpmm | cpmm+energy |")
-    A("|---|---|---|---|---|")
-    A("| Right-but-late user loses rep | ❌ severe (46%) | ✅ fixed | ✅ fixed | ✅ |")
-    A("| Followers steal influencer's reward | ❌ (~96%) | ❌ | ✅ | ✅ |")
-    A("| Reward known at buy time | ❌ | ❌ | ✅ | ✅ |")
-    A("| Whale dominance | n/a (fixed 10-rep + 1-position rule blocks it) | n/a | n/a | n/a |")
-    A("| Top users runaway leaderboard | ❌ | ❌ | ❌ | ✅ |")
-    A("| Needs house to seed virtual liquidity | — | — | small (~100 rep/claim) | small |")
-    A("| Free daily token = sybil farming risk | — | — | — | ⚠ needs age gate |")
-    A("\n")
+    A("All four assume v2 hard rules: fixed 10-rep stake, 1 bet per user per claim, "
+      "1 energy per bet.\n")
+    A("| Problem | A (rejected) | B (rejected) | C (current) | D (Arda) | E (CPMM) | F (E + energy) |")
+    A("|---|---|---|---|---|---|---|")
+    A("| Right-but-late user loses rep | n/a | n/a | ❌ severe (46%) | ✅ fixed | ✅ fixed | ✅ fixed |")
+    A("| Followers steal predictor's reward | n/a | n/a | ❌ (~96%) | ❌ | ✅ | ✅ |")
+    A("| Reward known the moment you bet | n/a | n/a | ❌ | ❌ | ✅ | ✅ |")
+    A("| Whale dominance | n/a | n/a | impossible (rule) | impossible | impossible | impossible |")
+    A("| Top users runaway leaderboard | n/a | n/a | ❌ | ❌ | ❌ | ✅ |")
+    A("| House seed liquidity needed | — | — | — | — | small (~100 rep/claim) | small |")
+    A("| Free daily token sybil risk | — | — | — | — | — | ⚠ needs 7-day account-age gate |")
+    A("\nA: arbitrary per-asset accuracy formula. B: rep + token but with token gating "
+      "*staking* (rejected as redundant). v1 wiki has the original A/B reasoning.\n")
 
     # ------------------------------------------------------------------
-    A("## Final recommendation\n")
+    A("## Final recommendation — adopt Model F\n")
+    A("Model F = Model E (CPMM payouts) + the v1 spec's hard rules + a daily energy token.\n")
 
-    A("**1. Replace the parimutuel pool with CPMM (Polymarket-style) shares.**\n")
-    A("- Each claim starts with virtual liquidity Y₀ = N₀ = 100 (price = 50/50).")
-    A("- Each stake is **fixed 10 rep**, **1 position per user per claim**, **1 ENERGY per stake**. "
-      "These v2 rules mean nobody can be a whale — no per-claim cap needed.")
+    A("**1. Replace Model C (split-the-pot) with Model E (stock-market-style).**\n")
+    A("- Each claim starts with two virtual pools of 100 shares each (Y₀ = N₀ = 100). "
+      "Initial price = 50/50.")
+    A("- Each bet is **fixed 10 rep**, **1 bet per user per claim**, **1 energy per bet**. "
+      "These v1 rules already make whales impossible — no per-claim cap needed.")
     A("- Buying YES with 10 rep gives you `10 + (Y+10)·10/(N+20)` YES shares.")
     A("- Each share pays 1 rep if your side wins, 0 if not. **Reward locked at buy time.**")
     A("- House (admin reserve) covers up to ~100 rep of subsidy per claim. Cap total open "
-      "claims to bound exposure.\n")
+      "claims to bound the platform's exposure.\n")
 
-    A("**2. Add a daily energy token.**\n")
-    A("- Every user gets 3 ENERGY at midnight. Maximum balance = 4 (so saving up beyond "
+    A("**2. Add a daily energy token (this is what makes Model F different from E).**\n")
+    A("- Every user gets 3 energy at midnight. Maximum balance = 4 (so saving up beyond "
       "1 day is impossible).")
-    A("- Buying into a claim costs 1 ENERGY. Creating a claim costs 2.")
+    A("- Betting on a claim costs 1 energy. Creating a claim costs 2.")
     A("- Energy is not tradeable, not refundable, not buyable.")
     A("- Effect: even the most active user can place ~3 bets/day. New users always have "
       "the same daily allowance as veterans.\n")
@@ -796,10 +830,10 @@ def write_report(balanced, late, copy, skewed, first_mover, multiday_no, multida
     A("- Optional: 5-rep deposit to create a claim, refunded if claim resolves cleanly.\n")
 
     A("**4. What this changes in the wiki/code.**\n")
-    A("- Drop the `weight = 1/entry_price` parimutuel formula entirely.")
+    A("- Drop Model C's `weight = 1/entry_price` formula entirely.")
     A("- Replace `distribute_pool()` with `redeem_shares()` (1 rep per winning share).")
-    A("- Add `Position` model (replaces `ClaimStake`): `shares` field locked at create-time.")
-    A("- Add `energy`, `energy_cap`, `last_grant` to `WalletUser`.")
+    A("- Add `Position` model (replaces `ClaimStake`): `shares` field locked at bet time.")
+    A("- Add `energy`, `energy_cap`, `last_grant` fields to `WalletUser`.")
     A("- Profile UI shows: rep, accuracy %, energy / cap.")
     A("- Claim card shows: live YES/NO price, *your locked payout if correct*.\n")
 
@@ -809,9 +843,10 @@ def write_report(balanced, late, copy, skewed, first_mover, multiday_no, multida
     A("- One position per user per claim, no exit before resolution.\n")
 
     A("## Numbers in a nutshell\n")
-    A(f"- CPMM cuts \"right-but-lost\" cases from **{pari:.0f}% to 0%**.")
-    A(f"- CPMM cuts copy-trade dilution from **{pari_dil:.0f}% to {cpmm_dil:.0f}%**.")
-    A(f"- Energy token compresses leaderboard spread by **~{(1 - gini(rep_b)/gini(rep_a))*100:.0f}%** "
+    A(f"- Going from Model C to E cuts \"right-but-lost\" cases from **{pari:.0f}% to 0%**.")
+    A(f"- Going from C to E cuts copy-trade dilution from **{pari_dil:.0f}% to {cpmm_dil:.0f}%**.")
+    A(f"- Going from E to F (adding the energy token) compresses the leaderboard spread by "
+      f"**~{(1 - gini(rep_b)/gini(rep_a))*100:.0f}%** "
       f"(Gini {gini(rep_a):.2f} → {gini(rep_b):.2f}).\n")
 
     A("## Things still to decide\n")
