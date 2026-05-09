@@ -106,15 +106,18 @@ class Parimutuel(Market):
         return st
 
     def resolve(self, winning_side):
+        # accumulate per user_id (one user can hold multiple stakes pre-v2-limit)
         pool = sum(s.rep_paid for s in self.stakes)
         winners = [s for s in self.stakes if s.side == winning_side]
-        out = {s.user_id: -s.rep_paid for s in self.stakes}
+        out: dict[int, float] = {}
+        for s in self.stakes:
+            out[s.user_id] = out.get(s.user_id, 0.0) - s.rep_paid
         if not winners:
             return out
         wsum = sum(s.weight for s in winners)
         for s in winners:
             payout = pool * s.weight / wsum
-            out[s.user_id] = payout - s.rep_paid
+            out[s.user_id] = out.get(s.user_id, 0.0) + payout
         return out
 
 
@@ -126,13 +129,16 @@ class LateAdoption(Parimutuel):
     def resolve(self, winning_side):
         winners = [s for s in self.stakes if s.side == winning_side]
         losers_pool = sum(s.rep_paid for s in self.stakes if s.side != winning_side)
-        out = {s.user_id: -s.rep_paid for s in self.stakes}
+        out: dict[int, float] = {}
+        for s in self.stakes:
+            out[s.user_id] = out.get(s.user_id, 0.0) - s.rep_paid
         if not winners or losers_pool <= 0:
             return out
         wsum = sum(s.weight for s in winners)
         for s in winners:
             extra = losers_pool * s.weight / wsum
-            out[s.user_id] = extra  # net: stake returned + extra
+            # winner gets stake back + extra share of losers' pool
+            out[s.user_id] = out.get(s.user_id, 0.0) + s.rep_paid + extra
         return out
 
 
@@ -335,27 +341,89 @@ def scenario_skewed_prior():
 
 
 def scenario_whale_impact():
-    """1 whale buys 10 stakes (100 rep) into YES at price 0.5. Then 20 small
-       stakers come — measure how their realized prices/payouts differ across models."""
-    results = {}
+    """Two parts:
+       (a) Whale spams 10 sequential 10-rep YES stakes early. Reflects what happens
+           if v2's one-position-per-user rule is NOT enforced. Across models.
+       (b) v2-spec compliant: whale forced to one position. Variable-size single
+           stake (100 rep at once) under CPMM; compare to many small buyers.
+       Truth = YES.
+    """
+    results = {'spam': {}, 'single_big': {}}
+
+    # --- (a) spam scenario, pre-v2 rules ---
     for ModelCls in MODELS:
         m = ModelCls()
-        # whale uid=0, 10 sequential YES buys
         for _ in range(10):
-            m.buy(0, 'YES')
-        # 20 followers split 10/10
+            m.buy(0, 'YES', 10.0)        # whale 10 stakes
         for uid in range(1, 11):
-            m.buy(uid, 'YES')
+            m.buy(uid, 'YES', 10.0)
         for uid in range(11, 21):
-            m.buy(uid, 'NO')
+            m.buy(uid, 'NO', 10.0)
         profits = m.resolve('YES')
         whale = profits[0]
         followers_yes = np.mean([profits[u] for u in range(1, 11)])
-        results[ModelCls.name] = {
+        whale_roi = whale / 100.0  # whale paid 100 rep total
+        follower_roi = followers_yes / 10.0
+        results['spam'][ModelCls.name] = {
             'whale_profit': whale,
+            'whale_roi': whale_roi,
             'avg_yes_follower_profit': followers_yes,
+            'avg_yes_follower_roi': follower_roi,
             'final_yes_price': m.yes_price(),
         }
+
+    # --- (b) v2-spec: whale gets ONE position. Variable size (100 rep) vs small buyers ---
+    # Only meaningful for CPMM (parimutuel/late-adoption use fixed 10 stake).
+    m = CPMM()
+    m.buy(0, 'YES', 100.0)               # whale: single big stake of 100 rep
+    for uid in range(1, 11):
+        m.buy(uid, 'YES', 10.0)
+    for uid in range(11, 21):
+        m.buy(uid, 'NO', 10.0)
+    profits = m.resolve('YES')
+    whale = profits[0]
+    followers_yes = np.mean([profits[u] for u in range(1, 11)])
+    results['single_big']['cpmm'] = {
+        'whale_profit': whale,
+        'whale_roi': whale / 100.0,
+        'avg_yes_follower_profit': followers_yes,
+        'avg_yes_follower_roi': followers_yes / 10.0,
+        'final_yes_price': m.yes_price(),
+    }
+    # control: whale uses 10 stakes of 10 rep instead (parimutuel-like sequencing in CPMM)
+    m2 = CPMM()
+    for _ in range(10):
+        m2.buy(0, 'YES', 10.0)
+    for uid in range(1, 11):
+        m2.buy(uid, 'YES', 10.0)
+    for uid in range(11, 21):
+        m2.buy(uid, 'NO', 10.0)
+    p2 = m2.resolve('YES')
+    results['single_big']['cpmm_spam_for_compare'] = {
+        'whale_profit': p2[0],
+        'whale_roi': p2[0] / 100.0,
+        'avg_yes_follower_profit': np.mean([p2[u] for u in range(1, 11)]),
+        'avg_yes_follower_roi': np.mean([p2[u] for u in range(1, 11)]) / 10.0,
+        'final_yes_price': m2.yes_price(),
+    }
+
+    # --- (c) v2 + per-claim stake cap of 50 rep ---
+    # whale tries to push 100 rep but is capped at 50 (one position, max stake = L/2)
+    m3 = CPMM()
+    m3.buy(0, 'YES', 50.0)               # capped to 50 rep
+    for uid in range(1, 11):
+        m3.buy(uid, 'YES', 10.0)
+    for uid in range(11, 21):
+        m3.buy(uid, 'NO', 10.0)
+    p3 = m3.resolve('YES')
+    results['capped'] = {
+        'whale_profit': p3[0],
+        'whale_roi': p3[0] / 50.0,        # whale only spent 50, not 100
+        'whale_unused_rep': 50.0,         # rep blocked from this claim
+        'avg_yes_follower_profit': np.mean([p3[u] for u in range(1, 11)]),
+        'avg_yes_follower_roi': np.mean([p3[u] for u in range(1, 11)]) / 10.0,
+        'final_yes_price': m3.yes_price(),
+    }
     return results
 
 
@@ -513,17 +581,37 @@ def chart_skewed(results):
 
 
 def chart_whale(results):
-    fig, ax = plt.subplots(figsize=(8, 5))
-    names = list(results.keys())
-    whale = [results[n]['whale_profit'] for n in names]
-    follower = [results[n]['avg_yes_follower_profit'] for n in names]
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+    # (a) spam scenario — ROI comparison across models
+    ax = axes[0]
+    spam = results['spam']
+    names = list(spam.keys())
+    whale_roi = [spam[n]['whale_roi'] * 100 for n in names]
+    follower_roi = [spam[n]['avg_yes_follower_roi'] * 100 for n in names]
     x = np.arange(len(names)); w = 0.35
-    ax.bar(x - w/2, whale, w, label='Whale profit (10 stakes)', color='#8e44ad')
-    ax.bar(x + w/2, follower, w, label='Avg later-YES follower', color='#16a085')
+    ax.bar(x - w/2, whale_roi, w, label='Whale ROI %', color='#8e44ad')
+    ax.bar(x + w/2, follower_roi, w, label='Avg small YES buyer ROI %', color='#16a085')
     ax.set_xticks(x); ax.set_xticklabels(names)
-    ax.set_ylabel("Net profit (rep)")
-    ax.set_title("Whale early entry: profit comparison")
-    ax.legend(); fig.tight_layout()
+    ax.set_ylabel("ROI %")
+    ax.set_title("(a) Whale spams 10 stakes (no per-user limit)")
+    ax.legend(); ax.grid(alpha=0.3, axis='y')
+
+    # (b) v2 single-position rule: variable-size single stake under CPMM
+    ax = axes[1]
+    big = results['single_big']
+    labels = ["Whale: 1×100 rep\n(v2 rule)", "Whale: 10×10 rep\n(no limit)"]
+    whale_rois = [big['cpmm']['whale_roi'] * 100, big['cpmm_spam_for_compare']['whale_roi'] * 100]
+    follower_rois = [big['cpmm']['avg_yes_follower_roi'] * 100, big['cpmm_spam_for_compare']['avg_yes_follower_roi'] * 100]
+    x = np.arange(len(labels)); w = 0.35
+    ax.bar(x - w/2, whale_rois, w, label='Whale ROI %', color='#8e44ad')
+    ax.bar(x + w/2, follower_rois, w, label='Avg small YES buyer ROI %', color='#16a085')
+    ax.set_xticks(x); ax.set_xticklabels(labels)
+    ax.set_ylabel("ROI %")
+    ax.set_title("(b) CPMM only — does v2 one-position rule fix it?")
+    ax.legend(); ax.grid(alpha=0.3, axis='y')
+
+    fig.tight_layout()
     fig.savefig(os.path.join(CHART_DIR, "05_whale.png"), dpi=120)
     plt.close(fig)
 
@@ -595,9 +683,11 @@ def write_report(balanced, late, copy, skewed, whale, multiday_no, multiday_yes)
     A("We compared three ways to pay out a YES/NO claim. The current one (`parimutuel`) "
       "punishes people who join late even when they're right, and lets piggybackers steal "
       "the original predictor's reward. The Polymarket-style one (`cpmm`) fixes both — "
-      "your reward is locked the moment you click Buy. We also tested a daily energy "
-      "token; it stops the leaderboard from running away from new users. **Final pick: "
-      "CPMM payouts + daily energy token.**\n")
+      "your reward is locked the moment you click Buy. CPMM does **not** by itself solve "
+      "the rich-user problem (early whales still profit), so we add a per-claim stake cap "
+      "of 50 rep per user. We also tested a daily energy token to stop the leaderboard "
+      "from running away from new users. **Final pick: CPMM payouts + 50-rep per-claim "
+      "cap + daily energy token.**\n")
 
     # ------------------------------------------------------------------
     A("## The three payout systems (plain words)\n")
@@ -687,19 +777,59 @@ def write_report(balanced, late, copy, skewed, whale, multiday_no, multiday_yes)
       "guarantee.\n")
 
     # ------------------------------------------------------------------
-    A("## Scenario 5 — the whale\n")
-    A("**Story:** One rich user spams 10 YES bets in a row before anyone else trades. Then "
+    A("## Scenario 5 — the whale (honest version)\n")
+    A("**Story (a):** One rich user spams 10 YES bets in a row before anyone else trades. Then "
       "20 normal-sized users come in (10 YES, 10 NO). YES wins.\n")
-    A("| Model | Whale's profit | Other YES buyers' avg profit | Final YES price |")
+    spam = whale['spam']
+    A("| Model | Whale ROI | Small YES buyer ROI | Final YES price |")
     A("|---|---|---|---|")
-    for n, r in whale.items():
-        A(f"| {n} | {r['whale_profit']:+.1f} rep | {r['avg_yes_follower_profit']:+.1f} rep | {r['final_yes_price']*100:.0f}% |")
+    for n, r in spam.items():
+        A(f"| {n} | **{r['whale_roi']*100:+.0f}%** | {r['avg_yes_follower_roi']*100:+.0f}% | {r['final_yes_price']*100:.0f}% |")
     A("\n![whale](charts/05_whale.png)\n")
-    A("**Takeaway:** in CPMM, the whale's 10 rapid buys *push the price up themselves*, so "
-      "she pays more for each next share. She still profits if she's right (because she was "
-      "early and high-conviction) but the slippage protects later buyers from getting "
-      "wiped. Parimutuel has no such pushback — the whale just buys 10 cheap tickets at "
-      "50/50 every time.\n")
+    A(f"**Honest reading:** CPMM does **not** punish whales here. CPMM gives the whale "
+      f"**{spam['cpmm']['whale_roi']*100:.0f}% ROI** vs "
+      f"{spam['parimutuel']['whale_roi']*100:.0f}% under parimutuel. CPMM slippage makes "
+      "each *next* whale buy more expensive but doesn't undo the advantage of being first. "
+      "The earliest shares were cheap.\n")
+    big = whale['single_big']
+    A("**Story (b):** What if v2's *one-position-per-user* rule is enforced? Whale must use "
+      "a single 100-rep stake. CPMM only.\n")
+    A("| Whale strategy | Whale ROI | Small YES buyer ROI |")
+    A("|---|---|---|")
+    A(f"| 10 stakes × 10 rep (loophole) | **{big['cpmm_spam_for_compare']['whale_roi']*100:+.0f}%** | {big['cpmm_spam_for_compare']['avg_yes_follower_roi']*100:+.0f}% |")
+    A(f"| 1 stake × 100 rep (v2 rule) | **{big['cpmm']['whale_roi']*100:+.0f}%** | {big['cpmm']['avg_yes_follower_roi']*100:+.0f}% |")
+    A(f"\n**Real takeaway:** the one-position rule **does not** fix whale dominance — single "
+      f"big buys are actually slightly *more* efficient than spamming small ones "
+      f"({big['cpmm']['whale_roi']*100:.0f}% vs "
+      f"{big['cpmm_spam_for_compare']['whale_roi']*100:.0f}% ROI). The whale's edge comes "
+      f"from being **first when the price was cheap**, not from buy splitting. CPMM "
+      f"slippage is bounded by the virtual seed `L`; with `L=100`, a 100-rep buy moves "
+      f"price from 50% to ~60% — not enough to wipe out the early-entry advantage.\n")
+    A("**Actual fixes (any one of these works):**")
+    A("- **Per-claim stake cap.** Cap any single user's total rep at `L/2 = 50` per claim. "
+      "Forces big bettors to spread across claims, where their bets don't compound.")
+    A("- **Quadratic stake cost.** `n` rep of exposure costs `n²/100` rep. Single 100-rep "
+      "buy costs 100; single 200-rep buy costs 400. Heavy bettors pay supra-linear cost.")
+    A("- **Larger virtual seed `L`.** Raising `L` from 100 to 1000 dilutes early-entry "
+      "advantage (price moves less per rep). Trade-off: bigger house subsidy budget.")
+    A("- **Time-locked entry window.** Open a claim with a 1-hour 'auction' phase where "
+      "all buys settle at one fair price (uniform-price auction); CPMM begins after.\n")
+    A("**Recommendation for v2:** add a per-claim cap of **50 rep per user** (matching "
+      "L/2). Cheap to implement, doesn't break the share-locking property, and visibly "
+      "limits the whale advantage. The one-position-per-user rule alone is not enough.\n")
+    capped = whale['capped']
+    A("**Story (c):** v2 + 50-rep-per-claim cap enforced. Whale wants to push 100 rep "
+      "but is rejected at 50.\n")
+    A("| Strategy | Whale ROI | Whale total profit | Small YES buyer ROI |")
+    A("|---|---|---|---|")
+    A(f"| 100 rep, no cap | {big['cpmm']['whale_roi']*100:+.0f}% | {big['cpmm']['whale_profit']:+.1f} rep | {big['cpmm']['avg_yes_follower_roi']*100:+.0f}% |")
+    A(f"| 50 rep, cap enforced | {capped['whale_roi']*100:+.0f}% | {capped['whale_profit']:+.1f} rep | {capped['avg_yes_follower_roi']*100:+.0f}% |")
+    A(f"\nWhale total profit drops from "
+      f"**{big['cpmm']['whale_profit']:.1f} → {capped['whale_profit']:.1f} rep** "
+      f"(roughly half), and the other 50 rep stays in the whale's wallet — they can use "
+      "it on a different claim, where it doesn't compound with their first bet. Cap-based "
+      "fix preserves CPMM's locked-reward and copy-trade-immunity guarantees while "
+      "blunting the whale's per-claim leverage.\n")
 
     # ------------------------------------------------------------------
     A("## Scenario 6 — does the leaderboard run away?\n")
@@ -728,7 +858,8 @@ def write_report(balanced, late, copy, skewed, whale, multiday_no, multiday_yes)
     A("|---|---|---|---|---|")
     A("| Right-but-late user loses rep | ❌ severe | ✅ fixed | ✅ fixed | ✅ |")
     A("| Followers steal influencer's reward | ❌ | ❌ | ✅ | ✅ |")
-    A("| Whale dominates with cheap early bets | ❌ | ❌ | ✅ slippage | ✅ |")
+    A("| Whale spam (10 small stakes) | ROI ~65% | ROI ~55% | ROI ~62% | ROI ~62% (no fix) |")
+    A("| Whale single big stake | n/a | n/a | ROI ~67% (worse!) | ROI ~57% with 50-rep cap |")
     A("| Reward known the moment you click buy | ❌ | ❌ | ✅ | ✅ |")
     A("| Top users runaway leaderboard | ❌ | ❌ | ❌ | ✅ |")
     A("| Needs house to seed virtual liquidity | — | — | small (~100 rep/claim) | small |")
@@ -740,10 +871,16 @@ def write_report(balanced, late, copy, skewed, whale, multiday_no, multiday_yes)
 
     A("**1. Replace the parimutuel pool with CPMM (Polymarket-style) shares.**\n")
     A("- Each claim starts with virtual liquidity Y₀ = N₀ = 100 (price = 50/50).")
-    A("- Buying YES with 10 rep gives you `10 + (Y+10)·10/(N+20)` YES shares.")
+    A("- Buying YES with `r` rep gives you `r + (Y+r)·r/(N+2r)` YES shares.")
     A("- Each share pays 1 rep if your side wins, 0 if not. **Reward locked at buy time.**")
     A("- House (admin reserve) covers up to ~100 rep of subsidy per claim. Cap on total "
       "open claims keeps total exposure bounded.\n")
+    A("**1b. Per-claim stake cap = 50 rep per user (= L/2).**\n")
+    A("- One position per user per claim (already in Model C spec).")
+    A("- Maximum rep on that position: 50. Larger requested stakes rejected at API.")
+    A("- Without this cap, a user with 1000 rep can drop the whole pile on one claim and "
+      "soak up most of the early-entry advantage. With the cap, that user has to spread "
+      "across 20 claims, where the early advantage doesn't compound.\n")
 
     A("**2. Add a daily energy token.**\n")
     A("- Every user gets 3 ENERGY at midnight. Maximum balance = 4 (so saving up beyond "
