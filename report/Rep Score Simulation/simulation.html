@@ -65,10 +65,14 @@
             <div class="stats">Toplam Havuz: <span id="poolVal">0</span> Rep</div>
             <div class="stats" style="color: #27ae60;">EVET Fiyatı: <span id="yesPrice">50.0</span>%</div>
             <div class="stats" style="color: #c0392b;">HAYIR Fiyatı: <span id="noPrice">50.0</span>%</div>
+            <div id="cpmmStats" style="display:none; font-size: 0.95em; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ccc;">
+                <div>Y reserve: <span id="yReserveVal">100.00</span> · N reserve: <span id="nReserveVal">100.00</span></div>
+                <div>LP subsidy exposure: <span id="lpSubsidyVal" style="color:#c0392b;">0.00</span> Rep</div>
+            </div>
         </div>
     </div>
 
-    <div class="chart-container">
+    <div class="chart-container" id="weightChartContainer">
         <h3>EVET Ağırlık Eğrisi</h3>
         <canvas id="ammChart"></canvas>
     </div>
@@ -84,7 +88,7 @@
                 <th>Katılımcı</th>
                 <th>Seçim</th>
                 <th>Giriş Fiyatı</th>
-                <th>Ağırlık (Weight)</th>
+                <th id="weightHeader">Ağırlık (Weight)</th>
                 <th>YES Kazanırsa Net Kâr</th>
                 <th>NO Kazanırsa Net Kâr</th>
             </tr>
@@ -105,11 +109,49 @@
     let yesPriceChart = null;
     let yesPriceHistory = [];
     let voteHistory = [];
-    let useLateAdoptionPayout = false;
+    // payoutMode: 'default' (parimutuel) | 'late' (late-adoption parimutuel) | 'cpmm' (Polymarket-style)
+    let payoutMode = 'default';
+
+    // --- CPMM (Polymarket-style) STATE ---
+    const CPMM_INIT_L = 100;          // virtual liquidity seed each side
+    let yReserve = CPMM_INIT_L;       // YES shares in AMM pool
+    let nReserve = CPMM_INIT_L;       // NO shares in AMM pool
+    let yesOutstanding = 0;           // YES shares held by users (sum)
+    let noOutstanding = 0;            // NO shares held by users (sum)
+    let cpmmEscrow = 0;               // total real rep deposited as collateral
 
     // --- MATEMATİK FONKSİYONLARI ---
     function getYesPrice() {
+        if (payoutMode === 'cpmm') {
+            return nReserve / (yReserve + nReserve);
+        }
         return (yesCount + 1) / (yesCount + noCount + 2);
+    }
+
+    // CPMM buy: spend r rep, receive shares of `side`. Mints r complete sets, swaps opposite side for more.
+    // shares_out = r + (Y_or_N + r) * r / (opposite + 2r). Pool reserves updated; k grows with each mint.
+    function cpmmBuy(side, r) {
+        let shares;
+        if (side === 'YES') {
+            // mint r complete sets, swap user's r NO into pool for more YES.
+            // closed form: shares_out = r + (Y+r)*r/(N+2r). pool: Y' = (Y+r)(N+r)/(N+2r), N' = N+2r.
+            shares = r + (yReserve + r) * r / (nReserve + 2 * r);
+            const newY = (yReserve + r) * (nReserve + r) / (nReserve + 2 * r);
+            const newN = nReserve + 2 * r;
+            yReserve = newY;
+            nReserve = newN;
+        } else {
+            shares = r + (nReserve + r) * r / (yReserve + 2 * r);
+            const newN = (nReserve + r) * (yReserve + r) / (yReserve + 2 * r);
+            const newY = yReserve + 2 * r;
+            yReserve = newY;
+            nReserve = newN;
+        }
+        // bookkeep collateral and outstanding user-held shares
+        cpmmEscrow += r;
+        if (side === 'YES') yesOutstanding += shares;
+        else noOutstanding += shares;
+        return shares;
     }
 
     function getYesPriceAt(yesCount, totalVotes) {
@@ -133,13 +175,21 @@
         const yesPrice = getYesPrice();
         const noPrice = 1 - yesPrice;
         const entryPrice = side === 'YES' ? yesPrice : noPrice;
-        const weight = 1 / entryPrice;
+        let weight, shares = null;
+
+        if (payoutMode === 'cpmm') {
+            shares = cpmmBuy(side, STAKE);
+            weight = shares / STAKE;       // for display: shares per rep
+        } else {
+            weight = 1 / entryPrice;
+        }
 
         stakes.push({
             id: stakes.length + 1,
             side: side,
             entryPrice: entryPrice,
-            weight: weight
+            weight: weight,
+            shares: shares
         });
 
         if (side === 'YES') yesCount++;
@@ -155,6 +205,9 @@
         stakes = [];
         yesCount = 0;
         noCount = 0;
+        yReserve = CPMM_INIT_L;
+        nReserve = CPMM_INIT_L;
+        lpSubsidyExposure = 0;
         yesPriceHistory = [getYesPrice()];
         voteHistory = [0];
         updatePayoutMethodUI();
@@ -162,7 +215,10 @@
     }
 
     function togglePayoutMethod() {
-        useLateAdoptionPayout = !useLateAdoptionPayout;
+        // Cycle: default -> late -> cpmm -> default
+        if (payoutMode === 'default') payoutMode = 'late';
+        else if (payoutMode === 'late') payoutMode = 'cpmm';
+        else payoutMode = 'default';
         resetSim();
     }
 
@@ -170,13 +226,23 @@
         const label = document.getElementById('payoutMethodLabel');
         const formulaDiv = document.querySelector('.formulas');
         if (!label || !formulaDiv) return;
-        label.innerText = useLateAdoptionPayout ? 'Late Adoption' : 'Default';
-        if (useLateAdoptionPayout) {
+        const labels = { 'default': 'Default (Parimutuel)', 'late': 'Late Adoption', 'cpmm': 'CPMM (Polymarket)' };
+        label.innerText = labels[payoutMode];
+
+        if (payoutMode === 'late') {
             formulaDiv.innerHTML = `
                 <strong>Sistem Kuralları:</strong> Sabit Stake: 10 Rep<br>
                 <strong>EVET Fiyatı</strong> = (x + 1) / (Toplam_Oy + 2)<br>
                 <strong>Ağırlık (Weight)</strong> = 1 / Giriş_Fiyatı<br>
                 <strong>Kazanma Durumunda Payout</strong> = 10 + 10 * (n_losers) × (weight_i / sum of weights on winning side)
+            `;
+        } else if (payoutMode === 'cpmm') {
+            formulaDiv.innerHTML = `
+                <strong>Polymarket Modu — Reward LOCKED at buy time:</strong> Sabit Stake: 10 Rep<br>
+                <strong>EVET Fiyatı</strong> = N_reserve / (Y_reserve + N_reserve)<br>
+                <strong>YES Buy:</strong> shares = 10 + (Y+10) * 10 / (N + 20). Each share = 1 Rep if YES wins.<br>
+                <strong>Net Kâr (kazanırsa)</strong> = shares - 10 (stake-time'da kilitli, sonradan değişmez)<br>
+                <strong>Virtual liquidity seed:</strong> Y₀ = N₀ = ${CPMM_INIT_L}. LP subsidy tracked below.
             `;
         } else {
             formulaDiv.innerHTML = `
@@ -215,17 +281,26 @@
             let yesProfit = -STAKE;
             let noProfit = -STAKE;
 
-            if (!useLateAdoptionPayout) {
+            if (payoutMode === 'default') {
                 if (s.side === 'YES' && yesTotalWeight > 0) {
                     yesProfit = (totalPool * (s.weight / yesTotalWeight)) - STAKE;
                 } else if (s.side === 'NO' && noTotalWeight > 0) {
                     noProfit = (totalPool * (s.weight / noTotalWeight)) - STAKE;
                 }
-            } else {
+            } else if (payoutMode === 'late') {
                 if (s.side === 'YES' && yesTotalWeight > 0) {
                     yesProfit = STAKE * noCount * (s.weight / yesTotalWeight);
                 } else if (s.side === 'NO' && noTotalWeight > 0) {
                     noProfit = STAKE * yesCount * (s.weight / noTotalWeight);
+                }
+            } else if (payoutMode === 'cpmm') {
+                // Each share pays 1 Rep if user's side wins. Profit locked at buy time.
+                if (s.side === 'YES') {
+                    yesProfit = s.shares - STAKE;
+                    noProfit  = -STAKE;
+                } else {
+                    noProfit  = s.shares - STAKE;
+                    yesProfit = -STAKE;
                 }
             }
 
@@ -236,31 +311,63 @@
     // --- ARAYÜZ (UI) GÜNCELLEMELERİ ---
     function updateUI() {
         const currentYesPrice = getYesPrice();
-        
+
         // Üst Panelleri Güncelle
         document.getElementById('poolVal').innerText = (yesCount + noCount) * STAKE;
         document.getElementById('yesPrice').innerText = (currentYesPrice * 100).toFixed(1);
         document.getElementById('noPrice').innerText = ((1 - currentYesPrice) * 100).toFixed(1);
+
+        // CPMM-only stats
+        const cpmmStats = document.getElementById('cpmmStats');
+        if (cpmmStats) {
+            if (payoutMode === 'cpmm') {
+                cpmmStats.style.display = 'block';
+                document.getElementById('yReserveVal').innerText = yReserve.toFixed(2);
+                document.getElementById('nReserveVal').innerText = nReserve.toFixed(2);
+                document.getElementById('lpSubsidyVal').innerText = lpSubsidyExposure.toFixed(2);
+            } else {
+                cpmmStats.style.display = 'none';
+            }
+        }
+        // Hide weight curve chart in CPMM mode (concept doesn't apply)
+        const weightChartContainer = document.getElementById('weightChartContainer');
+        if (weightChartContainer) {
+            weightChartContainer.style.display = payoutMode === 'cpmm' ? 'none' : 'block';
+        }
 
         // Tabloyu Güncelle
         const results = calculatePayouts();
         const tbody = document.getElementById('tableBody');
         tbody.innerHTML = '';
         
+        // Update weight column header per mode
+        const weightHeader = document.getElementById('weightHeader');
+        if (weightHeader) {
+            weightHeader.innerText = payoutMode === 'cpmm' ? 'Shares (locked)' : 'Ağırlık (Weight)';
+        }
+
         results.forEach(s => {
             const tr = document.createElement('tr');
-            
+
             const formatMoney = (val) => {
                 if (val > 0) return `<span class="profit">+${val.toFixed(2)}</span>`;
                 if (val < 0) return `<span class="loss">${val.toFixed(2)}</span>`;
                 return `0.00`;
             };
 
+            // In CPMM mode, show effective price paid (10/shares) and shares received
+            const displayPrice = (payoutMode === 'cpmm' && s.shares != null)
+                ? (STAKE / s.shares * 100).toFixed(1)
+                : (s.entryPrice * 100).toFixed(1);
+            const middleCol = (payoutMode === 'cpmm' && s.shares != null)
+                ? s.shares.toFixed(3)
+                : s.weight.toFixed(3);
+
             tr.innerHTML = `
                 <td>Kullanıcı ${s.id}</td>
                 <td style="font-weight: bold; color: ${s.side === 'YES' ? '#27ae60' : '#c0392b'}">${s.side}</td>
-                <td>${(s.entryPrice * 100).toFixed(1)}%</td>
-                <td>${s.weight.toFixed(3)}</td>
+                <td>${displayPrice}%</td>
+                <td>${middleCol}</td>
                 <td>${formatMoney(s.yesProfit)}</td>
                 <td>${formatMoney(s.noProfit)}</td>
             `;
