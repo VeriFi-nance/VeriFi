@@ -43,14 +43,22 @@
     <div class="dashboard" style="margin-top: 15px;">
         <div class="panel">
             <h3>Kontroller</h3>
-            <button class="btn btn-yes" onclick="addStake('YES')">EVET Katılımcısı Ekle</button>
-            <button class="btn btn-no" onclick="addStake('NO')">HAYIR Katılımcısı Ekle</button>
-            <button class="btn btn-yes" onclick="addMany('YES', 10)">10 EVET Ekle</button>
-            <button class="btn btn-no" onclick="addMany('NO', 10)">10 HAYIR Ekle</button>
-            <button class="btn btn-yes" onclick="addRandom(50)">Rastgele 50 Kişi Ekle</button>
-            <button class="btn btn-reset" onclick="togglePayoutMethod()">Payout Yöntemini Değiştir</button>
-            <button class="btn btn-reset" onclick="resetSim()">Sıfırlayıcı</button>
-            <div style="margin-top: 10px; font-size: 0.95em;">Payout mod: <span id="payoutMethodLabel">Default</span></div>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                    <button class="btn btn-yes" onclick="addStake('YES')">EVET Ekle</button>
+                    <button class="btn btn-no" onclick="addStake('NO')">HAYIR Ekle</button>
+                </div>
+                <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                    <button class="btn btn-yes" onclick="addMany('YES', 10)">10 EVET</button>
+                    <button class="btn btn-no" onclick="addMany('NO', 10)">10 HAYIR</button>
+                    <button class="btn btn-yes" onclick="addRandom(50)">50 Rastgele</button>
+                </div>
+                <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                    <button class="btn btn-reset" onclick="togglePayoutMethod()">Payout Değiştir</button>
+                    <button class="btn btn-reset" onclick="resetSim()">Sıfırla</button>
+                </div>
+                <div style="font-size: 0.95em; margin-top: 5px;">Payout mod: <span id="payoutMethodLabel">Default</span></div>
+            </div>
         </div>
         <div class="panel text-center">
             <h3>Havuz Durumu</h3>
