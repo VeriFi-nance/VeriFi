@@ -205,14 +205,14 @@ export interface ResolveStatus {
   remaining_seconds: number;
 }
 
-export async function getCommunityResolveStatus(id: number): Promise<ResolveStatus> {
-  return request(`/api/posts/communities/${id}/resolve-positions/`, {
+export async function getPositionResolveStatus(positionId: number): Promise<ResolveStatus> {
+  return request(`/api/posts/positions/${positionId}/resolve/`, {
     headers: authHeaders(),
   });
 }
 
-export async function triggerResolvePositions(id: number): Promise<ResolveStatus & { detail: string }> {
-  return request(`/api/posts/communities/${id}/resolve-positions/`, {
+export async function triggerPositionResolve(positionId: number): Promise<ResolveStatus & { position: PositionItem }> {
+  return request(`/api/posts/positions/${positionId}/resolve/`, {
     method: 'POST',
     headers: authHeaders(),
   });

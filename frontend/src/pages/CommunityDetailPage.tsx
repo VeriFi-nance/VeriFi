@@ -4,9 +4,8 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getCommunity, joinCommunity, approveCommunityMember, banCommunityMember, getFeed, getAssets, getCommunityMembers, getPositions, getCommunityResolveStatus, triggerResolvePositions, updateCommunity } from '@/lib/api';
+import { getCommunity, joinCommunity, approveCommunityMember, banCommunityMember, getFeed, getAssets, getCommunityMembers, getPositions, updateCommunity } from '@/lib/api';
 import type { CommunityItem, PostItem, AssetItem, CommunityMembershipItem, PositionItem } from '@/lib/types';
-import type { ResolveStatus } from '@/lib/api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { loadAddress } from '@/lib/auth';
 import { PostCard } from '@/components/feed/PostCard';
@@ -14,7 +13,7 @@ import { NewPostButton } from '@/components/feed/NewPostModal';
 import ProfitabilityBadge from '@/components/ProfitabilityBadge';
 import { PositionCard } from '@/components/PositionCard';
 import { NewPositionModal } from '@/components/NewPositionModal';
-import { RefreshCw, Settings } from 'lucide-react';
+import { Settings } from 'lucide-react';
 
 export default function CommunityDetailPage() {
   const { id } = useParams();
@@ -28,10 +27,6 @@ export default function CommunityDetailPage() {
   const [members, setMembers] = useState<CommunityMembershipItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [resolveStatus, setResolveStatus] = useState<ResolveStatus | null>(null);
-  const [resolving, setResolving] = useState(false);
-  const [resolveMsg, setResolveMsg] = useState('');
-  const [countdown, setCountdown] = useState(0);
   const [settingsSaved, setSettingsSaved] = useState('');
 
   const fetchCommunityAndPosts = useCallback(async () => {
@@ -62,22 +57,9 @@ export default function CommunityDetailPage() {
     }
   }, [id, myAddress]);
 
-  // Fetch resolve status for creators
-  const fetchResolveStatus = useCallback(async () => {
-    if (!id || !myAddress) return;
-    try {
-      const rs = await getCommunityResolveStatus(Number(id));
-      setResolveStatus(rs);
-      setCountdown(rs.remaining_seconds);
-    } catch {
-      // not creator or not authed — ignore
-    }
-  }, [id, myAddress]);
-
   useEffect(() => {
     fetchCommunityAndPosts();
-    fetchResolveStatus();
-  }, [fetchCommunityAndPosts, fetchResolveStatus]);
+  }, [fetchCommunityAndPosts]);
 
   useEffect(() => {
     const handler = () => fetchCommunityAndPosts();
@@ -88,13 +70,6 @@ export default function CommunityDetailPage() {
       window.removeEventListener('hard-claim-created', handler);
     };
   }, [fetchCommunityAndPosts]);
-
-  // Countdown ticker
-  useEffect(() => {
-    if (countdown <= 0) return;
-    const t = setInterval(() => setCountdown(c => Math.max(0, c - 1)), 1000);
-    return () => clearInterval(t);
-  }, [countdown]);
 
   const handleJoin = async () => {
     if (!id) return;
@@ -126,21 +101,8 @@ export default function CommunityDetailPage() {
     }
   };
 
-  const handleResolve = async () => {
-    if (!id) return;
-    setResolving(true);
-    setResolveMsg('');
-    try {
-      const res = await triggerResolvePositions(Number(id));
-      setResolveStatus(res);
-      setCountdown(res.remaining_seconds);
-      setResolveMsg('Positions resolved successfully.');
-      await fetchCommunityAndPosts();
-    } catch (e: any) {
-      setResolveMsg(e.message || 'Failed to resolve.');
-    } finally {
-      setResolving(false);
-    }
+  const handlePositionResolved = (updated: PositionItem) => {
+    setPositions(prev => prev.map(p => p.id === updated.id ? updated : p));
   };
 
   const handlePostPermissionChange = async (value: 'all' | 'creator_only') => {
@@ -166,12 +128,6 @@ export default function CommunityDetailPage() {
   const isCreator = myAddress && myAddress.toLowerCase() === community.creator_address.toLowerCase();
   const canViewPosts = community.privacy_type === 'public' || community.my_membership_status === 'approved' || isCreator;
   const canPost = isCreator || (community.my_membership_status === 'approved' && community.post_permission === 'all');
-
-  const fmtCountdown = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return m > 0 ? `${m}m ${s}s` : `${s}s`;
-  };
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
@@ -247,38 +203,17 @@ export default function CommunityDetailPage() {
           </TabsContent>
           
           <TabsContent value="positions" className="space-y-4 mt-4">
-            {isCreator && (
-              <div className="flex items-center justify-between rounded-xl border border-dashed px-4 py-3 bg-muted/30">
-                <div className="text-sm">
-                  <span className="font-medium">Resolve Positions</span>
-                  <p className="text-xs text-muted-foreground">
-                    {countdown > 0
-                      ? `Next resolve in ${fmtCountdown(countdown)}`
-                      : 'Run resolution engine for this community.'}
-                  </p>
-                  {resolveMsg && (
-                    <p className={`text-xs mt-1 ${resolveMsg.startsWith('Error') ? 'text-destructive' : 'text-green-600'}`}>
-                      {resolveMsg}
-                    </p>
-                  )}
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleResolve}
-                  disabled={resolving || countdown > 0}
-                  className="gap-2"
-                >
-                  <RefreshCw className={`size-3.5 ${resolving ? 'animate-spin' : ''}`} />
-                  {resolving ? 'Resolving…' : countdown > 0 ? `Wait ${fmtCountdown(countdown)}` : 'Resolve'}
-                </Button>
-              </div>
-            )}
             {positions.length === 0 ? (
               <p className="text-muted-foreground text-sm">No positions active in this community.</p>
             ) : (
               positions.map(position => (
-                <PositionCard key={position.id} position={position} assets={assets} onClosed={fetchCommunityAndPosts} />
+                <PositionCard
+                  key={position.id}
+                  position={position}
+                  assets={assets}
+                  onClosed={fetchCommunityAndPosts}
+                  onResolved={handlePositionResolved}
+                />
               ))
             )}
           </TabsContent>

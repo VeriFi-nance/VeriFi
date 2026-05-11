@@ -1,27 +1,75 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { closePosition } from '@/lib/api';
+import { closePosition, getPositionResolveStatus, triggerPositionResolve } from '@/lib/api';
 import type { PositionItem, AssetItem } from '@/lib/types';
 import { loadAddress } from '@/lib/auth';
 import ProfitabilityBadge from './ProfitabilityBadge';
 import { Link } from 'react-router-dom';
 import { truncateAddress } from './HardClaimCard';
+import { RefreshCw } from 'lucide-react';
 
 interface PositionCardProps {
   position: PositionItem;
   assets: AssetItem[];
   onClosed?: () => void;
+  onResolved?: (updated: PositionItem) => void;
 }
 
-export function PositionCard({ position, assets, onClosed }: PositionCardProps) {
+export function PositionCard({ position, assets, onClosed, onResolved }: PositionCardProps) {
   const [closing, setClosing] = useState(false);
+  const [resolving, setResolving] = useState(false);
+  const [resolveMsg, setResolveMsg] = useState('');
+  const [countdown, setCountdown] = useState(0);
+
   const myAddress = loadAddress();
   const asset = assets.find(a => a.id === position.asset);
-  
-  const isAuthor = myAddress?.toLowerCase() === position.author_address.toLowerCase();
-  
+  const isAuthor = !!myAddress && myAddress.toLowerCase() === position.author_address.toLowerCase();
+  const canResolve = isAuthor && (position.status === 'pending' || position.status === 'active');
+  const canClose = isAuthor && position.status === 'active';
+
+  // Fetch cooldown on mount (author only, resolvable positions only)
+  const fetchCooldown = useCallback(async () => {
+    if (!canResolve) return;
+    try {
+      const rs = await getPositionResolveStatus(position.id);
+      setCountdown(rs.remaining_seconds);
+    } catch {
+      // not authed or position already resolved
+    }
+  }, [position.id, canResolve]);
+
+  useEffect(() => { fetchCooldown(); }, [fetchCooldown]);
+
+  // Live ticker
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const t = setInterval(() => setCountdown(c => Math.max(0, c - 1)), 1000);
+    return () => clearInterval(t);
+  }, [countdown]);
+
+  const fmtCountdown = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  };
+
+  const handleResolve = async () => {
+    setResolving(true);
+    setResolveMsg('');
+    try {
+      const res = await triggerPositionResolve(position.id);
+      setCountdown(res.remaining_seconds);
+      setResolveMsg('Resolution triggered.');
+      onResolved?.(res.position);
+    } catch (e: any) {
+      setResolveMsg(e.message || 'Failed to resolve.');
+    } finally {
+      setResolving(false);
+    }
+  };
+
   const handleClose = async () => {
     if (!confirm('Are you sure you want to close this position early?')) return;
     setClosing(true);
@@ -62,7 +110,7 @@ export function PositionCard({ position, assets, onClosed }: PositionCardProps) 
               {position.status.replace('_', ' ')}
             </span>
           </div>
-          
+
           <div className="flex flex-col items-end gap-1">
             <Link to={`/app/user/${position.author_address}`} className="text-xs font-mono hover:underline">
               {truncateAddress(position.author_address)}
@@ -82,11 +130,11 @@ export function PositionCard({ position, assets, onClosed }: PositionCardProps) 
           </div>
           <div>
             <div className="text-muted-foreground text-xs uppercase tracking-wider">Take Profit</div>
-            <div className="font-mono text-success font-medium">${position.take_profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</div>
+            <div className="font-mono text-green-600 font-medium">${position.take_profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</div>
           </div>
         </div>
 
-        <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+        <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
           <div>
             {position.status === 'pending' && (
               <span>Valid until: {new Date(position.entry_interval).toLocaleString()}</span>
@@ -94,21 +142,44 @@ export function PositionCard({ position, assets, onClosed }: PositionCardProps) 
             {position.status === 'active' && (
               <span>Expires: {new Date(position.lifetime).toLocaleString()}</span>
             )}
-            {(position.status === 'confirmed' || position.status === 'rejected' || position.status === 'closed_early' || position.status === 'expired') && position.pnl_percentage !== null && (
+            {(['confirmed', 'rejected', 'closed_early', 'expired'] as const).includes(position.status as any) && position.pnl_percentage !== null && (
               <span className={`font-bold ${position.pnl_percentage > 0 ? 'text-green-600' : 'text-red-600'}`}>
                 PnL: {position.pnl_percentage > 0 ? '+' : ''}{position.pnl_percentage.toFixed(2)}%
                 {position.exit_price && ` (Exit: $${position.exit_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })})`}
               </span>
             )}
-            {position.status === 'missed' && (
-              <span>Entry target not reached.</span>
-            )}
+            {position.status === 'missed' && <span>Entry target not reached.</span>}
           </div>
-          
-          {isAuthor && position.status === 'active' && (
-            <Button size="sm" variant="outline" onClick={handleClose} disabled={closing} className="h-7 text-xs">
-              {closing ? 'Closing...' : 'Close Early'}
-            </Button>
+
+          {/* Author actions */}
+          {(canResolve || canClose) && (
+            <div className="flex flex-col items-end gap-1 shrink-0">
+              <div className="flex gap-2">
+                {canResolve && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleResolve}
+                    disabled={resolving || countdown > 0}
+                    className="h-7 text-xs gap-1.5"
+                    title={countdown > 0 ? `Next resolve in ${fmtCountdown(countdown)}` : 'Check if SL or TP has been hit'}
+                  >
+                    <RefreshCw className={`size-3 ${resolving ? 'animate-spin' : ''}`} />
+                    {resolving ? 'Checking…' : countdown > 0 ? `Wait ${fmtCountdown(countdown)}` : 'Resolve'}
+                  </Button>
+                )}
+                {canClose && (
+                  <Button size="sm" variant="outline" onClick={handleClose} disabled={closing} className="h-7 text-xs">
+                    {closing ? 'Closing…' : 'Close Early'}
+                  </Button>
+                )}
+              </div>
+              {resolveMsg && (
+                <p className={`text-[10px] ${resolveMsg.startsWith('Failed') ? 'text-destructive' : 'text-green-600'}`}>
+                  {resolveMsg}
+                </p>
+              )}
+            </div>
           )}
         </div>
       </CardContent>

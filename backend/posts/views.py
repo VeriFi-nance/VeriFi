@@ -542,21 +542,15 @@ import time
 
 RESOLVE_COOLDOWN_SECONDS = 3600  # 1 hour
 
-class CommunityResolvePositionsView(APIView):
+class PositionResolveView(APIView):
+    """
+    GET  → returns cooldown metadata for the position (author-only).
+    POST → attempts to resolve a single PENDING/ACTIVE position (author-only, 1×/hour).
+    """
     authentication_classes = []
     permission_classes = []
 
-    def get(self, request, pk):
-        """Return cooldown metadata without triggering a resolve."""
-        user = _get_wallet_user(request)
-        if not user:
-            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
-
-        community = get_object_or_404(Community, pk=pk)
-        if community.creator != user:
-            return Response({"detail": "Only the creator can access resolve status."}, status=status.HTTP_403_FORBIDDEN)
-
-        cache_key = f"resolve_positions:{pk}"
+    def _cooldown_data(self, cache_key):
         last_run = django_cache.get(cache_key)
         if last_run:
             next_allowed = last_run + RESOLVE_COOLDOWN_SECONDS
@@ -564,23 +558,36 @@ class CommunityResolvePositionsView(APIView):
         else:
             next_allowed = None
             remaining = 0
+        return last_run, next_allowed, remaining
 
-        return Response({
-            "last_run": last_run,
-            "next_allowed": next_allowed,
-            "remaining_seconds": remaining,
-        })
+    def get(self, request, pk):
+        user = _get_wallet_user(request)
+        if not user:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        position = get_object_or_404(Position, pk=pk)
+        if position.author != user:
+            return Response({"detail": "Only the position author can view resolve status."}, status=status.HTTP_403_FORBIDDEN)
+
+        last_run, next_allowed, remaining = self._cooldown_data(f"resolve_position:{pk}")
+        return Response({"last_run": last_run, "next_allowed": next_allowed, "remaining_seconds": remaining})
 
     def post(self, request, pk):
         user = _get_wallet_user(request)
         if not user:
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
 
-        community = get_object_or_404(Community, pk=pk)
-        if community.creator != user:
-            return Response({"detail": "Only the creator can trigger position resolution."}, status=status.HTTP_403_FORBIDDEN)
+        position = get_object_or_404(Position, pk=pk)
+        if position.author != user:
+            return Response({"detail": "Only the position author can trigger resolution."}, status=status.HTTP_403_FORBIDDEN)
 
-        cache_key = f"resolve_positions:{pk}"
+        if position.status not in (Position.Status.PENDING, Position.Status.ACTIVE):
+            return Response(
+                {"detail": f"Position is already resolved (status: {position.status})."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        cache_key = f"resolve_position:{pk}"
         last_run = django_cache.get(cache_key)
         now_ts = time.time()
 
@@ -596,16 +603,27 @@ class CommunityResolvePositionsView(APIView):
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
 
-        # Run resolution scoped to this community
-        from .position_resolution import resolve_positions
-        from .profitability import recalculate_all_profitabilities
-        resolve_positions(community_id=pk)
-        recalculate_all_profitabilities()
+        # Run resolution for this single position
+        from .position_resolution import _resolve_pending, _resolve_active
+        from .profitability import recalculate_profitability
+        now = timezone.now()
+        try:
+            if position.status == Position.Status.PENDING:
+                _resolve_pending(position, now)
+            else:
+                _resolve_active(position, now)
+        except Exception as e:
+            return Response({"detail": f"Resolution failed: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+        # Record rate-limit timestamp
         django_cache.set(cache_key, now_ts, timeout=RESOLVE_COOLDOWN_SECONDS)
 
+        # Recalculate profitability in case the position resolved
+        position.refresh_from_db()
+        recalculate_profitability(user)
+
         return Response({
-            "detail": "Positions resolved successfully.",
+            "position": PositionSerializer(position).data,
             "last_run": now_ts,
             "next_allowed": now_ts + RESOLVE_COOLDOWN_SECONDS,
             "remaining_seconds": RESOLVE_COOLDOWN_SECONDS,
@@ -615,6 +633,7 @@ from .models import Position, PositionEvent
 from .serializers import PositionSerializer, PositionInputSerializer
 from .resolution import fetch_current_price
 from django.utils import timezone
+
 
 class PositionListCreateView(APIView):
     authentication_classes = []

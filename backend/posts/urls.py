@@ -3,7 +3,7 @@ from .views import (
     HardClaimView, HardClaimResolveView, HardClaimChartDataView, 
     PostListCreateView, ExtractClaimsView, AssetListView,
     CommunityListView, CommunityDetailView, CommunityJoinView, CommunityApproveView, CommunityBanView,
-    CommunityMemberListView, CommunityResolvePositionsView, PositionListCreateView, PositionCloseView
+    CommunityMemberListView, PositionListCreateView, PositionCloseView, PositionResolveView
 )
 
 urlpatterns = [
@@ -20,7 +20,7 @@ urlpatterns = [
     path("communities/<int:pk>/approve/<str:user_address>/", CommunityApproveView.as_view(), name="community-approve"),
     path("communities/<int:pk>/ban/<str:user_address>/", CommunityBanView.as_view(), name="community-ban"),
     path("communities/<int:pk>/members/", CommunityMemberListView.as_view(), name="community-members"),
-    path("communities/<int:pk>/resolve-positions/", CommunityResolvePositionsView.as_view(), name="community-resolve-positions"),
     path("positions/", PositionListCreateView.as_view(), name="position-list-create"),
     path("positions/<int:pk>/close/", PositionCloseView.as_view(), name="position-close"),
+    path("positions/<int:pk>/resolve/", PositionResolveView.as_view(), name="position-resolve"),
 ]
