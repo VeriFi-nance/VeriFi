@@ -1,6 +1,6 @@
 # Task 05: Position Resolution Engine
 
-**Status:** TODO
+**Status:** DONE
 **ADR Reference:** `docs/adr/0001-social-features.md` — Decision 10
 **Depends On:** Task 04 (Position model must exist)
 
@@ -61,7 +61,7 @@ Build the automated resolution engine that monitors active positions and transit
    - Test PnL calculation for both LONG and SHORT.
 
 ## Acceptance Criteria
-- [ ] `resolve_positions` management command processes all pending and active positions.
-- [ ] OHLC data is fetched and cached using the existing infrastructure.
-- [ ] PnL is correctly calculated and stored for each resolved position.
-- [ ] Events are recorded for each state transition.
+- [x] `resolve_positions` management command processes all pending and active positions.
+- [x] OHLC data is fetched and cached using the existing infrastructure.
+- [x] PnL is correctly calculated and stored for each resolved position.
+- [x] Events are recorded for each state transition.
