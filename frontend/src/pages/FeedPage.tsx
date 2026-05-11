@@ -1,11 +1,14 @@
+import { useState } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { FeedList } from '@/components/feed/FeedList';
 import { NewPostButton } from '@/components/feed/NewPostModal';
 import { isAuthenticated } from '@/lib/auth';
 import { Info } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function FeedPage() {
   const authed = isAuthenticated();
+  const [feedType, setFeedType] = useState('global');
 
   return (
     <div className="space-y-5">
@@ -32,8 +35,19 @@ export default function FeedPage() {
         </Alert>
       )}
 
-      {/* ── Post list ──────────────────────────────────────────── */}
-      <FeedList />
+      {/* ── Feed Tabs ──────────────────────────────────────────── */}
+      <Tabs defaultValue="global" value={feedType} onValueChange={setFeedType} className="max-w-2xl">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="global">Global</TabsTrigger>
+          <TabsTrigger value="following" disabled={!authed}>Following</TabsTrigger>
+        </TabsList>
+        <TabsContent value="global" className="mt-4">
+          <FeedList feed="global" />
+        </TabsContent>
+        <TabsContent value="following" className="mt-4">
+          {authed ? <FeedList feed="following" /> : null}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

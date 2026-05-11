@@ -8,8 +8,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { HardClaimCard } from '@/components/HardClaimCard';
 import { clearAuth, loadAddress } from '@/lib/auth';
 import { clearPrivateKey, loadEncryptedKey, decryptPrivateKey } from '@/lib/crypto';
-import { getHardClaimsByAddress, getAssets } from '@/lib/api';
-import type { HardClaimItem, AssetItem } from '@/lib/types';
+import { getHardClaimsByAddress, getAssets, getProfileStats } from '@/lib/api';
+import type { HardClaimItem, AssetItem, ProfileStats } from '@/lib/types';
 
 const REVEAL_TTL = 60;
 
@@ -34,11 +34,13 @@ export default function ProfilePage() {
 
   const [hardClaims, setHardClaims] = useState<HardClaimItem[]>([]);
   const [assets, setAssets] = useState<AssetItem[]>([]);
+  const [stats, setStats] = useState<ProfileStats | null>(null);
 
   useEffect(() => {
     if (!address) return;
     getHardClaimsByAddress(address).then(setHardClaims).catch(console.error);
     getAssets().then(setAssets).catch(console.error);
+    getProfileStats(address).then(setStats).catch(console.error);
   }, [address]);
 
   const [showReveal, setShowReveal] = useState(false);
@@ -109,18 +111,34 @@ export default function ProfilePage() {
         <h1 className="text-xl font-semibold">Profile</h1>
       </div>
 
-      {/* Address */}
+      {/* Profile Info */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Your Address</CardTitle>
+          <CardTitle className="text-base">Your Profile</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2">
-          <div className="flex items-center gap-2">
-            <code className="flex-1 text-xs font-mono bg-muted px-3 py-2 rounded break-all">
-              {address || '—'}
-            </code>
-            {address && <CopyButton text={address} />}
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">Address</Label>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 text-xs font-mono bg-muted px-3 py-2 rounded break-all">
+                {address || '—'}
+              </code>
+              {address && <CopyButton text={address} />}
+            </div>
           </div>
+          
+          {stats && (
+            <div className="flex gap-6 text-sm pt-2">
+              <div className="flex flex-col">
+                <span className="font-semibold text-lg">{stats.followers_count}</span>
+                <span className="text-muted-foreground text-xs uppercase tracking-wider">Followers</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="font-semibold text-lg">{stats.following_count}</span>
+                <span className="text-muted-foreground text-xs uppercase tracking-wider">Following</span>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

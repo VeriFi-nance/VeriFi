@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Home, User, LogOut, Sun, Moon } from 'lucide-react';
+import { Home, User, LogOut, Sun, Moon, Users } from 'lucide-react';
 import { clearAuth, loadAddress } from '@/lib/auth';
 import { clearPrivateKey } from '@/lib/crypto';
 import { loadTheme, toggleTheme, type Theme } from '@/lib/theme';
@@ -57,6 +57,7 @@ function pageTitle(pathname: string): string {
   if (pathname.startsWith('/app/post/new')) return 'New Post';
   if (pathname.startsWith('/app/post/')) return 'Post';
   if (pathname.startsWith('/app/user/')) return 'User';
+  if (pathname.startsWith('/app/communities')) return 'Communities';
   return 'VeriFi';
 }
 
@@ -79,6 +80,7 @@ export default function AppLayout() {
 
   const isFeed = location.pathname === '/app' || location.pathname === '/app/';
   const isProfile = location.pathname === '/app/profile';
+  const isCommunities = location.pathname.startsWith('/app/communities');
   const title = pageTitle(location.pathname);
 
   function handleThemeToggle() {
@@ -123,6 +125,12 @@ export default function AppLayout() {
               icon={<User className="size-5 shrink-0" />}
               label="Profile"
               active={isProfile}
+            />
+            <SidebarNavLink
+              to="/app/communities"
+              icon={<Users className="size-5 shrink-0" />}
+              label="Communities"
+              active={isCommunities}
             />
           </nav>
 

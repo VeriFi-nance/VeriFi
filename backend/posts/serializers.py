@@ -1,6 +1,6 @@
 from datetime import date
 from rest_framework import serializers
-from .models import Asset, Post, Claim, HardClaim, HardClaimEvent, OHLCData
+from .models import Asset, Post, Claim, HardClaim, HardClaimEvent, OHLCData, Community, CommunityMembership
 
 
 class ClaimSerializer(serializers.ModelSerializer):
@@ -37,10 +37,12 @@ class AssetSerializer(serializers.ModelSerializer):
 class HardClaimInputSerializer(serializers.Serializer):
     asset_id = serializers.IntegerField()
     post_id = serializers.IntegerField(required=False, allow_null=True, default=None)
+    community_id = serializers.IntegerField(required=False, allow_null=True, default=None)
     direction = serializers.CharField(allow_blank=True, default="")
     percentage = serializers.FloatField(min_value=0)
     until = serializers.DateField()
     status = serializers.ChoiceField(choices=["confirmed", "undetermined", "rejected"], default="undetermined")
+
 
     def validate_until(self, value):
         if value <= date.today():
@@ -58,7 +60,7 @@ class HardClaimSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = HardClaim
-        fields = ["id", "author_address", "post_id", "asset", "direction", "percentage", "until", "created_at", "status", "events"]
+        fields = ["id", "author_address", "post_id", "community", "asset", "direction", "percentage", "until", "created_at", "status", "events"]
 
 class PostSerializer(serializers.ModelSerializer):
     author_address = serializers.CharField(source="author.address", read_only=True)
@@ -67,10 +69,28 @@ class PostSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Post
-        fields = ["id", "author_address", "content", "created_at", "claims", "hard_claims"]
+        fields = ["id", "author_address", "content", "community", "created_at", "claims", "hard_claims"]
 
 
 class OHLCDataSerializer(serializers.ModelSerializer):
     class Meta:
         model = OHLCData
         fields = ["date", "open", "high", "low", "close"]
+
+class CommunitySerializer(serializers.ModelSerializer):
+    creator_address = serializers.CharField(source="creator.address", read_only=True)
+    member_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Community
+        fields = ["id", "name", "description", "creator_address", "privacy_type", "created_at", "member_count"]
+
+    def get_member_count(self, obj):
+        return obj.memberships.filter(status="approved").count()
+
+class CommunityMembershipSerializer(serializers.ModelSerializer):
+    user_address = serializers.CharField(source="user.address", read_only=True)
+
+    class Meta:
+        model = CommunityMembership
+        fields = ["id", "community", "user_address", "status", "created_at"]

@@ -1,5 +1,5 @@
 import { getToken } from './auth';
-import type { ReviewClaim, PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData } from './types';
+import type { ReviewClaim, PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, ProfileStats, CommunityItem, CommunityMembershipItem } from './types';
 
 const BASE_URL = 'http://localhost:8000';
 
@@ -67,21 +67,30 @@ export async function extractClaims(content: string): Promise<ExtractClaimsRespo
 
 export async function createPost(
   content: string,
-  claims: ReviewClaim[]
+  claims: ReviewClaim[],
+  community_id?: number
 ): Promise<PostItem> {
   return request('/api/posts/', {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ content, claims }),
+    body: JSON.stringify({ content, claims, community_id }),
   });
 }
 
-export async function getFeed(): Promise<PostItem[]> {
-  return request('/api/posts/');
+export async function getFeed(params?: { feed?: string, community?: number }): Promise<PostItem[]> {
+  const query = new URLSearchParams();
+  if (params?.feed) query.append('feed', params.feed);
+  if (params?.community) query.append('community', params.community.toString());
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  return request(`/api/posts/${qs}`, { headers: authHeaders() });
 }
 
-export async function getHardClaims(): Promise<HardClaimItem[]> {
-  return request('/api/posts/hard-claims/');
+export async function getHardClaims(params?: { feed?: string, community?: number }): Promise<HardClaimItem[]> {
+  const query = new URLSearchParams();
+  if (params?.feed) query.append('feed', params.feed);
+  if (params?.community) query.append('community', params.community.toString());
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  return request(`/api/posts/hard-claims/${qs}`, { headers: authHeaders() });
 }
 
 export async function getHardClaimsByAddress(address: string): Promise<HardClaimItem[]> {
@@ -91,6 +100,7 @@ export async function getHardClaimsByAddress(address: string): Promise<HardClaim
 export async function createHardClaim(data: {
   asset_id: number;
   post_id?: number;
+  community_id?: number;
   direction: string;
   percentage: number;
   until: string;
@@ -119,4 +129,51 @@ export async function getAssets(): Promise<AssetItem[]> {
 
 export async function getClaimChartData(claimId: number): Promise<ClaimChartData> {
   return request(`/api/posts/hard-claims/${claimId}/chart-data/`);
+}
+
+export async function getProfileStats(address: string): Promise<ProfileStats> {
+  return request(`/api/auth/profile/${encodeURIComponent(address)}/`, {
+    headers: authHeaders(),
+  });
+}
+
+export async function toggleFollow(target_address: string): Promise<{ following: boolean }> {
+  return request('/api/auth/follow/', {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ target_address }),
+  });
+}
+
+export async function getCommunities(): Promise<CommunityItem[]> {
+  return request('/api/posts/communities/');
+}
+
+export async function getCommunity(id: number): Promise<CommunityItem> {
+  return request(`/api/posts/communities/${id}/`, {
+    headers: authHeaders(),
+  });
+}
+
+export async function createCommunity(name: string, description: string, privacy_type: 'public' | 'private'): Promise<CommunityItem> {
+  return request('/api/posts/communities/', {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ name, description, privacy_type }),
+  });
+}
+
+export async function joinCommunity(id: number): Promise<CommunityMembershipItem> {
+  return request(`/api/posts/communities/${id}/join/`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+}
+
+export async function approveCommunityMember(id: number, user_address: string, action: 'approve' | 'reject'): Promise<any> {
+  return request(`/api/posts/communities/${id}/approve/${encodeURIComponent(user_address)}/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ action }),
+  });
 }

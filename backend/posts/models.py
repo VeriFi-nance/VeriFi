@@ -2,8 +2,40 @@ from django.db import models
 from accounts.models import WalletUser
 
 
+class Community(models.Model):
+    class PrivacyType(models.TextChoices):
+        PUBLIC = "public"
+        PRIVATE = "private"
+
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    creator = models.ForeignKey(WalletUser, on_delete=models.SET_NULL, null=True, related_name="created_communities")
+    privacy_type = models.CharField(max_length=10, choices=PrivacyType.choices, default=PrivacyType.PUBLIC)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+class CommunityMembership(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending"
+        APPROVED = "approved"
+
+    community = models.ForeignKey(Community, on_delete=models.CASCADE, related_name="memberships")
+    user = models.ForeignKey(WalletUser, on_delete=models.CASCADE, related_name="community_memberships")
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("community", "user")
+
+    def __str__(self):
+        return f"{self.user.address[:10]} in {self.community.name} ({self.status})"
+
+
 class Post(models.Model):
     author = models.ForeignKey(WalletUser, on_delete=models.CASCADE, related_name="posts")
+    community = models.ForeignKey(Community, on_delete=models.CASCADE, related_name="posts", null=True, blank=True)
     content = models.TextField(max_length=500)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -74,6 +106,7 @@ class HardClaim(models.Model):
         REJECTED = "rejected"
 
     author = models.ForeignKey(WalletUser, on_delete=models.CASCADE, related_name="hard_claims", null=True, blank=True)
+    community = models.ForeignKey(Community, on_delete=models.CASCADE, related_name="hard_claims", null=True, blank=True)
     post = models.ForeignKey(Post, on_delete=models.SET_NULL, null=True, blank=True, related_name="hard_claims")
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE, blank=False, null=False)
     direction = models.CharField(max_length=20, blank=True, default="") # this will be binary, 1 up, 0 down

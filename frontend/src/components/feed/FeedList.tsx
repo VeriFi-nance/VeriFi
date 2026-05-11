@@ -4,8 +4,7 @@ import { PostCard } from '@/components/feed/PostCard';
 import { getFeed, getAssets } from '@/lib/api';
 import type { PostItem, AssetItem } from '@/lib/types';
 
-/** Fetches and renders the post feed. Listens for 'post-created' and 'hard-claim-created' events. */
-export function FeedList() {
+export function FeedList({ feed }: { feed?: string }) {
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -13,7 +12,7 @@ export function FeedList() {
 
   const fetchFeed = () => {
     setLoading(true);
-    Promise.all([getFeed(), getAssets()])
+    Promise.all([getFeed({ feed }), getAssets()])
       .then(([p, a]) => { setPosts(p); setAssets(a); })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
@@ -27,9 +26,7 @@ export function FeedList() {
       window.removeEventListener('post-created', fetchFeed);
       window.removeEventListener('hard-claim-created', fetchFeed);
     };
-  }, []);
-
-
+  }, [feed]);
 
   if (error) return (
     <Alert variant="destructive">

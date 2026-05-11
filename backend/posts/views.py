@@ -5,8 +5,9 @@ from rest_framework import status
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from accounts.models import WalletUser
-from .models import Post, Claim, HardClaim, Asset, OHLCData
-from .serializers import PostSerializer, ClaimInputSerializer, HardClaimInputSerializer, HardClaimSerializer, AssetSerializer
+from .models import Post, Claim, HardClaim, Asset, OHLCData, Community, CommunityMembership
+from .serializers import PostSerializer, ClaimInputSerializer, HardClaimInputSerializer, HardClaimSerializer, AssetSerializer, CommunitySerializer, CommunityMembershipSerializer
+from django.shortcuts import get_object_or_404
 from .resolution import CONTRACT_VERSION, ResolutionError, preview_resolution, resolve_hard_claim
 
 
@@ -41,8 +42,29 @@ class PostListCreateView(APIView):
     permission_classes = []
 
     def get(self, request):
-        posts = Post.objects.prefetch_related("claims", "hard_claims").all()
-        return Response(PostSerializer(posts, many=True).data)
+        qs = Post.objects.prefetch_related("claims", "hard_claims").order_by("-created_at")
+        
+        community_id = request.query_params.get("community")
+        if community_id:
+            qs = qs.filter(community_id=community_id)
+            community = get_object_or_404(Community, id=community_id)
+            if community.privacy_type == Community.PrivacyType.PRIVATE:
+                user = _get_wallet_user(request)
+                if not user or not CommunityMembership.objects.filter(community=community, user=user, status=CommunityMembership.Status.APPROVED).exists():
+                    return Response({"detail": "You must be an approved member to view this community's posts."}, status=status.HTTP_403_FORBIDDEN)
+        else:
+            qs = qs.filter(community__isnull=True)
+            
+        feed_type = request.query_params.get("feed")
+        if feed_type == "following":
+            user = _get_wallet_user(request)
+            if user:
+                following_addresses = user.following_set.values_list("following__address", flat=True)
+                qs = qs.filter(author__address__in=following_addresses)
+            else:
+                return Response({"detail": "Authentication required for following feed."}, status=status.HTTP_401_UNAUTHORIZED)
+                
+        return Response(PostSerializer(qs, many=True).data)
 
     def post(self, request):
         user = _get_wallet_user(request)
@@ -55,12 +77,23 @@ class PostListCreateView(APIView):
         if len(content) > 500:
             return Response({"detail": "content exceeds 500 characters."}, status=status.HTTP_400_BAD_REQUEST)
 
+        community_id = request.data.get("community_id")
+        community_obj = None
+        if community_id is not None:
+            try:
+                community_obj = Community.objects.get(id=community_id)
+                if community_obj.privacy_type == Community.PrivacyType.PRIVATE:
+                    if not CommunityMembership.objects.filter(community=community_obj, user=user, status=CommunityMembership.Status.APPROVED).exists():
+                        return Response({"detail": "You must be an approved member to post in this private community."}, status=status.HTTP_403_FORBIDDEN)
+            except Community.DoesNotExist:
+                return Response({"detail": f"Community {community_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
+
         claims_data = request.data.get("claims", [])
         serializer = ClaimInputSerializer(data=claims_data, many=True)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        post = Post.objects.create(author=user, content=content)
+        post = Post.objects.create(author=user, content=content, community=community_obj)
         for claim in serializer.validated_data:
             if claim.get("status") != "rejected":
                 Claim.objects.create(
@@ -100,9 +133,31 @@ class HardClaimView(APIView):
 
     def get(self, request):
         qs = HardClaim.objects.all().order_by("-id")
+        
+        community_id = request.query_params.get("community")
+        if community_id:
+            qs = qs.filter(community_id=community_id)
+            community = get_object_or_404(Community, id=community_id)
+            if community.privacy_type == Community.PrivacyType.PRIVATE:
+                user = _get_wallet_user(request)
+                if not user or not CommunityMembership.objects.filter(community=community, user=user, status=CommunityMembership.Status.APPROVED).exists():
+                    return Response({"detail": "You must be an approved member to view this community's claims."}, status=status.HTTP_403_FORBIDDEN)
+        else:
+            qs = qs.filter(community__isnull=True)
+
         address = request.query_params.get("address", "").strip().lower()
         if address:
             qs = qs.filter(author__address=address)
+            
+        feed_type = request.query_params.get("feed")
+        if feed_type == "following":
+            user = _get_wallet_user(request)
+            if user:
+                following_addresses = user.following_set.values_list("following__address", flat=True)
+                qs = qs.filter(author__address__in=following_addresses)
+            else:
+                return Response({"detail": "Authentication required for following feed."}, status=status.HTTP_401_UNAUTHORIZED)
+                
         return Response(HardClaimSerializer(qs, many=True).data)
 
     def post(self, request):
@@ -130,11 +185,24 @@ class HardClaimView(APIView):
             except Post.DoesNotExist:
                 return Response({"detail": f"Post {post_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Resolve optional community reference
+        community_obj = None
+        community_id = data.get("community_id")
+        if community_id is not None:
+            try:
+                community_obj = Community.objects.get(id=community_id)
+                if community_obj.privacy_type == Community.PrivacyType.PRIVATE:
+                    if not CommunityMembership.objects.filter(community=community_obj, user=user, status=CommunityMembership.Status.APPROVED).exists():
+                        return Response({"detail": "You must be an approved member to post in this private community."}, status=status.HTTP_403_FORBIDDEN)
+            except Community.DoesNotExist:
+                return Response({"detail": f"Community {community_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
+
         # Create HardClaim object in the database with the given data
         try:
             hard_claim = HardClaim.objects.create(
                 author=user,
                 post=post_obj,
+                community=community_obj,
                 asset=asset,
                 direction=data.get("direction", ""),
                 percentage=data["percentage"],
@@ -278,3 +346,111 @@ class HardClaimChartDataView(APIView):
             "closest_price": closest_price,
             "target_reached_at": target_reached_at,
         })
+
+
+class CommunityListView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        qs = Community.objects.all().order_by("-created_at")
+        return Response(CommunitySerializer(qs, many=True).data)
+
+    def post(self, request):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+            
+        name = request.data.get("name")
+        description = request.data.get("description", "")
+        privacy_type = request.data.get("privacy_type", Community.PrivacyType.PUBLIC)
+        
+        if not name:
+            return Response({"detail": "Name is required."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        community = Community.objects.create(
+            name=name,
+            description=description,
+            creator=user,
+            privacy_type=privacy_type
+        )
+        
+        CommunityMembership.objects.create(
+            community=community,
+            user=user,
+            status=CommunityMembership.Status.APPROVED
+        )
+        
+        return Response(CommunitySerializer(community).data, status=status.HTTP_201_CREATED)
+
+class CommunityDetailView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        community = get_object_or_404(Community, pk=pk)
+        data = CommunitySerializer(community).data
+        
+        user = _get_wallet_user(request)
+        membership_status = None
+        if user:
+            membership = CommunityMembership.objects.filter(community=community, user=user).first()
+            if membership:
+                membership_status = membership.status
+                
+        data["my_membership_status"] = membership_status
+        
+        if user and community.creator == user:
+            pending_memberships = CommunityMembership.objects.filter(community=community, status=CommunityMembership.Status.PENDING)
+            data["pending_requests"] = CommunityMembershipSerializer(pending_memberships, many=True).data
+            
+        return Response(data)
+
+class CommunityJoinView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, pk):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+            
+        community = get_object_or_404(Community, pk=pk)
+        
+        membership, created = CommunityMembership.objects.get_or_create(
+            community=community,
+            user=user,
+            defaults={"status": CommunityMembership.Status.APPROVED if community.privacy_type == Community.PrivacyType.PUBLIC else CommunityMembership.Status.PENDING}
+        )
+        
+        if not created:
+            return Response({"detail": f"Already have a membership with status: {membership.status}."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        return Response(CommunityMembershipSerializer(membership).data, status=status.HTTP_201_CREATED)
+
+class CommunityApproveView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, pk, user_address):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+            
+        community = get_object_or_404(Community, pk=pk)
+        if community.creator != user:
+            return Response({"detail": "Only the community creator can approve members."}, status=status.HTTP_403_FORBIDDEN)
+            
+        target_user = get_object_or_404(WalletUser, address=user_address.lower())
+        membership = get_object_or_404(CommunityMembership, community=community, user=target_user)
+        
+        action = request.data.get("action")
+        if action == "approve":
+            membership.status = CommunityMembership.Status.APPROVED
+            membership.save()
+            return Response(CommunityMembershipSerializer(membership).data)
+        elif action == "reject":
+            membership.delete()
+            return Response({"detail": "Request rejected."})
+        else:
+            return Response({"detail": "Invalid action. Use 'approve' or 'reject'."}, status=status.HTTP_400_BAD_REQUEST)

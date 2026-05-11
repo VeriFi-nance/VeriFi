@@ -97,3 +97,32 @@ export interface ClaimChartData {
   closest_price: number | null;
   target_reached_at: string | null;
 }
+
+export interface ProfileStats {
+  address: string;
+  followers_count: number;
+  following_count: number;
+  followers: string[];
+  following: string[];
+  is_following?: boolean;
+}
+
+export interface CommunityItem {
+  id: number;
+  name: string;
+  description: string;
+  creator_address: string;
+  privacy_type: 'public' | 'private';
+  created_at: string;
+  member_count: number;
+  my_membership_status?: 'pending' | 'approved' | null;
+  pending_requests?: CommunityMembershipItem[];
+}
+
+export interface CommunityMembershipItem {
+  id: number;
+  community: number;
+  user_address: string;
+  status: 'pending' | 'approved';
+  created_at: string;
+}
