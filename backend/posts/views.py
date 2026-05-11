@@ -5,7 +5,7 @@ from rest_framework import status
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from accounts.models import WalletUser
-from .models import Post, Claim, HardClaim, Asset
+from .models import Post, Claim, HardClaim, Asset, OHLCData
 from .serializers import PostSerializer, ClaimInputSerializer, HardClaimInputSerializer, HardClaimSerializer, AssetSerializer
 from .resolution import CONTRACT_VERSION, ResolutionError, preview_resolution, resolve_hard_claim
 
@@ -197,3 +197,84 @@ class HardClaimResolveView(APIView):
             return Response(exc.to_payload(), status=status.HTTP_400_BAD_REQUEST)
 
         return Response(result)
+
+
+class HardClaimChartDataView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        try:
+            hard_claim = HardClaim.objects.select_related("asset").get(pk=pk)
+        except HardClaim.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        asset = hard_claim.asset
+        start_date = hard_claim.created_at.date()
+        end_date = hard_claim.until
+
+        # Get or fetch OHLC data
+        from .ohlc_fetcher import get_ohlc_data, OHLCFetchError
+        try:
+            ohlc_rows = get_ohlc_data(asset, start_date, end_date)
+        except OHLCFetchError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        # Compute target price
+        reference_price = None
+        target_price = None
+        target_reached_at = None
+        hit_days = []
+        closest_price = None
+
+        # Try to get resolution details from events
+        resolution_event = hard_claim.events.filter(event_type="resolution").first()
+        if resolution_event and resolution_event.details:
+            details = resolution_event.details
+            prices = details.get("prices", {})
+            reference_price = prices.get("reference")
+            target_price = prices.get("target")
+            closest_price = prices.get("closest")
+            target_reached_at = details.get("target_reached_at")
+            hit_days = details.get("hit_days", [])
+        elif ohlc_rows:
+            # Not resolved yet — compute from OHLC
+            from .resolution import fetch_reference_price, ResolutionError, _round_decimal
+            try:
+                reference_price, _ = fetch_reference_price(hard_claim)
+                reference_price = _round_decimal(reference_price)
+            except ResolutionError:
+                reference_price = ohlc_rows[0].open
+
+            direction = hard_claim.direction.lower()
+            pct = float(hard_claim.percentage)
+            if direction == "bullish":
+                target_price = _round_decimal(reference_price * (1 + pct / 100))
+            else:
+                target_price = _round_decimal(reference_price * (1 - pct / 100))
+
+        ohlc_data = [
+            {
+                "date": row.date.isoformat(),
+                "open": row.open,
+                "high": row.high,
+                "low": row.low,
+                "close": row.close,
+            }
+            for row in ohlc_rows
+        ]
+
+        return Response({
+            "claim_id": hard_claim.id,
+            "asset_symbol": asset.symbol,
+            "direction": hard_claim.direction.lower(),
+            "reference_price": reference_price,
+            "target_price": target_price,
+            "percentage": float(hard_claim.percentage),
+            "created_at": hard_claim.created_at.isoformat(),
+            "until": hard_claim.until.isoformat(),
+            "ohlc": ohlc_data,
+            "hit_days": hit_days,
+            "closest_price": closest_price,
+            "target_reached_at": target_reached_at,
+        })

@@ -344,7 +344,7 @@ export function NewPostButton({ onPosted }: { onPosted: () => void }) {
     <>
       <Button
         size="sm"
-        className="gap-2 font-semibold"
+        className="gap-2 font-semibold bg-emerald-300/90 text-gray-900 border border-emerald-500/50 hover:bg-emerald-500/90 shadow-[0_0_18px_rgba(16,185,129,0.5)] rounded-xl"
         onClick={() => setOpen(true)}
       >
         <PenSquare className="size-4" />

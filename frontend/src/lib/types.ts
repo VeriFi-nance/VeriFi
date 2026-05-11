@@ -72,3 +72,28 @@ export interface AssetItem {
   symbol: string;
   description: string;
 }
+
+// OHLC chart data types
+
+export interface OHLCRow {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
+export interface ClaimChartData {
+  claim_id: number;
+  asset_symbol: string;
+  direction: string;
+  reference_price: number;
+  target_price: number;
+  percentage: number;
+  created_at: string;
+  until: string;
+  ohlc: OHLCRow[];
+  hit_days: string[];
+  closest_price: number | null;
+  target_reached_at: string | null;
+}

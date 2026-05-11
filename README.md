@@ -29,3 +29,5 @@ See [frontend/README.md](frontend/README.md) for detailed frontend initializatio
 1. Start the backend server (runs on port 8000 by default)
 2. Start the frontend development server (runs on port 5173 by default)
 3. Open http://localhost:5173 in your browser
+4. To run claim resolution, use the following command:
+    uv run python manage.py resolve_claims

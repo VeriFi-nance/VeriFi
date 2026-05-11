@@ -1,6 +1,6 @@
 from datetime import date
 from rest_framework import serializers
-from .models import Asset, Post, Claim, HardClaim, HardClaimEvent
+from .models import Asset, Post, Claim, HardClaim, HardClaimEvent, OHLCData
 
 
 class ClaimSerializer(serializers.ModelSerializer):
@@ -28,6 +28,10 @@ class AssetSerializer(serializers.ModelSerializer):
             "provider",
             "provider_symbol",
             "quote_currency",
+            "binance_symbol",
+            "kucoin_symbol",
+            "kraken_pair",
+            "twelvedata_symbol",
         ]
 
 class HardClaimInputSerializer(serializers.Serializer):
@@ -64,3 +68,9 @@ class PostSerializer(serializers.ModelSerializer):
     class Meta:
         model = Post
         fields = ["id", "author_address", "content", "created_at", "claims", "hard_claims"]
+
+
+class OHLCDataSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OHLCData
+        fields = ["date", "open", "high", "low", "close"]

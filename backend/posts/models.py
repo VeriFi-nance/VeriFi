@@ -39,6 +39,10 @@ class Asset(models.Model):
     class Provider(models.TextChoices):
         COINGECKO = "coingecko"
         YFINANCE = "yfinance"
+        BINANCE = "binance"
+        KUCOIN = "kucoin"
+        KRAKEN = "kraken"
+        TWELVEDATA = "twelvedata"
 
     name = models.CharField(max_length=100)
     symbol = models.CharField(max_length=10)
@@ -55,6 +59,10 @@ class Asset(models.Model):
     )
     provider_symbol = models.CharField(max_length=50, blank=True, default="")
     quote_currency = models.CharField(max_length=10, default="USD")
+    binance_symbol = models.CharField(max_length=20, blank=True, default="")
+    kucoin_symbol = models.CharField(max_length=20, blank=True, default="")
+    kraken_pair = models.CharField(max_length=20, blank=True, default="")
+    twelvedata_symbol = models.CharField(max_length=20, blank=True, default="")
 
     def __str__(self):
         return self.name
@@ -102,3 +110,19 @@ class HardClaimEvent(models.Model):
 
     def __str__(self):
         return f"{self.event_type} at {self.timestamp} for claim {self.hard_claim.id}"
+
+
+class OHLCData(models.Model):
+    asset = models.ForeignKey(Asset, on_delete=models.CASCADE, related_name="ohlc_data")
+    date = models.DateField()
+    open = models.FloatField()
+    high = models.FloatField()
+    low = models.FloatField()
+    close = models.FloatField()
+
+    class Meta:
+        unique_together = ("asset", "date")
+        ordering = ["date"]
+
+    def __str__(self):
+        return f"{self.asset.symbol} {self.date} O={self.open} H={self.high} L={self.low} C={self.close}"
