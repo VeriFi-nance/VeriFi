@@ -3,8 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { getCommunity, joinCommunity, approveCommunityMember, getFeed, getAssets } from '@/lib/api';
-import type { CommunityItem, PostItem, AssetItem } from '@/lib/types';
+import { getCommunity, joinCommunity, approveCommunityMember, banCommunityMember, getFeed, getAssets, getCommunityMembers } from '@/lib/api';
+import type { CommunityItem, PostItem, AssetItem, CommunityMembershipItem } from '@/lib/types';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { loadAddress } from '@/lib/auth';
 import { PostCard } from '@/components/feed/PostCard';
 import { NewPostButton } from '@/components/feed/NewPostModal';
@@ -17,6 +18,7 @@ export default function CommunityDetailPage() {
   const [community, setCommunity] = useState<CommunityItem | null>(null);
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [assets, setAssets] = useState<AssetItem[]>([]);
+  const [members, setMembers] = useState<CommunityMembershipItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -30,12 +32,14 @@ export default function CommunityDetailPage() {
       const canViewPosts = comm.privacy_type === 'public' || comm.my_membership_status === 'approved' || comm.creator_address === myAddress;
       
       if (canViewPosts) {
-        const [p, a] = await Promise.all([
+        const [p, a, m] = await Promise.all([
           getFeed({ community: Number(id) }),
-          getAssets()
+          getAssets(),
+          getCommunityMembers(Number(id))
         ]);
         setPosts(p);
         setAssets(a);
+        setMembers(m);
       }
     } catch (e: any) {
       setError(e.message);
@@ -74,12 +78,23 @@ export default function CommunityDetailPage() {
     }
   };
 
+  const handleBan = async (userAddress: string) => {
+    if (!id || !confirm(`Are you sure you want to ban ${userAddress}?`)) return;
+    try {
+      await banCommunityMember(Number(id), userAddress);
+      await fetchCommunityAndPosts();
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
+
   if (error) return <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>;
   if (loading && !community) return <p className="text-center py-10">Loading...</p>;
   if (!community) return <p className="text-center py-10">Community not found.</p>;
 
   const isCreator = myAddress && myAddress.toLowerCase() === community.creator_address.toLowerCase();
   const canViewPosts = community.privacy_type === 'public' || community.my_membership_status === 'approved' || isCreator;
+  const canPost = isCreator || (community.my_membership_status === 'approved' && community.post_permission === 'all');
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
@@ -91,6 +106,9 @@ export default function CommunityDetailPage() {
           <h1 className="text-2xl font-bold flex items-center gap-3">
             {community.name}
             <span className="text-xs font-normal px-2 py-1 bg-secondary rounded-full uppercase tracking-wider">{community.privacy_type}</span>
+            {community.post_permission === 'creator_only' && (
+              <span className="text-xs font-normal px-2 py-1 bg-primary/10 text-primary rounded-full uppercase tracking-wider">Broadcast Only</span>
+            )}
           </h1>
           <p className="text-sm text-muted-foreground">{community.description}</p>
         </div>
@@ -100,7 +118,7 @@ export default function CommunityDetailPage() {
         {!isCreator && community.my_membership_status === 'pending' && (
           <Button variant="secondary" disabled>Request Pending</Button>
         )}
-        {(community.my_membership_status === 'approved' || isCreator) && (
+        {canPost && (
           <div className="shrink-0">
             <NewPostButton onPosted={fetchCommunityAndPosts} communityId={Number(id)} />
           </div>
@@ -121,6 +139,7 @@ export default function CommunityDetailPage() {
               <div key={req.id} className="flex items-center justify-between">
                 <code className="text-xs">{req.user_address}</code>
                 <div className="flex gap-2">
+                  <Button size="sm" variant="destructive" onClick={() => handleBan(req.user_address)}>Ban</Button>
                   <Button size="sm" variant="outline" onClick={() => handleApprove(req.user_address, 'reject')}>Reject</Button>
                   <Button size="sm" onClick={() => handleApprove(req.user_address, 'approve')}>Approve</Button>
                 </div>
@@ -131,20 +150,48 @@ export default function CommunityDetailPage() {
       )}
 
       {canViewPosts ? (
-        <div className="space-y-4 mt-6">
-          <h2 className="text-lg font-semibold">Posts</h2>
-          {posts.length === 0 ? (
-            <p className="text-muted-foreground text-sm">No posts in this community yet.</p>
-          ) : (
-            posts.map(post => (
-              <PostCard key={post.id} post={post} hardClaims={post.hard_claims} assets={assets} />
-            ))
-          )}
-        </div>
+        <Tabs defaultValue="posts" className="mt-6">
+          <TabsList>
+            <TabsTrigger value="posts">Posts</TabsTrigger>
+            <TabsTrigger value="members">Members</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="posts" className="space-y-4 mt-4">
+            {posts.length === 0 ? (
+              <p className="text-muted-foreground text-sm">No posts in this community yet.</p>
+            ) : (
+              posts.map(post => (
+                <PostCard key={post.id} post={post} hardClaims={post.hard_claims} assets={assets} />
+              ))
+            )}
+          </TabsContent>
+          
+          <TabsContent value="members" className="space-y-4 mt-4">
+            {members.length === 0 ? (
+              <p className="text-muted-foreground text-sm">No approved members yet.</p>
+            ) : (
+              <div className="grid gap-2">
+                {members.map(member => (
+                  <Card key={member.id}>
+                    <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <div className="font-mono font-bold text-sm">{member.user_address}</div>
+                        <div className="text-xs text-muted-foreground">Joined: {new Date(member.created_at).toLocaleDateString()}</div>
+                      </div>
+                      {isCreator && member.user_address.toLowerCase() !== community.creator_address.toLowerCase() && (
+                        <Button size="sm" variant="destructive" onClick={() => handleBan(member.user_address)}>Ban</Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       ) : (
         <Alert>
           <AlertDescription>
-            This is a private community. You must be an approved member to view posts.
+            This is a private community. You must be an approved member to view posts and members.
           </AlertDescription>
         </Alert>
       )}

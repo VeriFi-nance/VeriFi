@@ -82,9 +82,16 @@ class PostListCreateView(APIView):
         if community_id is not None:
             try:
                 community_obj = Community.objects.get(id=community_id)
+                membership = CommunityMembership.objects.filter(community=community_obj, user=user).first()
+                if membership and membership.status == CommunityMembership.Status.BANNED:
+                    return Response({"detail": "You are banned from this community."}, status=status.HTTP_403_FORBIDDEN)
+                
                 if community_obj.privacy_type == Community.PrivacyType.PRIVATE:
-                    if not CommunityMembership.objects.filter(community=community_obj, user=user, status=CommunityMembership.Status.APPROVED).exists():
+                    if not membership or membership.status != CommunityMembership.Status.APPROVED:
                         return Response({"detail": "You must be an approved member to post in this private community."}, status=status.HTTP_403_FORBIDDEN)
+                
+                if community_obj.post_permission == Community.PostPermission.CREATOR_ONLY and user != community_obj.creator:
+                    return Response({"detail": "Only the community creator can post in this community."}, status=status.HTTP_403_FORBIDDEN)
             except Community.DoesNotExist:
                 return Response({"detail": f"Community {community_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -191,9 +198,16 @@ class HardClaimView(APIView):
         if community_id is not None:
             try:
                 community_obj = Community.objects.get(id=community_id)
+                membership = CommunityMembership.objects.filter(community=community_obj, user=user).first()
+                if membership and membership.status == CommunityMembership.Status.BANNED:
+                    return Response({"detail": "You are banned from this community."}, status=status.HTTP_403_FORBIDDEN)
+
                 if community_obj.privacy_type == Community.PrivacyType.PRIVATE:
-                    if not CommunityMembership.objects.filter(community=community_obj, user=user, status=CommunityMembership.Status.APPROVED).exists():
+                    if not membership or membership.status != CommunityMembership.Status.APPROVED:
                         return Response({"detail": "You must be an approved member to post in this private community."}, status=status.HTTP_403_FORBIDDEN)
+                
+                if community_obj.post_permission == Community.PostPermission.CREATOR_ONLY and user != community_obj.creator:
+                    return Response({"detail": "Only the community creator can post claims in this community."}, status=status.HTTP_403_FORBIDDEN)
             except Community.DoesNotExist:
                 return Response({"detail": f"Community {community_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -364,6 +378,7 @@ class CommunityListView(APIView):
         name = request.data.get("name")
         description = request.data.get("description", "")
         privacy_type = request.data.get("privacy_type", Community.PrivacyType.PUBLIC)
+        post_permission = request.data.get("post_permission", Community.PostPermission.ALL)
         
         if not name:
             return Response({"detail": "Name is required."}, status=status.HTTP_400_BAD_REQUEST)
@@ -372,7 +387,8 @@ class CommunityListView(APIView):
             name=name,
             description=description,
             creator=user,
-            privacy_type=privacy_type
+            privacy_type=privacy_type,
+            post_permission=post_permission
         )
         
         CommunityMembership.objects.create(
@@ -417,14 +433,17 @@ class CommunityJoinView(APIView):
             
         community = get_object_or_404(Community, pk=pk)
         
-        membership, created = CommunityMembership.objects.get_or_create(
+        membership = CommunityMembership.objects.filter(community=community, user=user).first()
+        if membership:
+            if membership.status == CommunityMembership.Status.BANNED:
+                return Response({"detail": "You are banned from this community."}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": f"Already have a membership with status: {membership.status}."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        membership = CommunityMembership.objects.create(
             community=community,
             user=user,
-            defaults={"status": CommunityMembership.Status.APPROVED if community.privacy_type == Community.PrivacyType.PUBLIC else CommunityMembership.Status.PENDING}
+            status=CommunityMembership.Status.APPROVED if community.privacy_type == Community.PrivacyType.PUBLIC else CommunityMembership.Status.PENDING
         )
-        
-        if not created:
-            return Response({"detail": f"Already have a membership with status: {membership.status}."}, status=status.HTTP_400_BAD_REQUEST)
             
         return Response(CommunityMembershipSerializer(membership).data, status=status.HTTP_201_CREATED)
 
@@ -454,3 +473,168 @@ class CommunityApproveView(APIView):
             return Response({"detail": "Request rejected."})
         else:
             return Response({"detail": "Invalid action. Use 'approve' or 'reject'."}, status=status.HTTP_400_BAD_REQUEST)
+
+class CommunityBanView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, pk, user_address):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+            
+        community = get_object_or_404(Community, pk=pk)
+        if community.creator != user:
+            return Response({"detail": "Only the community creator can ban members."}, status=status.HTTP_403_FORBIDDEN)
+            
+        target_user = get_object_or_404(WalletUser, address=user_address.lower())
+        if target_user == user:
+            return Response({"detail": "You cannot ban yourself."}, status=status.HTTP_400_BAD_REQUEST)
+
+        membership, _ = CommunityMembership.objects.get_or_create(
+            community=community,
+            user=target_user
+        )
+        membership.status = CommunityMembership.Status.BANNED
+        membership.save()
+        return Response(CommunityMembershipSerializer(membership).data)
+
+class CommunityMemberListView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        community = get_object_or_404(Community, pk=pk)
+        
+        if community.privacy_type == Community.PrivacyType.PRIVATE:
+            user = _get_wallet_user(request)
+            if not user or (community.creator != user and not CommunityMembership.objects.filter(community=community, user=user, status=CommunityMembership.Status.APPROVED).exists()):
+                return Response({"detail": "You must be a member to view this list."}, status=status.HTTP_403_FORBIDDEN)
+                
+        memberships = CommunityMembership.objects.filter(community=community, status=CommunityMembership.Status.APPROVED).order_by('created_at')
+        return Response(CommunityMembershipSerializer(memberships, many=True).data)
+
+from .models import Position, PositionEvent
+from .serializers import PositionSerializer, PositionInputSerializer
+from .resolution import fetch_current_price
+from django.utils import timezone
+
+class PositionListCreateView(APIView):
+    authentication_classes = []
+    permission_classes = []
+    
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return []
+        return super().get_permissions()
+
+    def get(self, request):
+        community_id = request.query_params.get("community")
+        if not community_id:
+            return Response({"detail": "community parameter is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        community = get_object_or_404(Community, pk=community_id)
+        
+        # Privacy check
+        if community.privacy_type == Community.PrivacyType.PRIVATE:
+            user = _get_wallet_user(request)
+            if not user or (community.creator != user and not CommunityMembership.objects.filter(community=community, user=user, status=CommunityMembership.Status.APPROVED).exists()):
+                return Response({"detail": "You must be an approved member to view positions in this private community."}, status=status.HTTP_403_FORBIDDEN)
+                
+        positions = Position.objects.filter(community=community).order_by("-created_at")
+        return Response(PositionSerializer(positions, many=True).data)
+
+    def post(self, request):
+        user = _get_wallet_user(request)
+        if not user:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        serializer = PositionInputSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        data = serializer.validated_data
+        community = get_object_or_404(Community, pk=data["community_id"])
+        
+        # Permission checks
+        membership = CommunityMembership.objects.filter(community=community, user=user).first()
+        if membership and membership.status == CommunityMembership.Status.BANNED:
+            return Response({"detail": "You are banned from this community."}, status=status.HTTP_403_FORBIDDEN)
+
+        if community.privacy_type == Community.PrivacyType.PRIVATE:
+            if not membership or membership.status != CommunityMembership.Status.APPROVED:
+                return Response({"detail": "You must be an approved member to post positions in this private community."}, status=status.HTTP_403_FORBIDDEN)
+                
+        if community.post_permission == Community.PostPermission.CREATOR_ONLY and user != community.creator:
+            return Response({"detail": "Only the creator can post in this community."}, status=status.HTTP_403_FORBIDDEN)
+
+        asset = get_object_or_404(Asset, pk=data["asset_id"])
+        
+        position = Position.objects.create(
+            author=user,
+            community=community,
+            asset=asset,
+            direction=data["direction"],
+            entry_price=data["entry_price"],
+            entry_interval=data["entry_interval"],
+            stop_loss=data["stop_loss"],
+            take_profit=data["take_profit"],
+            lifetime=data["lifetime"],
+            status=Position.Status.PENDING
+        )
+        
+        PositionEvent.objects.create(
+            position=position,
+            event_type=PositionEvent.EventType.CREATION,
+            details={"message": "Position created"}
+        )
+        
+        return Response(PositionSerializer(position).data, status=status.HTTP_201_CREATED)
+
+class PositionCloseView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, pk):
+        user = _get_wallet_user(request)
+        if not user:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        position = get_object_or_404(Position, pk=pk)
+        
+        if position.author != user:
+            return Response({"detail": "Only the author can close this position."}, status=status.HTTP_403_FORBIDDEN)
+            
+        if position.status != Position.Status.ACTIVE:
+            return Response({"detail": f"Position cannot be closed manually. Current status: {position.status}."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            now = timezone.now()
+            current_price, source_url = fetch_current_price(position.asset, now)
+            
+            position.exit_price = current_price
+            
+            if position.direction == Position.Direction.LONG:
+                position.pnl_percentage = ((current_price - position.entry_price) / position.entry_price) * 100
+            else:
+                position.pnl_percentage = ((position.entry_price - current_price) / position.entry_price) * 100
+                
+            position.status = Position.Status.CLOSED_EARLY
+            position.save()
+            
+            PositionEvent.objects.create(
+                position=position,
+                event_type=PositionEvent.EventType.MANUAL_CLOSE,
+                details={
+                    "exit_price": current_price,
+                    "pnl_percentage": position.pnl_percentage,
+                    "source": source_url,
+                    "message": "Manually closed by author"
+                }
+            )
+            
+            return Response(PositionSerializer(position).data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"detail": f"Failed to close position: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+

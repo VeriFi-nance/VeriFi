@@ -155,11 +155,11 @@ export async function getCommunity(id: number): Promise<CommunityItem> {
   });
 }
 
-export async function createCommunity(name: string, description: string, privacy_type: 'public' | 'private'): Promise<CommunityItem> {
+export async function createCommunity(name: string, description: string, privacy_type: 'public' | 'private', post_permission: 'all' | 'creator_only' = 'all'): Promise<CommunityItem> {
   return request('/api/posts/communities/', {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ name, description, privacy_type }),
+    body: JSON.stringify({ name, description, privacy_type, post_permission }),
   });
 }
 
@@ -175,5 +175,18 @@ export async function approveCommunityMember(id: number, user_address: string, a
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({ action }),
+  });
+}
+
+export async function banCommunityMember(id: number, user_address: string): Promise<any> {
+  return request(`/api/posts/communities/${id}/ban/${encodeURIComponent(user_address)}/`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+}
+
+export async function getCommunityMembers(id: number): Promise<CommunityMembershipItem[]> {
+  return request(`/api/posts/communities/${id}/members/`, {
+    headers: authHeaders(),
   });
 }

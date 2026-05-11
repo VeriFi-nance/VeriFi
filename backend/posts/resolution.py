@@ -136,14 +136,8 @@ def _fetch_binance_price(symbol: str, at_dt: datetime) -> tuple[float, str]:
     return float(candle[4]), url  # close price
 
 
-def fetch_reference_price(hard_claim: HardClaim) -> tuple[float, str]:
-    """
-    Fetch the price at the exact created_at timestamp.
-    Routes based on asset type: crypto → Binance / CoinGecko, traditional → Yahoo Finance.
-    """
-    asset = hard_claim.asset
-    at_dt = hard_claim.created_at
-
+def fetch_current_price(asset: Asset, at_dt: datetime) -> tuple[float, str]:
+    """Fetch the price for an asset at a specific datetime."""
     if asset.market_type == Asset.MarketType.CRYPTO:
         # Try Binance first, then CoinGecko
         if asset.binance_symbol:
@@ -165,6 +159,13 @@ def fetch_reference_price(hard_claim: HardClaim) -> tuple[float, str]:
             except ResolutionError:
                 pass
         raise ResolutionError("PROVIDER_NO_PRICE_DATA", "Could not fetch reference price from any traditional source.")
+
+def fetch_reference_price(hard_claim: HardClaim) -> tuple[float, str]:
+    """
+    Fetch the price at the exact created_at timestamp.
+    Routes based on asset type: crypto → Binance / CoinGecko, traditional → Yahoo Finance.
+    """
+    return fetch_current_price(hard_claim.asset, hard_claim.created_at)
 
 
 # ---------------------------------------------------------------------------

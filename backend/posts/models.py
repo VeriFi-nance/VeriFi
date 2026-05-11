@@ -7,10 +7,15 @@ class Community(models.Model):
         PUBLIC = "public"
         PRIVATE = "private"
 
+    class PostPermission(models.TextChoices):
+        ALL = "all"
+        CREATOR_ONLY = "creator_only"
+
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
     creator = models.ForeignKey(WalletUser, on_delete=models.SET_NULL, null=True, related_name="created_communities")
     privacy_type = models.CharField(max_length=10, choices=PrivacyType.choices, default=PrivacyType.PUBLIC)
+    post_permission = models.CharField(max_length=15, choices=PostPermission.choices, default=PostPermission.ALL)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -20,6 +25,7 @@ class CommunityMembership(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending"
         APPROVED = "approved"
+        BANNED = "banned"
 
     community = models.ForeignKey(Community, on_delete=models.CASCADE, related_name="memberships")
     user = models.ForeignKey(WalletUser, on_delete=models.CASCADE, related_name="community_memberships")
@@ -159,3 +165,53 @@ class OHLCData(models.Model):
 
     def __str__(self):
         return f"{self.asset.symbol} {self.date} O={self.open} H={self.high} L={self.low} C={self.close}"
+
+class Position(models.Model):
+    class Direction(models.TextChoices):
+        LONG = "long"
+        SHORT = "short"
+
+    class Status(models.TextChoices):
+        PENDING = "pending"
+        MISSED = "missed"
+        ACTIVE = "active"
+        CONFIRMED = "confirmed"
+        REJECTED = "rejected"
+        EXPIRED = "expired"
+        CLOSED_EARLY = "closed_early"
+
+    author = models.ForeignKey(WalletUser, on_delete=models.CASCADE, related_name="positions")
+    community = models.ForeignKey(Community, on_delete=models.CASCADE, related_name="positions")
+    asset = models.ForeignKey(Asset, on_delete=models.CASCADE)
+    direction = models.CharField(max_length=10, choices=Direction.choices)
+    entry_price = models.FloatField()
+    entry_interval = models.DateTimeField()
+    stop_loss = models.FloatField()
+    take_profit = models.FloatField()
+    lifetime = models.DateTimeField()
+    exit_price = models.FloatField(null=True, blank=True)
+    pnl_percentage = models.FloatField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Position {self.id} ({self.asset.symbol} {self.direction})"
+
+class PositionEvent(models.Model):
+    class EventType(models.TextChoices):
+        CREATION = "creation"
+        ENTRY_TRIGGERED = "entry_triggered"
+        PRICE_CHECK = "price_check"
+        RESOLUTION = "resolution"
+        MANUAL_CLOSE = "manual_close"
+
+    position = models.ForeignKey(Position, on_delete=models.CASCADE, related_name="events")
+    event_type = models.CharField(max_length=20, choices=EventType.choices)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    details = models.JSONField(blank=True, default=dict)
+
+    class Meta:
+        ordering = ["timestamp"]
+
+    def __str__(self):
+        return f"{self.event_type} at {self.timestamp} for position {self.position.id}"

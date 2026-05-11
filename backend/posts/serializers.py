@@ -83,7 +83,7 @@ class CommunitySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Community
-        fields = ["id", "name", "description", "creator_address", "privacy_type", "created_at", "member_count"]
+        fields = ["id", "name", "description", "creator_address", "privacy_type", "post_permission", "created_at", "member_count"]
 
     def get_member_count(self, obj):
         return obj.memberships.filter(status="approved").count()
@@ -94,3 +94,56 @@ class CommunityMembershipSerializer(serializers.ModelSerializer):
     class Meta:
         model = CommunityMembership
         fields = ["id", "community", "user_address", "status", "created_at"]
+
+from .models import Position, PositionEvent
+
+class PositionEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PositionEvent
+        fields = ["id", "event_type", "timestamp", "details"]
+
+class PositionSerializer(serializers.ModelSerializer):
+    author_address = serializers.CharField(source="author.address", read_only=True)
+    events = PositionEventSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Position
+        fields = [
+            "id", "author_address", "community", "asset", "direction",
+            "entry_price", "entry_interval", "stop_loss", "take_profit",
+            "lifetime", "exit_price", "pnl_percentage", "status", "created_at", "events"
+        ]
+
+from django.utils import timezone
+
+class PositionInputSerializer(serializers.Serializer):
+    community_id = serializers.IntegerField(required=True)
+    asset_id = serializers.IntegerField(required=True)
+    direction = serializers.ChoiceField(choices=Position.Direction.choices, required=True)
+    entry_price = serializers.FloatField(required=True)
+    entry_interval = serializers.DateTimeField(required=True)
+    stop_loss = serializers.FloatField(required=True)
+    take_profit = serializers.FloatField(required=True)
+    lifetime = serializers.DateTimeField(required=True)
+
+    def validate(self, data):
+        now = timezone.now()
+        
+        if data["entry_interval"] <= now:
+            raise serializers.ValidationError({"entry_interval": "entry_interval must be in the future."})
+            
+        if data["lifetime"] <= data["entry_interval"]:
+            raise serializers.ValidationError({"lifetime": "lifetime must be after entry_interval."})
+            
+        entry = data["entry_price"]
+        sl = data["stop_loss"]
+        tp = data["take_profit"]
+        
+        if data["direction"] == Position.Direction.LONG:
+            if not (sl < entry < tp):
+                raise serializers.ValidationError("For LONG positions, stop_loss must be < entry_price < take_profit.")
+        elif data["direction"] == Position.Direction.SHORT:
+            if not (tp < entry < sl):
+                raise serializers.ValidationError("For SHORT positions, take_profit must be < entry_price < stop_loss.")
+                
+        return data

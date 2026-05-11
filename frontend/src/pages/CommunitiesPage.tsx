@@ -18,6 +18,7 @@ export default function CommunitiesPage() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [privacy, setPrivacy] = useState<'public' | 'private'>('public');
+  const [postPermission, setPostPermission] = useState<'all' | 'creator_only'>('all');
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -31,7 +32,7 @@ export default function CommunitiesPage() {
 
   const handleCreate = async () => {
     try {
-      const comm = await createCommunity(name, description, privacy);
+      const comm = await createCommunity(name, description, privacy, postPermission);
       setOpen(false);
       setName('');
       setDescription('');
@@ -71,6 +72,18 @@ export default function CommunitiesPage() {
                   <SelectContent>
                     <SelectItem value="public">Public (Anyone can join)</SelectItem>
                     <SelectItem value="private">Private (Requires approval)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Who can post?</Label>
+                <Select value={postPermission} onValueChange={(v: 'all' | 'creator_only') => setPostPermission(v)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Members (Discussion)</SelectItem>
+                    <SelectItem value="creator_only">Creator Only (Broadcast)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

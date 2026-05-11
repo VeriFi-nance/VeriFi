@@ -113,6 +113,7 @@ export interface CommunityItem {
   description: string;
   creator_address: string;
   privacy_type: 'public' | 'private';
+  post_permission: 'all' | 'creator_only';
   created_at: string;
   member_count: number;
   my_membership_status?: 'pending' | 'approved' | null;
