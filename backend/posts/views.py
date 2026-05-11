@@ -422,6 +422,29 @@ class CommunityDetailView(APIView):
             
         return Response(data)
 
+    def patch(self, request, pk):
+        user = _get_wallet_user(request)
+        if not user:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        community = get_object_or_404(Community, pk=pk)
+        if community.creator != user:
+            return Response({"detail": "Only the creator can update community settings."}, status=status.HTTP_403_FORBIDDEN)
+
+        allowed_fields = {"post_permission"}
+        updated = False
+        for field in allowed_fields:
+            if field in request.data:
+                value = request.data[field]
+                if field == "post_permission" and value not in (Community.PostPermission.ALL, Community.PostPermission.CREATOR_ONLY):
+                    return Response({"detail": f"Invalid value for {field}."}, status=status.HTTP_400_BAD_REQUEST)
+                setattr(community, field, value)
+                updated = True
+
+        if updated:
+            community.save()
+        return Response(CommunitySerializer(community).data)
+
 class CommunityJoinView(APIView):
     authentication_classes = []
     permission_classes = []
@@ -513,6 +536,80 @@ class CommunityMemberListView(APIView):
                 
         memberships = CommunityMembership.objects.filter(community=community, status=CommunityMembership.Status.APPROVED).order_by('created_at')
         return Response(CommunityMembershipSerializer(memberships, many=True).data)
+
+from django.core.cache import cache as django_cache
+import time
+
+RESOLVE_COOLDOWN_SECONDS = 3600  # 1 hour
+
+class CommunityResolvePositionsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        """Return cooldown metadata without triggering a resolve."""
+        user = _get_wallet_user(request)
+        if not user:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        community = get_object_or_404(Community, pk=pk)
+        if community.creator != user:
+            return Response({"detail": "Only the creator can access resolve status."}, status=status.HTTP_403_FORBIDDEN)
+
+        cache_key = f"resolve_positions:{pk}"
+        last_run = django_cache.get(cache_key)
+        if last_run:
+            next_allowed = last_run + RESOLVE_COOLDOWN_SECONDS
+            remaining = max(0, int(next_allowed - time.time()))
+        else:
+            next_allowed = None
+            remaining = 0
+
+        return Response({
+            "last_run": last_run,
+            "next_allowed": next_allowed,
+            "remaining_seconds": remaining,
+        })
+
+    def post(self, request, pk):
+        user = _get_wallet_user(request)
+        if not user:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        community = get_object_or_404(Community, pk=pk)
+        if community.creator != user:
+            return Response({"detail": "Only the creator can trigger position resolution."}, status=status.HTTP_403_FORBIDDEN)
+
+        cache_key = f"resolve_positions:{pk}"
+        last_run = django_cache.get(cache_key)
+        now_ts = time.time()
+
+        if last_run and (now_ts - last_run) < RESOLVE_COOLDOWN_SECONDS:
+            remaining = int(RESOLVE_COOLDOWN_SECONDS - (now_ts - last_run))
+            return Response(
+                {
+                    "detail": "Rate limit exceeded. Try again later.",
+                    "remaining_seconds": remaining,
+                    "last_run": last_run,
+                    "next_allowed": last_run + RESOLVE_COOLDOWN_SECONDS,
+                },
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        # Run resolution scoped to this community
+        from .position_resolution import resolve_positions
+        from .profitability import recalculate_all_profitabilities
+        resolve_positions(community_id=pk)
+        recalculate_all_profitabilities()
+
+        django_cache.set(cache_key, now_ts, timeout=RESOLVE_COOLDOWN_SECONDS)
+
+        return Response({
+            "detail": "Positions resolved successfully.",
+            "last_run": now_ts,
+            "next_allowed": now_ts + RESOLVE_COOLDOWN_SECONDS,
+            "remaining_seconds": RESOLVE_COOLDOWN_SECONDS,
+        })
 
 from .models import Position, PositionEvent
 from .serializers import PositionSerializer, PositionInputSerializer

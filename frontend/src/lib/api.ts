@@ -191,6 +191,33 @@ export async function getCommunityMembers(id: number): Promise<CommunityMembersh
   });
 }
 
+export async function updateCommunity(id: number, data: { post_permission?: 'all' | 'creator_only' }): Promise<CommunityItem> {
+  return request(`/api/posts/communities/${id}/`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export interface ResolveStatus {
+  last_run: number | null;
+  next_allowed: number | null;
+  remaining_seconds: number;
+}
+
+export async function getCommunityResolveStatus(id: number): Promise<ResolveStatus> {
+  return request(`/api/posts/communities/${id}/resolve-positions/`, {
+    headers: authHeaders(),
+  });
+}
+
+export async function triggerResolvePositions(id: number): Promise<ResolveStatus & { detail: string }> {
+  return request(`/api/posts/communities/${id}/resolve-positions/`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+}
+
 export async function getPositions(communityId?: number): Promise<PositionItem[]> {
   const query = new URLSearchParams();
   if (communityId) query.append('community', communityId.toString());

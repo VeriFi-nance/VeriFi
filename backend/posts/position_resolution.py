@@ -19,21 +19,29 @@ def calculate_pnl(direction, entry_price, exit_price):
 def _round_decimal(value: float, places: str = "0.01") -> float:
     return float(Decimal(str(value)).quantize(Decimal(places), rounding=ROUND_HALF_UP))
 
-def resolve_positions():
-    """Run Phase 1 and Phase 2 of position resolution."""
+def resolve_positions(community_id: int | None = None):
+    """Run Phase 1 and Phase 2 of position resolution.
+
+    Args:
+        community_id: If provided, resolution is scoped to that community only.
+    """
     now = django_timezone.now()
-    
+
+    filters_pending = {"status": Position.Status.PENDING}
+    filters_active = {"status": Position.Status.ACTIVE}
+    if community_id is not None:
+        filters_pending["community_id"] = community_id
+        filters_active["community_id"] = community_id
+
     # Phase 1: PENDING -> ACTIVE or MISSED
-    pending_positions = Position.objects.filter(status=Position.Status.PENDING)
-    for pos in pending_positions:
+    for pos in Position.objects.filter(**filters_pending):
         try:
             _resolve_pending(pos, now)
         except Exception as e:
             logger.error(f"Error resolving pending position {pos.id}: {e}")
 
     # Phase 2: ACTIVE -> CONFIRMED, REJECTED, or EXPIRED
-    active_positions = Position.objects.filter(status=Position.Status.ACTIVE)
-    for pos in active_positions:
+    for pos in Position.objects.filter(**filters_active):
         try:
             _resolve_active(pos, now)
         except Exception as e:
