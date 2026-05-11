@@ -1,6 +1,6 @@
 # Task 07: Position Frontend UI
 
-**Status:** TODO
+**Status:** DONE
 **ADR Reference:** `docs/adr/0001-social-features.md` — Decisions 9, 10
 **Depends On:** Task 04 (Position API), Task 01 (post permission enforcement)
 
@@ -48,8 +48,8 @@ Build the frontend components for creating, viewing, and managing Positions with
    - The Positions tab fetches from `GET /api/posts/positions/?community=<id>` and renders a list of `PositionCard` components.
 
 ## Acceptance Criteria
-- [ ] Position creation form validates inputs and submits successfully.
-- [ ] PositionCard renders all statuses with appropriate visual treatment.
-- [ ] "Close Position" button works for the position author on active positions.
-- [ ] Community detail page has a Positions section/tab.
-- [ ] Post permission is respected (form hidden when not allowed).
+- [x] Position creation form validates inputs and submits successfully.
+- [x] PositionCard renders all statuses with appropriate visual treatment.
+- [x] "Close Position" button works for the position author on active positions.
+- [x] Community detail page has a Positions section/tab.
+- [x] Post permission is respected (form hidden when not allowed).

@@ -1,5 +1,5 @@
 import { getToken } from './auth';
-import type { ReviewClaim, PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, ProfileStats, CommunityItem, CommunityMembershipItem } from './types';
+import type { ReviewClaim, PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, ProfileStats, CommunityItem, CommunityMembershipItem, PositionItem } from './types';
 
 const BASE_URL = 'http://localhost:8000';
 
@@ -187,6 +187,37 @@ export async function banCommunityMember(id: number, user_address: string): Prom
 
 export async function getCommunityMembers(id: number): Promise<CommunityMembershipItem[]> {
   return request(`/api/posts/communities/${id}/members/`, {
+    headers: authHeaders(),
+  });
+}
+
+export async function getPositions(communityId?: number): Promise<PositionItem[]> {
+  const query = new URLSearchParams();
+  if (communityId) query.append('community', communityId.toString());
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  return request(`/api/posts/positions/${qs}`, { headers: authHeaders() });
+}
+
+export async function createPosition(data: {
+  community_id: number;
+  asset_id: number;
+  direction: 'long' | 'short';
+  entry_price: number;
+  entry_interval: string;
+  stop_loss: number;
+  take_profit: number;
+  lifetime: string;
+}): Promise<PositionItem> {
+  return request('/api/posts/positions/', {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export async function closePosition(id: number): Promise<PositionItem> {
+  return request(`/api/posts/positions/${id}/close/`, {
+    method: 'POST',
     headers: authHeaders(),
   });
 }

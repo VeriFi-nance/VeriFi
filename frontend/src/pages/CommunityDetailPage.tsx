@@ -3,13 +3,15 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { getCommunity, joinCommunity, approveCommunityMember, banCommunityMember, getFeed, getAssets, getCommunityMembers } from '@/lib/api';
-import type { CommunityItem, PostItem, AssetItem, CommunityMembershipItem } from '@/lib/types';
+import { getCommunity, joinCommunity, approveCommunityMember, banCommunityMember, getFeed, getAssets, getCommunityMembers, getPositions } from '@/lib/api';
+import type { CommunityItem, PostItem, AssetItem, CommunityMembershipItem, PositionItem } from '@/lib/types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { loadAddress } from '@/lib/auth';
 import { PostCard } from '@/components/feed/PostCard';
 import { NewPostButton } from '@/components/feed/NewPostModal';
 import ProfitabilityBadge from '@/components/ProfitabilityBadge';
+import { PositionCard } from '@/components/PositionCard';
+import { NewPositionModal } from '@/components/NewPositionModal';
 
 export default function CommunityDetailPage() {
   const { id } = useParams();
@@ -18,6 +20,7 @@ export default function CommunityDetailPage() {
   
   const [community, setCommunity] = useState<CommunityItem | null>(null);
   const [posts, setPosts] = useState<PostItem[]>([]);
+  const [positions, setPositions] = useState<PositionItem[]>([]);
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [members, setMembers] = useState<CommunityMembershipItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,14 +36,16 @@ export default function CommunityDetailPage() {
       const canViewPosts = comm.privacy_type === 'public' || comm.my_membership_status === 'approved' || comm.creator_address === myAddress;
       
       if (canViewPosts) {
-        const [p, a, m] = await Promise.all([
+        const [p, a, m, pos] = await Promise.all([
           getFeed({ community: Number(id) }),
           getAssets(),
-          getCommunityMembers(Number(id))
+          getCommunityMembers(Number(id)),
+          getPositions(Number(id))
         ]);
         setPosts(p);
         setAssets(a);
         setMembers(m);
+        setPositions(pos);
       }
     } catch (e: any) {
       setError(e.message);
@@ -120,7 +125,8 @@ export default function CommunityDetailPage() {
           <Button variant="secondary" disabled>Request Pending</Button>
         )}
         {canPost && (
-          <div className="shrink-0">
+          <div className="shrink-0 flex items-center gap-2">
+            <NewPositionModal communityId={Number(id)} assets={assets} onCreated={fetchCommunityAndPosts} />
             <NewPostButton onPosted={fetchCommunityAndPosts} communityId={Number(id)} />
           </div>
         )}
@@ -154,6 +160,7 @@ export default function CommunityDetailPage() {
         <Tabs defaultValue="posts" className="mt-6">
           <TabsList>
             <TabsTrigger value="posts">Posts</TabsTrigger>
+            <TabsTrigger value="positions">Positions</TabsTrigger>
             <TabsTrigger value="members">Members</TabsTrigger>
           </TabsList>
           
@@ -163,6 +170,16 @@ export default function CommunityDetailPage() {
             ) : (
               posts.map(post => (
                 <PostCard key={post.id} post={post} hardClaims={post.hard_claims} assets={assets} />
+              ))
+            )}
+          </TabsContent>
+          
+          <TabsContent value="positions" className="space-y-4 mt-4">
+            {positions.length === 0 ? (
+              <p className="text-muted-foreground text-sm">No positions active in this community.</p>
+            ) : (
+              positions.map(position => (
+                <PositionCard key={position.id} position={position} assets={assets} onClosed={fetchCommunityAndPosts} />
               ))
             )}
           </TabsContent>
