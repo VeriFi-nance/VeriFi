@@ -633,6 +633,9 @@ class PositionCloseView(APIView):
                 }
             )
             
+            from .profitability import recalculate_profitability
+            recalculate_profitability(user)
+            
             return Response(PositionSerializer(position).data, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"detail": f"Failed to close position: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

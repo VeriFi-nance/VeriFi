@@ -9,5 +9,10 @@ class Command(BaseCommand):
         try:
             resolve_positions()
             self.stdout.write(self.style.SUCCESS('Position resolution completed successfully.'))
+            
+            from posts.profitability import recalculate_all_profitabilities
+            self.stdout.write(self.style.SUCCESS('Recalculating profitabilities...'))
+            recalculate_all_profitabilities()
+            self.stdout.write(self.style.SUCCESS('Profitabilities updated successfully.'))
         except Exception as e:
             self.stderr.write(self.style.ERROR(f'Error during position resolution: {e}'))

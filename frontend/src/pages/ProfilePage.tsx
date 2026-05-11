@@ -10,6 +10,7 @@ import { clearAuth, loadAddress } from '@/lib/auth';
 import { clearPrivateKey, loadEncryptedKey, decryptPrivateKey } from '@/lib/crypto';
 import { getHardClaimsByAddress, getAssets, getProfileStats } from '@/lib/api';
 import type { HardClaimItem, AssetItem, ProfileStats } from '@/lib/types';
+import ProfitabilityBadge from '@/components/ProfitabilityBadge';
 
 const REVEAL_TTL = 60;
 
@@ -125,6 +126,11 @@ export default function ProfilePage() {
               </code>
               {address && <CopyButton text={address} />}
             </div>
+            {stats && stats.profitability && (
+              <div className="pt-2">
+                <ProfitabilityBadge data={stats.profitability} className="text-sm px-3 py-1" />
+              </div>
+            )}
           </div>
           
           {stats && (

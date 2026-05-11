@@ -37,6 +37,13 @@ export interface ClaimItem {
   status: 'confirmed' | 'rejected';
 }
 
+export interface ProfitabilityData {
+  pnl_7d: number;
+  pnl_30d: number;
+  pnl_all: number;
+  updated_at?: string | null;
+}
+
 export interface PostItem {
   id: number;
   author_address: string;
@@ -44,6 +51,7 @@ export interface PostItem {
   created_at: string;
   claims: ClaimItem[];
   hard_claims: HardClaimItem[];
+  profitability?: ProfitabilityData | null;
 }
 
 export interface HardClaimEvent {
@@ -64,6 +72,7 @@ export interface HardClaimItem {
   created_at: string;
   status: string;
   events?: HardClaimEvent[];
+  profitability?: ProfitabilityData | null;
 }
 
 export interface AssetItem {
@@ -105,6 +114,7 @@ export interface ProfileStats {
   followers: string[];
   following: string[];
   is_following?: boolean;
+  profitability?: ProfitabilityData | null;
 }
 
 export interface CommunityItem {
@@ -124,6 +134,33 @@ export interface CommunityMembershipItem {
   id: number;
   community: number;
   user_address: string;
-  status: 'pending' | 'approved';
+  status: 'pending' | 'approved' | 'banned';
   created_at: string;
+  profitability?: ProfitabilityData | null;
+}
+
+export interface PositionEventItem {
+  id: number;
+  event_type: string;
+  timestamp: string;
+  details: any;
+}
+
+export interface PositionItem {
+  id: number;
+  author_address: string;
+  community: number;
+  asset: number;
+  direction: 'long' | 'short';
+  entry_price: number;
+  entry_interval: string;
+  stop_loss: number;
+  take_profit: number;
+  lifetime: string;
+  exit_price: number | null;
+  pnl_percentage: number | null;
+  status: 'pending' | 'active' | 'confirmed' | 'rejected' | 'missed' | 'closed_early' | 'expired';
+  created_at: string;
+  events?: PositionEventItem[];
+  profitability?: ProfitabilityData | null;
 }

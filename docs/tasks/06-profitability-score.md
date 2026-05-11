@@ -1,6 +1,6 @@
 # Task 06: Profitability Score System
 
-**Status:** TODO
+**Status:** DONE
 **ADR Reference:** `docs/adr/0001-social-features.md` — Decision 11
 **Depends On:** Task 04 (Position model), Task 05 (resolution fills `pnl_percentage`)
 
@@ -56,8 +56,8 @@ Implement the Profitability score — a cumulative PnL badge displayed next to a
    - Community member list (next to each member).
 
 ## Acceptance Criteria
-- [ ] `ProfitabilityCache` model stores pre-calculated PnL for 3 time windows.
-- [ ] Recalculation runs automatically after position resolution.
-- [ ] API endpoint returns profitability data for any user address.
-- [ ] Frontend badge component renders with correct color and toggleable timeframes.
-- [ ] Badge is integrated into feed, profile, and member list views.
+- [x] `ProfitabilityCache` model stores pre-calculated PnL for 3 time windows.
+- [x] Recalculation runs automatically after position resolution.
+- [x] API endpoint returns profitability data for any user address.
+- [x] Frontend badge component renders with correct color and toggleable timeframes.
+- [x] Badge is integrated into feed, profile, and member list views.

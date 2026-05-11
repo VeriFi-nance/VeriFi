@@ -26,3 +26,13 @@ class Follow(models.Model):
 
     def __str__(self):
         return f"{self.follower.address[:10]} follows {self.following.address[:10]}"
+
+class ProfitabilityCache(models.Model):
+    user = models.OneToOneField(WalletUser, on_delete=models.CASCADE, related_name="profitability")
+    pnl_7d = models.FloatField(default=0.0)
+    pnl_30d = models.FloatField(default=0.0)
+    pnl_all = models.FloatField(default=0.0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Profitability({self.user.address[:10]}): {self.pnl_all}%"

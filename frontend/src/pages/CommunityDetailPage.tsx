@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { loadAddress } from '@/lib/auth';
 import { PostCard } from '@/components/feed/PostCard';
 import { NewPostButton } from '@/components/feed/NewPostModal';
+import ProfitabilityBadge from '@/components/ProfitabilityBadge';
 
 export default function CommunityDetailPage() {
   const { id } = useParams();
@@ -175,7 +176,10 @@ export default function CommunityDetailPage() {
                   <Card key={member.id}>
                     <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div>
-                        <div className="font-mono font-bold text-sm">{member.user_address}</div>
+                        <div className="font-mono font-bold text-sm flex items-center gap-2">
+                          {member.user_address}
+                          <ProfitabilityBadge data={member.profitability} />
+                        </div>
                         <div className="text-xs text-muted-foreground">Joined: {new Date(member.created_at).toLocaleDateString()}</div>
                       </div>
                       {isCreator && member.user_address.toLowerCase() !== community.creator_address.toLowerCase() && (

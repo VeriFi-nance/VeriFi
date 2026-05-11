@@ -57,19 +57,43 @@ class HardClaimEventSerializer(serializers.ModelSerializer):
 class HardClaimSerializer(serializers.ModelSerializer):
     author_address = serializers.CharField(source="author.address", read_only=True, allow_null=True)
     events = HardClaimEventSerializer(many=True, read_only=True)
+    profitability = serializers.SerializerMethodField()
 
     class Meta:
         model = HardClaim
-        fields = ["id", "author_address", "post_id", "community", "asset", "direction", "percentage", "until", "created_at", "status", "events"]
+        fields = ["id", "author_address", "post_id", "community", "asset", "direction", "percentage", "until", "created_at", "status", "events", "profitability"]
+
+    def get_profitability(self, obj):
+        try:
+            cache = obj.author.profitability
+            return {
+                "pnl_7d": cache.pnl_7d,
+                "pnl_30d": cache.pnl_30d,
+                "pnl_all": cache.pnl_all
+            }
+        except Exception:
+            return None
 
 class PostSerializer(serializers.ModelSerializer):
     author_address = serializers.CharField(source="author.address", read_only=True)
     claims = ClaimSerializer(many=True, read_only=True)
     hard_claims = HardClaimSerializer(many=True, read_only=True)
+    profitability = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
-        fields = ["id", "author_address", "content", "community", "created_at", "claims", "hard_claims"]
+        fields = ["id", "author_address", "content", "community", "created_at", "claims", "hard_claims", "profitability"]
+
+    def get_profitability(self, obj):
+        try:
+            cache = obj.author.profitability
+            return {
+                "pnl_7d": cache.pnl_7d,
+                "pnl_30d": cache.pnl_30d,
+                "pnl_all": cache.pnl_all
+            }
+        except Exception:
+            return None
 
 
 class OHLCDataSerializer(serializers.ModelSerializer):
@@ -90,10 +114,22 @@ class CommunitySerializer(serializers.ModelSerializer):
 
 class CommunityMembershipSerializer(serializers.ModelSerializer):
     user_address = serializers.CharField(source="user.address", read_only=True)
+    profitability = serializers.SerializerMethodField()
 
     class Meta:
         model = CommunityMembership
-        fields = ["id", "community", "user_address", "status", "created_at"]
+        fields = ["id", "community", "user_address", "status", "created_at", "profitability"]
+
+    def get_profitability(self, obj):
+        try:
+            cache = obj.user.profitability
+            return {
+                "pnl_7d": cache.pnl_7d,
+                "pnl_30d": cache.pnl_30d,
+                "pnl_all": cache.pnl_all
+            }
+        except Exception:
+            return None
 
 from .models import Position, PositionEvent
 
@@ -105,14 +141,26 @@ class PositionEventSerializer(serializers.ModelSerializer):
 class PositionSerializer(serializers.ModelSerializer):
     author_address = serializers.CharField(source="author.address", read_only=True)
     events = PositionEventSerializer(many=True, read_only=True)
+    profitability = serializers.SerializerMethodField()
 
     class Meta:
         model = Position
         fields = [
             "id", "author_address", "community", "asset", "direction",
             "entry_price", "entry_interval", "stop_loss", "take_profit",
-            "lifetime", "exit_price", "pnl_percentage", "status", "created_at", "events"
+            "lifetime", "exit_price", "pnl_percentage", "status", "created_at", "events", "profitability"
         ]
+
+    def get_profitability(self, obj):
+        try:
+            cache = obj.author.profitability
+            return {
+                "pnl_7d": cache.pnl_7d,
+                "pnl_30d": cache.pnl_30d,
+                "pnl_all": cache.pnl_all
+            }
+        except Exception:
+            return None
 
 from django.utils import timezone
 

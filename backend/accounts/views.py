@@ -137,6 +137,17 @@ class ProfileView(APIView):
             "following": following_list,
         }
         
+        try:
+            cache = target_user.profitability
+            data["profitability"] = {
+                "pnl_7d": cache.pnl_7d,
+                "pnl_30d": cache.pnl_30d,
+                "pnl_all": cache.pnl_all,
+                "updated_at": cache.updated_at
+            }
+        except Exception:
+            data["profitability"] = None
+        
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
             token = auth_header.split(" ")[1]
@@ -189,3 +200,27 @@ class FollowToggleView(APIView):
             return Response({"detail": "Unfollowed successfully.", "following": False})
             
         return Response({"detail": "Followed successfully.", "following": True})
+
+class ProfitabilityView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, address):
+        address = address.lower()
+        user = get_object_or_404(WalletUser, address=address)
+        
+        try:
+            cache = user.profitability
+            return Response({
+                "pnl_7d": cache.pnl_7d,
+                "pnl_30d": cache.pnl_30d,
+                "pnl_all": cache.pnl_all,
+                "updated_at": cache.updated_at
+            })
+        except WalletUser.profitability.RelatedObjectDoesNotExist:
+            return Response({
+                "pnl_7d": 0.0,
+                "pnl_30d": 0.0,
+                "pnl_all": 0.0,
+                "updated_at": None
+            })
