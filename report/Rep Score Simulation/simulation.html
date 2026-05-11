@@ -31,7 +31,7 @@
 <body>
 
 <div class="container">
-    <h1>Model C: Repitasyon Havuzu Simülatörü</h1>
+    <h1>Repütasyon Skoru Simülatörü</h1>
     
     <div class="formulas">
         <strong>Sistem Kuralları:</strong> Sabit Stake: 10 Rep<br>
@@ -57,7 +57,7 @@
                     <button class="btn btn-reset" onclick="togglePayoutMethod()">Payout Değiştir</button>
                     <button class="btn btn-reset" onclick="resetSim()">Sıfırla</button>
                 </div>
-                <div style="font-size: 0.95em; margin-top: 5px;">Payout mod: <span id="payoutMethodLabel">Default</span></div>
+                <div style="font-size: 0.95em; margin-top: 5px;">Aktif Model: <span id="payoutMethodLabel">Model C, Default (Parimutuel)</span></div>
             </div>
         </div>
         <div class="panel text-center">
@@ -226,8 +226,8 @@
         const label = document.getElementById('payoutMethodLabel');
         const formulaDiv = document.querySelector('.formulas');
         if (!label || !formulaDiv) return;
-        const labels = { 'default': 'Default (Parimutuel)', 'late': 'Late Adoption', 'cpmm': 'CPMM (Polymarket)' };
-        label.innerText = labels[payoutMode];
+        const modelLabels = { 'default': 'Model C, Default (Parimutuel)', 'late': 'Model D, Late Adoption', 'cpmm': 'Model E/F, CPMM (Polymarket)' };
+        label.innerText = modelLabels[payoutMode];
 
         if (payoutMode === 'late') {
             formulaDiv.innerHTML = `
