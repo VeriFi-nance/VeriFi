@@ -37,6 +37,61 @@ function emptyDraft(): ClaimDraft {
   return { asset_id: '', assetSymbol: '', direction: '', percentage: '', until: '' };
 }
 
+interface ClaimViewerProps {
+  assetSymbol: string;
+  direction: 'Bullish' | 'Bearish' | 'bullish' | 'bearish';
+  percentage: string;
+  until: string;
+  onAction: () => void;
+  actionLabel: string;
+  actionVariant?: 'remove' | 'add';
+}
+
+function ClaimViewer({
+  assetSymbol,
+  direction,
+  percentage,
+  until,
+  onAction,
+  actionLabel,
+  actionVariant = 'remove',
+}: ClaimViewerProps) {
+  const isDirectionBullish = direction === 'Bullish' || direction === 'bullish';
+  return (
+    <div className="flex items-center gap-2 rounded-lg border px-3 py-2 bg-muted/40">
+      {/* Direction dot */}
+      <span
+        className={`size-2 rounded-full shrink-0 ${
+          isDirectionBullish ? 'bg-emerald-500' : 'bg-red-500'
+        }`}
+      />
+      <span className="font-mono font-semibold text-xs">{assetSymbol}</span>
+      <Badge
+        variant={isDirectionBullish ? 'success' : 'destructive'}
+        className="text-[10px] px-1.5 py-0"
+      >
+        {isDirectionBullish ? '▲' : '▼'} {parseFloat(percentage).toFixed(1)}%
+      </Badge>
+      <span className="flex items-center gap-1 text-xs text-muted-foreground flex-1">
+        <CalendarDays className="size-3" />
+        {new Date(until).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+      </span>
+      {actionVariant === 'add' ? (
+        <Button size="sm" variant="ghost" className="h-5 px-2 text-xs" onClick={onAction}>
+          {actionLabel}
+        </Button>
+      ) : (
+        <button
+          onClick={onAction}
+          className="ml-auto size-5 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+        >
+          <X className="size-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 interface NewPostModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -210,32 +265,62 @@ export function NewPostModal({ open, onOpenChange, onPosted }: NewPostModalProps
               <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                 {extracting ? 'Analysing…' : 'Detected Claims'}
               </p>
-              {extractedClaims.map((c, i) => (
-                <div
-                  key={i}
-                  className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-opacity ${
-                    c.status === 'rejected' ? 'opacity-40' : 'bg-muted/30'
-                  }`}
-                >
-                  <span
-                    className={`size-2 rounded-full shrink-0 ${
-                      c.direction === 'bullish' ? 'bg-emerald-500' : 'bg-red-500'
-                    }`}
+              {extractedClaims.map((c, i) => {
+                const notRejected = c.status !== 'rejected';
+                const defaultUntil = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
+                return notRejected ? (
+                  <ClaimViewer
+                    key={i}
+                    assetSymbol={c.asset}
+                    direction={c.direction}
+                    percentage="5"
+                    until={defaultUntil}
+                    onAction={() => {
+                      const asset = assets.find(a => a.symbol === c.asset);
+                      if (asset) {
+                        const newClaim: ClaimDraft = {
+                          asset_id: asset.id.toString(),
+                          assetSymbol: asset.symbol,
+                          direction: c.direction === 'bullish' ? 'Bullish' : 'Bearish',
+                          percentage: '5',
+                          until: defaultUntil,
+                        };
+                        setClaims((prev) => [...prev, newClaim]);
+                        toggleExtracted(i);
+                      }
+                    }}
+                    actionLabel="Add"
+                    actionVariant="add"
                   />
-                  <span className={`flex-1 text-xs truncate ${c.status === 'rejected' ? 'line-through text-muted-foreground' : ''}`}>
-                    {c.text}
-                  </span>
-                  <Badge variant={c.direction === 'bullish' ? 'success' : 'destructive'} className="text-[10px] px-1.5 py-0 shrink-0">
-                    {c.direction === 'bullish' ? '▲' : '▼'} {c.asset}
-                  </Badge>
-                  <button
-                    onClick={() => toggleExtracted(i)}
-                    className="size-5 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors text-xs shrink-0"
-                  >
-                    {c.status === 'rejected' ? '↩' : <X className="size-3" />}
-                  </button>
+                ) : null;
+              })}
+              {extractedClaims.some(c => c.status !== 'rejected') && (
+                <div className="space-y-1.5">
+                  {extractedClaims.map((c, i) =>
+                    c.status === 'rejected' ? (
+                      <div
+                        key={i}
+                        className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm opacity-40"
+                      >
+                        <span
+                          className={`size-2 rounded-full shrink-0 ${
+                            c.direction === 'bullish' ? 'bg-emerald-500' : 'bg-red-500'
+                          }`}
+                        />
+                        <span className="flex-1 text-xs truncate line-through text-muted-foreground">
+                          {c.text}
+                        </span>
+                        <button
+                          onClick={() => toggleExtracted(i)}
+                          className="size-5 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors text-xs shrink-0"
+                        >
+                          ↩
+                        </button>
+                      </div>
+                    ) : null
+                  )}
                 </div>
-              ))}
+              )}
             </div>
           )}
 
@@ -246,34 +331,16 @@ export function NewPostModal({ open, onOpenChange, onPosted }: NewPostModalProps
                 Attached Claims
               </p>
               {claims.map((c, i) => (
-                <div
+                <ClaimViewer
                   key={i}
-                  className="flex items-center gap-2 rounded-lg border px-3 py-2 bg-muted/40"
-                >
-                  {/* Direction dot */}
-                  <span
-                    className={`size-2 rounded-full shrink-0 ${
-                      c.direction === 'Bullish' ? 'bg-emerald-500' : 'bg-red-500'
-                    }`}
-                  />
-                  <span className="font-mono font-semibold text-xs">{c.assetSymbol}</span>
-                  <Badge
-                    variant={c.direction === 'Bullish' ? 'success' : 'destructive'}
-                    className="text-[10px] px-1.5 py-0"
-                  >
-                    {c.direction === 'Bullish' ? '▲' : '▼'} {parseFloat(c.percentage).toFixed(1)}%
-                  </Badge>
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground flex-1">
-                    <CalendarDays className="size-3" />
-                    {new Date(c.until).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                  </span>
-                  <button
-                    onClick={() => removeClaim(i)}
-                    className="ml-auto size-5 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                  >
-                    <X className="size-3.5" />
-                  </button>
-                </div>
+                  assetSymbol={c.assetSymbol}
+                  direction={c.direction}
+                  percentage={c.percentage}
+                  until={c.until}
+                  onAction={() => removeClaim(i)}
+                  actionLabel="Remove"
+                  actionVariant="remove"
+                />
               ))}
             </div>
           )}
