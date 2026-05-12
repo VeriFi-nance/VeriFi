@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Post, Claim, Asset, HardClaim
+from .models import Post, Claim, Asset, HardClaim, OHLCData
 
 
 class ClaimInline(admin.TabularInline):
@@ -31,6 +31,10 @@ class AssetAdmin(admin.ModelAdmin):
     list_display = ["id", "name", "symbol", "market_type", "provider", "provider_symbol", "quote_currency"]
     list_filter = ["market_type", "provider", "quote_currency"]
     search_fields = ["name", "symbol", "provider_symbol"]
+    fieldsets = (
+        (None, {"fields": ("name", "symbol", "description", "market_type", "provider", "provider_symbol", "quote_currency")}),
+        ("Exchange Symbols", {"fields": ("binance_symbol", "kucoin_symbol", "kraken_pair", "twelvedata_symbol")}),
+    )
 
 
 @admin.register(HardClaim)
@@ -38,3 +42,11 @@ class HardClaimAdmin(admin.ModelAdmin):
     list_display = ["id", "author", "asset", "direction", "percentage", "until", "status"]
     list_filter = ["status", "direction", "asset"]
     search_fields = ["text", "author__address"]
+
+
+@admin.register(OHLCData)
+class OHLCDataAdmin(admin.ModelAdmin):
+    list_display = ["id", "asset", "date", "open", "high", "low", "close"]
+    list_filter = ["asset", "date"]
+    search_fields = ["asset__symbol"]
+    ordering = ["-date"]

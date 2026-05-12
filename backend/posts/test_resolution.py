@@ -1,10 +1,9 @@
 from datetime import date, timedelta
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from django.test import TestCase
-from posts.models import Asset, Post, HardClaim, HardClaimEvent
+from posts.models import Asset, Post, HardClaim, HardClaimEvent, OHLCData
 from posts.resolution import (
     normalize_claim_for_resolution,
-    evaluate_claim,
     resolve_hard_claim,
     ResolutionError,
 )
@@ -18,9 +17,12 @@ class ResolutionTests(TestCase):
             symbol="BTC",
             name="Bitcoin",
             market_type=Asset.MarketType.CRYPTO,
-            provider=Asset.Provider.COINGECKO,
+            provider=Asset.Provider.BINANCE,
             provider_symbol="bitcoin",
             quote_currency="USD",
+            binance_symbol="BTCUSDT",
+            kucoin_symbol="BTC-USDT",
+            kraken_pair="XBTUSD",
         )
         self.author = WalletUser.objects.create(address="0x123")
         self.post = Post.objects.create(
@@ -52,62 +54,104 @@ class ResolutionTests(TestCase):
         with self.assertRaisesMessage(ResolutionError, "Claim cannot be resolved before its due date."):
             normalize_claim_for_resolution(self.claim)
 
-    def test_normalize_missing_provider_symbol(self):
-        self.asset.provider_symbol = ""
-        self.asset.save()
-        with self.assertRaisesMessage(ResolutionError, "Asset is missing provider lookup metadata."):
+    def test_normalize_unsupported_direction(self):
+        self.claim.direction = "sideways"
+        with self.assertRaisesMessage(ResolutionError, "Only bullish and bearish"):
             normalize_claim_for_resolution(self.claim)
 
-    def test_evaluate_claim_bullish_confirmed(self):
-        req = normalize_claim_for_resolution(self.claim)
-        result = evaluate_claim(req, 100.0, "http://ref.url", 105.0, "http://due.url", 115.0)
-        self.assertEqual(result["status"], HardClaim.Status.CONFIRMED)
-        self.assertEqual(result["computed_change_pct"], 15.0)
+    def _seed_ohlc(self, base_price=1000.0, days=5, trend_pct=2.0):
+        """Create OHLC rows for the claim period with a simple uptrend."""
+        start = self.claim.created_at.date()
+        rows = []
+        for i in range(days):
+            d = start + timedelta(days=i)
+            if d > self.claim.until:
+                break
+            price = base_price * (1 + trend_pct * i / 100)
+            rows.append(OHLCData(
+                asset=self.asset,
+                date=d,
+                open=price,
+                high=price * 1.02,
+                low=price * 0.98,
+                close=price * 1.01,
+            ))
+        OHLCData.objects.bulk_create(rows)
+        return rows
 
-    def test_evaluate_claim_bullish_rejected(self):
-        req = normalize_claim_for_resolution(self.claim)
-        # 5% increase is less than 10% threshold
-        result = evaluate_claim(req, 100.0, "http://ref.url", 95.0, "http://due.url", 105.0)
-        self.assertEqual(result["status"], HardClaim.Status.REJECTED)
-
-    def test_evaluate_claim_bearish_confirmed(self):
-        self.claim.direction = "bearish"
-        self.claim.save()
-        req = normalize_claim_for_resolution(self.claim)
-        # Wait: change = (85 - 100) / 100 = -15%. Target is bearish 10%. -15 <= -10 is True.
-        result = evaluate_claim(req, 100.0, "http://ref.url", 95.0, "http://due.url", 85.0)
-        self.assertEqual(result["status"], HardClaim.Status.CONFIRMED)
-        self.assertEqual(result["computed_change_pct"], -15.0)
-
-    def test_evaluate_claim_bearish_rejected(self):
-        self.claim.direction = "bearish"
-        self.claim.save()
-        req = normalize_claim_for_resolution(self.claim)
-        # -5% does not meet strictly -10% or more drop.
-        result = evaluate_claim(req, 100.0, "http://ref.url", 110.0, "http://due.url", 95.0)
-        self.assertEqual(result["status"], HardClaim.Status.REJECTED)
-
-    @patch("posts.resolution.fetch_peak_price")
-    @patch("posts.resolution.fetch_due_price")
     @patch("posts.resolution.fetch_reference_price")
-    def test_resolve_hard_claim_success_logging(self, mock_ref, mock_due, mock_peak):
+    @patch("posts.ohlc_fetcher.fetch_ohlc_for_asset")
+    def test_resolve_bullish_confirmed(self, mock_ohlc_fetch, mock_ref):
+        """If OHLC high reaches target, claim is confirmed."""
         mock_ref.return_value = (1000.0, "http://mock.ref")
-        mock_due.return_value = (1100.0, "http://mock.due")
-        mock_peak.return_value = 1100.0
+        # Seed OHLC where high on day 4 exceeds 10% target (1100)
+        start = self.claim.created_at.date()
+        for i in range(5):
+            d = start + timedelta(days=i)
+            if d > self.claim.until:
+                break
+            price = 1000 + i * 30  # 1000, 1030, 1060, 1090, 1120
+            OHLCData.objects.create(
+                asset=self.asset, date=d,
+                open=price, high=price + 20, low=price - 20, close=price + 10,
+            )
+        mock_ohlc_fetch.return_value = []  # Already in DB, won't be called
 
         result = resolve_hard_claim(self.claim)
-        
-        # 1100/1000 => 10% change. Target is 10.0%, so exactly CONFIRMED
         self.assertEqual(result["status"], HardClaim.Status.CONFIRMED)
-        
+        self.assertGreater(len(result["hit_days"]), 0)
+        self.assertIsNotNone(result["target_reached_at"])
+
         self.claim.refresh_from_db()
         self.assertEqual(self.claim.status, HardClaim.Status.CONFIRMED)
 
-        # Ensure correct insertion of the event log
         events = self.claim.events.all()
         self.assertEqual(events.count(), 1)
         evt = events.last()
         self.assertEqual(evt.event_type, HardClaimEvent.EventType.RESOLUTION)
-        self.assertEqual(evt.details["computed_change_pct"], 10.0)
-        self.assertEqual(evt.details["prices"]["reference_url"], "http://mock.ref")
-        self.assertEqual(evt.details["prices"]["due_url"], "http://mock.due")
+
+    @patch("posts.resolution.fetch_reference_price")
+    @patch("posts.ohlc_fetcher.fetch_ohlc_for_asset")
+    def test_resolve_bullish_rejected(self, mock_ohlc_fetch, mock_ref):
+        """If OHLC high never reaches 10% target, claim is rejected."""
+        mock_ref.return_value = (1000.0, "http://mock.ref")
+        start = self.claim.created_at.date()
+        for i in range(5):
+            d = start + timedelta(days=i)
+            if d > self.claim.until:
+                break
+            price = 1000 + i * 10  # 1000, 1010, 1020, 1030, 1040 — max high = 1060
+            OHLCData.objects.create(
+                asset=self.asset, date=d,
+                open=price, high=price + 20, low=price - 20, close=price + 5,
+            )
+        mock_ohlc_fetch.return_value = []
+
+        result = resolve_hard_claim(self.claim)
+        self.assertEqual(result["status"], HardClaim.Status.REJECTED)
+        self.assertEqual(len(result["hit_days"]), 0)
+        self.assertIsNone(result["target_reached_at"])
+        # Closest price should exist
+        self.assertIsNotNone(result["prices"]["closest"])
+
+    @patch("posts.resolution.fetch_reference_price")
+    @patch("posts.ohlc_fetcher.fetch_ohlc_for_asset")
+    def test_resolve_bearish_confirmed(self, mock_ohlc_fetch, mock_ref):
+        """Bearish claim: low goes below target → confirmed."""
+        self.claim.direction = "bearish"
+        self.claim.save()
+        mock_ref.return_value = (1000.0, "http://mock.ref")
+        start = self.claim.created_at.date()
+        for i in range(5):
+            d = start + timedelta(days=i)
+            if d > self.claim.until:
+                break
+            price = 1000 - i * 30  # 1000, 970, 940, 910, 880
+            OHLCData.objects.create(
+                asset=self.asset, date=d,
+                open=price, high=price + 10, low=price - 20, close=price - 5,
+            )
+        mock_ohlc_fetch.return_value = []
+
+        result = resolve_hard_claim(self.claim)
+        self.assertEqual(result["status"], HardClaim.Status.CONFIRMED)

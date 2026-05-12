@@ -1,9 +1,11 @@
+import { useState, useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Home, User, LogOut } from 'lucide-react';
+import { Home, User, LogOut, Sun, Moon, Users } from 'lucide-react';
 import { clearAuth, loadAddress } from '@/lib/auth';
 import { clearPrivateKey } from '@/lib/crypto';
+import { loadTheme, toggleTheme, type Theme } from '@/lib/theme';
 
 /** Derive a stable avatar background hue from an address. */
 function avatarColor(addr: string): string {
@@ -35,8 +37,8 @@ function SidebarNavLink({
       className={[
         'w-full justify-start gap-3 px-4 py-3 h-auto font-semibold text-base rounded-xl transition-all duration-150',
         active
-          ? 'bg-foreground text-background hover:bg-foreground/90 hover:text-background'
-          : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+          ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/40 shadow-[0_0_15px_rgba(99,102,241,0.15)] hover:bg-indigo-500/15 hover:text-indigo-300'
+          : 'text-muted-foreground hover:text-foreground hover:bg-accent border border-transparent',
       ].join(' ')}
     >
       <Link to={to}>
@@ -55,6 +57,7 @@ function pageTitle(pathname: string): string {
   if (pathname.startsWith('/app/post/review')) return 'Review Claims';
   if (pathname.startsWith('/app/post/')) return 'Post';
   if (pathname.startsWith('/app/user/')) return 'User';
+  if (pathname.startsWith('/app/communities')) return 'Communities';
   return 'VeriFi';
 }
 
@@ -62,10 +65,28 @@ export default function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const address = loadAddress() ?? '';
+  const [theme, setTheme] = useState<Theme>(loadTheme);
+
+  useEffect(() => {
+    // Listen for storage changes (if user opens multiple tabs)
+    const handler = (e: StorageEvent) => {
+      if (e.key === 'verifi-theme' && (e.newValue === 'dark' || e.newValue === 'light')) {
+        setTheme(e.newValue);
+      }
+    };
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
+  }, []);
 
   const isFeed = location.pathname === '/app' || location.pathname === '/app/';
   const isProfile = location.pathname === '/app/profile';
+  const isCommunities = location.pathname.startsWith('/app/communities');
   const title = pageTitle(location.pathname);
+
+  function handleThemeToggle() {
+    const next = toggleTheme();
+    setTheme(next);
+  }
 
   function handleDisconnect() {
     clearAuth();
@@ -105,6 +126,12 @@ export default function AppLayout() {
               label="Profile"
               active={isProfile}
             />
+            <SidebarNavLink
+              to="/app/communities"
+              icon={<Users className="size-5 shrink-0" />}
+              label="Communities"
+              active={isCommunities}
+            />
           </nav>
 
           {/* Disconnect button at bottom */}
@@ -130,8 +157,21 @@ export default function AppLayout() {
             {/* Page title — left aligned */}
             <h1 className="text-md font-semibold tracking-tight flex-1">{title}</h1>
 
-            {/* Wallet info — right side */}
-            {address && (
+            {/* Right side controls */}
+            <div className="flex items-center gap-3">
+              {/* Theme toggle */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 rounded-full text-muted-foreground hover:text-foreground"
+                onClick={handleThemeToggle}
+                title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              >
+                {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
+              </Button>
+
+              {/* Wallet info */}
+              {address && (
               <div className="flex items-center gap-2.5">
                 <div
                   className="size-8 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0 select-none ring-2 ring-background"
@@ -142,7 +182,8 @@ export default function AppLayout() {
                 </div>
                 <span className="text-sm font-mono text-muted-foreground">{truncateAddress(address)}</span>
               </div>
-            )}
+              )}
+            </div>
           </header>
 
           {/* ── Page content ─────────────────────────────────────────────────── */}

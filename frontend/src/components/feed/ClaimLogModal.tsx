@@ -1,8 +1,11 @@
+import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, CheckCircle2, Clock, Info, XCircle } from 'lucide-react';
-import type { HardClaimItem, AssetItem } from '@/lib/types';
+import { CalendarDays, CheckCircle2, Clock, Crosshair, Info, Target, XCircle } from 'lucide-react';
+import type { HardClaimItem, AssetItem, ClaimChartData } from '@/lib/types';
 import { truncateAddress } from '../HardClaimCard';
+import { getClaimChartData } from '@/lib/api';
+import { PriceChart } from './PriceChart';
 
 interface ClaimLogModalProps {
   isOpen: boolean;
@@ -12,6 +15,24 @@ interface ClaimLogModalProps {
 }
 
 export function ClaimLogModal({ isOpen, onClose, claim, assets }: ClaimLogModalProps) {
+  const [chartData, setChartData] = useState<ClaimChartData | null>(null);
+  const [chartLoading, setChartLoading] = useState(false);
+  const [chartError, setChartError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen || !claim) {
+      setChartData(null);
+      setChartError(null);
+      return;
+    }
+    setChartLoading(true);
+    setChartError(null);
+    getClaimChartData(claim.id)
+      .then(setChartData)
+      .catch((err) => setChartError(err.message || 'Failed to load chart data'))
+      .finally(() => setChartLoading(false));
+  }, [isOpen, claim?.id]);
+
   if (!claim) return null;
 
   const asset = assets.find((a) => a.id === claim.asset);
@@ -23,9 +44,17 @@ export function ClaimLogModal({ isOpen, onClose, claim, assets }: ClaimLogModalP
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
 
+  // Extract resolution details for target-reached / closest-price timeline entry
+  const resolutionEvent = events.find((e) => e.event_type === 'resolution');
+  const resDetails = resolutionEvent?.details;
+  const targetReachedAt = resDetails?.target_reached_at;
+  const hitDays = resDetails?.hit_days || [];
+  const closestPrice = resDetails?.prices?.closest;
+  const targetPrice = resDetails?.prices?.target;
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg">
             <span
@@ -152,7 +181,81 @@ export function ClaimLogModal({ isOpen, onClose, claim, assets }: ClaimLogModalP
               </div>
             );
           })}
+
+          {/* Target Reached / Closest to Target timeline entry */}
+          {resDetails && (
+            <div className="relative pl-10">
+              <div className="absolute left-0 top-1.5 flex size-8 -translate-x-1.5 items-center justify-center rounded-full bg-background border border-border shadow-sm">
+                {targetReachedAt ? (
+                  <Target className="size-4 text-emerald-500" />
+                ) : (
+                  <Crosshair className="size-3.5 text-amber-500" />
+                )}
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-medium">
+                  {targetReachedAt ? '🎯 Target Reached' : '📊 Closest to Target'}
+                </h4>
+
+                {targetReachedAt && (
+                  <>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <CalendarDays className="size-3" />
+                      <time dateTime={targetReachedAt}>
+                        {new Date(targetReachedAt).toLocaleDateString(undefined, {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </time>
+                    </div>
+                    {targetPrice && (
+                      <p className="text-xs text-muted-foreground">
+                        Target Price: <span className="font-mono font-medium text-emerald-500">${targetPrice.toLocaleString()}</span>
+                      </p>
+                    )}
+                    {hitDays.length > 1 && (
+                      <p className="text-[10px] text-muted-foreground">
+                        Price reached target on {hitDays.length} total days
+                      </p>
+                    )}
+                  </>
+                )}
+
+                {!targetReachedAt && closestPrice != null && targetPrice != null && (
+                  <>
+                    <p className="text-xs text-muted-foreground">
+                      Closest: <span className="font-mono font-medium text-amber-500">${closestPrice.toLocaleString()}</span>
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {Math.abs(((closestPrice - targetPrice) / targetPrice) * 100).toFixed(2)}% away from target ($
+                      {targetPrice.toLocaleString()})
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* Price Chart */}
+        {chartLoading && (
+          <div className="mt-4 rounded-lg border bg-card p-6 flex items-center justify-center">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="size-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              Loading chart data…
+            </div>
+          </div>
+        )}
+
+        {chartError && (
+          <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-xs text-destructive">
+            Failed to load chart: {chartError}
+          </div>
+        )}
+
+        {chartData && chartData.ohlc.length > 0 && <PriceChart data={chartData} />}
       </DialogContent>
     </Dialog>
   );

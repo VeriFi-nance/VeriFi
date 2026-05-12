@@ -229,3 +229,5 @@ pnpm-debug.log*
 # Editor
 .DS_Store
 copilot-instructions.md
+.roo
+.agents/
