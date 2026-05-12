@@ -54,7 +54,7 @@ function SidebarNavLink({
 function pageTitle(pathname: string): string {
   if (pathname === '/app' || pathname === '/app/') return 'Feed';
   if (pathname === '/app/profile') return 'Profile';
-  if (pathname.startsWith('/app/post/new')) return 'New Post';
+  if (pathname.startsWith('/app/post/review')) return 'Review Claims';
   if (pathname.startsWith('/app/post/')) return 'Post';
   if (pathname.startsWith('/app/user/')) return 'User';
   if (pathname.startsWith('/app/communities')) return 'Communities';

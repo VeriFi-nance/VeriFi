@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import LoginPage from './pages/LoginPage';
 import AppLayout from './pages/AppLayout';
 import FeedPage from './pages/FeedPage';
-import PostCreationPage from './pages/PostCreationPage';
+import ClaimReviewPage from './pages/ClaimReviewPage';
 import PostDetailPage from './pages/PostDetailPage';
 import UserPostsPage from './pages/UserPostsPage';
 import ProfilePage from './pages/ProfilePage';
@@ -34,7 +34,7 @@ export default function App() {
           }
         >
           <Route index element={<FeedPage />} />
-          <Route path="post/new" element={<PostCreationPage />} />
+          <Route path="post/review" element={<ClaimReviewPage />} />
           <Route path="post/:id" element={<PostDetailPage />} />
           <Route path="user/:address" element={<UserPostsPage />} />
           <Route path="profile" element={<ProfilePage />} />

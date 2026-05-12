@@ -3,25 +3,18 @@ export interface ReviewClaim {
   asset: string;
   direction: string;
   status: 'confirmed' | 'rejected';
+  percentage?: string;
+  until?: string;
 }
 
 export interface ExtractedClaimContract {
-  source_text: string;
-  instrument: {
-    display_symbol: string;
-    normalized_symbol: string;
-    market_type: string;
-  };
-  target: {
-    kind: 'percentage' | 'exact_price';
-    direction: string;
-    value: number;
-    unit: string;
-  };
-  due_at: string;
-  confidence: number;
-  language: string;
-  needs_user_confirmation: boolean;
+  pay: string | null;
+  payda: string | null;
+  value: number | null;
+  value_type: 'PRICE' | 'PERCENTAGE_UP' | 'PERCENTAGE_DOWN';
+  deadline: string | null;
+  status: 'HARD_CLAIM' | 'POSSIBLE_CLAIM';
+  text: string;
 }
 
 export interface ExtractClaimsResponse {

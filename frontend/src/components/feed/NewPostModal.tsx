@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -8,9 +8,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { PenSquare, Plus, X, TrendingUp, TrendingDown, CalendarDays } from 'lucide-react';
-import { createPost, createHardClaim, getAssets } from '@/lib/api';
+import { createPost, createHardClaim, getAssets, extractClaims } from '@/lib/api';
 import { isAuthenticated } from '@/lib/auth';
-import type { AssetItem } from '@/lib/types';
+import type { AssetItem, ReviewClaim, ExtractedClaimContract } from '@/lib/types';
+
+const DEBOUNCE_MS = 700;
+
+function toReviewClaim(c: ExtractedClaimContract): ReviewClaim {
+  return {
+    text: c.text,
+    asset: c.pay || '',
+    direction: c.value_type === 'PERCENTAGE_DOWN' ? 'bearish' : 'bullish',
+    status: 'confirmed',
+    percentage: c.value !== null ? c.value.toString() : '',
+    until: c.deadline || '',
+  };
+}
 
 const MAX_CHARS = 500;
 
@@ -24,6 +37,43 @@ interface ClaimDraft {
 
 function emptyDraft(): ClaimDraft {
   return { asset_id: '', assetSymbol: '', direction: '', percentage: '', until: '' };
+}
+
+interface ClaimViewerProps {
+  assetSymbol: string;
+  direction: 'Bullish' | 'Bearish' | 'bullish' | 'bearish';
+  percentage: string;
+  until: string;
+}
+
+function ClaimViewer({
+  assetSymbol,
+  direction,
+  percentage,
+  until,
+}: ClaimViewerProps) {
+  const isDirectionBullish = direction === 'Bullish' || direction === 'bullish';
+  return (
+    <div className="flex items-center gap-2 rounded-lg border px-3 py-2 bg-muted/40">
+      {/* Direction dot */}
+      <span
+        className={`size-2 rounded-full shrink-0 ${
+          isDirectionBullish ? 'bg-emerald-500' : 'bg-red-500'
+        }`}
+      />
+      <span className="font-mono font-semibold text-xs">{assetSymbol || 'Unknown Asset'}</span>
+      <Badge
+        variant={isDirectionBullish ? 'success' : 'destructive'}
+        className="text-[10px] px-1.5 py-0"
+      >
+        {isDirectionBullish ? '▲' : '▼'} {percentage ? `${parseFloat(percentage).toFixed(1)}%` : '? %'}
+      </Badge>
+      <span className="flex items-center gap-1 text-xs text-muted-foreground flex-1">
+        <CalendarDays className="size-3" />
+        {until ? new Date(until).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'Unknown Date'}
+      </span>
+    </div>
+  );
 }
 
 interface NewPostModalProps {
@@ -42,15 +92,42 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  const [extractedClaims, setExtractedClaims] = useState<ReviewClaim[]>([]);
+  const [ignoredClaimKeys, setIgnoredClaimKeys] = useState<Set<string>>(new Set());
+  const [extracting, setExtracting] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     if (open) {
       getAssets().then(setAssets).catch(console.error);
     }
   }, [open]);
 
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!content.trim()) {
+      setExtractedClaims([]);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      setExtracting(true);
+      try {
+        const response = await extractClaims(content);
+        setExtractedClaims(response.claims.map(toReviewClaim));
+      } catch {
+        setExtractedClaims([]);
+      } finally {
+        setExtracting(false);
+      }
+    }, DEBOUNCE_MS);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [content]);
+
   function resetModal() {
     setContent('');
     setClaims([]);
+    setExtractedClaims([]);
+    setIgnoredClaimKeys(new Set());
     setShowClaimForm(false);
     setDraft(emptyDraft());
     setError('');
@@ -85,7 +162,12 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
   }
 
   function removeClaim(idx: number) {
-    setClaims((prev) => prev.filter((_, i) => i !== idx));
+    setClaims((prev) => {
+      const target = prev[idx];
+      const key = `${target.assetSymbol || 'null'}-${target.direction.toLowerCase()}-${target.percentage || 'null'}-${target.until || 'null'}`;
+      setIgnoredClaimKeys(keys => new Set(keys).add(key));
+      return prev.filter((_, i) => i !== idx);
+    });
   }
 
   async function handleSubmit() {
@@ -162,42 +244,124 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
             </p>
           </div>
 
+          {/* ── Auto-extracted claims ───────────────────────── */}
+          {(extracting || extractedClaims.length > 0) && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                {extracting ? 'Analysing…' : 'Detected Claims'}
+              </p>
+
+              {/* Waiting to be added */}
+              <div className="space-y-1.5">
+                {extractedClaims
+                  .filter((c) => {
+                    const key = `${c.asset || 'null'}-${c.direction}-${c.percentage || 'null'}-${c.until || 'null'}`;
+                    if (ignoredClaimKeys.has(key)) return false;
+                    const isAttached = claims.some((ac) => {
+                      const dir = ac.direction.toLowerCase();
+                      return `${ac.assetSymbol || 'null'}-${dir}-${ac.percentage || 'null'}-${ac.until || 'null'}` === key;
+                    });
+                    return !isAttached;
+                  })
+                  .map((c, i) => {
+                    const hasMissingFields = !c.asset || !c.percentage || !c.until;
+                    return (
+                      <div key={i} className="flex items-center gap-2">
+                        <div className="flex-1">
+                          <ClaimViewer
+                            assetSymbol={c.asset}
+                            direction={c.direction as any}
+                            percentage={c.percentage!}
+                            until={c.until!}
+                          />
+                        </div>
+                        <div className="flex items-center">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs"
+                            disabled={hasMissingFields}
+                            onClick={() => {
+                              const asset = assets.find((a) => a.symbol === c.asset);
+                              if (asset) {
+                                const newClaim: ClaimDraft = {
+                                  asset_id: asset.id.toString(),
+                                  assetSymbol: asset.symbol,
+                                  direction: c.direction === 'bullish' ? 'Bullish' : 'Bearish',
+                                  percentage: c.percentage!,
+                                  until: c.until!,
+                                };
+                                setClaims((prev) => [...prev, newClaim]);
+                              }
+                            }}
+                          >
+                            Add
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => {
+                              const asset = assets.find((a) => a.symbol === c.asset);
+                              setDraft({
+                                asset_id: asset ? asset.id.toString() : '',
+                                assetSymbol: asset ? asset.symbol : '',
+                                direction: c.direction === 'bullish' ? 'Bullish' : 'Bearish',
+                                percentage: c.percentage || '',
+                                until: c.until || '',
+                              });
+                              setShowClaimForm(true);
+                              const key = `${c.asset || 'null'}-${c.direction}-${c.percentage || 'null'}-${c.until || 'null'}`;
+                              setIgnoredClaimKeys((keys) => new Set(keys).add(key));
+                            }}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => {
+                              const key = `${c.asset || 'null'}-${c.direction}-${c.percentage || 'null'}-${c.until || 'null'}`;
+                              setIgnoredClaimKeys((keys) => new Set(keys).add(key));
+                            }}
+                          >
+                            Dismiss
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
           {/* ── Added claims ────────────────────────────────── */}
           {claims.length > 0 && (
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                 Attached Claims
               </p>
-              {claims.map((c, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-2 rounded-lg border px-3 py-2 bg-muted/40"
-                >
-                  {/* Direction dot */}
-                  <span
-                    className={`size-2 rounded-full shrink-0 ${
-                      c.direction === 'Bullish' ? 'bg-emerald-500' : 'bg-red-500'
-                    }`}
-                  />
-                  <span className="font-mono font-semibold text-xs">{c.assetSymbol}</span>
-                  <Badge
-                    variant={c.direction === 'Bullish' ? 'success' : 'destructive'}
-                    className="text-[10px] px-1.5 py-0"
-                  >
-                    {c.direction === 'Bullish' ? '▲' : '▼'} {parseFloat(c.percentage).toFixed(1)}%
-                  </Badge>
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground flex-1">
-                    <CalendarDays className="size-3" />
-                    {new Date(c.until).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                  </span>
-                  <button
-                    onClick={() => removeClaim(i)}
-                    className="ml-auto size-5 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                  >
-                    <X className="size-3.5" />
-                  </button>
-                </div>
-              ))}
+              <div className="space-y-1.5">
+                {claims.map((c, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <ClaimViewer
+                        assetSymbol={c.assetSymbol}
+                        direction={c.direction}
+                        percentage={c.percentage}
+                        until={c.until}
+                      />
+                    </div>
+                    <button
+                      onClick={() => removeClaim(i)}
+                      className="size-5 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

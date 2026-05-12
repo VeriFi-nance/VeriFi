@@ -145,7 +145,7 @@ export default function ClaimReviewPage() {
   const [error, setError] = useState('');
 
   if (!state) {
-    return <Navigate to="/app/post/new" replace />;
+    return <Navigate to="/app" replace />;
   }
 
   const { content } = state;
@@ -163,7 +163,7 @@ export default function ClaimReviewPage() {
   }
 
   function handleBack() {
-    navigate('/app/post/new', { state: { restoredContent: content } });
+    navigate('/app', { replace: true });
   }
 
   return (
