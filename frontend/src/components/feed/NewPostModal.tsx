@@ -20,6 +20,8 @@ function toReviewClaim(c: ExtractedClaimContract): ReviewClaim {
     asset: c.pay,
     direction: c.value_type === 'PERCENTAGE_DOWN' ? 'bearish' : 'bullish',
     status: 'confirmed',
+    percentage: c.value_type !== 'PRICE' ? c.value.toString() : '5',
+    until: c.deadline || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
   };
 }
 
@@ -90,6 +92,7 @@ export function NewPostModal({ open, onOpenChange, onPosted }: NewPostModalProps
   const [error, setError] = useState('');
 
   const [extractedClaims, setExtractedClaims] = useState<ReviewClaim[]>([]);
+  const [ignoredClaimKeys, setIgnoredClaimKeys] = useState<Set<string>>(new Set());
   const [extracting, setExtracting] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -123,17 +126,10 @@ export function NewPostModal({ open, onOpenChange, onPosted }: NewPostModalProps
     setContent('');
     setClaims([]);
     setExtractedClaims([]);
+    setIgnoredClaimKeys(new Set());
     setShowClaimForm(false);
     setDraft(emptyDraft());
     setError('');
-  }
-
-  function toggleExtracted(idx: number) {
-    setExtractedClaims((prev) =>
-      prev.map((c, i) =>
-        i === idx ? { ...c, status: c.status === 'rejected' ? 'confirmed' : 'rejected' } : c
-      )
-    );
   }
 
   function handleClose(val: boolean) {
@@ -165,7 +161,12 @@ export function NewPostModal({ open, onOpenChange, onPosted }: NewPostModalProps
   }
 
   function removeClaim(idx: number) {
-    setClaims((prev) => prev.filter((_, i) => i !== idx));
+    setClaims((prev) => {
+      const target = prev[idx];
+      const key = `${target.assetSymbol}-${target.direction.toLowerCase()}-${target.percentage}-${target.until}`;
+      setIgnoredClaimKeys(keys => new Set(keys).add(key));
+      return prev.filter((_, i) => i !== idx);
+    });
   }
 
   async function handleSubmit() {
@@ -251,76 +252,85 @@ export function NewPostModal({ open, onOpenChange, onPosted }: NewPostModalProps
               {/* Waiting to be added */}
               <div className="space-y-1.5">
                 {extractedClaims
-                  .filter(c => c.status !== 'rejected')
+                  .filter((c) => {
+                    const key = `${c.asset}-${c.direction}-${c.percentage}-${c.until}`;
+                    if (ignoredClaimKeys.has(key)) return false;
+                    const isAttached = claims.some((ac) => {
+                      const dir = ac.direction.toLowerCase();
+                      return `${ac.assetSymbol}-${dir}-${ac.percentage}-${ac.until}` === key;
+                    });
+                    return !isAttached;
+                  })
                   .map((c, i) => {
-                    const actualIndex = extractedClaims.findIndex(ec => ec === c);
-                    const defaultUntil = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
                     return (
                       <div key={i} className="flex items-center gap-2">
                         <div className="flex-1">
                           <ClaimViewer
                             assetSymbol={c.asset}
-                            direction={c.direction}
-                            percentage="5"
-                            until={defaultUntil}
+                            direction={c.direction as any}
+                            percentage={c.percentage!}
+                            until={c.until!}
                           />
                         </div>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-5 px-2 text-xs"
-                          onClick={() => {
-                            const asset = assets.find(a => a.symbol === c.asset);
-                            if (asset) {
-                              const newClaim: ClaimDraft = {
-                                asset_id: asset.id.toString(),
-                                assetSymbol: asset.symbol,
-                                direction: c.direction === 'bullish' ? 'Bullish' : 'Bearish',
-                                percentage: '5',
-                                until: defaultUntil,
-                              };
-                              setClaims((prev) => [...prev, newClaim]);
-                              toggleExtracted(actualIndex);
-                            }
-                          }}
-                        >
-                          Add
-                        </Button>
+                        <div className="flex items-center">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => {
+                              const asset = assets.find((a) => a.symbol === c.asset);
+                              if (asset) {
+                                const newClaim: ClaimDraft = {
+                                  asset_id: asset.id.toString(),
+                                  assetSymbol: asset.symbol,
+                                  direction: c.direction === 'bullish' ? 'Bullish' : 'Bearish',
+                                  percentage: c.percentage!,
+                                  until: c.until!,
+                                };
+                                setClaims((prev) => [...prev, newClaim]);
+                              }
+                            }}
+                          >
+                            Add
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => {
+                              const asset = assets.find((a) => a.symbol === c.asset);
+                              if (asset) {
+                                setDraft({
+                                  asset_id: asset.id.toString(),
+                                  assetSymbol: asset.symbol,
+                                  direction: c.direction === 'bullish' ? 'Bullish' : 'Bearish',
+                                  percentage: c.percentage!,
+                                  until: c.until!,
+                                });
+                                setShowClaimForm(true);
+                                const key = `${c.asset}-${c.direction}-${c.percentage}-${c.until}`;
+                                setIgnoredClaimKeys((keys) => new Set(keys).add(key));
+                              }
+                            }}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => {
+                              const key = `${c.asset}-${c.direction}-${c.percentage}-${c.until}`;
+                              setIgnoredClaimKeys((keys) => new Set(keys).add(key));
+                            }}
+                          >
+                            Dismiss
+                          </Button>
+                        </div>
                       </div>
                     );
                   })}
               </div>
-
-              {/* Already added */}
-              {extractedClaims.some(c => c.status === 'rejected') && (
-                <div className="space-y-1.5 opacity-60">
-                  <p className="text-xs text-muted-foreground italic">Added to claims</p>
-                  {extractedClaims
-                    .filter(c => c.status === 'rejected')
-                    .map((c, i) => {
-                      const actualIndex = extractedClaims.findIndex(ec => ec === c);
-                      return (
-                        <div key={i} className="flex items-center gap-2">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 rounded-lg border px-3 py-2 bg-muted/40 line-through">
-                              <span className="flex-1 text-xs truncate text-muted-foreground">
-                                {c.text}
-                              </span>
-                            </div>
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-5 px-2 text-xs"
-                            onClick={() => toggleExtracted(actualIndex)}
-                          >
-                            Undo
-                          </Button>
-                        </div>
-                      );
-                    })}
-                </div>
-              )}
             </div>
           )}
 

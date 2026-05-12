@@ -3,6 +3,8 @@ export interface ReviewClaim {
   asset: string;
   direction: string;
   status: 'confirmed' | 'rejected';
+  percentage?: string;
+  until?: string;
 }
 
 export interface ExtractedClaimContract {

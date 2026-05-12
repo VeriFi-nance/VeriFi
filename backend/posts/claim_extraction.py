@@ -164,6 +164,11 @@ def extract_deadline(text: str) -> Optional[str]:
     if year_end:
         return year_end
 
+    # Check for explicit YYYY-MM-DD
+    iso_date = re.search(r"\b(20\d{2}-\d{2}-\d{2})\b", text)
+    if iso_date:
+        return iso_date.group(1)
+
     lowered = text.lower()
     if re.search(r"yıl sonu|yıl sonunda|yıl sonuna kadar|yıl sonu itibarıyla|end of year|year[- ]end|by year[- ]end", lowered):
         return f"{_now.year}-12-31"
