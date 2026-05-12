@@ -8,9 +8,9 @@ export interface ReviewClaim {
 }
 
 export interface ExtractedClaimContract {
-  pay: string;
+  pay: string | null;
   payda: string | null;
-  value: number;
+  value: number | null;
   value_type: 'PRICE' | 'PERCENTAGE_UP' | 'PERCENTAGE_DOWN';
   deadline: string | null;
   status: 'HARD_CLAIM' | 'POSSIBLE_CLAIM';

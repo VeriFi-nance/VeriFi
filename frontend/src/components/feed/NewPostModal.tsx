@@ -17,11 +17,11 @@ const DEBOUNCE_MS = 700;
 function toReviewClaim(c: ExtractedClaimContract): ReviewClaim {
   return {
     text: c.text,
-    asset: c.pay,
+    asset: c.pay || '',
     direction: c.value_type === 'PERCENTAGE_DOWN' ? 'bearish' : 'bullish',
     status: 'confirmed',
-    percentage: c.value_type !== 'PRICE' ? c.value.toString() : '5',
-    until: c.deadline || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+    percentage: c.value !== null ? c.value.toString() : '',
+    until: c.deadline || '',
   };
 }
 
@@ -61,16 +61,16 @@ function ClaimViewer({
           isDirectionBullish ? 'bg-emerald-500' : 'bg-red-500'
         }`}
       />
-      <span className="font-mono font-semibold text-xs">{assetSymbol}</span>
+      <span className="font-mono font-semibold text-xs">{assetSymbol || 'Unknown Asset'}</span>
       <Badge
         variant={isDirectionBullish ? 'success' : 'destructive'}
         className="text-[10px] px-1.5 py-0"
       >
-        {isDirectionBullish ? '▲' : '▼'} {parseFloat(percentage).toFixed(1)}%
+        {isDirectionBullish ? '▲' : '▼'} {percentage ? `${parseFloat(percentage).toFixed(1)}%` : '? %'}
       </Badge>
       <span className="flex items-center gap-1 text-xs text-muted-foreground flex-1">
         <CalendarDays className="size-3" />
-        {new Date(until).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+        {until ? new Date(until).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'Unknown Date'}
       </span>
     </div>
   );
@@ -163,7 +163,7 @@ export function NewPostModal({ open, onOpenChange, onPosted }: NewPostModalProps
   function removeClaim(idx: number) {
     setClaims((prev) => {
       const target = prev[idx];
-      const key = `${target.assetSymbol}-${target.direction.toLowerCase()}-${target.percentage}-${target.until}`;
+      const key = `${target.assetSymbol || 'null'}-${target.direction.toLowerCase()}-${target.percentage || 'null'}-${target.until || 'null'}`;
       setIgnoredClaimKeys(keys => new Set(keys).add(key));
       return prev.filter((_, i) => i !== idx);
     });
@@ -253,15 +253,16 @@ export function NewPostModal({ open, onOpenChange, onPosted }: NewPostModalProps
               <div className="space-y-1.5">
                 {extractedClaims
                   .filter((c) => {
-                    const key = `${c.asset}-${c.direction}-${c.percentage}-${c.until}`;
+                    const key = `${c.asset || 'null'}-${c.direction}-${c.percentage || 'null'}-${c.until || 'null'}`;
                     if (ignoredClaimKeys.has(key)) return false;
                     const isAttached = claims.some((ac) => {
                       const dir = ac.direction.toLowerCase();
-                      return `${ac.assetSymbol}-${dir}-${ac.percentage}-${ac.until}` === key;
+                      return `${ac.assetSymbol || 'null'}-${dir}-${ac.percentage || 'null'}-${ac.until || 'null'}` === key;
                     });
                     return !isAttached;
                   })
                   .map((c, i) => {
+                    const hasMissingFields = !c.asset || !c.percentage || !c.until;
                     return (
                       <div key={i} className="flex items-center gap-2">
                         <div className="flex-1">
@@ -277,6 +278,7 @@ export function NewPostModal({ open, onOpenChange, onPosted }: NewPostModalProps
                             size="sm"
                             variant="ghost"
                             className="h-7 px-2 text-xs"
+                            disabled={hasMissingFields}
                             onClick={() => {
                               const asset = assets.find((a) => a.symbol === c.asset);
                               if (asset) {
@@ -299,18 +301,16 @@ export function NewPostModal({ open, onOpenChange, onPosted }: NewPostModalProps
                             className="h-7 px-2 text-xs"
                             onClick={() => {
                               const asset = assets.find((a) => a.symbol === c.asset);
-                              if (asset) {
-                                setDraft({
-                                  asset_id: asset.id.toString(),
-                                  assetSymbol: asset.symbol,
-                                  direction: c.direction === 'bullish' ? 'Bullish' : 'Bearish',
-                                  percentage: c.percentage!,
-                                  until: c.until!,
-                                });
-                                setShowClaimForm(true);
-                                const key = `${c.asset}-${c.direction}-${c.percentage}-${c.until}`;
-                                setIgnoredClaimKeys((keys) => new Set(keys).add(key));
-                              }
+                              setDraft({
+                                asset_id: asset ? asset.id.toString() : '',
+                                assetSymbol: asset ? asset.symbol : '',
+                                direction: c.direction === 'bullish' ? 'Bullish' : 'Bearish',
+                                percentage: c.percentage || '',
+                                until: c.until || '',
+                              });
+                              setShowClaimForm(true);
+                              const key = `${c.asset || 'null'}-${c.direction}-${c.percentage || 'null'}-${c.until || 'null'}`;
+                              setIgnoredClaimKeys((keys) => new Set(keys).add(key));
                             }}
                           >
                             Edit
@@ -320,7 +320,7 @@ export function NewPostModal({ open, onOpenChange, onPosted }: NewPostModalProps
                             variant="ghost"
                             className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                             onClick={() => {
-                              const key = `${c.asset}-${c.direction}-${c.percentage}-${c.until}`;
+                              const key = `${c.asset || 'null'}-${c.direction}-${c.percentage || 'null'}-${c.until || 'null'}`;
                               setIgnoredClaimKeys((keys) => new Set(keys).add(key));
                             }}
                           >

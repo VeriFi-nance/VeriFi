@@ -63,22 +63,26 @@ _ALIAS_POOL: list[str] = list(_ALIAS_MAP) + list(_TICKER_MAP)
 
 @dataclass
 class FinancialClaim:
-    pay: str
+    pay: Optional[str]
     payda: Optional[str]
-    value: float
+    value: Optional[float]
     value_type: str          # "PRICE" | "PERCENTAGE_UP" | "PERCENTAGE_DOWN"
     deadline: Optional[str]  # ISO date string or None
     status: str              # "HARD_CLAIM" | "POSSIBLE_CLAIM"
 
     def to_dict(self) -> dict:
-        if self.value_type == "PERCENTAGE_UP":
+        if self.value is None:
+            value_str = "?"
+        elif self.value_type == "PERCENTAGE_UP":
             value_str = f"+{self.value}%"
         elif self.value_type == "PERCENTAGE_DOWN":
             value_str = f"-{self.value}%"
         else:
             value_str = str(self.value)
 
-        parts = [self.pay, "→", value_str]
+        pay_str = self.pay if self.pay else "Unknown Asset"
+
+        parts = [pay_str, "→", value_str]
         if self.payda:
             parts.append(self.payda)
         if self.deadline:
@@ -366,12 +370,11 @@ def rule_based_claims_from_prompt(prompt: str) -> list[FinancialClaim]:
 
     if value is None:
         value, value_end = _extract_best_numeric_value(text)
-    if value is None:
-        return []
 
     if not pay:
         pay = _extract_primary_asset(text)
-    if not pay:
+
+    if not pay and value is None:
         return []
 
     if not payda:
