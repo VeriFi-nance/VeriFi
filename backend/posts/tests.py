@@ -8,7 +8,7 @@ from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from accounts.models import WalletUser
 from .models import Post, Asset, HardClaim
-from .resolution import ResolutionError, fetch_peak_price, fetch_reference_price, normalize_claim_for_resolution
+from .resolution import ResolutionError, normalize_claim_for_resolution
 
 
 class HardClaimAPITestCase(APITestCase):
@@ -522,3 +522,343 @@ class HardClaimResolveApiTestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["error_code"], "PROVIDER_INVALID_JSON")
+
+class CommunityPostPermissionTestCase(APITestCase):
+    def setUp(self):
+        self.creator_user = WalletUser.objects.create(address="0xcreator00000000000000000000000000000000")
+        self.member_user = WalletUser.objects.create(address="0xmember00000000000000000000000000000000")
+        self.non_member_user = WalletUser.objects.create(address="0xnonmember00000000000000000000000000000")
+
+        from .models import Community, CommunityMembership
+        self.community_all = Community.objects.create(
+            name="All Can Post",
+            creator=self.creator_user,
+            privacy_type=Community.PrivacyType.PUBLIC,
+            post_permission=Community.PostPermission.ALL
+        )
+        self.community_creator = Community.objects.create(
+            name="Creator Only Post",
+            creator=self.creator_user,
+            privacy_type=Community.PrivacyType.PUBLIC,
+            post_permission=Community.PostPermission.CREATOR_ONLY
+        )
+
+        CommunityMembership.objects.create(community=self.community_all, user=self.member_user, status=CommunityMembership.Status.APPROVED)
+        CommunityMembership.objects.create(community=self.community_creator, user=self.member_user, status=CommunityMembership.Status.APPROVED)
+
+    def _auth(self, user):
+        refresh = RefreshToken()
+        refresh["address"] = user.address
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {str(refresh.access_token)}')
+
+    def test_member_can_post_in_all_community(self):
+        self._auth(self.member_user)
+        url = reverse('post-list-create')
+        response = self.client.post(url, {"content": "Hello", "community_id": self.community_all.id}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_member_cannot_post_in_creator_only_community(self):
+        self._auth(self.member_user)
+        url = reverse('post-list-create')
+        response = self.client.post(url, {"content": "Hello", "community_id": self.community_creator.id}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_creator_can_always_post(self):
+        self._auth(self.creator_user)
+        url = reverse('post-list-create')
+        response = self.client.post(url, {"content": "Hello", "community_id": self.community_creator.id}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+class CommunityBanTestCase(APITestCase):
+    def setUp(self):
+        self.creator_user = WalletUser.objects.create(address="0xcreator00000000000000000000000000000000")
+        self.member_user = WalletUser.objects.create(address="0xmember00000000000000000000000000000000")
+        self.other_user = WalletUser.objects.create(address="0xother000000000000000000000000000000000")
+
+        from .models import Community, CommunityMembership
+        self.community = Community.objects.create(
+            name="Ban Test",
+            creator=self.creator_user,
+            privacy_type=Community.PrivacyType.PUBLIC
+        )
+        CommunityMembership.objects.create(community=self.community, user=self.member_user, status=CommunityMembership.Status.APPROVED)
+
+    def _auth(self, user):
+        refresh = RefreshToken()
+        refresh["address"] = user.address
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {str(refresh.access_token)}')
+
+    def test_creator_can_ban(self):
+        self._auth(self.creator_user)
+        url = reverse('community-ban', kwargs={"pk": self.community.id, "user_address": self.member_user.address})
+        response = self.client.post(url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], "banned")
+
+    def test_creator_cannot_ban_self(self):
+        self._auth(self.creator_user)
+        url = reverse('community-ban', kwargs={"pk": self.community.id, "user_address": self.creator_user.address})
+        response = self.client.post(url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_member_cannot_ban(self):
+        self._auth(self.member_user)
+        url = reverse('community-ban', kwargs={"pk": self.community.id, "user_address": self.other_user.address})
+        response = self.client.post(url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_banned_user_cannot_join(self):
+        self._auth(self.creator_user)
+        url = reverse('community-ban', kwargs={"pk": self.community.id, "user_address": self.other_user.address})
+        self.client.post(url, format="json")
+
+        self._auth(self.other_user)
+        join_url = reverse('community-join', kwargs={"pk": self.community.id})
+        response = self.client.post(join_url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_banned_user_cannot_post(self):
+        self._auth(self.creator_user)
+        url = reverse('community-ban', kwargs={"pk": self.community.id, "user_address": self.member_user.address})
+        self.client.post(url, format="json")
+
+        self._auth(self.member_user)
+        post_url = reverse('post-list-create')
+        response = self.client.post(post_url, {"content": "Hello", "community_id": self.community.id}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+class CommunityMemberListTestCase(APITestCase):
+    def setUp(self):
+        self.creator_user = WalletUser.objects.create(address="0xcreator00000000000000000000000000000000")
+        self.member_user = WalletUser.objects.create(address="0xmember00000000000000000000000000000000")
+        self.other_user = WalletUser.objects.create(address="0xother000000000000000000000000000000000")
+
+        from .models import Community, CommunityMembership
+        self.public_community = Community.objects.create(
+            name="Public Community",
+            creator=self.creator_user,
+            privacy_type=Community.PrivacyType.PUBLIC
+        )
+        self.private_community = Community.objects.create(
+            name="Private Community",
+            creator=self.creator_user,
+            privacy_type=Community.PrivacyType.PRIVATE
+        )
+        CommunityMembership.objects.create(community=self.public_community, user=self.member_user, status=CommunityMembership.Status.APPROVED)
+        CommunityMembership.objects.create(community=self.private_community, user=self.member_user, status=CommunityMembership.Status.APPROVED)
+
+    def _auth(self, user):
+        refresh = RefreshToken()
+        refresh["address"] = user.address
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {str(refresh.access_token)}')
+
+    def test_public_member_list(self):
+        url = reverse('community-members', kwargs={"pk": self.public_community.id})
+        response = self.client.get(url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["user_address"], self.member_user.address)
+
+    def test_private_member_list_unauthenticated(self):
+        url = reverse('community-members', kwargs={"pk": self.private_community.id})
+        response = self.client.get(url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_private_member_list_non_member(self):
+        self._auth(self.other_user)
+        url = reverse('community-members', kwargs={"pk": self.private_community.id})
+        response = self.client.get(url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_private_member_list_member(self):
+        self._auth(self.member_user)
+        url = reverse('community-members', kwargs={"pk": self.private_community.id})
+        response = self.client.get(url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+
+    def test_private_member_list_creator(self):
+        self._auth(self.creator_user)
+        url = reverse('community-members', kwargs={"pk": self.private_community.id})
+        response = self.client.get(url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+
+from unittest.mock import patch
+from django.utils import timezone
+from datetime import timedelta
+
+class PositionTestCase(APITestCase):
+    def setUp(self):
+        self.creator_user = WalletUser.objects.create(address="0xcreator00000000000000000000000000000000")
+        self.member_user = WalletUser.objects.create(address="0xmember00000000000000000000000000000000")
+        self.other_user = WalletUser.objects.create(address="0xother000000000000000000000000000000000")
+
+        from .models import Community, CommunityMembership, Asset, Position
+        self.community = Community.objects.create(
+            name="Test Community",
+            creator=self.creator_user,
+            privacy_type=Community.PrivacyType.PUBLIC
+        )
+        CommunityMembership.objects.create(community=self.community, user=self.member_user, status=CommunityMembership.Status.APPROVED)
+        
+        self.asset = Asset.objects.create(
+            symbol="BTC",
+            name="Bitcoin",
+            market_type=Asset.MarketType.CRYPTO,
+            provider="binance",
+            binance_symbol="BTCUSDT"
+        )
+
+    def _auth(self, user):
+        refresh = RefreshToken()
+        refresh["address"] = user.address
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {str(refresh.access_token)}')
+
+    def test_create_valid_long_position(self):
+        self._auth(self.member_user)
+        now = timezone.now()
+        data = {
+            "community_id": self.community.id,
+            "asset_id": self.asset.id,
+            "direction": "long",
+            "entry_price": 50000,
+            "entry_interval": (now + timedelta(days=1)).isoformat(),
+            "stop_loss": 40000,
+            "take_profit": 60000,
+            "lifetime": (now + timedelta(days=7)).isoformat()
+        }
+        url = reverse('position-list-create')
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["status"], "pending")
+
+    def test_create_invalid_long_position_sl_tp(self):
+        self._auth(self.member_user)
+        now = timezone.now()
+        data = {
+            "community_id": self.community.id,
+            "asset_id": self.asset.id,
+            "direction": "long",
+            "entry_price": 50000,
+            "entry_interval": (now + timedelta(days=1)).isoformat(),
+            "stop_loss": 60000,  # SL > entry
+            "take_profit": 40000, # TP < entry
+            "lifetime": (now + timedelta(days=7)).isoformat()
+        }
+        url = reverse('position-list-create')
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_invalid_short_position_sl_tp(self):
+        self._auth(self.member_user)
+        now = timezone.now()
+        data = {
+            "community_id": self.community.id,
+            "asset_id": self.asset.id,
+            "direction": "short",
+            "entry_price": 50000,
+            "entry_interval": (now + timedelta(days=1)).isoformat(),
+            "stop_loss": 40000,  # SL < entry
+            "take_profit": 60000, # TP > entry
+            "lifetime": (now + timedelta(days=7)).isoformat()
+        }
+        url = reverse('position-list-create')
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_invalid_dates(self):
+        self._auth(self.member_user)
+        now = timezone.now()
+        data = {
+            "community_id": self.community.id,
+            "asset_id": self.asset.id,
+            "direction": "long",
+            "entry_price": 50000,
+            "entry_interval": (now - timedelta(days=1)).isoformat(), # Past
+            "stop_loss": 40000,
+            "take_profit": 60000,
+            "lifetime": (now + timedelta(days=7)).isoformat()
+        }
+        url = reverse('position-list-create')
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("entry_interval", response.data)
+
+        data["entry_interval"] = (now + timedelta(days=7)).isoformat()
+        data["lifetime"] = (now + timedelta(days=1)).isoformat() # Before entry
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("lifetime", response.data)
+
+    @patch('posts.views.fetch_current_price')
+    def test_close_position(self, mock_fetch):
+        mock_fetch.return_value = (55000, "http://mock")
+        
+        self._auth(self.member_user)
+        now = timezone.now()
+        from .models import Position
+        pos = Position.objects.create(
+            author=self.member_user,
+            community=self.community,
+            asset=self.asset,
+            direction="long",
+            entry_price=50000,
+            entry_interval=now + timedelta(days=1),
+            stop_loss=40000,
+            take_profit=60000,
+            lifetime=now + timedelta(days=7),
+            status=Position.Status.ACTIVE
+        )
+
+        url = reverse('position-close', kwargs={"pk": pos.id})
+        response = self.client.post(url, format="json")
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], "closed_early")
+        self.assertEqual(response.data["exit_price"], 55000)
+        self.assertEqual(response.data["pnl_percentage"], 10.0)
+
+    def test_close_inactive_position(self):
+        self._auth(self.member_user)
+        now = timezone.now()
+        from .models import Position
+        pos = Position.objects.create(
+            author=self.member_user,
+            community=self.community,
+            asset=self.asset,
+            direction="long",
+            entry_price=50000,
+            entry_interval=now + timedelta(days=1),
+            stop_loss=40000,
+            take_profit=60000,
+            lifetime=now + timedelta(days=7),
+            status=Position.Status.PENDING # Not active
+        )
+
+        url = reverse('position-close', kwargs={"pk": pos.id})
+        response = self.client.post(url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_close_other_user_position(self):
+        self._auth(self.other_user)
+        now = timezone.now()
+        from .models import Position
+        pos = Position.objects.create(
+            author=self.member_user,
+            community=self.community,
+            asset=self.asset,
+            direction="long",
+            entry_price=50000,
+            entry_interval=now + timedelta(days=1),
+            stop_loss=40000,
+            take_profit=60000,
+            lifetime=now + timedelta(days=7),
+            status=Position.Status.ACTIVE
+        )
+
+        url = reverse('position-close', kwargs={"pk": pos.id})
+        response = self.client.post(url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+

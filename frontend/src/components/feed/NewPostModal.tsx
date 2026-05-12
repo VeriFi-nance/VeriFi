@@ -30,9 +30,10 @@ interface NewPostModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onPosted: () => void;
+  communityId?: number;
 }
 
-export function NewPostModal({ open, onOpenChange, onPosted }: NewPostModalProps) {
+export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewPostModalProps) {
   const [content, setContent] = useState('');
   const [claims, setClaims] = useState<ClaimDraft[]>([]);
   const [showClaimForm, setShowClaimForm] = useState(false);
@@ -93,7 +94,7 @@ export function NewPostModal({ open, onOpenChange, onPosted }: NewPostModalProps
     setSubmitting(true);
     try {
       // 1. Create the post (no attached claims on the post itself)
-      const newPost = await createPost(content.trim(), []);
+      const newPost = await createPost(content.trim(), [], communityId);
 
       // 2. Create each HardClaim, linked to the new post
       await Promise.all(
@@ -101,6 +102,7 @@ export function NewPostModal({ open, onOpenChange, onPosted }: NewPostModalProps
           createHardClaim({
             asset_id: parseInt(c.asset_id, 10),
             post_id: newPost.id,
+            community_id: communityId,
             direction: c.direction,
             percentage: parseFloat(c.percentage),
             until: c.until,
@@ -335,7 +337,7 @@ export function NewPostModal({ open, onOpenChange, onPosted }: NewPostModalProps
 }
 
 /** Trigger button — place anywhere to open the modal */
-export function NewPostButton({ onPosted }: { onPosted: () => void }) {
+export function NewPostButton({ onPosted, communityId }: { onPosted: () => void, communityId?: number }) {
   const [open, setOpen] = useState(false);
   const authed = isAuthenticated();
   if (!authed) return null;
@@ -350,7 +352,7 @@ export function NewPostButton({ onPosted }: { onPosted: () => void }) {
         <PenSquare className="size-4" />
         New Post
       </Button>
-      <NewPostModal open={open} onOpenChange={setOpen} onPosted={onPosted} />
+      <NewPostModal open={open} onOpenChange={setOpen} onPosted={onPosted} communityId={communityId} />
     </>
   );
 }

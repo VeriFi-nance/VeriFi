@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { LineChart } from 'lucide-react';
 import { HardClaimCard, truncateAddress } from '@/components/HardClaimCard';
+import ProfitabilityBadge from '@/components/ProfitabilityBadge';
 import type { PostItem, HardClaimItem, AssetItem } from '@/lib/types';
 
 interface PostCardProps {
@@ -64,6 +65,9 @@ export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) 
               <span className="truncate">{truncateAddress(post.author_address)}</span>
             </Link>
           </Button>
+
+          {/* Profitability Badge */}
+          <ProfitabilityBadge data={post.profitability} />
 
           {/* Date */}
           <time dateTime={post.created_at} className="text-xs text-muted-foreground shrink-0">

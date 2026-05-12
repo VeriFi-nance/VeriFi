@@ -9,6 +9,9 @@ import UserPostsPage from './pages/UserPostsPage';
 import ProfilePage from './pages/ProfilePage';
 import { isAuthenticated } from './lib/auth';
 
+import CommunitiesPage from './pages/CommunitiesPage';
+import CommunityDetailPage from './pages/CommunityDetailPage';
+
 function ProtectedRoute({ children }: { children: ReactNode }) {
   if (!isAuthenticated()) {
     return <Navigate to="/login" replace />;
@@ -35,6 +38,8 @@ export default function App() {
           <Route path="post/:id" element={<PostDetailPage />} />
           <Route path="user/:address" element={<UserPostsPage />} />
           <Route path="profile" element={<ProfilePage />} />
+          <Route path="communities" element={<CommunitiesPage />} />
+          <Route path="communities/:id" element={<CommunityDetailPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

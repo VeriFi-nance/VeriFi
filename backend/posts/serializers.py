@@ -1,6 +1,6 @@
 from datetime import date
 from rest_framework import serializers
-from .models import Asset, Post, Claim, HardClaim, HardClaimEvent, OHLCData
+from .models import Asset, Post, Claim, HardClaim, HardClaimEvent, OHLCData, Community, CommunityMembership
 
 
 class ClaimSerializer(serializers.ModelSerializer):
@@ -37,10 +37,12 @@ class AssetSerializer(serializers.ModelSerializer):
 class HardClaimInputSerializer(serializers.Serializer):
     asset_id = serializers.IntegerField()
     post_id = serializers.IntegerField(required=False, allow_null=True, default=None)
+    community_id = serializers.IntegerField(required=False, allow_null=True, default=None)
     direction = serializers.CharField(allow_blank=True, default="")
     percentage = serializers.FloatField(min_value=0)
     until = serializers.DateField()
     status = serializers.ChoiceField(choices=["confirmed", "undetermined", "rejected"], default="undetermined")
+
 
     def validate_until(self, value):
         if value <= date.today():
@@ -55,22 +57,141 @@ class HardClaimEventSerializer(serializers.ModelSerializer):
 class HardClaimSerializer(serializers.ModelSerializer):
     author_address = serializers.CharField(source="author.address", read_only=True, allow_null=True)
     events = HardClaimEventSerializer(many=True, read_only=True)
+    profitability = serializers.SerializerMethodField()
 
     class Meta:
         model = HardClaim
-        fields = ["id", "author_address", "post_id", "asset", "direction", "percentage", "until", "created_at", "status", "events"]
+        fields = ["id", "author_address", "post_id", "community", "asset", "direction", "percentage", "until", "created_at", "status", "events", "profitability"]
+
+    def get_profitability(self, obj):
+        try:
+            cache = obj.author.profitability
+            return {
+                "pnl_7d": cache.pnl_7d,
+                "pnl_30d": cache.pnl_30d,
+                "pnl_all": cache.pnl_all
+            }
+        except Exception:
+            return None
 
 class PostSerializer(serializers.ModelSerializer):
     author_address = serializers.CharField(source="author.address", read_only=True)
     claims = ClaimSerializer(many=True, read_only=True)
     hard_claims = HardClaimSerializer(many=True, read_only=True)
+    profitability = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
-        fields = ["id", "author_address", "content", "created_at", "claims", "hard_claims"]
+        fields = ["id", "author_address", "content", "community", "created_at", "claims", "hard_claims", "profitability"]
+
+    def get_profitability(self, obj):
+        try:
+            cache = obj.author.profitability
+            return {
+                "pnl_7d": cache.pnl_7d,
+                "pnl_30d": cache.pnl_30d,
+                "pnl_all": cache.pnl_all
+            }
+        except Exception:
+            return None
 
 
 class OHLCDataSerializer(serializers.ModelSerializer):
     class Meta:
         model = OHLCData
         fields = ["date", "open", "high", "low", "close"]
+
+class CommunitySerializer(serializers.ModelSerializer):
+    creator_address = serializers.CharField(source="creator.address", read_only=True)
+    member_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Community
+        fields = ["id", "name", "description", "creator_address", "privacy_type", "post_permission", "created_at", "member_count"]
+
+    def get_member_count(self, obj):
+        return obj.memberships.filter(status="approved").count()
+
+class CommunityMembershipSerializer(serializers.ModelSerializer):
+    user_address = serializers.CharField(source="user.address", read_only=True)
+    profitability = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CommunityMembership
+        fields = ["id", "community", "user_address", "status", "created_at", "profitability"]
+
+    def get_profitability(self, obj):
+        try:
+            cache = obj.user.profitability
+            return {
+                "pnl_7d": cache.pnl_7d,
+                "pnl_30d": cache.pnl_30d,
+                "pnl_all": cache.pnl_all
+            }
+        except Exception:
+            return None
+
+from .models import Position, PositionEvent
+
+class PositionEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PositionEvent
+        fields = ["id", "event_type", "timestamp", "details"]
+
+class PositionSerializer(serializers.ModelSerializer):
+    author_address = serializers.CharField(source="author.address", read_only=True)
+    events = PositionEventSerializer(many=True, read_only=True)
+    profitability = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Position
+        fields = [
+            "id", "author_address", "community", "asset", "direction",
+            "entry_price", "entry_interval", "stop_loss", "take_profit",
+            "lifetime", "exit_price", "pnl_percentage", "status", "created_at", "events", "profitability"
+        ]
+
+    def get_profitability(self, obj):
+        try:
+            cache = obj.author.profitability
+            return {
+                "pnl_7d": cache.pnl_7d,
+                "pnl_30d": cache.pnl_30d,
+                "pnl_all": cache.pnl_all
+            }
+        except Exception:
+            return None
+
+from django.utils import timezone
+
+class PositionInputSerializer(serializers.Serializer):
+    community_id = serializers.IntegerField(required=True)
+    asset_id = serializers.IntegerField(required=True)
+    direction = serializers.ChoiceField(choices=Position.Direction.choices, required=True)
+    entry_price = serializers.FloatField(required=True)
+    entry_interval = serializers.DateTimeField(required=True)
+    stop_loss = serializers.FloatField(required=True)
+    take_profit = serializers.FloatField(required=True)
+    lifetime = serializers.DateTimeField(required=True)
+
+    def validate(self, data):
+        now = timezone.now()
+        
+        if data["entry_interval"] <= now:
+            raise serializers.ValidationError({"entry_interval": "entry_interval must be in the future."})
+            
+        if data["lifetime"] <= data["entry_interval"]:
+            raise serializers.ValidationError({"lifetime": "lifetime must be after entry_interval."})
+            
+        entry = data["entry_price"]
+        sl = data["stop_loss"]
+        tp = data["take_profit"]
+        
+        if data["direction"] == Position.Direction.LONG:
+            if not (sl < entry < tp):
+                raise serializers.ValidationError("For LONG positions, stop_loss must be < entry_price < take_profit.")
+        elif data["direction"] == Position.Direction.SHORT:
+            if not (tp < entry < sl):
+                raise serializers.ValidationError("For SHORT positions, take_profit must be < entry_price < stop_loss.")
+                
+        return data
