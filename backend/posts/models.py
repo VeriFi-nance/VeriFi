@@ -101,6 +101,7 @@ class Asset(models.Model):
     kucoin_symbol = models.CharField(max_length=20, blank=True, default="")
     kraken_pair = models.CharField(max_length=20, blank=True, default="")
     twelvedata_symbol = models.CharField(max_length=20, blank=True, default="")
+    last_price_update = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return self.name
@@ -215,3 +216,22 @@ class PositionEvent(models.Model):
 
     def __str__(self):
         return f"{self.event_type} at {self.timestamp} for position {self.position.id}"
+
+
+class AssetSubscription(models.Model):
+    """
+    Observer Design Pattern — subscriber list.
+    Each row represents one Position subscribing to one Asset (the Observable).
+    The Asset iterates this table during notification to dispatch price updates
+    to all active observers.
+    """
+    asset = models.ForeignKey(
+        Asset, on_delete=models.CASCADE, related_name="subscriptions"
+    )
+    position = models.OneToOneField(
+        Position, on_delete=models.CASCADE, related_name="asset_subscription"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Subscription: Position #{self.position.id} → {self.asset.symbol}"
