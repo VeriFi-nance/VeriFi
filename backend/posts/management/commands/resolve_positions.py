@@ -5,6 +5,11 @@ class Command(BaseCommand):
     help = 'Runs the automated position resolution engine to update PENDING and ACTIVE positions'
 
     def handle(self, *args, **kwargs):
+        self.stderr.write(self.style.WARNING(
+            'DEPRECATED: This command is superseded by "update_and_notify" '
+            'which uses the Observer pattern for asset-driven position resolution. '
+            'Use: uv run python manage.py update_and_notify'
+        ))
         self.stdout.write(self.style.SUCCESS('Starting position resolution...'))
         try:
             resolve_positions()

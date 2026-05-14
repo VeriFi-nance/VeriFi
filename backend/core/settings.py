@@ -130,6 +130,10 @@ import os
 # Twelve Data API key for stock/forex/commodity OHLC fallback (free tier: 800 calls/day)
 TWELVE_DATA_API_KEY = os.environ.get("TWELVE_DATA_API_KEY", "4117d86e953d4430bfc7003d72d9ed97")
 
+# Observer Pattern: how often the price updater runs (in minutes)
+# Used as a reference for the scheduler (cron / Render cron); not enforced in code.
+PRICE_UPDATE_INTERVAL_MINUTES = 10
+
 # CORS — allow frontend dev server in development
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
