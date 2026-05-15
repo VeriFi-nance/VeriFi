@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from accounts.models import WalletUser
-from .models import Post, Claim, HardClaim, Asset, OHLCData, Community, CommunityMembership
+from .models import Post, Claim, HardClaim, Asset, OHLCData, Community, CommunityMembership, AssetSubscription
 from .serializers import PostSerializer, ClaimInputSerializer, HardClaimInputSerializer, HardClaimSerializer, AssetSerializer, CommunitySerializer, CommunityMembershipSerializer
 from .claim_extraction import rule_based_claims_from_prompt
 from django.shortcuts import get_object_or_404
@@ -702,6 +702,9 @@ class PositionListCreateView(APIView):
             event_type=PositionEvent.EventType.CREATION,
             details={"message": "Position created"}
         )
+
+        # Observer Pattern: subscribe this position to the asset
+        AssetSubscription.objects.create(asset=asset, position=position)
         
         return Response(PositionSerializer(position).data, status=status.HTTP_201_CREATED)
 
@@ -747,6 +750,9 @@ class PositionCloseView(APIView):
                 }
             )
             
+            # Observer Pattern: unsubscribe from asset on manual close
+            AssetSubscription.objects.filter(position=position).delete()
+
             from .profitability import recalculate_profitability
             recalculate_profitability(user)
             
