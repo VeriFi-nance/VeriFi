@@ -38,6 +38,11 @@ class ObserverTestBase(TestCase):
     """Shared setup for Observer pattern tests."""
 
     def setUp(self):
+        # Prevent hitting real external APIs during tests by mocking fetch_ohlc_for_asset
+        patcher = patch("posts.ohlc_fetcher.fetch_ohlc_for_asset", return_value=[])
+        self.addCleanup(patcher.stop)
+        self.mock_fetch = patcher.start()
+
         self.user = WalletUser.objects.create(address="0x" + "a" * 40)
         self.community = Community.objects.create(
             name="Test Community", creator=self.user

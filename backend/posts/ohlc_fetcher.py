@@ -386,8 +386,9 @@ def get_ohlc_data(asset: Asset, start_date: date, end_date: date, interval: Inte
         interval=interval.value
     ))
     
-    # We group existing by date to know which days are already fully cached
-    existing_dates = {row.timestamp.date() for row in existing}
+    # Group existing by date to count how many candles we have per day
+    from collections import Counter
+    date_counts = Counter(row.timestamp.date() for row in existing)
 
     all_dates = set()
     current = start_date
@@ -395,7 +396,27 @@ def get_ohlc_data(asset: Asset, start_date: date, end_date: date, interval: Inte
         all_dates.add(current)
         current += timedelta(days=1)
 
-    missing_dates = all_dates - existing_dates
+    today = datetime.now(timezone.utc).date()
+    missing_dates = set()
+    
+    expected_crypto_counts = {
+        Interval.ONE_DAY.value: 1,
+        Interval.ONE_HOUR.value: 24,
+        Interval.FIFTEEN_MIN.value: 96,
+        Interval.ONE_MIN.value: 1440
+    }
+
+    for d in all_dates:
+        # Always fetch if it's today (day is incomplete)
+        if d == today:
+            missing_dates.add(d)
+        # For past days in crypto, check if we have the full expected candle count
+        elif asset.market_type == Asset.MarketType.CRYPTO and interval.value != Interval.ONE_DAY.value:
+            if date_counts[d] < expected_crypto_counts.get(interval.value, 1):
+                missing_dates.add(d)
+        # For non-crypto or daily crypto, just check if we have at least 1 candle
+        elif date_counts[d] == 0:
+            missing_dates.add(d)
 
     if missing_dates:
         min_missing = min(missing_dates)
