@@ -63,12 +63,12 @@ def _resolve_pending(pos: Position, now: datetime):
         if pos.direction == Position.Direction.LONG:
             if candle.low <= pos.entry_price:
                 triggered = True
-                trigger_date = candle.date
+                trigger_date = candle.timestamp.date()
                 break
         else: # SHORT
             if candle.high >= pos.entry_price:
                 triggered = True
-                trigger_date = candle.date
+                trigger_date = candle.timestamp.date()
                 break
                 
     if triggered:

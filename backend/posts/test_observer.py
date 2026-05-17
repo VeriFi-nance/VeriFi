@@ -169,7 +169,8 @@ class StateTransitionTests(ObserverTestBase):
         # Create OHLC data where low hits entry price
         OHLCData.objects.create(
             asset=self.asset_btc,
-            date=date.today(),
+            timestamp=timezone.now(),
+            interval="1d",
             open=105.0, high=110.0, low=99.0, close=102.0,
         )
 
@@ -197,7 +198,8 @@ class StateTransitionTests(ObserverTestBase):
         # Create OHLC data where high hits take-profit
         OHLCData.objects.create(
             asset=self.asset_btc,
-            date=date.today(),
+            timestamp=timezone.now(),
+            interval="1d",
             open=105.0, high=125.0, low=102.0, close=122.0,
         )
 
@@ -224,7 +226,8 @@ class StateTransitionTests(ObserverTestBase):
         # Create OHLC data where low hits stop-loss
         OHLCData.objects.create(
             asset=self.asset_btc,
-            date=date.today(),
+            timestamp=timezone.now(),
+            interval="1d",
             open=95.0, high=97.0, low=88.0, close=89.0,
         )
 
@@ -282,7 +285,7 @@ class UpdateAllAssetsTests(ObserverTestBase):
             name="FailCoin", symbol="FAIL", market_type=Asset.MarketType.CRYPTO,
         )
 
-        def side_effect(asset, start, end):
+        def side_effect(asset, start, end, interval=None):
             if asset.id == failing_asset.id:
                 raise OHLCFetchError("All providers down")
             return []
