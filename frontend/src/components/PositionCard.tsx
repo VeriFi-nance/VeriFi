@@ -28,6 +28,7 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
   const isAuthor = !!myAddress && myAddress.toLowerCase() === position.author_address.toLowerCase();
   const canResolve = isAuthor && (position.status === 'pending' || position.status === 'active');
   const canClose = isAuthor && position.status === 'active';
+  const canCancel = isAuthor && position.status === 'pending';
 
   // Fetch cooldown on mount (author only, resolvable positions only)
   const fetchCooldown = useCallback(async () => {
@@ -71,7 +72,11 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
   };
 
   const handleClose = async () => {
-    if (!confirm('Are you sure you want to close this position early?')) return;
+    const isPending = position.status === 'pending';
+    const msg = isPending 
+      ? 'Are you sure you want to cancel this pending position?' 
+      : 'Are you sure you want to close this position early?';
+    if (!confirm(msg)) return;
     setClosing(true);
     try {
       await closePosition(position.id);
@@ -171,6 +176,11 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
                 {canClose && (
                   <Button size="sm" variant="outline" onClick={handleClose} disabled={closing} className="h-7 text-xs">
                     {closing ? 'Closing…' : 'Close Early'}
+                  </Button>
+                )}
+                {canCancel && (
+                  <Button size="sm" variant="outline" onClick={handleClose} disabled={closing} className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10">
+                    {closing ? 'Canceling…' : 'Cancel Position'}
                   </Button>
                 )}
               </div>
