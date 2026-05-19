@@ -54,7 +54,10 @@
                     <button class="btn btn-yes" onclick="addRandom(50)">50 Rastgele</button>
                 </div>
                 <div id="gNote" style="display:none; font-size:0.9em; padding: 8px; background: #eafaf1; border-radius: 5px; color:#16a085;">
-                    <strong>Model G</strong> = Model F'in matematiği aynısı, tek fark: <em>claim açılışında yaratıcı otomatik EVET'e yatırılmaz</em>. Trivial claim'ler için ücretsiz +9 rep farm kapatıldı.
+                    <strong>Model G</strong> = Model F + iki küçük değişiklik:<br>
+                    1. Claim açılışında yaratıcı otomatik EVET'e yatırılmaz<br>
+                    2. <strong>Sıfır-toplam üst sınırı:</strong> Kazanan toplam payout > toplam stake olduğunda kazanan ödülleri orantılı olarak küçültülür → sistem rep <em>basmaz</em><br>
+                    <span style="color:#7f8c8d;">Cap aktif olduğunda tabloda "kazanırsa net" değeri normalde göreceğinden düşük olur.</span>
                 </div>
                 <div style="display: flex; gap: 5px; flex-wrap: wrap;">
                     <button class="btn btn-reset" onclick="togglePayoutMethod()">Payout Değiştir</button>
@@ -71,6 +74,11 @@
             <div id="cpmmStats" style="display:none; font-size: 0.95em; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ccc;">
                 <div>Y reserve: <span id="yReserveVal">100.00</span> · N reserve: <span id="nReserveVal">100.00</span></div>
                 <div>LP subsidy exposure: <span id="lpSubsidyVal" style="color:#c0392b;">0.00</span> Rep</div>
+                <div id="gCapInfo" style="display:none; margin-top: 4px; padding-top: 4px; border-top: 1px dotted #ccc;">
+                    G cap (EVET kazanırsa): <span id="gScaleYes" style="font-weight:bold;">1.00</span>
+                    · G cap (HAYIR kazanırsa): <span id="gScaleNo" style="font-weight:bold;">1.00</span>
+                    <br><span style="color:#7f8c8d; font-size:0.9em;">1.00 = cap aktif değil. &lt;1.00 = cap kazanan ödüllerini ölçeklendiriyor.</span>
+                </div>
             </div>
         </div>
         <div class="panel text-center" style="background:#fff8e1; border-color:#ffe082;">
@@ -174,13 +182,42 @@
             const sumW = winners.reduce((a, s) => a + s.weight, 0);
             return winners.reduce((a, s) => a + STAKE + (losers.length * STAKE) * (s.weight / sumW), 0);
         }
-        if (payoutMode === 'cpmm' || payoutMode === 'g') {
+        if (payoutMode === 'cpmm') {
             // each winning share = 1 rep, loser shares = 0
             return stakes
                 .filter(s => s.side === winningSide && s.shares != null)
                 .reduce((a, s) => a + s.shares, 0);
         }
+        if (payoutMode === 'g') {
+            // Model G: zero-sum cap. Winners get min(CPMM payout, total stakes).
+            // If CPMM math would mint, scale winner gains so total mint = 0.
+            const winners = stakes.filter(s => s.side === winningSide && s.shares != null);
+            if (winners.length === 0) return 0;
+            const cpmmWinnerPayout = winners.reduce((a, s) => a + s.shares, 0);
+            const totalStakes = stakes.length * STAKE;
+            return Math.min(cpmmWinnerPayout, totalStakes);
+        }
         return 0;
+    }
+
+    // Compute Model G cap scale factor.  scale = 1 means CPMM math
+    // pays out as-is (no mint).  scale < 1 means winners are scaled
+    // down to prevent mint.
+    function gCapScale(winningSide) {
+        const winners = stakes.filter(s => s.side === winningSide && s.shares != null);
+        if (winners.length === 0) return 1;
+        const cpmmWinnerPayout = winners.reduce((a, s) => a + s.shares, 0);
+        const winnerStakes = winners.length * STAKE;
+        const winnerGainTotal = cpmmWinnerPayout - winnerStakes;
+        if (winnerGainTotal <= 0) return 1;
+        // total stake in claim
+        const totalStakes = stakes.length * STAKE;
+        // mint that would occur without cap
+        const cpmmTotalOut = cpmmWinnerPayout;  // losers get 0
+        const mint = cpmmTotalOut - totalStakes;
+        if (mint <= 0) return 1;  // no mint anyway
+        // need to scale winner gains by (winnerGainTotal - mint) / winnerGainTotal
+        return Math.max(0, (winnerGainTotal - mint) / winnerGainTotal);
     }
 
     // CPMM buy: spend r rep, receive shares of `side`. Mints r complete sets, swaps opposite side for more.
@@ -314,12 +351,12 @@
             `;
         } else if (payoutMode === 'g') {
             formulaDiv.innerHTML = `
-                <strong>Model G = Model F'in minimal değişiklikli versiyonu:</strong><br>
-                <strong>Aynı:</strong> CPMM payoutları, sabit 10 rep stake, 1 pozisyon/claim, enerji limiti, kilitli ödül, virtual likidite (Y₀=N₀=${CPMM_INIT_L}).<br>
-                <strong>Fark:</strong> Claim açılışında yaratıcı OTOMATIK EVET'e yatırılmaz. Manuel oy verebilir.<br>
-                <strong>Çözdüğü problem:</strong> trivial claim farming (#76 P2). F'de yaratıcı her açtığı YES-trivial claimden ücretsiz +9 rep kazanıyordu.<br>
-                <strong>Enflasyon (#76 P1):</strong> aynı F kadar (+~244%/180gün). Ama sıralama korunuyor (Spearman ρ≈0.87). UI'da percentile gösterimi ile fiilen görünmez.<br>
-                <strong>Trader payoutu:</strong> shares × 1 Rep, alım anında kilitli (F ile aynı).
+                <strong>Model G = Model F + iki değişiklik:</strong><br>
+                <strong>Aynı:</strong> CPMM payoutları, sabit 10 rep stake, 1 pozisyon/claim, enerji limiti, virtual likidite (Y₀=N₀=${CPMM_INIT_L}).<br>
+                <strong>Fark 1:</strong> Claim açılışında yaratıcı OTOMATIK EVET'e yatırılmaz. Manuel oy verebilir → trivial claim farming kapatıldı (#76 P2).<br>
+                <strong>Fark 2 — Sıfır-toplam üst sınırı:</strong> Çözünürlükte CPMM math çalıştırılır. Eğer kazananlar toplam staked rep'ten <em>daha çok</em> alacaksa (yani sistem rep <em>basacaksa</em>), her kazananın kârı orantılı olarak küçültülür. Net rep yaratımı = 0.<br>
+                <strong>Sonuç:</strong> Enflasyon = 0 her claim için. Hiçbir claim iptal edilmiyor. 85/15, 88/12 gibi gerçek güçlü-konsensüs claim'leri normal çözünüyor.<br>
+                <strong>Trader payoutu:</strong> Cap aktif değilse shares × 1 Rep (F gibi). Cap aktifse shares × 1 × scale (sistem rep basmamak için ölçeklenmiş).
             `;
         } else {
             formulaDiv.innerHTML = `
@@ -370,13 +407,25 @@
                 } else if (s.side === 'NO' && noTotalWeight > 0) {
                     noProfit = STAKE * yesCount * (s.weight / noTotalWeight);
                 }
-            } else if (payoutMode === 'cpmm' || payoutMode === 'g') {
-                // Each share pays 1 Rep if user's side wins. Profit locked at buy time.
+            } else if (payoutMode === 'cpmm') {
+                // F: each share pays 1 Rep if user's side wins. Profit locked at buy time.
                 if (s.side === 'YES') {
                     yesProfit = s.shares - STAKE;
                     noProfit  = -STAKE;
                 } else {
                     noProfit  = s.shares - STAKE;
+                    yesProfit = -STAKE;
+                }
+            } else if (payoutMode === 'g') {
+                // G: same CPMM math, plus zero-sum cap that scales winners
+                // down if claim would mint rep.  Compute scale for each outcome.
+                const scaleYes = gCapScale('YES');
+                const scaleNo  = gCapScale('NO');
+                if (s.side === 'YES') {
+                    yesProfit = (s.shares - STAKE) * scaleYes;
+                    noProfit  = -STAKE;
+                } else {
+                    noProfit  = (s.shares - STAKE) * scaleNo;
                     yesProfit = -STAKE;
                 }
             }
@@ -394,7 +443,7 @@
         document.getElementById('yesPrice').innerText = (currentYesPrice * 100).toFixed(1);
         document.getElementById('noPrice').innerText = ((1 - currentYesPrice) * 100).toFixed(1);
 
-        // CPMM/G stats (same — G is F minus auto-YES)
+        // CPMM/G stats panel
         const cpmmStats = document.getElementById('cpmmStats');
         if (cpmmStats) {
             if (payoutMode === 'cpmm' || payoutMode === 'g') {
@@ -402,6 +451,23 @@
                 document.getElementById('yReserveVal').innerText = yReserve.toFixed(2);
                 document.getElementById('nReserveVal').innerText = nReserve.toFixed(2);
                 document.getElementById('lpSubsidyVal').innerText = lpSubsidyExposure.toFixed(2);
+                // G-only: show live cap scale factors
+                const gCapInfo = document.getElementById('gCapInfo');
+                if (gCapInfo) {
+                    if (payoutMode === 'g') {
+                        gCapInfo.style.display = 'block';
+                        const sY = gCapScale('YES');
+                        const sN = gCapScale('NO');
+                        const gScaleYes = document.getElementById('gScaleYes');
+                        const gScaleNo = document.getElementById('gScaleNo');
+                        gScaleYes.innerText = sY.toFixed(3);
+                        gScaleNo.innerText = sN.toFixed(3);
+                        gScaleYes.style.color = sY < 0.999 ? '#c0392b' : '#16a085';
+                        gScaleNo.style.color = sN < 0.999 ? '#c0392b' : '#16a085';
+                    } else {
+                        gCapInfo.style.display = 'none';
+                    }
+                }
             } else {
                 cpmmStats.style.display = 'none';
             }
