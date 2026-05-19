@@ -4,25 +4,25 @@ After exploring more invasive redesigns (zero-sum + info-gain bonus,
 LP-funded CPMM, etc.) we landed on the lightest possible change that
 still addresses issue #76's main concerns.
 
-G = F + two tiny changes
-------------------------
+G = F + two tiny changes (LOCKED REWARD PRESERVED)
+--------------------------------------------------
   1. **No auto-YES at claim creation.**  Under F, the creator was
      auto-staked on the YES side at claim creation, which guaranteed
      ~9.17 rep of profit on any claim that resolved YES.  In G, the
-     creator does not auto-bet.
+     creator does not auto-bet.  Closes the trivial-claim farming
+     hole (#76 P2).
 
-  2. **Zero-sum cap at resolution.**  If CPMM math would pay winners
-     more than the total rep staked in the claim (i.e. mint rep out
-     of thin air via the virtual-liquidity seed), each winner's gain
-     is scaled down proportionally so the claim breaks even at the
-     system level.  Real claims at 85/15, 90/10, 95/5 still resolve
-     and reward contrarian winners — no claim is ever cancelled.
-     Zero-sum per claim by construction.
+  2. **Refund-if-fully-uncontested.**  If the losing side attracts
+     fewer than 3 distinct voters at resolution time, every stake is
+     refunded — claim declared trivial.  Otherwise, CPMM math runs
+     exactly as in F.  Locked reward is preserved on every claim
+     that resolves normally: trader knows `shares × 1 rep` at buy
+     time and gets exactly that on win, or full refund on trivial.
 
   3. **Display percentile rank, not raw rep, in the leaderboard UI.**
-     With the zero-sum cap there is no inflation left anyway, but
-     percentile display also handles legacy F balances if the
-     migration is gradual.
+     F's inflation persists in G; sim shows it doesn't damage the
+     leaderboard (rank ρ=0.87, newcomers catch up).  Percentile
+     display makes the numeric drift invisible.
 
 Everything else from F is unchanged:
   - CPMM payouts (Polymarket-style, shares × 1 rep locked at buy time)
@@ -81,72 +81,47 @@ os.makedirs(CHART_DIR, exist_ok=True)
 # scenarios below construct a fresh CPMM market and DO NOT stake the
 # creator on YES at t=0.
 
+MIN_LOSER_VOTERS = 3  # losing side must have ≥ this many distinct voters
+                      # to resolve; otherwise the claim is declared trivial
+                      # and all stakes are refunded.
+
+
 class ModelG(CPMM):
-    """Model G = Model F (CPMM) + zero-sum mint cap at resolution.
+    """Model G = Model F (CPMM) with locked rewards intact + 2 small rules:
 
     1. No creator auto-YES at creation (enforced by the harness — this
-       class doesn't auto-stake on construction).
+       class doesn't auto-stake on construction).  Closes the
+       trivial-claim farming hole where creators auto-earned +9.17 rep
+       per obvious-YES claim.
 
-    2. ``resolve()`` caps total winner payouts at total stakes in the
-       claim.  No claim ever mints rep.  Formally, if CPMM's locked-
-       reward math would pay winners more than the sum of all stakes
-       (because the virtual-liquidity seed contributed extra shares),
-       each winner's payout is scaled down by the same factor so the
-       total exactly matches the stake total.
+    2. Refund-if-fully-uncontested.  If the losing side attracts fewer
+       than ``MIN_LOSER_VOTERS`` distinct stakers (default 3), the claim
+       is declared trivial and every stake is refunded.  No claim is
+       ever paid out by the system pool when there was no real
+       disagreement.
 
-    Why this is better than refunding on vote-share:
-    - Real claims with 85-95% consensus still resolve normally —
-      contrarian winners are still paid for being right.
-    - No claim is ever cancelled.
-    - Zero-sum per claim: no new rep created from thin air.
-    - Locked reward holds approximately — the trader knows their
-      shares at buy time; only the *exchange rate* (rep per share)
-      varies, and only in the direction that prevents mint.
+    Locked reward is fully preserved on every claim that resolves
+    normally.  Trader knows at buy time: best case `shares × 1 rep`,
+    worst case full refund.  No fractional scaling, no surprise rate
+    changes between buy and resolution.
 
-    Sybil/influencer attack analysis:
-    - Influencer with N sock puppets all voting YES on a trivial
-      claim: total stake = N × 10 rep, total payout capped at N × 10.
-      Net mint = 0.  No new rep enters the system.
-    - If a single honest NO voter participates: attacker gains
-      exactly the honest voter's 10 rep.  Cap eliminates mint, but
-      does not prevent wealth transfer between honest and sybil
-      stakers.  Sybil-prevention (account age, verification) is a
-      separate layer.
+    Tradeoff: F's inflation is accepted in exchange.  Sim shows it
+    does not damage the leaderboard (rank stability ρ=0.87, newcomers
+    catch up to peers within 90 days) and is hidden by displaying
+    percentile rank or a derived `truth_score = accuracy × log(rep)`.
     """
 
     name = "model_g"
 
     def resolve(self, winning_side: str) -> dict[int, float]:
-        # Standard CPMM payouts first
-        out = {}
-        for s in self.stakes:
-            base = -s.rep_paid
-            if s.side == winning_side:
-                base += s.shares
-            out[s.user_id] = out.get(s.user_id, 0.0) + base
-
-        # Zero-sum cap: if total mint > 0, scale winner gains down so
-        # the claim breaks even at the system level.
-        total_mint = sum(out.values())
-        if total_mint > 0:
-            winner_gain_total = sum(
-                s.shares - s.rep_paid
-                for s in self.stakes
-                if s.side == winning_side
-            )
-            if winner_gain_total > 0:
-                # We need winner_gain_total to drop by total_mint
-                # (so the new sum is 0).  scale ∈ [0, 1].
-                scale = max(0.0, 1.0 - total_mint / winner_gain_total)
-                # rebuild out with scaled winner gains
-                out = {}
-                for s in self.stakes:
-                    base = -s.rep_paid
-                    if s.side == winning_side:
-                        gain = s.shares - s.rep_paid
-                        base += s.rep_paid + gain * scale
-                    out[s.user_id] = out.get(s.user_id, 0.0) + base
-        return out
+        losing_side = 'NO' if winning_side == 'YES' else 'YES'
+        loser_voters = {s.user_id for s in self.stakes
+                        if s.side == losing_side}
+        if len(loser_voters) < MIN_LOSER_VOTERS:
+            # Trivial claim: refund every stake.  System mint = 0.
+            return {s.user_id: 0.0 for s in self.stakes}
+        # Otherwise CPMM payouts as in F — locked reward intact.
+        return super().resolve(winning_side)
 
 
 # ---------------------------------------------------------------------------
@@ -481,12 +456,13 @@ def write_report(triv, locked, creator, mint, contested,
     A("")
     A("Model G  =  CPMM payouts + v2 hard rules + energy gate")
     A("            - drop creator auto-YES")
-    A("            + zero-sum cap at resolution:")
-    A("              if winners would receive more rep than total stakes,")
-    A("              scale their gains down so total mint = 0")
+    A("            + refund-if-fully-uncontested:")
+    A("              if loser side has < 3 distinct voters, refund all")
+    A("              (trivial claim, no resolution)")
     A("```\n")
     A("Locked reward, copy-trade immunity, whale rules, energy gate — "
-      "all unchanged from F. No claim is ever cancelled.\n")
+      "all unchanged from F. Trader knows `shares × 1 rep` at buy time "
+      "and gets exactly that on win.\n")
 
     # ----
     A("## Scenario 1 — trivial-claim farming\n")
