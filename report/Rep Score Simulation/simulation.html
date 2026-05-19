@@ -54,9 +54,11 @@
                     <button class="btn btn-yes" onclick="addRandom(50)">50 Rastgele</button>
                 </div>
                 <div id="gLPControls" style="display:none; gap: 5px; flex-wrap: wrap; padding: 8px; background: #eafaf1; border-radius: 5px;">
-                    <button class="btn btn-reset" style="background-color:#16a085;" onclick="addLP('LP', 20)">LP Ekle (+20 Rep)</button>
-                    <button class="btn btn-reset" style="background-color:#16a085;" onclick="addLP('LP', 50)">LP Ekle (+50 Rep)</button>
-                    <button class="btn btn-reset" style="background-color:#2980b9;" onclick="addLP('Yaratıcı', 20)">Yaratıcı LP'ye Katıl (+20)</button>
+                    <div id="gCreatorNote" style="width:100%; font-size:0.9em; color:#16a085; font-weight:bold;">
+                        Yaratıcı zorunlu LP olarak <span id="gCreatorAmount">20</span> Rep yatırdı (claim açılışında otomatik).
+                    </div>
+                    <button class="btn btn-reset" style="background-color:#16a085;" onclick="addLP('Ek LP', 20)">Ek LP (+20 Rep)</button>
+                    <button class="btn btn-reset" style="background-color:#16a085;" onclick="addLP('Ek LP', 50)">Ek LP (+50 Rep)</button>
                 </div>
                 <div style="display: flex; gap: 5px; flex-wrap: wrap;">
                     <button class="btn btn-reset" onclick="togglePayoutMethod()">Payout Değiştir</button>
@@ -146,7 +148,7 @@
 
     // --- MODEL G STATE (LP-funded CPMM) ---
     const G_FEE_BPS = 200;            // 2% trading fee → LP pool
-    const G_MIN_LP_TO_OPEN = 10;      // pool needs at least this rep before trading opens
+    const G_CREATOR_MIN_LP = 20;      // creator MUST deposit this much as LP at claim creation
     let gYReserve = 0;                // AMM YES reserve (starts at 0, LP seeds it)
     let gNReserve = 0;                // AMM NO reserve
     let gLPTokensTotal = 0;           // total LP-tokens minted
@@ -386,6 +388,10 @@
         gLPPositions = [];
         gAccumulatedFees = 0;
         gNextLpId = 1;
+        // Model G — creator's compulsory LP at claim creation.
+        if (payoutMode === 'g') {
+            gAddLiquidity('Yaratıcı', G_CREATOR_MIN_LP);
+        }
         yesPriceHistory = [getYesPrice()];
         voteHistory = [0];
         updatePayoutMethodUI();
@@ -416,6 +422,8 @@
         // Show/hide LP controls
         const gLPControls = document.getElementById('gLPControls');
         if (gLPControls) gLPControls.style.display = payoutMode === 'g' ? 'flex' : 'none';
+        const gCreatorAmount = document.getElementById('gCreatorAmount');
+        if (gCreatorAmount) gCreatorAmount.innerText = G_CREATOR_MIN_LP;
 
         if (payoutMode === 'late') {
             formulaDiv.innerHTML = `
@@ -435,12 +443,13 @@
         } else if (payoutMode === 'g') {
             formulaDiv.innerHTML = `
                 <strong>Model G (Uniswap-style LP-funded CPMM) — sıfır enflasyon, kilitli ödül:</strong><br>
-                <strong>1.</strong> Önce kullanıcılar LP olarak rep yatırır → havuz açılır (Y₀ = N₀ = LP_total).<br>
-                <strong>2.</strong> Yaratıcı auto-katılmaz, isterse LP olur.<br>
+                <strong>1.</strong> <span style="color:#c0392b;">Yaratıcı ZORUNLU olarak ${G_CREATOR_MIN_LP} Rep'i LP olarak yatırır</span> — havuz açılır (Y₀ = N₀ = ${G_CREATOR_MIN_LP}).<br>
+                <strong>2.</strong> Başka kullanıcılar isterse ek LP koyabilir.<br>
                 <strong>3.</strong> Stake = 10 Rep, ${(G_FEE_BPS/100).toFixed(1)}% fee LP'lere gider, kalan r = mint(r YES + r NO), sonra swap (k=Y·N sabit).<br>
                 <strong>Trader payoutu:</strong> shares × 1 Rep (kazanırsa, alım anında kilitli).<br>
                 <strong>LP payoutu:</strong> token oranı × (kazanan_taraf_rezerv + biriken_fee). Kaybeden taraf rezervi 0.<br>
-                <strong>Korunum:</strong> LP_in + stake_in = LP_out + trader_out. Sıfır rep yaratımı.
+                <strong>Korunum:</strong> LP_in + stake_in = LP_out + trader_out. Sıfır rep yaratımı.<br>
+                <strong>Yaratıcı teşviği:</strong> LP olarak fee gelirini alır; iddialı/trafikli claim açmak için doğal motivasyon.
             `;
         } else {
             formulaDiv.innerHTML = `

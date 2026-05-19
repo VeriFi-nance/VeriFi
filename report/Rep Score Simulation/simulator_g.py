@@ -9,11 +9,19 @@ prediction market.
 
 Roles
 -----
-LP: deposits ``D`` rep, mints ``D`` YES and ``D`` NO shares in the
-pool, receives an LP-token (claim on the pool).  Any user can be an
-LP.  The claim creator does **not** auto-join — they may opt-in later
-by calling ``add_liquidity`` like anyone else.  Their reward is the
-share of fees their LP-tokens entitle them to at resolution.
+Claim creator: **must** deposit ``CREATOR_MIN_LP`` rep as LP at claim
+creation.  This seeds the pool, opens trading immediately, and forces
+skin-in-the-game.  The creator's LP is at risk of impermanent loss if
+the claim resolves decisively against the side the pool ends up
+weighted on — so the creator is incentivised to only post claims they
+believe will produce a contested market.
+
+Additional LPs: any other user may add liquidity later via
+``add_liquidity`` and mints new LP-tokens at the current pool ratio.
+
+Trading: every staker is a trader (separate from the LP role).  The
+creator may *also* trade by calling ``buy`` — that vote is independent
+of their LP position.
 
 Trader: stakes ``FIXED_STAKE`` (10) rep on YES or NO.  A ``fee_bps`` fee
 is removed from the stake at buy time and added to the LP pool.  The
@@ -79,7 +87,8 @@ os.makedirs(CHART_DIR, exist_ok=True)
 
 
 FEE_BPS = 200            # 2% of every stake routed to LP pool
-DEFAULT_LP_DEPOSIT = 20  # min LP deposit per claim to open trading
+DEFAULT_LP_DEPOSIT = 20  # default later-LP deposit
+CREATOR_MIN_LP = 20      # creator's compulsory LP deposit at claim creation
 
 
 # ---------------------------------------------------------------------------
@@ -94,13 +103,24 @@ class LPPosition:
 
 
 class ModelG:
-    """CPMM with user-supplied liquidity and trading fees that pay LPs."""
+    """CPMM with user-supplied liquidity and trading fees that pay LPs.
+
+    The claim creator is **required** to seed the pool at claim creation
+    by depositing at least ``creator_min_lp`` rep.  Pass ``creator_uid``
+    to the constructor to enforce this — the LP deposit is made
+    automatically and recorded as the creator's LP position.  Other LPs
+    can join later via ``add_liquidity``.
+    """
 
     name = "model_g"
 
-    def __init__(self, claim_id: int = 0, fee_bps: int = FEE_BPS):
+    def __init__(self, claim_id: int = 0, fee_bps: int = FEE_BPS,
+                 creator_uid: int | None = None,
+                 creator_min_lp: float = CREATOR_MIN_LP):
         self.claim_id = claim_id
         self.fee_bps = fee_bps
+        self.creator_uid = creator_uid
+        self.creator_min_lp = creator_min_lp
         self.y_reserve = 0.0
         self.n_reserve = 0.0
         self.lp_tokens_total = 0.0
@@ -109,6 +129,10 @@ class ModelG:
         self.accumulated_fees = 0.0
         self.yes_outstanding = 0.0   # trader shares (excl. LP pool shares)
         self.no_outstanding = 0.0
+
+        # Compulsory creator-LP at claim creation.
+        if creator_uid is not None:
+            self.add_liquidity(creator_uid, creator_min_lp)
 
     # --- LP side -----------------------------------------------------------
 
@@ -222,16 +246,15 @@ def scenario_inflation(n_rounds: int = 400, n_users: int = 60,
 
     for r in range(n_rounds):
         truth = rng.choice(['YES', 'NO'])
-        eligible_lps = [u for u in range(n_users) if rep[u] >= lp_deposit]
-        if not eligible_lps:
+        # Creator-LP is compulsory at claim creation.
+        eligible_creators = [u for u in range(n_users) if rep[u] >= lp_deposit]
+        if not eligible_creators:
             history.append(sum(rep)); continue
-        lp_uid = rng.choice(eligible_lps)
-        m = ModelG(claim_id=r, fee_bps=fee_bps)
-
-        # LP deposits — rep flows out of user balance into the pool.
-        m.add_liquidity(lp_uid, lp_deposit)
-        rep[lp_uid] -= lp_deposit
-        involved = {lp_uid}
+        creator_uid = rng.choice(eligible_creators)
+        m = ModelG(claim_id=r, fee_bps=fee_bps,
+                   creator_uid=creator_uid, creator_min_lp=lp_deposit)
+        rep[creator_uid] -= lp_deposit
+        involved = {creator_uid}
 
         for uid in range(n_users):
             if rep[uid] < 10:
@@ -247,7 +270,7 @@ def scenario_inflation(n_rounds: int = 400, n_users: int = 60,
         # already-debited balance.
         profits = m.resolve(truth)
         for uid in involved:
-            rep[uid] += (lp_deposit if uid == lp_uid else 0.0)
+            rep[uid] += (lp_deposit if uid == creator_uid else 0.0)
             # add back any stake the user put down as trader
             if any(s.user_id == uid for s in m.stakes):
                 rep[uid] += 10.0
@@ -275,9 +298,9 @@ def scenario_lp_profitability(n_claims: int = 1000, n_users: int = 50,
 
     for r in range(n_claims):
         truth = rng.choice(['YES', 'NO'])
-        m = ModelG(claim_id=r, fee_bps=fee_bps)
-        lp_uid = 0
-        m.add_liquidity(lp_uid, lp_deposit)
+        lp_uid = 0  # creator is uid=0 and is forced to LP
+        m = ModelG(claim_id=r, fee_bps=fee_bps,
+                   creator_uid=lp_uid, creator_min_lp=lp_deposit)
         for uid in range(1, n_users):
             if rng.random() > 0.6:
                 continue
@@ -321,8 +344,8 @@ def scenario_trader_locked_reward():
     results = {}
     for label, mk in [
         ("F", lambda: CPMM()),
-        ("G (LP=20)", lambda: (lambda mm: (mm.add_liquidity(99, 20.0), mm)[1])(ModelG())),
-        ("G (LP=50)", lambda: (lambda mm: (mm.add_liquidity(99, 50.0), mm)[1])(ModelG())),
+        ("G (creator LP=20)", lambda: ModelG(creator_uid=99, creator_min_lp=20.0)),
+        ("G (creator LP=50)", lambda: ModelG(creator_uid=99, creator_min_lp=50.0)),
     ]:
         alice_at_n = {}
         for n_later in [0, 5, 20, 50]:
@@ -410,7 +433,7 @@ def chart_fee_sweep(res):
 def chart_locked_reward(res):
     fig, ax = plt.subplots(figsize=(10, 5))
     x = sorted(next(iter(res.values())).keys())
-    colors = {'F': '#c0392b', 'G (LP=20)': '#16a085', 'G (LP=50)': '#2980b9'}
+    colors = {'F': '#c0392b', 'G (creator LP=20)': '#16a085', 'G (creator LP=50)': '#2980b9'}
     for label, vs in res.items():
         ys = [vs[n] for n in x]
         ax.plot(x, ys, marker='o', linewidth=2, label=label,
@@ -467,12 +490,12 @@ def write_report(infl, lp_p, fee_sweep, locked):
     A("## Locked reward and copy-trade immunity\n")
     A("Same test as before: Alice bets YES; vary the number of later YES "
       "buyers. Alice's net rep under each model:\n")
-    A("| Later YES buyers | F | G (LP=20) | G (LP=50) |")
+    A("| Later YES buyers | F | G (creator LP=20) | G (creator LP=50) |")
     A("|---|---|---|---|")
     ns = sorted(next(iter(locked.values())).keys())
     for n in ns:
-        A(f"| {n} | {locked['F'][n]:+7.2f} | {locked['G (LP=20)'][n]:+7.2f} | "
-          f"{locked['G (LP=50)'][n]:+7.2f} |")
+        A(f"| {n} | {locked['F'][n]:+7.2f} | {locked['G (creator LP=20)'][n]:+7.2f} | "
+          f"{locked['G (creator LP=50)'][n]:+7.2f} |")
     A("\n![locked_reward](charts/g_04_locked.png)\n")
     A("**Reading.** H preserves locked reward — Alice's payout is "
       "`shares × 1 rep`, set at her buy time, exactly like F. Later buyers "

@@ -30,7 +30,7 @@ Same as G: zero-sum by construction. No house mint.
 
 Same test as before: Alice bets YES; vary the number of later YES buyers. Alice's net rep under each model:
 
-| Later YES buyers | F | G (LP=20) | G (LP=50) |
+| Later YES buyers | F | G (creator LP=20) | G (creator LP=50) |
 |---|---|---|---|
 | 0 |   +9.17 |   +6.38 |   +7.99 |
 | 5 |   +9.17 |   +6.38 |   +7.99 |
