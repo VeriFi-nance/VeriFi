@@ -55,10 +55,16 @@
                 </div>
                 <div id="gLPControls" style="display:none; gap: 5px; flex-wrap: wrap; padding: 8px; background: #eafaf1; border-radius: 5px;">
                     <div id="gCreatorNote" style="width:100%; font-size:0.9em; color:#16a085; font-weight:bold;">
-                        Yaratıcı zorunlu LP olarak <span id="gCreatorAmount">20</span> Rep yatırdı (claim açılışında otomatik).
+                        Yaratıcı zorunlu LP olarak <span id="gCreatorAmount">100</span> Rep yatırdı (claim açılışında otomatik).
+                    </div>
+                    <div style="width:100%; font-size:0.85em; display:flex; align-items:center; gap:6px;">
+                        <label for="gCreatorLPInput">Yaratıcı LP miktarı:</label>
+                        <input id="gCreatorLPInput" type="number" min="10" max="2000" step="10" value="100" style="width:70px;">
+                        <button class="btn btn-reset" style="padding:4px 10px; font-size:0.85em;" onclick="applyCreatorLP()">Uygula + Sıfırla</button>
+                        <span style="color:#7f8c8d;">— Havuz derinliği = fiyat oynaklığı. Düşük = volatil, yüksek = sakin.</span>
                     </div>
                     <button class="btn btn-reset" style="background-color:#16a085;" onclick="addLP('Ek LP', 20)">Ek LP (+20 Rep)</button>
-                    <button class="btn btn-reset" style="background-color:#16a085;" onclick="addLP('Ek LP', 50)">Ek LP (+50 Rep)</button>
+                    <button class="btn btn-reset" style="background-color:#16a085;" onclick="addLP('Ek LP', 100)">Ek LP (+100 Rep)</button>
                 </div>
                 <div style="display: flex; gap: 5px; flex-wrap: wrap;">
                     <button class="btn btn-reset" onclick="togglePayoutMethod()">Payout Değiştir</button>
@@ -147,8 +153,11 @@
     let lpSubsidyExposure = 0;        // running house-subsidy bound (F)
 
     // --- MODEL G STATE (LP-funded CPMM) ---
-    const G_FEE_BPS = 200;            // 2% trading fee → LP pool
-    const G_CREATOR_MIN_LP = 20;      // creator MUST deposit this much as LP at claim creation
+    const G_FEE_BPS = 400;            // 4% trading fee → LP pool. Bigger pool depth needs higher fee to keep LP P&L positive on average.
+    // Creator's compulsory LP at claim creation.  Sized so price impact
+    // per 10-rep stake stays under ~5pp.  D=100 each side → ~4.7pp move.
+    // D=20 (old) gave ~19pp per bet which made the price look like noise.
+    let G_CREATOR_MIN_LP = 100;
     let gYReserve = 0;                // AMM YES reserve (starts at 0, LP seeds it)
     let gNReserve = 0;                // AMM NO reserve
     let gLPTokensTotal = 0;           // total LP-tokens minted
@@ -357,8 +366,8 @@
         updateUI();
     }
 
-    // Model G — anyone can add liquidity. The creator does NOT auto-LP;
-    // they call this themselves whenever they like.
+    // Model G — anyone can add liquidity (creator's compulsory LP is seeded
+    // automatically at claim creation by resetSim()).
     function addLP(owner, repAmount) {
         if (payoutMode !== 'g') {
             alert('LP ekleme yalnızca Model G modunda anlamlıdır.');
@@ -368,6 +377,20 @@
         yesPriceHistory.push(getYesPrice());
         voteHistory.push(yesCount + noCount);
         updateUI();
+    }
+
+    // Read the LP-size input and reset the claim with the new compulsory
+    // creator LP amount.
+    function applyCreatorLP() {
+        const el = document.getElementById('gCreatorLPInput');
+        if (!el) return;
+        const val = parseFloat(el.value);
+        if (!isFinite(val) || val < 10) {
+            alert('Yaratıcı LP en az 10 Rep olmalı.');
+            return;
+        }
+        G_CREATOR_MIN_LP = val;
+        resetSim();
     }
 
     function resetSim() {

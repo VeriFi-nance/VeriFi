@@ -86,9 +86,17 @@ CHART_DIR = os.path.join(OUT_DIR, "charts")
 os.makedirs(CHART_DIR, exist_ok=True)
 
 
-FEE_BPS = 200            # 2% of every stake routed to LP pool
-DEFAULT_LP_DEPOSIT = 20  # default later-LP deposit
-CREATOR_MIN_LP = 20      # creator's compulsory LP deposit at claim creation
+FEE_BPS = 400            # 4% of every stake routed to LP pool.  When the
+                         # default LP depth grew from 20 to 100 to smooth
+                         # price impact, the absolute IL on decisive claims
+                         # also grew.  Fee must scale to keep LP P&L
+                         # positive on average — see fee sweep in report.
+# Pool depth determines per-trade price impact.  D=20 → ~19pp move per
+# 10-rep stake (looks like noise).  D=100 → ~4.7pp move (smooth).  We
+# size the creator's compulsory LP at 100 by default so a fresh claim
+# already has tradeable depth.
+DEFAULT_LP_DEPOSIT = 100  # default later-LP deposit
+CREATOR_MIN_LP = 100      # creator's compulsory LP deposit at claim creation
 
 
 # ---------------------------------------------------------------------------
@@ -236,7 +244,7 @@ class ModelG:
 # ---------------------------------------------------------------------------
 
 def scenario_inflation(n_rounds: int = 400, n_users: int = 60,
-                       fee_bps: int = FEE_BPS, lp_deposit: float = 20.0,
+                       fee_bps: int = FEE_BPS, lp_deposit: float = 100.0,
                        seed: int = 7):
     """Same harness as inflation test for F vs G.  Run H with creator-as-LP."""
     rng = random.Random(seed)
@@ -282,7 +290,7 @@ def scenario_inflation(n_rounds: int = 400, n_users: int = 60,
 
 
 def scenario_lp_profitability(n_claims: int = 1000, n_users: int = 50,
-                              lp_deposit: float = 20.0, fee_bps: int = FEE_BPS,
+                              lp_deposit: float = 100.0, fee_bps: int = FEE_BPS,
                               seed: int = 11):
     """Is being an LP a profitable role?  Sample many claims; pick one
     user to be the LP each time; measure the LP's net P&L distribution.
@@ -325,7 +333,7 @@ def scenario_lp_profitability(n_claims: int = 1000, n_users: int = 50,
 
 
 def scenario_fee_sweep(n_claims: int = 500, n_users: int = 50,
-                       lp_deposit: float = 20.0, seed: int = 13):
+                       lp_deposit: float = 100.0, seed: int = 13):
     """Sweep fee_bps and look at LP expected P&L."""
     out = {}
     for fee in [0, 50, 100, 200, 300, 500]:
@@ -344,8 +352,8 @@ def scenario_trader_locked_reward():
     results = {}
     for label, mk in [
         ("F", lambda: CPMM()),
-        ("G (creator LP=20)", lambda: ModelG(creator_uid=99, creator_min_lp=20.0)),
-        ("G (creator LP=50)", lambda: ModelG(creator_uid=99, creator_min_lp=50.0)),
+        ("G (creator LP=100)", lambda: ModelG(creator_uid=99, creator_min_lp=100.0)),
+        ("G (creator LP=200)", lambda: ModelG(creator_uid=99, creator_min_lp=200.0)),
     ]:
         alice_at_n = {}
         for n_later in [0, 5, 20, 50]:
@@ -433,7 +441,7 @@ def chart_fee_sweep(res):
 def chart_locked_reward(res):
     fig, ax = plt.subplots(figsize=(10, 5))
     x = sorted(next(iter(res.values())).keys())
-    colors = {'F': '#c0392b', 'G (creator LP=20)': '#16a085', 'G (creator LP=50)': '#2980b9'}
+    colors = {'F': '#c0392b', 'G (creator LP=100)': '#16a085', 'G (creator LP=200)': '#2980b9'}
     for label, vs in res.items():
         ys = [vs[n] for n in x]
         ax.plot(x, ys, marker='o', linewidth=2, label=label,
@@ -490,12 +498,12 @@ def write_report(infl, lp_p, fee_sweep, locked):
     A("## Locked reward and copy-trade immunity\n")
     A("Same test as before: Alice bets YES; vary the number of later YES "
       "buyers. Alice's net rep under each model:\n")
-    A("| Later YES buyers | F | G (creator LP=20) | G (creator LP=50) |")
+    A("| Later YES buyers | F | G (creator LP=100) | G (creator LP=200) |")
     A("|---|---|---|---|")
     ns = sorted(next(iter(locked.values())).keys())
     for n in ns:
-        A(f"| {n} | {locked['F'][n]:+7.2f} | {locked['G (creator LP=20)'][n]:+7.2f} | "
-          f"{locked['G (creator LP=50)'][n]:+7.2f} |")
+        A(f"| {n} | {locked['F'][n]:+7.2f} | {locked['G (creator LP=100)'][n]:+7.2f} | "
+          f"{locked['G (creator LP=200)'][n]:+7.2f} |")
     A("\n![locked_reward](charts/g_04_locked.png)\n")
     A("**Reading.** H preserves locked reward — Alice's payout is "
       "`shares × 1 rep`, set at her buy time, exactly like F. Later buyers "
