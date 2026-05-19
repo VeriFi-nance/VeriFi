@@ -54,9 +54,10 @@
                     <button class="btn btn-yes" onclick="addRandom(50)">50 Rastgele</button>
                 </div>
                 <div id="gNote" style="display:none; font-size:0.9em; padding: 8px; background: #eafaf1; border-radius: 5px; color:#16a085;">
-                    <strong>Model G</strong> = Model F + iki küçük değişiklik:<br>
+                    <strong>Model G</strong> = Model F + üç küçük değişiklik:<br>
                     1. Claim açılışında yaratıcı otomatik EVET'e yatırılmaz<br>
-                    2. <strong>Trivial claim iadesi:</strong> Kaybeden tarafta &lt; 3 oy varsa claim trivial sayılır, tüm stakler iade edilir<br>
+                    2. Yaratıcı 2 rep listing fee öder (yakılır) — spam engeli<br>
+                    3. <strong>Trivial claim iadesi:</strong> Kaybeden tarafta &lt; 3 oy <em>VEYA</em> toplam &lt; 5 oy varsa claim trivial sayılır, tüm stakler iade edilir<br>
                     <span style="color:#7f8c8d;">Ödüller satın alma anında kilitli — gerçekten çözülen claim'lerde shares × 1 rep alırsınız. Trivial claim'lerde stake iadesi alırsınız.</span>
                 </div>
                 <div style="display: flex; gap: 5px; flex-wrap: wrap;">
@@ -196,16 +197,24 @@
         return 0;
     }
 
-    // Model G refund check: claim is trivial if the losing side has
-    // fewer than G_MIN_LOSER_VOTERS distinct stakers.  When trivial,
-    // resolution refunds every stake (no winners paid, no mint).
+    // Model G refund check: claim is trivial if
+    //   - losing side has fewer than G_MIN_LOSER_VOTERS distinct voters, OR
+    //   - the claim attracted fewer than G_MIN_TOTAL_VOTERS in total
+    // When trivial, resolution refunds every stake (no winners paid).
     const G_MIN_LOSER_VOTERS = 3;
+    const G_MIN_TOTAL_VOTERS = 5;
+    // G also uses a smaller virtual seed (CPMM_INIT_L would be lower in
+    // production, but for the visual sim we leave CPMM_INIT_L=100 so the
+    // F-mode and G-mode reserves start at the same place; the resolution
+    // math is what differs).
     function gIsTrivial(winningSide) {
         const losingSide = winningSide === 'YES' ? 'NO' : 'YES';
         const loserVoters = new Set(
             stakes.filter(s => s.side === losingSide).map(s => s.id)
         );
-        return loserVoters.size < G_MIN_LOSER_VOTERS;
+        const totalVoters = new Set(stakes.map(s => s.id));
+        return loserVoters.size < G_MIN_LOSER_VOTERS
+            || totalVoters.size < G_MIN_TOTAL_VOTERS;
     }
 
     // CPMM buy: spend r rep, receive shares of `side`. Mints r complete sets, swaps opposite side for more.
@@ -339,12 +348,13 @@
             `;
         } else if (payoutMode === 'g') {
             formulaDiv.innerHTML = `
-                <strong>Model G = Model F + iki değişiklik:</strong><br>
+                <strong>Model G = Model F + üç değişiklik:</strong><br>
                 <strong>Aynı:</strong> CPMM payoutları, sabit 10 rep stake, 1 pozisyon/claim, enerji limiti, virtual likidite (Y₀=N₀=${CPMM_INIT_L}). <strong>Ödüller satın alma anında kilitli</strong> (F gibi).<br>
                 <strong>Fark 1:</strong> Claim açılışında yaratıcı OTOMATIK EVET'e yatırılmaz. Manuel oy verebilir → trivial claim farming kapatıldı (#76 P2).<br>
-                <strong>Fark 2 — Trivial claim iadesi:</strong> Kaybeden tarafta &lt; 3 oy varsa claim trivial sayılır, tüm stake'ler iade edilir. Hiçbir mint olmaz. ≥ 3 oy varsa CPMM math normal çalışır, kilitli ödüller verilir.<br>
+                <strong>Fark 2 — Yaratıcı listing fee:</strong> Claim açılışında 2 rep ödenir, yakılır. Spam engeli + küçük deflasyon.<br>
+                <strong>Fark 3 — Trivial claim iadesi:</strong> Kaybeden tarafta &lt; 3 oy <em>VEYA</em> toplam &lt; 5 oy varsa claim trivial sayılır, tüm stake'ler iade edilir. Hiçbir mint olmaz. ≥ 3 muhalif VE ≥ 5 toplam oy varsa CPMM math normal çalışır, kilitli ödüller verilir.<br>
                 <strong>Trader payoutu:</strong> Eğer claim çözülürse <strong>shares × 1 Rep</strong> (kilitli, satın alma anında belirlenir). Eğer trivial sayılırsa <strong>tam iade</strong>. Hiçbir ölçeklendirme yok.<br>
-                <strong>Enflasyon:</strong> F kadar var (trivial claim'lerde iade ile bir kısmı engellenir). Leaderboard'ı bozmaz; UI'da percentile gösterimi ile gizlenebilir.
+                <strong>Enflasyon:</strong> F'den az ama yine de var (trivial claim'lerde iade engelliyor). UI'da percentile gösterimi ile gizlenebilir.
             `;
         } else {
             formulaDiv.innerHTML = `

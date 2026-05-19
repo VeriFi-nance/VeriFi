@@ -81,46 +81,56 @@ os.makedirs(CHART_DIR, exist_ok=True)
 # scenarios below construct a fresh CPMM market and DO NOT stake the
 # creator on YES at t=0.
 
-MIN_LOSER_VOTERS = 3  # losing side must have ≥ this many distinct voters
-                      # to resolve; otherwise the claim is declared trivial
-                      # and all stakes are refunded.
+MIN_LOSER_VOTERS = 3       # refund if losing side has fewer distinct voters
+MIN_TOTAL_VOTERS = 5       # refund if claim attracts fewer total voters
+                           # (anti-sybil: closes "3 puppets per side" loophole)
+CREATOR_LISTING_FEE = 2.0  # creator pays this at claim creation, burned
+G_INIT_L = 30.0            # CPMM virtual seed under G (was 100 under F);
+                           # smaller seed → smaller per-claim mint cap
 
 
 class ModelG(CPMM):
-    """Model G = Model F (CPMM) with locked rewards intact + 2 small rules:
+    """Model G — locked-reward CPMM with hardened trivial-claim defenses.
 
-    1. No creator auto-YES at creation (enforced by the harness — this
-       class doesn't auto-stake on construction).  Closes the
-       trivial-claim farming hole where creators auto-earned +9.17 rep
-       per obvious-YES claim.
+    Differences from Model F (CPMM):
+      1. **No creator auto-YES at creation.**  Enforced by harness;
+         creator must vote manually using their own energy.
+      2. **Listing fee.**  Creator pays ``CREATOR_LISTING_FEE`` rep at
+         claim creation, permanently burned.  Anti-spam.  Forces
+         attacker break-even point higher.
+      3. **Refund-if-trivial.**  At resolution, if the losing side has
+         < ``MIN_LOSER_VOTERS`` voters OR the claim attracted
+         < ``MIN_TOTAL_VOTERS`` stakers total, every stake is refunded
+         (no winners paid, no mint).
+      4. **Smaller virtual seed.**  ``INIT_L = 30`` (vs F's 100) caps
+         the per-claim mint at ~+43 rep instead of ~+143 rep.
 
-    2. Refund-if-fully-uncontested.  If the losing side attracts fewer
-       than ``MIN_LOSER_VOTERS`` distinct stakers (default 3), the claim
-       is declared trivial and every stake is refunded.  No claim is
-       ever paid out by the system pool when there was no real
-       disagreement.
-
-    Locked reward is fully preserved on every claim that resolves
-    normally.  Trader knows at buy time: best case `shares × 1 rep`,
-    worst case full refund.  No fractional scaling, no surprise rate
-    changes between buy and resolution.
-
-    Tradeoff: F's inflation is accepted in exchange.  Sim shows it
-    does not damage the leaderboard (rank stability ρ=0.87, newcomers
-    catch up to peers within 90 days) and is hidden by displaying
-    percentile rank or a derived `truth_score = accuracy × log(rep)`.
+    Locked reward is preserved on every resolving claim: trader knows
+    ``shares × 1 rep`` at buy time, gets exactly that on win, or full
+    refund if the claim is declared trivial.
     """
 
     name = "model_g"
+
+    def __init__(self, claim_id: int = 0, creator_uid: int | None = None,
+                 init_L: float = G_INIT_L,
+                 listing_fee: float = CREATOR_LISTING_FEE):
+        super().__init__(claim_id)
+        # Override CPMM's INIT_L by resetting reserves
+        self.y_reserve = init_L
+        self.n_reserve = init_L
+        self.init_L = init_L
+        self.creator_uid = creator_uid
+        self.listing_fee = listing_fee if creator_uid is not None else 0.0
 
     def resolve(self, winning_side: str) -> dict[int, float]:
         losing_side = 'NO' if winning_side == 'YES' else 'YES'
         loser_voters = {s.user_id for s in self.stakes
                         if s.side == losing_side}
-        if len(loser_voters) < MIN_LOSER_VOTERS:
-            # Trivial claim: refund every stake.  System mint = 0.
+        total_voters = {s.user_id for s in self.stakes}
+        if (len(loser_voters) < MIN_LOSER_VOTERS
+                or len(total_voters) < MIN_TOTAL_VOTERS):
             return {s.user_id: 0.0 for s in self.stakes}
-        # Otherwise CPMM payouts as in F — locked reward intact.
         return super().resolve(winning_side)
 
 
