@@ -53,6 +53,11 @@
                     <button class="btn btn-no" onclick="addMany('NO', 10)">10 HAYIR</button>
                     <button class="btn btn-yes" onclick="addRandom(50)">50 Rastgele</button>
                 </div>
+                <div id="gLPControls" style="display:none; gap: 5px; flex-wrap: wrap; padding: 8px; background: #eafaf1; border-radius: 5px;">
+                    <button class="btn btn-reset" style="background-color:#16a085;" onclick="addLP('LP', 20)">LP Ekle (+20 Rep)</button>
+                    <button class="btn btn-reset" style="background-color:#16a085;" onclick="addLP('LP', 50)">LP Ekle (+50 Rep)</button>
+                    <button class="btn btn-reset" style="background-color:#2980b9;" onclick="addLP('Yaratıcı', 20)">Yaratıcı LP'ye Katıl (+20)</button>
+                </div>
                 <div style="display: flex; gap: 5px; flex-wrap: wrap;">
                     <button class="btn btn-reset" onclick="togglePayoutMethod()">Payout Değiştir</button>
                     <button class="btn btn-reset" onclick="resetSim()">Sıfırla</button>
@@ -68,6 +73,24 @@
             <div id="cpmmStats" style="display:none; font-size: 0.95em; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ccc;">
                 <div>Y reserve: <span id="yReserveVal">100.00</span> · N reserve: <span id="nReserveVal">100.00</span></div>
                 <div>LP subsidy exposure: <span id="lpSubsidyVal" style="color:#c0392b;">0.00</span> Rep</div>
+            </div>
+            <div id="gStats" style="display:none; font-size: 0.95em; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ccc;">
+                <div>Y reserve: <span id="gYReserveVal">0.00</span> · N reserve: <span id="gNReserveVal">0.00</span></div>
+                <div>Toplam LP yatırımı: <span id="gLPDeposit">0.00</span> Rep · LP token: <span id="gLPTokens">0.00</span></div>
+                <div>Biriken ücretler: <span id="gFees" style="color:#16a085;">0.00</span> Rep</div>
+            </div>
+        </div>
+        <div class="panel text-center" style="background:#fff8e1; border-color:#ffe082;">
+            <h3>Sistem Rep Takibi</h3>
+            <div class="stats">Sistemdeki Toplam Rep: <span id="repIn">0</span></div>
+            <div style="font-size: 0.95em; margin-top: 8px;">EVET kazanırsa ödeme: <span id="repOutYes" style="color:#27ae60;">0.00</span></div>
+            <div style="font-size: 0.95em;">HAYIR kazanırsa ödeme: <span id="repOutNo" style="color:#27ae60;">0.00</span></div>
+            <div style="font-size: 0.95em; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ccc;">
+                Enflasyon (EVET): <span id="driftYes" style="font-weight:bold;">+0.00</span> Rep
+                <br>Enflasyon (HAYIR): <span id="driftNo" style="font-weight:bold;">+0.00</span> Rep
+            </div>
+            <div style="font-size: 0.85em; color: #7f8c8d; margin-top: 6px;">
+                Sıfır enflasyon = LP'ler ve oyuncular arasında rep yeniden dağıtılıyor, sisteme yeni rep eklenmiyor.
             </div>
         </div>
     </div>
@@ -109,23 +132,150 @@
     let yesPriceChart = null;
     let yesPriceHistory = [];
     let voteHistory = [];
-    // payoutMode: 'default' (parimutuel) | 'late' (late-adoption parimutuel) | 'cpmm' (Polymarket-style)
+    // payoutMode: 'default' (parimutuel) | 'late' (late-adoption parimutuel) | 'cpmm' (F: house-subsidised CPMM) | 'g' (G: LP-funded CPMM, Uniswap-style)
     let payoutMode = 'default';
 
-    // --- CPMM (Polymarket-style) STATE ---
+    // --- CPMM / Model F STATE (house virtual liquidity) ---
     const CPMM_INIT_L = 100;          // virtual liquidity seed each side
     let yReserve = CPMM_INIT_L;       // YES shares in AMM pool
     let nReserve = CPMM_INIT_L;       // NO shares in AMM pool
     let yesOutstanding = 0;           // YES shares held by users (sum)
     let noOutstanding = 0;            // NO shares held by users (sum)
     let cpmmEscrow = 0;               // total real rep deposited as collateral
+    let lpSubsidyExposure = 0;        // running house-subsidy bound (F)
+
+    // --- MODEL G STATE (LP-funded CPMM) ---
+    const G_FEE_BPS = 200;            // 2% trading fee → LP pool
+    const G_MIN_LP_TO_OPEN = 10;      // pool needs at least this rep before trading opens
+    let gYReserve = 0;                // AMM YES reserve (starts at 0, LP seeds it)
+    let gNReserve = 0;                // AMM NO reserve
+    let gLPTokensTotal = 0;           // total LP-tokens minted
+    let gLPPositions = [];            // [{owner, deposit, tokens}]
+    let gAccumulatedFees = 0;         // fees collected for LPs
+    let gNextLpId = 1;
 
     // --- MATEMATİK FONKSİYONLARI ---
     function getYesPrice() {
         if (payoutMode === 'cpmm') {
             return nReserve / (yReserve + nReserve);
         }
+        if (payoutMode === 'g') {
+            const total = gYReserve + gNReserve;
+            return total > 0 ? gNReserve / total : 0.5;
+        }
         return (yesCount + 1) / (yesCount + noCount + 2);
+    }
+
+    // --- MODEL G: LP and trader logic ---
+    // LP deposit: adds equal shares to both reserves (price preserved). Returns minted LP tokens.
+    function gAddLiquidity(owner, repAmount) {
+        let minted;
+        if (gYReserve === 0 && gNReserve === 0) {
+            // First LP defines the pool at 50/50
+            gYReserve = repAmount;
+            gNReserve = repAmount;
+            minted = repAmount;
+        } else {
+            // Subsequent LP: keep price by depositing at current ratio.
+            const pool_avg = (gYReserve + gNReserve) / 2;
+            minted = repAmount * gLPTokensTotal / pool_avg;
+            const total = gYReserve + gNReserve;
+            gYReserve += repAmount * (gYReserve / total) * 2;
+            gNReserve += repAmount * (gNReserve / total) * 2;
+        }
+        gLPTokensTotal += minted;
+        gLPPositions.push({
+            id: gNextLpId++,
+            owner: owner,
+            deposit: repAmount,
+            tokens: minted
+        });
+        return minted;
+    }
+
+    // Gnosis-style CPMM buy: mint outcome pair, swap losing side via k=Y*N. Strictly zero-sum.
+    function gBuy(side, repAmount) {
+        if (gYReserve === 0 && gNReserve === 0) {
+            alert('Önce LP eklemeniz gerekiyor (Model G havuzu boş).');
+            return null;
+        }
+        const fee = repAmount * G_FEE_BPS / 10000;
+        const r = repAmount - fee;
+        gAccumulatedFees += fee;
+        const k = gYReserve * gNReserve;
+        let shares;
+        if (side === 'YES') {
+            const newN = gNReserve + r;
+            const newY = k / newN;
+            const received = gYReserve - newY;
+            shares = r + received;
+            gYReserve = newY; gNReserve = newN;
+        } else {
+            const newY = gYReserve + r;
+            const newN = k / newY;
+            const received = gNReserve - newN;
+            shares = r + received;
+            gYReserve = newY; gNReserve = newN;
+        }
+        return shares;
+    }
+
+    // For Model G, payouts: trader winning shares × 1 rep; LP gets winning-side reserve + fees pro-rata.
+    function gComputePayouts(winningSide) {
+        // returns array of {kind, owner/id, side, payoutIfYes, payoutIfNo, deposit, ...}
+        const out = [];
+        // Recompute the AMM reserve as it would be at the end of trading (we
+        // simulate "what if YES wins" and "what if NO wins" using the current
+        // reserves; they don't change at resolution).
+        const winningReserve = winningSide === 'YES' ? gYReserve : gNReserve;
+        const lpPoolRep = winningReserve + gAccumulatedFees;
+        return { winningReserve, lpPoolRep };
+    }
+
+    // Sum of all rep currently inside the system (stakes + LP deposits + accumulated fees).
+    function totalRepIn() {
+        if (payoutMode === 'g') {
+            const stakeSum = stakes.reduce((acc, s) => acc + STAKE, 0);
+            const lpSum = gLPPositions.reduce((acc, p) => acc + p.deposit, 0);
+            // fees came from stakes already, so don't double count
+            return stakeSum + lpSum;
+        }
+        // For F and parimutuel modes: only stakes are real rep in the system.
+        return stakes.length * STAKE;
+    }
+
+    // Total rep paid out at resolution given a winning side.
+    function totalRepOut(winningSide) {
+        if (stakes.length === 0 && gLPPositions.length === 0) return 0;
+        if (payoutMode === 'default') {
+            const totalPool = stakes.length * STAKE;
+            const winners = stakes.filter(s => s.side === winningSide);
+            if (winners.length === 0) return 0;
+            const sumW = winners.reduce((a, s) => a + s.weight, 0);
+            return winners.reduce((a, s) => a + totalPool * (s.weight / sumW), 0);
+        }
+        if (payoutMode === 'late') {
+            const winners = stakes.filter(s => s.side === winningSide);
+            const losers = stakes.filter(s => s.side !== winningSide);
+            if (winners.length === 0) return winners.length * STAKE;  // refund only winners' stakes
+            const sumW = winners.reduce((a, s) => a + s.weight, 0);
+            // each winner gets back stake + share of losers' pool
+            return winners.reduce((a, s) => a + STAKE + (losers.length * STAKE) * (s.weight / sumW), 0);
+        }
+        if (payoutMode === 'cpmm') {
+            // each winning share = 1 rep, loser shares = 0
+            return stakes
+                .filter(s => s.side === winningSide && s.shares != null)
+                .reduce((a, s) => a + s.shares, 0);
+        }
+        if (payoutMode === 'g') {
+            const traderPayout = stakes
+                .filter(s => s.side === winningSide && s.shares != null)
+                .reduce((a, s) => a + s.shares, 0);
+            const { lpPoolRep } = gComputePayouts(winningSide);
+            return traderPayout + lpPoolRep;
+        }
+        return 0;
     }
 
     // CPMM buy: spend r rep, receive shares of `side`. Mints r complete sets, swaps opposite side for more.
@@ -180,6 +330,10 @@
         if (payoutMode === 'cpmm') {
             shares = cpmmBuy(side, STAKE);
             weight = shares / STAKE;       // for display: shares per rep
+        } else if (payoutMode === 'g') {
+            shares = gBuy(side, STAKE);
+            if (shares == null) return;     // pool empty, refused
+            weight = shares / STAKE;
         } else {
             weight = 1 / entryPrice;
         }
@@ -201,13 +355,37 @@
         updateUI();
     }
 
+    // Model G — anyone can add liquidity. The creator does NOT auto-LP;
+    // they call this themselves whenever they like.
+    function addLP(owner, repAmount) {
+        if (payoutMode !== 'g') {
+            alert('LP ekleme yalnızca Model G modunda anlamlıdır.');
+            return;
+        }
+        gAddLiquidity(owner, repAmount);
+        yesPriceHistory.push(getYesPrice());
+        voteHistory.push(yesCount + noCount);
+        updateUI();
+    }
+
     function resetSim() {
         stakes = [];
         yesCount = 0;
         noCount = 0;
+        // F state
         yReserve = CPMM_INIT_L;
         nReserve = CPMM_INIT_L;
+        yesOutstanding = 0;
+        noOutstanding = 0;
+        cpmmEscrow = 0;
         lpSubsidyExposure = 0;
+        // G state
+        gYReserve = 0;
+        gNReserve = 0;
+        gLPTokensTotal = 0;
+        gLPPositions = [];
+        gAccumulatedFees = 0;
+        gNextLpId = 1;
         yesPriceHistory = [getYesPrice()];
         voteHistory = [0];
         updatePayoutMethodUI();
@@ -215,9 +393,10 @@
     }
 
     function togglePayoutMethod() {
-        // Cycle: default -> late -> cpmm -> default
+        // Cycle: default -> late -> cpmm -> g -> default
         if (payoutMode === 'default') payoutMode = 'late';
         else if (payoutMode === 'late') payoutMode = 'cpmm';
+        else if (payoutMode === 'cpmm') payoutMode = 'g';
         else payoutMode = 'default';
         resetSim();
     }
@@ -226,8 +405,17 @@
         const label = document.getElementById('payoutMethodLabel');
         const formulaDiv = document.querySelector('.formulas');
         if (!label || !formulaDiv) return;
-        const modelLabels = { 'default': 'Model C, Default (Parimutuel)', 'late': 'Model D, Late Adoption', 'cpmm': 'Model E/F, CPMM (Polymarket)' };
+        const modelLabels = {
+            'default': 'Model C, Default (Parimutuel)',
+            'late': 'Model D, Late Adoption',
+            'cpmm': 'Model E/F, CPMM (Polymarket, ev sübvansiyonlu)',
+            'g': 'Model G, LP-funded CPMM (Uniswap, kullanıcı havuzu)'
+        };
         label.innerText = modelLabels[payoutMode];
+
+        // Show/hide LP controls
+        const gLPControls = document.getElementById('gLPControls');
+        if (gLPControls) gLPControls.style.display = payoutMode === 'g' ? 'flex' : 'none';
 
         if (payoutMode === 'late') {
             formulaDiv.innerHTML = `
@@ -238,11 +426,21 @@
             `;
         } else if (payoutMode === 'cpmm') {
             formulaDiv.innerHTML = `
-                <strong>Polymarket Modu — Reward LOCKED at buy time:</strong> Sabit Stake: 10 Rep<br>
+                <strong>Model F (Polymarket) — Reward LOCKED at buy time:</strong> Sabit Stake: 10 Rep<br>
                 <strong>EVET Fiyatı</strong> = N_reserve / (Y_reserve + N_reserve)<br>
                 <strong>YES Buy:</strong> shares = 10 + (Y+10) * 10 / (N + 20). Each share = 1 Rep if YES wins.<br>
                 <strong>Net Kâr (kazanırsa)</strong> = shares - 10 (stake-time'da kilitli, sonradan değişmez)<br>
-                <strong>Virtual liquidity seed:</strong> Y₀ = N₀ = ${CPMM_INIT_L}. LP subsidy tracked below.
+                <strong>Virtual liquidity seed:</strong> Y₀ = N₀ = ${CPMM_INIT_L}. ⚠ Ev sübvansiyonu rep yaratır (enflasyon).
+            `;
+        } else if (payoutMode === 'g') {
+            formulaDiv.innerHTML = `
+                <strong>Model G (Uniswap-style LP-funded CPMM) — sıfır enflasyon, kilitli ödül:</strong><br>
+                <strong>1.</strong> Önce kullanıcılar LP olarak rep yatırır → havuz açılır (Y₀ = N₀ = LP_total).<br>
+                <strong>2.</strong> Yaratıcı auto-katılmaz, isterse LP olur.<br>
+                <strong>3.</strong> Stake = 10 Rep, ${(G_FEE_BPS/100).toFixed(1)}% fee LP'lere gider, kalan r = mint(r YES + r NO), sonra swap (k=Y·N sabit).<br>
+                <strong>Trader payoutu:</strong> shares × 1 Rep (kazanırsa, alım anında kilitli).<br>
+                <strong>LP payoutu:</strong> token oranı × (kazanan_taraf_rezerv + biriken_fee). Kaybeden taraf rezervi 0.<br>
+                <strong>Korunum:</strong> LP_in + stake_in = LP_out + trader_out. Sıfır rep yaratımı.
             `;
         } else {
             formulaDiv.innerHTML = `
@@ -293,7 +491,7 @@
                 } else if (s.side === 'NO' && noTotalWeight > 0) {
                     noProfit = STAKE * yesCount * (s.weight / noTotalWeight);
                 }
-            } else if (payoutMode === 'cpmm') {
+            } else if (payoutMode === 'cpmm' || payoutMode === 'g') {
                 // Each share pays 1 Rep if user's side wins. Profit locked at buy time.
                 if (s.side === 'YES') {
                     yesProfit = s.shares - STAKE;
@@ -305,6 +503,23 @@
             }
 
             return { ...s, yesProfit, noProfit };
+        });
+    }
+
+    // Compute LP P&L (Model G only).  Returns array of LP rows with payoutIfYes/payoutIfNo.
+    function calculateLPPayouts() {
+        if (payoutMode !== 'g' || gLPPositions.length === 0) return [];
+        return gLPPositions.map(lp => {
+            const share = lp.tokens / gLPTokensTotal;
+            const lpPoolYes = gYReserve + gAccumulatedFees;
+            const lpPoolNo  = gNReserve + gAccumulatedFees;
+            return {
+                ...lp,
+                payoutIfYes: lpPoolYes * share,
+                payoutIfNo:  lpPoolNo  * share,
+                netIfYes: lpPoolYes * share - lp.deposit,
+                netIfNo:  lpPoolNo  * share - lp.deposit
+            };
         });
     }
 
@@ -329,10 +544,41 @@
                 cpmmStats.style.display = 'none';
             }
         }
-        // Hide weight curve chart in CPMM mode (concept doesn't apply)
+        // Model G stats
+        const gStats = document.getElementById('gStats');
+        if (gStats) {
+            if (payoutMode === 'g') {
+                gStats.style.display = 'block';
+                const totalDeposit = gLPPositions.reduce((a, p) => a + p.deposit, 0);
+                document.getElementById('gYReserveVal').innerText = gYReserve.toFixed(2);
+                document.getElementById('gNReserveVal').innerText = gNReserve.toFixed(2);
+                document.getElementById('gLPDeposit').innerText = totalDeposit.toFixed(2);
+                document.getElementById('gLPTokens').innerText = gLPTokensTotal.toFixed(2);
+                document.getElementById('gFees').innerText = gAccumulatedFees.toFixed(2);
+            } else {
+                gStats.style.display = 'none';
+            }
+        }
+        // Rep tracking panel (works for all modes)
+        const repInVal = totalRepIn();
+        const repOutYes = totalRepOut('YES');
+        const repOutNo  = totalRepOut('NO');
+        document.getElementById('repIn').innerText = repInVal.toFixed(2);
+        document.getElementById('repOutYes').innerText = repOutYes.toFixed(2);
+        document.getElementById('repOutNo').innerText = repOutNo.toFixed(2);
+        const driftYesEl = document.getElementById('driftYes');
+        const driftNoEl  = document.getElementById('driftNo');
+        const dy = repOutYes - repInVal;
+        const dn = repOutNo - repInVal;
+        driftYesEl.innerText = (dy >= 0 ? '+' : '') + dy.toFixed(2);
+        driftNoEl.innerText  = (dn >= 0 ? '+' : '') + dn.toFixed(2);
+        driftYesEl.style.color = Math.abs(dy) < 0.01 ? '#16a085' : (dy > 0 ? '#c0392b' : '#2980b9');
+        driftNoEl.style.color  = Math.abs(dn) < 0.01 ? '#16a085' : (dn > 0 ? '#c0392b' : '#2980b9');
+
+        // Hide weight curve chart in CPMM/G modes (concept doesn't apply)
         const weightChartContainer = document.getElementById('weightChartContainer');
         if (weightChartContainer) {
-            weightChartContainer.style.display = payoutMode === 'cpmm' ? 'none' : 'block';
+            weightChartContainer.style.display = (payoutMode === 'cpmm' || payoutMode === 'g') ? 'none' : 'block';
         }
 
         // Tabloyu Güncelle
@@ -346,20 +592,21 @@
             weightHeader.innerText = payoutMode === 'cpmm' ? 'Shares (locked)' : 'Ağırlık (Weight)';
         }
 
+        const formatMoney = (val) => {
+            if (val > 0.005) return `<span class="profit">+${val.toFixed(2)}</span>`;
+            if (val < -0.005) return `<span class="loss">${val.toFixed(2)}</span>`;
+            return `0.00`;
+        };
+
         results.forEach(s => {
             const tr = document.createElement('tr');
 
-            const formatMoney = (val) => {
-                if (val > 0) return `<span class="profit">+${val.toFixed(2)}</span>`;
-                if (val < 0) return `<span class="loss">${val.toFixed(2)}</span>`;
-                return `0.00`;
-            };
-
-            // In CPMM mode, show effective price paid (10/shares) and shares received
-            const displayPrice = (payoutMode === 'cpmm' && s.shares != null)
+            // In CPMM / G mode, show effective price paid (10/shares) and shares received
+            const isShareMode = (payoutMode === 'cpmm' || payoutMode === 'g') && s.shares != null;
+            const displayPrice = isShareMode
                 ? (STAKE / s.shares * 100).toFixed(1)
                 : (s.entryPrice * 100).toFixed(1);
-            const middleCol = (payoutMode === 'cpmm' && s.shares != null)
+            const middleCol = isShareMode
                 ? s.shares.toFixed(3)
                 : s.weight.toFixed(3);
 
@@ -373,6 +620,24 @@
             `;
             tbody.prepend(tr); // En son eklenen en üstte görünsün
         });
+
+        // Model G — append LP rows at the bottom of the table.
+        if (payoutMode === 'g') {
+            const lpRows = calculateLPPayouts();
+            lpRows.forEach(lp => {
+                const tr = document.createElement('tr');
+                tr.style.background = '#eafaf1';
+                tr.innerHTML = `
+                    <td>${lp.owner} #${lp.id}</td>
+                    <td style="font-weight: bold; color: #16a085;">LP</td>
+                    <td>—</td>
+                    <td>${lp.tokens.toFixed(3)} token<br><span style="font-size:0.85em;color:#7f8c8d;">(${lp.deposit.toFixed(2)} Rep yatırım)</span></td>
+                    <td>${formatMoney(lp.netIfYes)}</td>
+                    <td>${formatMoney(lp.netIfNo)}</td>
+                `;
+                tbody.appendChild(tr); // LP rows at the bottom
+            });
+        }
 
         // Grafikleri Güncelle
         updateChart(currentYesPrice);
