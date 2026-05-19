@@ -4,26 +4,25 @@ After exploring more invasive redesigns (zero-sum + info-gain bonus,
 LP-funded CPMM, etc.) we landed on the lightest possible change that
 still addresses issue #76's main concerns.
 
-G = F + three tiny changes
---------------------------
+G = F + two tiny changes
+------------------------
   1. **No auto-YES at claim creation.**  Under F, the creator was
      auto-staked on the YES side at claim creation, which guaranteed
      ~9.17 rep of profit on any claim that resolved YES.  In G, the
-     creator does not auto-bet.  They may vote manually like any
-     other user (using their own energy + stake).
+     creator does not auto-bet.
 
-  2. **Refund-if-uncontested rule.**  If the losing side attracted
-     fewer than ``MIN_LOSER_VOTERS`` (3) distinct stakers, the claim
-     is declared *trivial* — all stakes are refunded, no winners, no
-     losers, no mint.  Solves the "everyone bets YES, everyone wins
-     from the system pool" inflation hole.  Honest claims always
-     attract dissenters; one-sided farmable claims auto-cancel.
+  2. **Zero-sum cap at resolution.**  If CPMM math would pay winners
+     more than the total rep staked in the claim (i.e. mint rep out
+     of thin air via the virtual-liquidity seed), each winner's gain
+     is scaled down proportionally so the claim breaks even at the
+     system level.  Real claims at 85/15, 90/10, 95/5 still resolve
+     and reward contrarian winners — no claim is ever cancelled.
+     Zero-sum per claim by construction.
 
   3. **Display percentile rank, not raw rep, in the leaderboard UI.**
-     F's headline inflation does not reshuffle ranks (Spearman ρ
-     ≈ 0.87) or block newcomers.  Switching the visible leaderboard
-     from `"3812 rep"` to `"top 12%"` makes the residual inflation
-     invisible to users.
+     With the zero-sum cap there is no inflation left anyway, but
+     percentile display also handles legacy F balances if the
+     migration is gradual.
 
 Everything else from F is unchanged:
   - CPMM payouts (Polymarket-style, shares × 1 rep locked at buy time)
@@ -82,41 +81,72 @@ os.makedirs(CHART_DIR, exist_ok=True)
 # scenarios below construct a fresh CPMM market and DO NOT stake the
 # creator on YES at t=0.
 
-MIN_LOSER_VOTERS = 3        # losing side must have ≥ this many distinct
-                            # voters for the claim to resolve.  Catches
-                            # the "everyone voted YES" mint hole even
-                            # when CPMM's virtual liquidity hides the
-                            # extreme in the price.
-
-
 class ModelG(CPMM):
-    """Model G = Model F (CPMM) + two rule tweaks at resolution time.
+    """Model G = Model F (CPMM) + zero-sum mint cap at resolution.
 
     1. No creator auto-YES at creation (enforced by the harness — this
        class doesn't auto-stake on construction).
-    2. ``resolve()`` checks whether each side attracted real
-       disagreement.  If the losing side has fewer than
-       ``MIN_LOSER_VOTERS`` distinct stakers, the claim is declared
-       trivial and all stakes are refunded.  No winners, no losers,
-       no system mint.
 
-    Why a vote-count rule and not a price-band rule: CPMM's virtual
-    liquidity (Y₀ = N₀ = 100) smooths the YES price so a one-sided
-    claim with ~30 voters only pushes price to ~0.73, well below any
-    sensible "extreme price" threshold.  Counting actual voters on
-    the losing side bypasses the smoothing.
+    2. ``resolve()`` caps total winner payouts at total stakes in the
+       claim.  No claim ever mints rep.  Formally, if CPMM's locked-
+       reward math would pay winners more than the sum of all stakes
+       (because the virtual-liquidity seed contributed extra shares),
+       each winner's payout is scaled down by the same factor so the
+       total exactly matches the stake total.
+
+    Why this is better than refunding on vote-share:
+    - Real claims with 85-95% consensus still resolve normally —
+      contrarian winners are still paid for being right.
+    - No claim is ever cancelled.
+    - Zero-sum per claim: no new rep created from thin air.
+    - Locked reward holds approximately — the trader knows their
+      shares at buy time; only the *exchange rate* (rep per share)
+      varies, and only in the direction that prevents mint.
+
+    Sybil/influencer attack analysis:
+    - Influencer with N sock puppets all voting YES on a trivial
+      claim: total stake = N × 10 rep, total payout capped at N × 10.
+      Net mint = 0.  No new rep enters the system.
+    - If a single honest NO voter participates: attacker gains
+      exactly the honest voter's 10 rep.  Cap eliminates mint, but
+      does not prevent wealth transfer between honest and sybil
+      stakers.  Sybil-prevention (account age, verification) is a
+      separate layer.
     """
 
     name = "model_g"
 
     def resolve(self, winning_side: str) -> dict[int, float]:
-        losing_side = 'NO' if winning_side == 'YES' else 'YES'
-        loser_voters = {s.user_id for s in self.stakes
-                        if s.side == losing_side}
-        if len(loser_voters) < MIN_LOSER_VOTERS:
-            # Refund every stake; system mint = 0.
-            return {s.user_id: 0.0 for s in self.stakes}
-        return super().resolve(winning_side)
+        # Standard CPMM payouts first
+        out = {}
+        for s in self.stakes:
+            base = -s.rep_paid
+            if s.side == winning_side:
+                base += s.shares
+            out[s.user_id] = out.get(s.user_id, 0.0) + base
+
+        # Zero-sum cap: if total mint > 0, scale winner gains down so
+        # the claim breaks even at the system level.
+        total_mint = sum(out.values())
+        if total_mint > 0:
+            winner_gain_total = sum(
+                s.shares - s.rep_paid
+                for s in self.stakes
+                if s.side == winning_side
+            )
+            if winner_gain_total > 0:
+                # We need winner_gain_total to drop by total_mint
+                # (so the new sum is 0).  scale ∈ [0, 1].
+                scale = max(0.0, 1.0 - total_mint / winner_gain_total)
+                # rebuild out with scaled winner gains
+                out = {}
+                for s in self.stakes:
+                    base = -s.rep_paid
+                    if s.side == winning_side:
+                        gain = s.shares - s.rep_paid
+                        base += s.rep_paid + gain * scale
+                    out[s.user_id] = out.get(s.user_id, 0.0) + base
+        return out
 
 
 # ---------------------------------------------------------------------------
@@ -166,6 +196,60 @@ def scenario_trivial_claim_farming(n_trials: int = 200,
             'avg_creator_profit_G': g_profit / n_trials,
         }
     return out
+
+
+def scenario_sybil_attack(n_trials: int = 500, n_sybils: int = 10,
+                          n_honest_no: int = 0):
+    """Influencer with ``n_sybils`` sock-puppet accounts posts a
+    trivial claim and votes YES on all of them.  Optionally ``n_honest_no``
+    honest voters dissent.
+
+    Reports:
+    - System mint per claim (rep created from thin air) — should be 0
+      under G.
+    - Influencer net profit per claim (extracted from honest losers).
+    - Net change for honest dissenters.
+    """
+    f_mints, g_mints = [], []
+    f_infl_profits, g_infl_profits = [], []
+    f_honest, g_honest = [], []
+
+    for trial in range(n_trials):
+        # F: classic CPMM, no cap, mint happens.
+        mF = CPMM()
+        for u in range(n_sybils):
+            mF.buy(u, 'YES', 10.0)
+        for u in range(n_sybils, n_sybils + n_honest_no):
+            mF.buy(u, 'NO', 10.0)
+        pF = mF.resolve('YES')
+
+        # G: zero-sum cap.
+        mG = ModelG()
+        for u in range(n_sybils):
+            mG.buy(u, 'YES', 10.0)
+        for u in range(n_sybils, n_sybils + n_honest_no):
+            mG.buy(u, 'NO', 10.0)
+        pG = mG.resolve('YES')
+
+        f_mints.append(sum(pF.values()))
+        g_mints.append(sum(pG.values()))
+        f_infl_profits.append(sum(pF[u] for u in range(n_sybils)))
+        g_infl_profits.append(sum(pG[u] for u in range(n_sybils)))
+        if n_honest_no > 0:
+            f_honest.append(sum(pF[u] for u in
+                                range(n_sybils, n_sybils + n_honest_no)))
+            g_honest.append(sum(pG[u] for u in
+                                range(n_sybils, n_sybils + n_honest_no)))
+    return {
+        'F_mean_mint': float(np.mean(f_mints)),
+        'G_mean_mint': float(np.mean(g_mints)),
+        'F_mean_attacker_profit': float(np.mean(f_infl_profits)),
+        'G_mean_attacker_profit': float(np.mean(g_infl_profits)),
+        'F_mean_honest_net': float(np.mean(f_honest)) if f_honest else 0.0,
+        'G_mean_honest_net': float(np.mean(g_honest)) if g_honest else 0.0,
+        'n_sybils': n_sybils,
+        'n_honest_no': n_honest_no,
+    }
 
 
 def scenario_one_sided_mint(n_trials: int = 100, n_voters: int = 30):
@@ -382,7 +466,8 @@ def chart_creator(creator):
 # REPORT
 # ---------------------------------------------------------------------------
 
-def write_report(triv, locked, creator, mint, contested):
+def write_report(triv, locked, creator, mint, contested,
+                 sybil_alone=None, sybil_vs_one=None, sybil_vs_five=None):
     L = []
     A = L.append
     A("# Model G — F + 2 tiny rule tweaks\n")
@@ -396,11 +481,12 @@ def write_report(triv, locked, creator, mint, contested):
     A("")
     A("Model G  =  CPMM payouts + v2 hard rules + energy gate")
     A("            - drop creator auto-YES")
-    A("            + refund-if-uncontested: if losing side has < 3")
-    A("              distinct voters, all stakes refunded (no mint)")
+    A("            + zero-sum cap at resolution:")
+    A("              if winners would receive more rep than total stakes,")
+    A("              scale their gains down so total mint = 0")
     A("```\n")
     A("Locked reward, copy-trade immunity, whale rules, energy gate — "
-      "all unchanged from F.\n")
+      "all unchanged from F. No claim is ever cancelled.\n")
 
     # ----
     A("## Scenario 1 — trivial-claim farming\n")
@@ -424,7 +510,7 @@ def write_report(triv, locked, creator, mint, contested):
       "bet YES, YES wins.  How much rep does the system mint out of thin "
       "air per claim?\n")
     A("| Model | Mean mint per claim | Total mint over "
-      f"{mint['n_trials']} trials | Refund rate |")
+      f"{mint['n_trials']} trials | Net-zero rate |")
     A("|---|---|---|---|")
     A(f"| F | **{mint['F_mean_mint']:+.2f} rep** | "
       f"{mint['F_total_mint']:+.0f} rep | 0% |")
@@ -433,23 +519,23 @@ def write_report(triv, locked, creator, mint, contested):
     A("\n![mint](charts/g_04_mint.png)\n")
     A("**Reading.** Under F, every one-sided claim mints rep equal to "
       f"~{mint['F_mean_mint']:.0f} per claim ({mint['F_total_mint']:.0f} "
-      f"over {mint['n_trials']} trials).  Under G the refund-on-extreme "
-      "rule triggers — every voter gets their stake back, system mint "
-      "is zero.  Trivial claims become no-ops.\n")
+      f"over {mint['n_trials']} trials).  Under G the zero-sum cap "
+      "scales winners back to break-even — system mint is zero across "
+      "all claims, regardless of voter mix.\n")
 
     # ----
-    A("## Scenario 1c — refund rule doesn't break contested claims\n")
+    A("## Scenario 1c — contested claims still resolve\n")
     A(f"Sanity check: run {contested['contested_total']} near-50/50 "
-      "claims under G.  Refund rule should NOT fire.\n")
+      "claims under G.  Cap should not significantly disturb payouts.\n")
     A(f"- Contested claims that resolved normally: "
       f"**{contested['normal_resolutions']}** / "
       f"{contested['contested_total']}")
-    A(f"- Contested claims that hit the extreme-price refund: "
+    A(f"- Contested claims that net-zeroed (cap fired hard): "
       f"{contested['triggered_refunds']}\n")
     rate = contested['normal_resolutions'] / contested['contested_total']
-    A(f"**Reading.** {rate*100:.0f}% of contested claims resolve as "
-      "expected; the refund rule only catches the genuinely one-sided "
-      "ones.\n")
+    A(f"**Reading.** {rate*100:.0f}% of contested claims resolve "
+      "normally; the cap only adjusts payouts on claims where CPMM "
+      "would otherwise mint rep.\n")
 
     # ----
     A("## Scenario 2 — locked reward preserved\n")
@@ -486,6 +572,43 @@ def write_report(triv, locked, creator, mint, contested):
       "that as a freebie, regardless of claim quality.  Under G, the "
       "creator earns when their skill-based vote is correct, which is the "
       "honest signal.\n")
+
+    # ----
+    A("## Sybil attack — influencer + sock puppets\n")
+    A("An influencer creates a trivial claim and votes YES on 10 sock-"
+      "puppet accounts.  Test with 0, 1, and 5 honest NO voters.  We "
+      "want to confirm: **G's zero-sum cap prevents minting rep, even "
+      "when the attacker controls the entire YES side.**\n")
+    if sybil_alone:
+        A("| Setup | F mint/claim | G mint/claim | F attacker net | "
+          "G attacker net | G honest dissenter net |")
+        A("|---|---|---|---|---|---|")
+        for label, s in [("10 sybils, 0 honest NO", sybil_alone),
+                         ("10 sybils, 1 honest NO", sybil_vs_one),
+                         ("10 sybils, 5 honest NO", sybil_vs_five)]:
+            A(f"| {label} | {s['F_mean_mint']:+.2f} | "
+              f"**{s['G_mean_mint']:+.2f}** | "
+              f"{s['F_mean_attacker_profit']:+.2f} | "
+              f"**{s['G_mean_attacker_profit']:+.2f}** | "
+              f"{s['G_mean_honest_net']:+.2f} |")
+        A("")
+        A("**Reading.** Under G:")
+        A(f"- System mint per claim is **{sybil_alone['G_mean_mint']:.2f} "
+          "rep**.  No new rep enters the system from a sybil attack.")
+        A(f"- With 0 honest dissenters, attacker profit per claim = "
+          f"**{sybil_alone['G_mean_attacker_profit']:.2f} rep** — the cap "
+          "pulls winners back to break-even because there's no loser pool "
+          "to feed them.")
+        A(f"- With 1 honest dissenter, attacker gains "
+          f"**{sybil_vs_one['G_mean_attacker_profit']:.2f} rep** in total — "
+          "exactly the dissenter's 10 rep, transferred but not minted.")
+        A("- Attacker profit is bounded by **honest participation only**.  "
+          "If nobody honest dissents, attack yields 0 rep.\n")
+        A("**Conclusion: rep cannot be created from thin air by an "
+          "influencer with sock puppets.**  Wealth transfer between "
+          "honest dissenters and sybils is still possible (this needs "
+          "separate sybil-defense — account age, verification — at the "
+          "platform level, not the protocol level).\n")
 
     A("## Where the leaderboard problem goes\n")
     A("See `leaderboard_analysis.md`.  Under realistic 180-day sim:\n")
@@ -565,7 +688,15 @@ def main():
     creator = scenario_creator_earnings_real_claims()
     chart_creator(creator)
 
-    out = write_report(triv, locked, creator, mint, contested)
+    print("Scenario: sybil attack (no honest dissenter) ...")
+    sybil_alone = scenario_sybil_attack(n_sybils=10, n_honest_no=0)
+    print("Scenario: sybil attack (1 honest NO voter) ...")
+    sybil_vs_one = scenario_sybil_attack(n_sybils=10, n_honest_no=1)
+    print("Scenario: sybil attack (5 honest NO voters) ...")
+    sybil_vs_five = scenario_sybil_attack(n_sybils=10, n_honest_no=5)
+
+    out = write_report(triv, locked, creator, mint, contested,
+                       sybil_alone, sybil_vs_one, sybil_vs_five)
     print(f"\nDone. Report: {out}")
 
 
