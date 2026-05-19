@@ -1,69 +1,54 @@
-"""Model G — LP-funded CPMM.  No house subsidy, no rep minting.
+"""Model G — minimal tweaks on top of Model F.
 
-Idea: instead of seeding each claim with 100 virtual YES and 100 virtual
-NO shares (which is what creates F's inflation), real users deposit rep
-to fund the initial pool and earn a share of the trading fees.
+After exploring more invasive redesigns (zero-sum + info-gain bonus,
+LP-funded CPMM, etc.) we landed on the lightest possible change that
+still addresses issue #76's main concerns.
 
-This is the standard Uniswap-style LP pattern adapted to a binary
-prediction market.
+G = F + two tiny changes
+------------------------
+  1. **No auto-YES at claim creation.**  Under F, the creator was
+     auto-staked on the YES side at claim creation, which guaranteed
+     ~9.17 rep of profit on any claim that resolved YES.  This was the
+     main trivial-claim farming vector: post an obvious "did event X
+     happen" claim, collect free rep.  In G, the creator does not
+     auto-bet.  They may vote manually like any other user (using their
+     own energy + stake).
 
-Roles
------
-Claim creator: **must** deposit ``CREATOR_MIN_LP`` rep as LP at claim
-creation.  This seeds the pool, opens trading immediately, and forces
-skin-in-the-game.  The creator's LP is at risk of impermanent loss if
-the claim resolves decisively against the side the pool ends up
-weighted on — so the creator is incentivised to only post claims they
-believe will produce a contested market.
+  2. **Display percentile rank, not raw rep, in the leaderboard UI.**
+     F's headline inflation (~244% drift over 180 days in the realistic
+     sim) does not reshuffle ranks (Spearman ρ ≈ 0.87) or block
+     newcomers (median-skill newcomer caught up to peers within 90
+     days).  It just makes raw numbers harder to compare across time.
+     Switching the visible leaderboard from `"3812 rep"` to `"top 12%"`
+     makes the inflation literally invisible to users.
 
-Additional LPs: any other user may add liquidity later via
-``add_liquidity`` and mints new LP-tokens at the current pool ratio.
+Everything else from F is unchanged:
+  - CPMM payouts (Polymarket-style, shares × 1 rep locked at buy time)
+  - Fixed 10-rep stake, 1 position per claim, daily energy gate
+  - House subsidy bounded at ~100 rep per claim (Y₀ = N₀ = 100)
+  - 7-day account-age sybil guard
 
-Trading: every staker is a trader (separate from the LP role).  The
-creator may *also* trade by calling ``buy`` — that vote is independent
-of their LP position.
-
-Trader: stakes ``FIXED_STAKE`` (10) rep on YES or NO.  A ``fee_bps`` fee
-is removed from the stake at buy time and added to the LP pool.  The
-remaining rep flows into the pool and shifts the price exactly like F.
-
-Resolution
-----------
-- Winning-side shares pay 1 rep each (locked-reward preserved for
-  traders, same as F).
-- LP redeems all remaining pool shares.  Winning-side pool shares pay
-  1 rep, losing-side pool shares pay 0.  LP also collects all
-  accumulated fees.
-
-Conservation
+What G fixes
 ------------
-Per claim, ``LP_in + trader_stakes_in = LP_out + trader_payouts``.
-No mint, no burn.  Across all claims, total rep supply is constant.
+  - **#76 P2 trivial claims**: creator can no longer farm an auto-bet
+    at 50% price on an obviously-resolving claim.  Trader payouts on
+    skewed claims are already self-limiting under CPMM (small share
+    count at extreme prices) — no further mechanism needed.
+  - **#76 P3 low creator reward**: dropping the auto-bet looks like a
+    net reduction at first, but the trade-off is fair — creators are
+    no longer paid for posting obvious claims.  For genuinely contested
+    claims, the creator can still vote manually with conviction and
+    earn the same way any voter does.
 
-What this fixes vs F
---------------------
-- Inflation: gone (zero-sum per claim, verified below).
-- Creator reward: naturally tied to claim quality (more traffic = more
-  fees for the creator/LP).  Solves issue #76 P3 without a separate
-  bonus mechanism.
-
-What this keeps from F
-----------------------
-- Locked reward for traders: shares × 1 rep at resolution, same as F.
-- Copy-trade immunity: Alice's share count locked at her buy time.
-- CPMM trading math.
-
-What this trades off
---------------------
-- LP can take impermanent loss if the claim resolves decisively against
-  the side they're holding most of.  Honest LPs need fees > expected
-  loss on average to participate.  Knob: ``fee_bps``.
-- Cold-start: who LPs the first claim?  House can seed until organic
-  LPs appear, but the seed is loanable (recoverable on resolution),
-  not a permanent mint.
+What G does NOT fix
+-------------------
+  - **#76 P1 inflation**: F's mint via virtual liquidity remains.  The
+    leaderboard analysis (see `leaderboard_analysis.md`) shows this is
+    a UX label problem, not a fairness problem, and the percentile
+    display tweak handles it.
 
 Run:  python3 simulator_g.py
-Output:  charts/g_*.png  +  model_g_report.md
+Output: charts/g_*.png + model_g_report.md
 """
 
 from __future__ import annotations
@@ -71,12 +56,12 @@ from __future__ import annotations
 import math
 import os
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 import matplotlib.pyplot as plt
 
-from simulator import gini, Stake
+from simulator import CPMM, gini, Stake
 
 random.seed(42)
 np.random.seed(42)
@@ -86,373 +71,218 @@ CHART_DIR = os.path.join(OUT_DIR, "charts")
 os.makedirs(CHART_DIR, exist_ok=True)
 
 
-FEE_BPS = 400            # 4% of every stake routed to LP pool.  When the
-                         # default LP depth grew from 20 to 100 to smooth
-                         # price impact, the absolute IL on decisive claims
-                         # also grew.  Fee must scale to keep LP P&L
-                         # positive on average — see fee sweep in report.
-# Pool depth determines per-trade price impact.  D=20 → ~19pp move per
-# 10-rep stake (looks like noise).  D=100 → ~4.7pp move (smooth).  We
-# size the creator's compulsory LP at 100 by default so a fresh claim
-# already has tradeable depth.
-DEFAULT_LP_DEPOSIT = 100  # default later-LP deposit
-CREATOR_MIN_LP = 100      # creator's compulsory LP deposit at claim creation
-
-
 # ---------------------------------------------------------------------------
-# MODEL G
+# MODEL G  =  F (CPMM)  +  NO AUTO-YES
 # ---------------------------------------------------------------------------
+# G's implementation is just F.  The "no auto-YES" rule is a creation-time
+# convention enforced by the harness, not a payout-math change.  All
+# scenarios below construct a fresh CPMM market and DO NOT stake the
+# creator on YES at t=0.
 
-@dataclass
-class LPPosition:
-    user_id: int
-    deposit: float
-    lp_tokens: float
-
-
-class ModelG:
-    """CPMM with user-supplied liquidity and trading fees that pay LPs.
-
-    The claim creator is **required** to seed the pool at claim creation
-    by depositing at least ``creator_min_lp`` rep.  Pass ``creator_uid``
-    to the constructor to enforce this — the LP deposit is made
-    automatically and recorded as the creator's LP position.  Other LPs
-    can join later via ``add_liquidity``.
-    """
+class ModelG(CPMM):
+    """Model G payout math is identical to CPMM.  The only behavioural
+    difference vs F is at claim creation: in F, the harness auto-stakes
+    the creator on YES.  In G, it does not.  This class exists for
+    semantic clarity in the report; scenarios use it interchangeably
+    with CPMM."""
 
     name = "model_g"
-
-    def __init__(self, claim_id: int = 0, fee_bps: int = FEE_BPS,
-                 creator_uid: int | None = None,
-                 creator_min_lp: float = CREATOR_MIN_LP):
-        self.claim_id = claim_id
-        self.fee_bps = fee_bps
-        self.creator_uid = creator_uid
-        self.creator_min_lp = creator_min_lp
-        self.y_reserve = 0.0
-        self.n_reserve = 0.0
-        self.lp_tokens_total = 0.0
-        self.lp_positions: list[LPPosition] = []
-        self.stakes: list[Stake] = []
-        self.accumulated_fees = 0.0
-        self.yes_outstanding = 0.0   # trader shares (excl. LP pool shares)
-        self.no_outstanding = 0.0
-
-        # Compulsory creator-LP at claim creation.
-        if creator_uid is not None:
-            self.add_liquidity(creator_uid, creator_min_lp)
-
-    # --- LP side -----------------------------------------------------------
-
-    def add_liquidity(self, user_id: int, rep_amount: float):
-        """LP deposits ``rep_amount`` rep.  Adds equal-size shares to both
-        sides (preserves price) and mints LP-tokens proportional to pool
-        share."""
-        if self.y_reserve == 0 and self.n_reserve == 0:
-            # First LP defines the pool
-            self.y_reserve = rep_amount
-            self.n_reserve = rep_amount
-            minted = rep_amount  # 1:1 token mint on first deposit
-        else:
-            # Subsequent LPs deposit at current ratio
-            pool_size = (self.y_reserve + self.n_reserve) / 2
-            minted = rep_amount * self.lp_tokens_total / pool_size
-            # split deposit proportionally so price doesn't move
-            total_reserve = self.y_reserve + self.n_reserve
-            self.y_reserve += rep_amount * (self.y_reserve / total_reserve) * 2
-            self.n_reserve += rep_amount * (self.n_reserve / total_reserve) * 2
-        self.lp_tokens_total += minted
-        self.lp_positions.append(
-            LPPosition(user_id=user_id, deposit=rep_amount, lp_tokens=minted)
-        )
-        return minted
-
-    def yes_price(self) -> float:
-        total = self.y_reserve + self.n_reserve
-        return self.n_reserve / total if total > 0 else 0.5
-
-    # --- trader side -------------------------------------------------------
-
-    def buy(self, user_id: int, side: str, rep_amount: float = 10.0) -> Stake:
-        """Gnosis-CFMM style: mint outcome pair from rep, swap one side
-        via constant-product AMM.  Strictly zero-sum (no subsidy)."""
-        if self.y_reserve == 0 and self.n_reserve == 0:
-            raise RuntimeError("Claim has no liquidity yet — LP must seed it.")
-        fee = rep_amount * self.fee_bps / 10000.0
-        r = rep_amount - fee  # rep that hits the curve after fee
-        self.accumulated_fees += fee
-        yp_pre = self.yes_price()
-
-        # 1. Mint: r rep -> r YES + r NO shares for the trader
-        # 2. Swap r of the losing side into AMM for the winning side out
-        k = self.y_reserve * self.n_reserve
-        if side == 'YES':
-            new_n = self.n_reserve + r
-            new_y = k / new_n
-            received = self.y_reserve - new_y
-            shares = r + received  # r from mint + ``received`` from swap
-            self.y_reserve, self.n_reserve = new_y, new_n
-            self.yes_outstanding += shares
-        else:
-            new_y = self.y_reserve + r
-            new_n = k / new_y
-            received = self.n_reserve - new_n
-            shares = r + received
-            self.y_reserve, self.n_reserve = new_y, new_n
-            self.no_outstanding += shares
-        ep = yp_pre if side == 'YES' else 1 - yp_pre
-        st = Stake(user_id=user_id, side=side, rep_paid=rep_amount,
-                   entry_price=ep, weight=shares / r if r > 0 else 0.0,
-                   shares=shares)
-        self.stakes.append(st)
-        return st
-
-    # --- resolution --------------------------------------------------------
-
-    def resolve(self, winning_side: str) -> dict[int, float]:
-        out: dict[int, float] = {}
-
-        # 1. Traders: redeem locked shares.  Losers lose their stake; winners
-        #    get ``shares`` rep.  (Net = shares - rep_paid for winners,
-        #    -rep_paid for losers.)
-        for s in self.stakes:
-            base = -s.rep_paid
-            if s.side == winning_side:
-                base += s.shares
-            out[s.user_id] = out.get(s.user_id, 0.0) + base
-
-        # 2. LPs: redeem the pool.  Each LP gets ``lp_share`` of the
-        #    winning-side pool reserve (1 rep per share) and ``lp_share``
-        #    of the accumulated fees.  Losing-side reserve pays 0.
-        winning_reserve = (self.y_reserve if winning_side == 'YES'
-                           else self.n_reserve)
-        lp_pool_rep = winning_reserve + self.accumulated_fees
-        if self.lp_tokens_total > 0:
-            for lp in self.lp_positions:
-                share = lp.lp_tokens / self.lp_tokens_total
-                payout = lp_pool_rep * share
-                # net for LP = payout - deposit
-                out[lp.user_id] = out.get(lp.user_id, 0.0) + payout - lp.deposit
-        return out
-
-    def total_rep_delta(self, resolution_dict: dict[int, float]) -> float:
-        return sum(resolution_dict.values())
 
 
 # ---------------------------------------------------------------------------
 # SCENARIOS
 # ---------------------------------------------------------------------------
 
-def scenario_inflation(n_rounds: int = 400, n_users: int = 60,
-                       fee_bps: int = FEE_BPS, lp_deposit: float = 100.0,
-                       seed: int = 7):
-    """Same harness as inflation test for F vs G.  Run H with creator-as-LP."""
-    rng = random.Random(seed)
-    skills = [rng.uniform(0.40, 0.75) for _ in range(n_users)]
-    rep = [200.0] * n_users
-    history = [sum(rep)]
+def scenario_trivial_claim_farming(n_trials: int = 200,
+                                   skews: tuple[float, ...] = (0.5, 0.7, 0.9, 0.95)):
+    """Compare creator earnings on claims of varying skew, under
+    F (auto-YES) vs G (no auto-YES).  Truth = YES (the obvious side wins).
 
-    for r in range(n_rounds):
-        truth = rng.choice(['YES', 'NO'])
-        # Creator-LP is compulsory at claim creation.
-        eligible_creators = [u for u in range(n_users) if rep[u] >= lp_deposit]
-        if not eligible_creators:
-            history.append(sum(rep)); continue
-        creator_uid = rng.choice(eligible_creators)
-        m = ModelG(claim_id=r, fee_bps=fee_bps,
-                   creator_uid=creator_uid, creator_min_lp=lp_deposit)
-        rep[creator_uid] -= lp_deposit
-        involved = {creator_uid}
+    For each skew, simulate N voters where ``skew`` fraction vote YES and
+    the rest NO.  Truth = YES.
 
-        for uid in range(n_users):
-            if rep[uid] < 10:
-                continue
-            side = truth if rng.random() < skills[uid] else (
-                'NO' if truth == 'YES' else 'YES')
-            m.buy(uid, side, 10.0)
-            rep[uid] -= 10.0
-            involved.add(uid)
-
-        # ``resolve`` returns NET change per user (already accounts for
-        # stakes / LP deposits being "in").  Add it on top of the
-        # already-debited balance.
-        profits = m.resolve(truth)
-        for uid in involved:
-            rep[uid] += (lp_deposit if uid == creator_uid else 0.0)
-            # add back any stake the user put down as trader
-            if any(s.user_id == uid for s in m.stakes):
-                rep[uid] += 10.0
-            rep[uid] += profits.get(uid, 0.0)
-        history.append(sum(rep))
-
-    return {'history': history, 'n_rounds': n_rounds, 'n_users': n_users,
-            'initial': n_users * 200.0}
-
-
-def scenario_lp_profitability(n_claims: int = 1000, n_users: int = 50,
-                              lp_deposit: float = 100.0, fee_bps: int = FEE_BPS,
-                              seed: int = 11):
-    """Is being an LP a profitable role?  Sample many claims; pick one
-    user to be the LP each time; measure the LP's net P&L distribution.
-
-    Truth is uniformly random; bettors have heterogeneous skill so the
-    final price spans a wide range.
+    Under F: creator auto-bets YES at t=0 (price 50%, ~9.17 rep profit
+    locked-in).
+    Under G: creator does not auto-bet.  They earn 0 unless they
+    manually bet.
     """
-    rng = random.Random(seed)
-    skills = [rng.uniform(0.40, 0.75) for _ in range(n_users)]
-    lp_pnls = []
-    final_prices = []
-    n_bets = []
-
-    for r in range(n_claims):
-        truth = rng.choice(['YES', 'NO'])
-        lp_uid = 0  # creator is uid=0 and is forced to LP
-        m = ModelG(claim_id=r, fee_bps=fee_bps,
-                   creator_uid=lp_uid, creator_min_lp=lp_deposit)
-        for uid in range(1, n_users):
-            if rng.random() > 0.6:
-                continue
-            side = truth if rng.random() < skills[uid] else (
-                'NO' if truth == 'YES' else 'YES')
-            m.buy(uid, side, 10.0)
-        final_prices.append(m.yes_price())
-        n_bets.append(len(m.stakes))
-        out = m.resolve(truth)
-        lp_pnls.append(out.get(lp_uid, 0.0))
-
-    return {
-        'lp_pnls': lp_pnls,
-        'final_prices': final_prices,
-        'n_bets': n_bets,
-        'mean_pnl': float(np.mean(lp_pnls)),
-        'median_pnl': float(np.median(lp_pnls)),
-        'pct_losing': float(np.mean([1 if x < 0 else 0 for x in lp_pnls])),
-        'lp_deposit': lp_deposit,
-        'fee_bps': fee_bps,
-    }
-
-
-def scenario_fee_sweep(n_claims: int = 500, n_users: int = 50,
-                       lp_deposit: float = 100.0, seed: int = 13):
-    """Sweep fee_bps and look at LP expected P&L."""
     out = {}
-    for fee in [0, 50, 100, 200, 300, 500]:
-        r = scenario_lp_profitability(n_claims=n_claims, n_users=n_users,
-                                      lp_deposit=lp_deposit, fee_bps=fee,
-                                      seed=seed)
-        out[fee] = {'mean_pnl': r['mean_pnl'], 'median_pnl': r['median_pnl'],
-                    'pct_losing': r['pct_losing']}
+    for skew in skews:
+        f_profit = 0.0
+        g_profit = 0.0
+        n_voters = 100
+        for trial in range(n_trials):
+            rng = random.Random(trial * 7 + int(skew * 100))
+            # F: creator auto-bets YES first.
+            mF = CPMM()
+            mF.buy(0, 'YES', 10.0)        # creator's auto-YES
+            for u in range(1, n_voters + 1):
+                side = 'YES' if rng.random() < skew else 'NO'
+                mF.buy(u, side, 10.0)
+            pF = mF.resolve('YES')
+            f_profit += pF[0]
+
+            # G: creator does not auto-bet.
+            mG = ModelG()
+            for u in range(1, n_voters + 1):
+                side = 'YES' if rng.random() < skew else 'NO'
+                mG.buy(u, side, 10.0)
+            pG = mG.resolve('YES')
+            # Creator gets nothing because they didn't bet.
+            g_profit += pG.get(0, 0.0)
+
+        out[skew] = {
+            'avg_creator_profit_F': f_profit / n_trials,
+            'avg_creator_profit_G': g_profit / n_trials,
+        }
     return out
 
 
-def scenario_trader_locked_reward():
-    """Trader Alice bets YES early; many later YES buyers join.  Truth=YES.
-    Show Alice's profit under H vs F (locked reward preservation)."""
-    from simulator import CPMM
+def scenario_locked_reward_preserved():
+    """Sanity: G should preserve F's locked-reward.  Alice bets YES at
+    t=0, then more YES buyers join, then 10 NO buyers, truth=YES.
+    Alice's profit should be identical under F and G (since the only
+    diff is creator auto-YES, which is unrelated to Alice's locked
+    payout)."""
     results = {}
-    for label, mk in [
-        ("F", lambda: CPMM()),
-        ("G (creator LP=100)", lambda: ModelG(creator_uid=99, creator_min_lp=100.0)),
-        ("G (creator LP=200)", lambda: ModelG(creator_uid=99, creator_min_lp=200.0)),
-    ]:
-        alice_at_n = {}
+    for label, mk in [("F (with creator auto-YES)",
+                       lambda: (CPMM(), 'autovote_creator')),
+                      ("G (no creator auto-YES)",
+                       lambda: (ModelG(), 'no_creator'))]:
+        alice_at = {}
         for n_later in [0, 5, 20, 50]:
-            m = mk()
-            m.buy(0, 'YES', 10.0)         # Alice
+            m, mode = mk()
+            if mode == 'autovote_creator':
+                m.buy(999, 'YES', 10.0)   # creator's auto-bet (uid=999)
+            m.buy(0, 'YES', 10.0)          # Alice (the trader we measure)
             for u in range(1, 11):
-                m.buy(u, 'NO', 10.0)       # NO traders (loser pool)
+                m.buy(u, 'NO', 10.0)
             for u in range(11, 11 + n_later):
                 m.buy(u, 'YES', 10.0)
             p = m.resolve('YES')
-            alice_at_n[n_later] = p[0]
-        results[label] = alice_at_n
+            alice_at[n_later] = p[0]
+        results[label] = alice_at
     return results
+
+
+def scenario_creator_earnings_real_claims(n_trials: int = 500, seed: int = 11):
+    """For each model, simulate a creator who posts claims they think
+    they know the answer to, with skill 0.65 (better than chance).
+
+    F: creator auto-bets YES at creation (locked at 50/50 price).  If
+    truth is YES, +9.17.  If truth is NO, -10.  So F's expected return
+    per claim depends on whether the creator's claims tend toward YES
+    truth.
+
+    G: creator does not auto-bet.  They can manually vote at any time
+    using their own energy.  Here we assume the creator votes once,
+    using their best guess (skill 0.65), at the current market price.
+
+    Compare expected earnings per claim posted.
+    """
+    rng = random.Random(seed)
+    f_returns = []
+    g_returns = []
+    skill = 0.65
+
+    for trial in range(n_trials):
+        truth = rng.choice(['YES', 'NO'])
+        # F path: auto-YES at creation, then 30 other voters with mixed views
+        mF = CPMM()
+        mF.buy(0, 'YES', 10.0)             # creator auto-bet
+        for u in range(1, 31):
+            side = rng.choice(['YES', 'NO'])
+            mF.buy(u, side, 10.0)
+        pF = mF.resolve(truth)
+        f_returns.append(pF[0])
+
+        # G path: no auto-bet at creation.  Some voters bet, then creator
+        # votes manually based on their skill.
+        mG = ModelG()
+        # half of voters go first
+        for u in range(1, 16):
+            side = rng.choice(['YES', 'NO'])
+            mG.buy(u, side, 10.0)
+        # creator votes based on skill
+        creator_guess = truth if rng.random() < skill else (
+            'NO' if truth == 'YES' else 'YES')
+        mG.buy(0, creator_guess, 10.0)
+        # remaining voters
+        for u in range(16, 31):
+            side = rng.choice(['YES', 'NO'])
+            mG.buy(u, side, 10.0)
+        pG = mG.resolve(truth)
+        g_returns.append(pG[0])
+
+    return {
+        'F_mean': float(np.mean(f_returns)),
+        'F_median': float(np.median(f_returns)),
+        'F_pct_losing': float(np.mean([1 if x < 0 else 0 for x in f_returns])),
+        'G_mean': float(np.mean(g_returns)),
+        'G_median': float(np.median(g_returns)),
+        'G_pct_losing': float(np.mean([1 if x < 0 else 0 for x in g_returns])),
+    }
 
 
 # ---------------------------------------------------------------------------
 # CHARTS
 # ---------------------------------------------------------------------------
 
-def chart_inflation(res):
+def chart_trivial(triv):
+    skews = sorted(triv.keys())
     fig, ax = plt.subplots(figsize=(10, 5))
-    xs = np.arange(len(res['history']))
-    ax.plot(xs, res['history'], color='#16a085', linewidth=2,
-            label="Model G (LP-funded)")
-    ax.axhline(res['initial'], color='gray', linestyle='--', linewidth=1,
-               label=f"initial {res['initial']:.0f}")
-    drift = (res['history'][-1] - res['initial']) / res['initial'] * 100
-    ax.set_title(f"H supply over {res['n_rounds']} rounds  (drift {drift:+.2f}%)")
-    ax.set_xlabel("Round"); ax.set_ylabel("Total rep")
-    ax.legend(); ax.grid(alpha=0.3)
-    fig.tight_layout()
-    fig.savefig(os.path.join(CHART_DIR, "g_01_inflation.png"), dpi=120)
-    plt.close(fig)
-
-
-def chart_lp_pnl(res):
-    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
-    ax = axes[0]
-    ax.hist(res['lp_pnls'], bins=50, color='#27ae60', alpha=0.7)
-    ax.axvline(0, color='red', linewidth=1.5, label='break-even')
-    ax.axvline(res['mean_pnl'], color='blue', linewidth=1.5,
-               linestyle='--', label=f"mean = {res['mean_pnl']:+.2f}")
-    ax.set_title(f"LP P&L distribution  (deposit {res['lp_deposit']}, "
-                 f"fee {res['fee_bps']} bps)")
-    ax.set_xlabel("LP net rep / claim"); ax.set_ylabel("Count")
-    ax.legend(); ax.grid(alpha=0.3)
-
-    ax = axes[1]
-    ax.scatter(res['final_prices'], res['lp_pnls'], alpha=0.4, s=15,
-               color='#2980b9')
-    ax.axhline(0, color='red', linewidth=1)
-    ax.set_xlabel("Final YES price")
-    ax.set_ylabel("LP P&L")
-    ax.set_title("LP P&L vs final price")
-    ax.grid(alpha=0.3)
-    fig.tight_layout()
-    fig.savefig(os.path.join(CHART_DIR, "g_02_lp_pnl.png"), dpi=120)
-    plt.close(fig)
-
-
-def chart_fee_sweep(res):
-    fees = sorted(res.keys())
-    fig, ax = plt.subplots(figsize=(9, 5))
-    ax.plot(fees, [res[f]['mean_pnl'] for f in fees], marker='o',
-            label='mean LP P&L', color='#16a085', linewidth=2)
-    ax.plot(fees, [res[f]['median_pnl'] for f in fees], marker='s',
-            label='median LP P&L', color='#2980b9', linewidth=2)
-    ax2 = ax.twinx()
-    ax2.plot(fees, [res[f]['pct_losing'] * 100 for f in fees], marker='^',
-             label='% losing claims', color='#c0392b', linewidth=2)
-    ax2.set_ylabel("% LP-losing claims", color='#c0392b')
-    ax.axhline(0, color='gray', linestyle='--', linewidth=1)
-    ax.set_xlabel("Trading fee (basis points)")
-    ax.set_ylabel("LP P&L (rep / claim)")
-    ax.set_title("LP profitability vs fee level")
-    ax.grid(alpha=0.3)
-    lines1, labels1 = ax.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax.legend(lines1 + lines2, labels1 + labels2, loc='lower right')
-    fig.tight_layout()
-    fig.savefig(os.path.join(CHART_DIR, "g_03_fee_sweep.png"), dpi=120)
-    plt.close(fig)
-
-
-def chart_locked_reward(res):
-    fig, ax = plt.subplots(figsize=(10, 5))
-    x = sorted(next(iter(res.values())).keys())
-    colors = {'F': '#c0392b', 'G (creator LP=100)': '#16a085', 'G (creator LP=200)': '#2980b9'}
-    for label, vs in res.items():
-        ys = [vs[n] for n in x]
-        ax.plot(x, ys, marker='o', linewidth=2, label=label,
-                color=colors.get(label, 'gray'))
+    x = np.arange(len(skews))
+    w = 0.4
+    F_vals = [triv[s]['avg_creator_profit_F'] for s in skews]
+    G_vals = [triv[s]['avg_creator_profit_G'] for s in skews]
+    ax.bar(x - w/2, F_vals, w, label='F (creator auto-YES)', color='#c0392b')
+    ax.bar(x + w/2, G_vals, w, label='G (no auto-YES)', color='#27ae60')
+    ax.set_xticks(x)
+    ax.set_xticklabels([f"{int(s*100)}% YES vote" for s in skews])
+    ax.set_title("Creator avg profit per claim, truth=YES, varying voter skew")
+    ax.set_ylabel("Creator net rep")
     ax.axhline(0, color='gray', linewidth=0.8)
-    ax.set_title("Alice's locked reward: profit vs how many later YES buyers join")
+    ax.legend(); ax.grid(alpha=0.3, axis='y')
+    fig.tight_layout()
+    fig.savefig(os.path.join(CHART_DIR, "g_01_trivial.png"), dpi=120)
+    plt.close(fig)
+
+
+def chart_locked_reward(locked):
+    fig, ax = plt.subplots(figsize=(10, 5))
+    x = sorted(next(iter(locked.values())).keys())
+    colors = {
+        'F (with creator auto-YES)': '#c0392b',
+        'G (no creator auto-YES)': '#27ae60',
+    }
+    for label, vs in locked.items():
+        ys = [vs[n] for n in x]
+        ax.plot(x, ys, marker='o', linewidth=2, label=label, color=colors[label])
     ax.set_xlabel("Later YES buyers after Alice")
     ax.set_ylabel("Alice net rep")
-    ax.grid(alpha=0.3); ax.legend()
+    ax.set_title("Locked reward: Alice's profit independent of later buyers")
+    ax.axhline(0, color='gray', linewidth=0.8)
+    ax.legend(); ax.grid(alpha=0.3)
     fig.tight_layout()
-    fig.savefig(os.path.join(CHART_DIR, "g_04_locked.png"), dpi=120)
+    fig.savefig(os.path.join(CHART_DIR, "g_02_locked.png"), dpi=120)
+    plt.close(fig)
+
+
+def chart_creator(creator):
+    fig, ax = plt.subplots(figsize=(8, 5))
+    labels = ['F mean', 'G mean']
+    vals = [creator['F_mean'], creator['G_mean']]
+    colors = ['#c0392b', '#27ae60']
+    bars = ax.bar(labels, vals, color=colors)
+    for b, v in zip(bars, vals):
+        ax.text(b.get_x() + b.get_width()/2, v + 0.1, f"{v:+.2f}",
+                ha='center', fontsize=10)
+    ax.axhline(0, color='gray', linewidth=0.8)
+    ax.set_title("Creator avg earnings per claim (skill 0.65, balanced voters)")
+    ax.set_ylabel("Net rep / claim")
+    ax.grid(alpha=0.3, axis='y')
+    fig.tight_layout()
+    fig.savefig(os.path.join(CHART_DIR, "g_03_creator.png"), dpi=120)
     plt.close(fig)
 
 
@@ -460,125 +290,105 @@ def chart_locked_reward(res):
 # REPORT
 # ---------------------------------------------------------------------------
 
-def write_report(infl, lp_p, fee_sweep, locked):
+def write_report(triv, locked, creator):
     L = []
     A = L.append
-    A("# Model G — LP-funded CPMM\n")
-    A("Auto-built by `simulator_g.py`. Alternative to G — keeps F's "
-      "locked-reward and copy-trade immunity while killing F's inflation, "
-      "by replacing house-supplied virtual liquidity with user-supplied "
-      "liquidity earning fees.\n")
+    A("# Model G — F minus creator auto-YES\n")
+    A("Built by `simulator_g.py`.  Sister analysis: `leaderboard_analysis.md` "
+      "(does F's inflation actually hurt the leaderboard?).\n")
 
-    A("## Design summary\n")
-    A("- **LP** (often the claim creator) deposits `D` rep at claim "
-      "creation. Pool starts `Y = N = D`. LP receives LP-tokens.\n")
-    A(f"- Each trader `buy()` charges `fee_bps = {FEE_BPS}` (2%). Fee goes "
-      "to LP pool; remaining stake hits the CPMM curve.\n")
-    A("- At resolution: winning-side shares pay 1 rep (same as F). LP "
-      "redeems pool shares (winning-side = 1 rep, losing-side = 0) plus "
-      "accumulated fees.\n")
-    A("- **Per-claim conservation**: `LP_in + trader_stakes = LP_out + "
-      "trader_payouts`. No mint.\n")
+    A("## What changed\n")
+    A("```")
+    A("Model F  =  CPMM payouts + v2 hard rules + energy gate + creator auto-YES on creation")
+    A("Model G  =  CPMM payouts + v2 hard rules + energy gate    (NO creator auto-YES)")
+    A("```\n")
+    A("Everything else from F is kept verbatim.  Locked reward, copy-trade "
+      "immunity, whale rules, energy gate — all unchanged.\n")
 
-    # ----------------------------------------------------------------
-    A("## P1 — Inflation\n")
-    drift = (infl['history'][-1] - infl['initial']) / infl['initial'] * 100
-    A(f"Same harness as the G/F inflation test: {infl['n_rounds']} rounds, "
-      f"{infl['n_users']} users, initial supply {infl['initial']:.0f}, "
-      "random truth, mixed skill.\n")
-    A("| Model | Drift over 400 rounds |")
-    A("|---|---|")
-    A("| F (CPMM, INIT_L=100) | +150% to +250% |")
-    A("| G (zero-sum) | 0% |")
-    A(f"| **G (LP-funded)** | **{drift:+.2f}%** |")
-    A("\n![inflation](charts/g_01_inflation.png)\n")
-    A("Same as G: zero-sum by construction. No house mint.\n")
-
-    # ----------------------------------------------------------------
-    A("## Locked reward and copy-trade immunity\n")
-    A("Same test as before: Alice bets YES; vary the number of later YES "
-      "buyers. Alice's net rep under each model:\n")
-    A("| Later YES buyers | F | G (creator LP=100) | G (creator LP=200) |")
+    # ----
+    A("## Scenario 1 — trivial-claim farming\n")
+    A("100 voters, varying YES skew.  Truth = YES.  How much does the "
+      "creator earn?\n")
+    A("| Voter skew (% YES) | F (auto-YES) | G (no auto-YES) | Difference |")
     A("|---|---|---|---|")
+    for skew in sorted(triv.keys()):
+        r = triv[skew]
+        A(f"| {int(skew*100)}% | {r['avg_creator_profit_F']:+.2f} | "
+          f"{r['avg_creator_profit_G']:+.2f} | "
+          f"{r['avg_creator_profit_G'] - r['avg_creator_profit_F']:+.2f} |")
+    A("\n![trivial](charts/g_01_trivial.png)\n")
+    A("**Reading.** Under F, a creator posting an obvious-YES claim earns "
+      "~9 rep for free.  Under G, they earn 0 unless they personally vote.  "
+      "Trivial-farming attack closed.\n")
+
+    # ----
+    A("## Scenario 2 — locked reward preserved\n")
+    A("Alice bets YES, then varying numbers of later YES buyers join, then "
+      "10 NO buyers.  Truth = YES.  Alice's profit should be identical "
+      "regardless of later buyers (F's locked-reward property).\n")
+    A("| Later YES buyers | F | G |")
+    A("|---|---|---|")
     ns = sorted(next(iter(locked.values())).keys())
     for n in ns:
-        A(f"| {n} | {locked['F'][n]:+7.2f} | {locked['G (creator LP=100)'][n]:+7.2f} | "
-          f"{locked['G (creator LP=200)'][n]:+7.2f} |")
-    A("\n![locked_reward](charts/g_04_locked.png)\n")
-    A("**Reading.** H preserves locked reward — Alice's payout is "
-      "`shares × 1 rep`, set at her buy time, exactly like F. Later buyers "
-      "do not dilute her. (Compare G in the prior report, where Alice's "
-      "profit dropped from +94 to +5.85 when 30 followers copied.)\n")
+        f_key = 'F (with creator auto-YES)'
+        g_key = 'G (no creator auto-YES)'
+        A(f"| {n} | {locked[f_key][n]:+.2f} | {locked[g_key][n]:+.2f} |")
+    A("\n![locked](charts/g_02_locked.png)\n")
+    A("**Reading.** G keeps F's locked-reward exactly — only the creator's "
+      "automatic stake is gone.  Traders' payouts are unaffected.\n")
 
-    # ----------------------------------------------------------------
-    A("## LP profitability\n")
-    A(f"Run {len(lp_p['lp_pnls'])} random claims with one user as LP "
-      f"(deposit {lp_p['lp_deposit']}, fee {lp_p['fee_bps']} bps).\n")
-    A(f"- Mean LP P&L per claim: **{lp_p['mean_pnl']:+.2f} rep**")
-    A(f"- Median LP P&L per claim: **{lp_p['median_pnl']:+.2f} rep**")
-    A(f"- Claims where LP lost money: **{lp_p['pct_losing']*100:.0f}%**\n")
-    A("![lp_pnl](charts/g_02_lp_pnl.png)\n")
-    profitable = lp_p['mean_pnl'] > 0
-    A(("LPs are **profitable on average** — they will choose to participate."
-       if profitable else
-       "LPs **lose on average** at this fee level. Either raise the fee or "
-       "subsidise LPs with a small house bonus per resolved claim."))
-    A("\n")
-
-    # ----------------------------------------------------------------
-    A("## Fee tuning\n")
-    A("Sweep the trading fee to find a setting where LPs profit and "
-      "traders aren't taxed too hard.\n")
-    A("| Fee (bps) | Mean LP P&L | Median LP P&L | % losing |")
+    # ----
+    A("## Scenario 3 — creator's expected earnings under each model\n")
+    A("Creator with skill 0.65 (better than random) posts claims.  Under F, "
+      "they get auto-staked on YES at creation.  Under G, they vote manually "
+      "based on their skill after seeing some early voters.  30 other voters "
+      "per claim, random truth.\n")
+    A("| Model | Mean creator rep / claim | Median | % losing |")
     A("|---|---|---|---|")
-    for f in sorted(fee_sweep.keys()):
-        r = fee_sweep[f]
-        A(f"| {f} | {r['mean_pnl']:+.2f} | {r['median_pnl']:+.2f} | "
-          f"{r['pct_losing']*100:.0f}% |")
-    A("\n![fee_sweep](charts/g_03_fee_sweep.png)\n")
-    best_fee = max(fee_sweep.keys(),
-                   key=lambda f: fee_sweep[f]['mean_pnl'])
-    A(f"Best mean LP P&L at fee = {best_fee} bps "
-      f"({fee_sweep[best_fee]['mean_pnl']:+.2f} rep / claim). Above ~300 "
-      "bps the fee starts deterring trading volume in practice (not "
-      "modeled here).\n")
+    A(f"| F | {creator['F_mean']:+.2f} | {creator['F_median']:+.2f} | "
+      f"{creator['F_pct_losing']*100:.0f}% |")
+    A(f"| G | {creator['G_mean']:+.2f} | {creator['G_median']:+.2f} | "
+      f"{creator['G_pct_losing']*100:.0f}% |")
+    A("\n![creator](charts/g_03_creator.png)\n")
+    diff = creator['G_mean'] - creator['F_mean']
+    A(f"**Reading.** Creator's expected rep / claim drops by "
+      f"{abs(diff):.2f} when we remove the auto-YES — but they were earning "
+      "that as a freebie, regardless of claim quality.  Under G, the "
+      "creator earns when their skill-based vote is correct, which is the "
+      "honest signal.\n")
 
-    # ----------------------------------------------------------------
-    A("## Comparison vs F and G\n")
-    A("| Property | F | G | **H** |")
-    A("|---|---|---|---|")
-    A("| Inflation | +150–250%/yr-equivalent | 0% | **0%** |")
-    A("| Locked reward for traders | ✅ | ❌ (broken) | ✅ |")
-    A("| Copy-trade immunity for trader | ✅ | ❌ (re-introduced) | ✅ |")
-    A("| Right-but-late lose rep | 0% | 0% | **0%** |")
-    A("| Whale impossible (rule) | ✅ | ✅ | ✅ |")
-    A("| House subsidy required | ⚠ ~100/claim mint | none | none (LPs absorb) |")
-    A("| Creator earns from claim quality | weak | bounded bonus | **yes — fees scale with traffic** |")
-    A("| Trivial-claim farming | ❌ (P2 unfixed) | ✅ info-gain | partial — fees scale with volume, not info; needs add-on |")
-    A("| LP role required | no | no | **yes** — UX complexity |")
-    A("\n## What H does not fix on its own\n")
-    A("- **P2 trivial farming**: H doesn't penalise trivial-claim winners "
-      "directly. Two options:\n"
-      "  - layer G's info-gain factor `I = H(p_final)` onto winner payouts;\n"
-      "  - or rely on the fact that trivial claims attract little volume, "
-      "so the LP earns few fees and the creator is implicitly disincentivised.\n")
-    A("- **LP cold-start**: someone must seed the very first claim. The "
-      "house can act as bootstrap LP and recover its deposit on resolution. "
-      "Once user LPs appear, the house stops seeding.\n")
-    A("- **Sybil-LP farming**: a user could LP their own trivial claim and "
-      "vote both sides through alts. Mitigation: require minimum trade "
-      "volume from distinct accounts before the LP can redeem fees.\n")
+    A("## Where the leaderboard problem goes\n")
+    A("See `leaderboard_analysis.md`.  Under realistic 180-day sim:\n")
+    A("- Inflation: +244% drift")
+    A("- Rank stability: Spearman ρ = 0.87 (preserved)")
+    A("- Final rep ↔ skill: ρ = 0.93 (clean signal)")
+    A("- Median-skill newcomer at day 90 → pctl 48% (peers at 52%) — caught up\n")
+    A("Therefore the inflation does not damage the leaderboard's "
+      "*ordering*.  The fix is a UI tweak:\n")
+    A("```jsx")
+    A('display "Top {Math.round((1 - user.percentile) * 100)}%"')
+    A('instead of  "{user.rep} rep"')
+    A("```\n")
 
-    A("## Recommendation\n")
-    A("H is the cleanest of the three. It:\n"
-      "1. kills inflation (matches G)\n"
-      "2. preserves F's locked-reward UX\n"
-      "3. preserves F's copy-trade immunity\n"
-      "4. naturally rewards creators in proportion to claim quality (volume)\n\n"
-      "It costs one UX concept (LP role) and requires fee tuning. If "
-      "issue #76 P2 (trivial claims) is also a blocker, bolt on G's "
-      "info-gain factor; this composes cleanly because G's `I` only "
-      "modifies the winner-pool fraction.\n")
+    A("## What G keeps from F\n")
+    A("- Locked reward (shares × 1 rep at buy time)")
+    A("- Copy-trade immunity (Alice's share count fixed at click)")
+    A("- Fixed 10-rep stake + 1-per-claim rule (no whales)")
+    A("- Daily energy gate (no leaderboard runaway)")
+    A("- 7-day sybil guard")
+    A("- House subsidy bound (~100 rep / claim via virtual liquidity)\n")
+
+    A("## Summary\n")
+    A("| Issue | Status under G |")
+    A("|---|---|")
+    A("| #76 P1 inflation | UI-fix only (percentile display) |")
+    A("| #76 P2 trivial farming | ✅ fixed by removing auto-YES |")
+    A("| #76 P3 low creator reward | accept: creators paid only for honest votes |")
+    A("| Locked reward | ✅ preserved |")
+    A("| Copy-trade immunity | ✅ preserved |")
+    A("| Whale | ✅ rule-impossible |")
+    A("| Leaderboard runaway | ✅ energy gate |")
+    A("| House subsidy | ⚠ same as F (~100 rep / claim) |")
 
     out = os.path.join(OUT_DIR, "model_g_report.md")
     with open(out, "w") as f:
@@ -586,30 +396,21 @@ def write_report(infl, lp_p, fee_sweep, locked):
     return out
 
 
-# ---------------------------------------------------------------------------
-# MAIN
-# ---------------------------------------------------------------------------
-
 def main():
-    print("Scenario: inflation under H ...")
-    infl = scenario_inflation()
-    chart_inflation(infl)
+    print("Scenario: trivial claim farming (F vs G) ...")
+    triv = scenario_trivial_claim_farming()
+    chart_trivial(triv)
 
-    print("Scenario: LP profitability ...")
-    lp_p = scenario_lp_profitability(n_claims=1000)
-    chart_lp_pnl(lp_p)
-
-    print("Scenario: fee sweep ...")
-    fs = scenario_fee_sweep(n_claims=500)
-    chart_fee_sweep(fs)
-
-    print("Scenario: locked reward / copy-trade immunity ...")
-    locked = scenario_trader_locked_reward()
+    print("Scenario: locked reward preserved ...")
+    locked = scenario_locked_reward_preserved()
     chart_locked_reward(locked)
 
-    out = write_report(infl, lp_p, fs, locked)
+    print("Scenario: creator's expected earnings ...")
+    creator = scenario_creator_earnings_real_claims()
+    chart_creator(creator)
+
+    out = write_report(triv, locked, creator)
     print(f"\nDone. Report: {out}")
-    print(f"Charts: {CHART_DIR}/g_*.png")
 
 
 if __name__ == "__main__":
