@@ -60,10 +60,10 @@ Alice bets YES, then varying numbers of later YES buyers join, then 10 NO buyers
 
 | Later YES buyers | F | G |
 |---|---|---|
-| 0 | +7.92 | +8.00 |
-| 5 | +7.92 | +8.00 |
-| 20 | +7.92 | +8.00 |
-| 50 | +7.92 | +8.00 |
+| 0 | +7.92 | +6.67 |
+| 5 | +7.92 | +6.67 |
+| 20 | +7.92 | +6.67 |
+| 50 | +7.92 | +6.67 |
 
 ![locked](charts/g_02_locked.png)
 
@@ -76,7 +76,7 @@ Creator with skill 0.65 (better than random) posts claims.  Under F, they get au
 | Model | Mean creator rep / claim | Median | % losing |
 |---|---|---|---|
 | F | -0.42 | -0.42 | 50% |
-| G | +2.59 | +7.39 | 36% |
+| G | +2.58 | +7.24 | 36% |
 
 ![creator](charts/g_03_creator.png)
 
@@ -90,7 +90,7 @@ An influencer creates a trivial claim and votes YES on 10 sock-puppet accounts. 
 |---|---|---|---|---|---|
 | 10 sybils, 0 honest NO | +62.24 | **+0.00** | +62.24 | **+0.00** | +0.00 |
 | 10 sybils, 1 honest NO | +52.24 | **+0.00** | +62.24 | **+0.00** | +0.00 |
-| 10 sybils, 5 honest NO | +12.24 | **-2.38** | +62.24 | **+47.62** | -50.00 |
+| 10 sybils, 5 honest NO | +12.24 | **-9.37** | +62.24 | **+40.63** | -50.00 |
 
 **Reading.** Under G:
 - System mint per claim is **0.00 rep**.  No new rep enters the system from a sybil attack.

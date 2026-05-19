@@ -54,18 +54,17 @@
                     <button class="btn btn-yes" onclick="addRandom(50)">50 Rastgele</button>
                 </div>
                 <div id="gNote" style="display:none; font-size:0.9em; padding: 8px; background: #eafaf1; border-radius: 5px; color:#16a085;">
-                    <strong>Model G</strong> = Model F + dört küçük değişiklik:<br>
-                    1. Yaratıcı claim açılışında <em>kendi seçtiği</em> taraf ve <em>10-100 rep arası</em> stake ile otomatik yatırılır<br>
-                    2. Yaratıcı 2 rep listing fee öder (yakılır) — spam engeli<br>
-                    3. <strong>Trivial claim iadesi:</strong> Kaybeden tarafta &lt; 3 oy <em>VEYA</em> toplam &lt; 5 oy varsa claim trivial sayılır, tüm stakler iade edilir<br>
-                    4. Daha küçük virtual seed (Y₀=N₀=30) — daha az mint per claim<br>
+                    <strong>Model G</strong>:<br>
+                    1. <strong>Yaratıcı havuzu fonlar:</strong> Açılışta X rep (10-100) seçer ve kendi tarafına koyar. Sistem aynı X'i karşı tarafa <em>mirror</em>'lar. Pool Y=N=X ile başlar. Yaratıcının X locked share'i var (50% giriş fiyatı).<br>
+                    2. Yaratıcı 2 rep listing fee öder (yakılır)<br>
+                    3. <strong>Trivial iadesi:</strong> Kaybeden &lt; 3 oy <em>VEYA</em> toplam &lt; 5 oy → tüm stake iadesi<br>
                     <div style="margin-top:6px; padding:6px; background:#fff; border-radius:4px; border:1px solid #d5e8e1;">
                         <strong>Yaratıcı:</strong>
                         Taraf: <select id="gCreatorSide"><option value="YES">EVET</option><option value="NO">HAYIR</option></select>
-                        · Stake: <input id="gCreatorStake" type="number" min="10" max="100" step="10" value="10" style="width:60px;">
+                        · Stake (X): <input id="gCreatorStake" type="number" min="10" max="100" step="10" value="10" style="width:60px;">
                         <button class="btn btn-reset" style="padding:3px 8px; font-size:0.85em; background-color:#16a085;" onclick="applyCreatorAutoStake()">Uygula + Sıfırla</button>
                     </div>
-                    <span style="color:#7f8c8d;">Ödüller satın alma anında kilitli. Gerçekten çözülen claim'lerde shares × 1 rep. Trivial claim'lerde stake iadesi (listing fee yakılı kalır).</span>
+                    <span style="color:#7f8c8d;">X büyük = havuz derin, fiyat sakin, daha çok mint kapasitesi. X küçük = havuz ince, daha az mint.</span>
                 </div>
                 <div style="display: flex; gap: 5px; flex-wrap: wrap;">
                     <button class="btn btn-reset" onclick="togglePayoutMethod()">Payout Değiştir</button>
@@ -320,20 +319,33 @@
         lpSubsidyExposure = 0;
         yesPriceHistory = [getYesPrice()];
         voteHistory = [0];
-        // Model G: creator auto-stake at claim creation
+        // Model G: creator-funded pool seed at claim creation.
+        // Creator's X rep goes directly into their side's reserve.
+        // System mirrors X on opposite side (virtual).  Pool starts X/X,
+        // price 50%.  Creator owns exactly X locked shares.  No AMM
+        // swap on this — price stays at 50% post-seed.
         if (payoutMode === 'g') {
-            const shares = cpmmBuy(gCreatorSide, gCreatorStake);
-            const entryPrice = gCreatorSide === 'YES' ? 0.5 : 0.5;
+            const X = gCreatorStake;
+            yReserve = X;
+            nReserve = X;
+            // Creator's locked position: X shares of their side at 50% entry
             stakes.push({
-                id: stakes.length + 1,  // creator gets id 1
+                id: stakes.length + 1,
                 side: gCreatorSide,
-                entryPrice: entryPrice,
-                weight: shares / gCreatorStake,
-                shares: shares,
+                entryPrice: 0.5,
+                weight: 1.0,
+                shares: X,
                 isCreator: true,
-                stakeAmount: gCreatorStake
+                stakeAmount: X
             });
-            if (gCreatorSide === 'YES') yesCount++; else noCount++;
+            if (gCreatorSide === 'YES') {
+                yesCount++;
+                yesOutstanding += X;
+            } else {
+                noCount++;
+                noOutstanding += X;
+            }
+            cpmmEscrow += X;
             yesPriceHistory.push(getYesPrice());
             voteHistory.push(yesCount + noCount);
         }
@@ -397,13 +409,13 @@
             `;
         } else if (payoutMode === 'g') {
             formulaDiv.innerHTML = `
-                <strong>Model G = Model F + üç değişiklik:</strong><br>
-                <strong>Aynı:</strong> CPMM payoutları, sabit 10 rep stake, 1 pozisyon/claim, enerji limiti, virtual likidite (Y₀=N₀=${CPMM_INIT_L}). <strong>Ödüller satın alma anında kilitli</strong> (F gibi).<br>
-                <strong>Fark 1:</strong> Claim açılışında yaratıcı OTOMATIK EVET'e yatırılmaz. Manuel oy verebilir → trivial claim farming kapatıldı (#76 P2).<br>
-                <strong>Fark 2 — Yaratıcı listing fee:</strong> Claim açılışında 2 rep ödenir, yakılır. Spam engeli + küçük deflasyon.<br>
-                <strong>Fark 3 — Trivial claim iadesi:</strong> Kaybeden tarafta &lt; 3 oy <em>VEYA</em> toplam &lt; 5 oy varsa claim trivial sayılır, tüm stake'ler iade edilir. Hiçbir mint olmaz. ≥ 3 muhalif VE ≥ 5 toplam oy varsa CPMM math normal çalışır, kilitli ödüller verilir.<br>
-                <strong>Trader payoutu:</strong> Eğer claim çözülürse <strong>shares × 1 Rep</strong> (kilitli, satın alma anında belirlenir). Eğer trivial sayılırsa <strong>tam iade</strong>. Hiçbir ölçeklendirme yok.<br>
-                <strong>Enflasyon:</strong> F'den az ama yine de var (trivial claim'lerde iade engelliyor). UI'da percentile gösterimi ile gizlenebilir.
+                <strong>Model G:</strong><br>
+                <strong>1. Yaratıcı havuzu fonlar:</strong> Açılışta X rep (10-100 arası) seçer ve kendi tarafına direkt ekler. Sistem X'i karşı tarafa mirror'lar. Pool Y=N=X ile başlar. Yaratıcı X share alır, 50% giriş fiyatında kilitli.<br>
+                <strong>2. Listing fee:</strong> 2 rep claim açılışında yakılır.<br>
+                <strong>3. Trivial iadesi:</strong> Kaybeden tarafta &lt; 3 oy <em>VEYA</em> toplam &lt; 5 oy → tüm stake iadesi.<br>
+                <strong>Trader payoutu:</strong> shares × 1 Rep (kilitli, alım anında belirlenir). Trivial sayılırsa tam iade.<br>
+                <strong>Mint kapasitesi:</strong> claim başına X ile sınırlı (F'de sabit 100). Küçük X → az mint, ince havuz; büyük X → fazla mint, derin havuz.<br>
+                <strong>Sim sonucu:</strong> 180 günde F +425% drift; G ~+102%. Trivial-farming attack -2 rep cost (listing fee yakılır).
             `;
         } else {
             formulaDiv.innerHTML = `

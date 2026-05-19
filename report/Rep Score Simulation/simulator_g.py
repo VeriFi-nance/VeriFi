@@ -84,55 +84,80 @@ os.makedirs(CHART_DIR, exist_ok=True)
 MIN_LOSER_VOTERS = 3        # refund if losing side has fewer distinct voters
 MIN_TOTAL_VOTERS = 5        # refund if claim attracts fewer total voters
 CREATOR_LISTING_FEE = 2.0   # creator pays this at claim creation, burned
-G_INIT_L = 30.0             # CPMM virtual seed under G (was 100 under F)
-CREATOR_MIN_STAKE = 10      # creator's auto-stake range
+CREATOR_MIN_STAKE = 10      # creator's seed range
 CREATOR_MAX_STAKE = 100
 CREATOR_DEFAULT_STAKE = 10
 
 
 class ModelG(CPMM):
-    """Model G — locked-reward CPMM with hardened trivial-claim defenses.
+    """Model G — locked-reward CPMM with creator-funded pool seed.
 
     Differences from Model F (CPMM):
-      1. **Creator auto-stake with chosen amount + side.**  At claim
-         creation, the creator picks a side (YES/NO) and a stake size
-         in ``[CREATOR_MIN_STAKE, CREATOR_MAX_STAKE]`` rep.  That stake
-         is recorded as their position in the market.  Replaces F's
-         fixed-10-rep auto-YES.
-      2. **Listing fee.**  Creator pays ``CREATOR_LISTING_FEE`` rep at
-         claim creation, permanently burned.  Anti-spam.
-      3. **Refund-if-trivial.**  At resolution, if the losing side has
-         < ``MIN_LOSER_VOTERS`` voters OR the claim attracted
-         < ``MIN_TOTAL_VOTERS`` stakers total, every stake is refunded
-         (no winners paid, no mint).
-      4. **Smaller virtual seed.**  ``INIT_L = 30`` (vs F's 100) caps
-         the per-claim mint at ~+43 rep instead of ~+143 rep.
 
-    Locked reward is preserved on every resolving claim: trader knows
-    ``shares × 1 rep`` at buy time, gets exactly that on win, or full
-    refund if the claim is declared trivial.
+      1. **Creator-funded pool seed.**  At claim creation, the creator
+         picks a side (YES/NO) and an amount X in [10, 100] rep.
+         X is deposited directly into the creator's side of the pool
+         (no AMM swap, so price stays 50/50).  The system mirrors X
+         on the opposite side as virtual liquidity.  Result: pool
+         starts at Y = N = X.  Creator owns exactly X shares on their
+         chosen side, locked at the 50% entry price.
+
+         Smaller X = thinner pool, more price impact per stake, less
+         mint capacity per claim.  Bigger X = thicker pool, smoother
+         price, more mint capacity (capped at X).  Creator's choice.
+
+      2. **Listing fee.**  Creator pays CREATOR_LISTING_FEE (2 rep) at
+         claim creation, permanently burned.
+
+      3. **Refund-if-trivial.**  At resolution, if losing side has
+         < MIN_LOSER_VOTERS (3) voters OR claim attracted
+         < MIN_TOTAL_VOTERS (5) stakers, refund every stake.
+
+    Locked reward is fully preserved: trader gets shares × 1 rep on
+    win, exactly the share count they were quoted at click time, or a
+    full refund if the claim is trivial.
     """
 
     name = "model_g"
 
     def __init__(self, claim_id: int = 0, creator_uid: int | None = None,
-                 init_L: float = G_INIT_L,
                  listing_fee: float = CREATOR_LISTING_FEE,
                  creator_side: str = 'YES',
                  creator_stake: float = CREATOR_DEFAULT_STAKE):
         super().__init__(claim_id)
-        # Override CPMM's INIT_L by resetting reserves
-        self.y_reserve = init_L
-        self.n_reserve = init_L
-        self.init_L = init_L
-        self.creator_uid = creator_uid
-        self.listing_fee = listing_fee if creator_uid is not None else 0.0
 
-        # Validate + clamp creator stake to allowed band
         if creator_uid is not None:
             stake = max(CREATOR_MIN_STAKE,
                         min(CREATOR_MAX_STAKE, creator_stake))
-            self.buy(creator_uid, creator_side, stake)
+            # Pool depth = creator's chosen amount.  Both sides start equal.
+            self.y_reserve = stake
+            self.n_reserve = stake
+            self.init_L = stake
+            # Creator's position: X shares on chosen side, locked at 50%
+            # entry price.  Does NOT go through buy() so the price stays
+            # at 50/50 — that's the "system mirrors X on opposite" effect.
+            from simulator import Stake
+            self.stakes.append(Stake(
+                user_id=creator_uid,
+                side=creator_side,
+                rep_paid=stake,
+                entry_price=0.5,
+                weight=1.0,
+                shares=stake,
+            ))
+            if creator_side == 'YES':
+                self.yes_outstanding += stake
+                self.yes_count += 1
+            else:
+                self.no_outstanding += stake
+                self.no_count += 1
+        else:
+            self.y_reserve = CREATOR_DEFAULT_STAKE
+            self.n_reserve = CREATOR_DEFAULT_STAKE
+            self.init_L = CREATOR_DEFAULT_STAKE
+
+        self.creator_uid = creator_uid
+        self.listing_fee = listing_fee if creator_uid is not None else 0.0
 
     def resolve(self, winning_side: str) -> dict[int, float]:
         losing_side = 'NO' if winning_side == 'YES' else 'YES'
