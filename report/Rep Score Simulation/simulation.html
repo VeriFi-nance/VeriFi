@@ -54,11 +54,18 @@
                     <button class="btn btn-yes" onclick="addRandom(50)">50 Rastgele</button>
                 </div>
                 <div id="gNote" style="display:none; font-size:0.9em; padding: 8px; background: #eafaf1; border-radius: 5px; color:#16a085;">
-                    <strong>Model G</strong> = Model F + üç küçük değişiklik:<br>
-                    1. Claim açılışında yaratıcı otomatik EVET'e yatırılmaz<br>
+                    <strong>Model G</strong> = Model F + dört küçük değişiklik:<br>
+                    1. Yaratıcı claim açılışında <em>kendi seçtiği</em> taraf ve <em>10-100 rep arası</em> stake ile otomatik yatırılır<br>
                     2. Yaratıcı 2 rep listing fee öder (yakılır) — spam engeli<br>
                     3. <strong>Trivial claim iadesi:</strong> Kaybeden tarafta &lt; 3 oy <em>VEYA</em> toplam &lt; 5 oy varsa claim trivial sayılır, tüm stakler iade edilir<br>
-                    <span style="color:#7f8c8d;">Ödüller satın alma anında kilitli — gerçekten çözülen claim'lerde shares × 1 rep alırsınız. Trivial claim'lerde stake iadesi alırsınız.</span>
+                    4. Daha küçük virtual seed (Y₀=N₀=30) — daha az mint per claim<br>
+                    <div style="margin-top:6px; padding:6px; background:#fff; border-radius:4px; border:1px solid #d5e8e1;">
+                        <strong>Yaratıcı:</strong>
+                        Taraf: <select id="gCreatorSide"><option value="YES">EVET</option><option value="NO">HAYIR</option></select>
+                        · Stake: <input id="gCreatorStake" type="number" min="10" max="100" step="10" value="10" style="width:60px;">
+                        <button class="btn btn-reset" style="padding:3px 8px; font-size:0.85em; background-color:#16a085;" onclick="applyCreatorAutoStake()">Uygula + Sıfırla</button>
+                    </div>
+                    <span style="color:#7f8c8d;">Ödüller satın alma anında kilitli. Gerçekten çözülen claim'lerde shares × 1 rep. Trivial claim'lerde stake iadesi (listing fee yakılı kalır).</span>
                 </div>
                 <div style="display: flex; gap: 5px; flex-wrap: wrap;">
                     <button class="btn btn-reset" onclick="togglePayoutMethod()">Payout Değiştir</button>
@@ -146,12 +153,14 @@
     let cpmmEscrow = 0;               // total real rep deposited as collateral
     let lpSubsidyExposure = 0;        // running house-subsidy bound (F)
 
-    // Model G shares the CPMM (Model F) math entirely.  The only G-specific
-    // behaviour is that the creator does NOT auto-stake YES at claim
-    // creation — there is no auto-stake logic in this sim anyway (all
-    // stakes come from button clicks), so G mode is identical to cpmm
-    // mode for trading; we keep G as a separate label only for clarity in
-    // the formula box.
+    // Model G — creator auto-stakes with chosen side + stake in [10, 100]
+    // at claim creation.  These two knobs are user-controllable from the
+    // G note panel.  Auto-stake happens in resetSim() when payoutMode === 'g'.
+    let gCreatorSide = 'YES';
+    let gCreatorStake = 10;
+    const G_CREATOR_MIN_STAKE = 10;
+    const G_CREATOR_MAX_STAKE = 100;
+    const G_LISTING_FEE = 2;   // tracked separately, just for UI display
 
     // --- MATEMATİK FONKSİYONLARI ---
     function getYesPrice() {
@@ -161,9 +170,16 @@
         return (yesCount + 1) / (yesCount + noCount + 2);
     }
 
-    // Sum of all rep currently inside the system (= sum of all stakes).
+    // Sum of all rep currently inside the system.
     function totalRepIn() {
-        return stakes.length * STAKE;
+        let total = stakes.reduce(
+            (a, s) => a + (s.stakeAmount != null ? s.stakeAmount : STAKE), 0);
+        // G also has the burned listing fee in flight (not part of pool
+        // but spent from creator's balance)
+        if (payoutMode === 'g' && stakes.some(s => s.isCreator)) {
+            total += G_LISTING_FEE;
+        }
+        return total;
     }
 
     // Total rep paid out at resolution given a winning side.
@@ -185,10 +201,12 @@
         }
         if (payoutMode === 'cpmm' || payoutMode === 'g') {
             // Both F and G use locked CPMM payouts: shares × 1 rep on win.
-            // G also has refund-if-uncontested check (see gIsTrivial),
-            // applied in calculatePayouts.
+            // G's refund-if-trivial check applies if the loser side has
+            // too few voters or the claim is too small.
             if (payoutMode === 'g' && gIsTrivial(winningSide)) {
-                return stakes.length * STAKE;  // refund all stakes
+                // Refund every stake at its original amount.
+                return stakes.reduce(
+                    (a, s) => a + (s.stakeAmount != null ? s.stakeAmount : STAKE), 0);
             }
             return stakes
                 .filter(s => s.side === winningSide && s.shares != null)
@@ -302,8 +320,39 @@
         lpSubsidyExposure = 0;
         yesPriceHistory = [getYesPrice()];
         voteHistory = [0];
+        // Model G: creator auto-stake at claim creation
+        if (payoutMode === 'g') {
+            const shares = cpmmBuy(gCreatorSide, gCreatorStake);
+            const entryPrice = gCreatorSide === 'YES' ? 0.5 : 0.5;
+            stakes.push({
+                id: stakes.length + 1,  // creator gets id 1
+                side: gCreatorSide,
+                entryPrice: entryPrice,
+                weight: shares / gCreatorStake,
+                shares: shares,
+                isCreator: true,
+                stakeAmount: gCreatorStake
+            });
+            if (gCreatorSide === 'YES') yesCount++; else noCount++;
+            yesPriceHistory.push(getYesPrice());
+            voteHistory.push(yesCount + noCount);
+        }
         updatePayoutMethodUI();
         updateUI();
+    }
+
+    function applyCreatorAutoStake() {
+        const sideEl = document.getElementById('gCreatorSide');
+        const stakeEl = document.getElementById('gCreatorStake');
+        if (!sideEl || !stakeEl) return;
+        const stake = parseFloat(stakeEl.value);
+        if (!isFinite(stake) || stake < G_CREATOR_MIN_STAKE || stake > G_CREATOR_MAX_STAKE) {
+            alert(`Stake ${G_CREATOR_MIN_STAKE}-${G_CREATOR_MAX_STAKE} arası olmalı`);
+            return;
+        }
+        gCreatorSide = sideEl.value;
+        gCreatorStake = stake;
+        resetSim();
     }
 
     function togglePayoutMethod() {
@@ -406,19 +455,18 @@
                     noProfit = STAKE * yesCount * (s.weight / noTotalWeight);
                 }
             } else if (payoutMode === 'cpmm' || payoutMode === 'g') {
-                // Both F and G use locked CPMM payouts: each share = 1 rep
-                // if user's side wins.  Profit is locked at buy time.
-                // For G, if the claim is trivial (loser side has < 3 voters)
-                // every stake is refunded — net profit = 0 on every outcome
-                // for which the trivial check fires.
+                // Both F and G use locked CPMM payouts.
+                // Each stake's rep amount: STAKE for regular voters,
+                // s.stakeAmount for the creator's auto-stake under G.
+                const myStake = s.stakeAmount != null ? s.stakeAmount : STAKE;
                 const trivialYes = (payoutMode === 'g') && gIsTrivial('YES');
                 const trivialNo  = (payoutMode === 'g') && gIsTrivial('NO');
                 if (s.side === 'YES') {
-                    yesProfit = trivialYes ? 0 : (s.shares - STAKE);
-                    noProfit  = trivialNo  ? 0 : -STAKE;
+                    yesProfit = trivialYes ? 0 : (s.shares - myStake);
+                    noProfit  = trivialNo  ? 0 : -myStake;
                 } else {
-                    noProfit  = trivialNo  ? 0 : (s.shares - STAKE);
-                    yesProfit = trivialYes ? 0 : -STAKE;
+                    noProfit  = trivialNo  ? 0 : (s.shares - myStake);
+                    yesProfit = trivialYes ? 0 : -myStake;
                 }
             }
 
@@ -516,7 +564,7 @@
                 : s.weight.toFixed(3);
 
             tr.innerHTML = `
-                <td>Kullanıcı ${s.id}</td>
+                <td>${s.isCreator ? `Yaratıcı (stake ${s.stakeAmount})` : `Kullanıcı ${s.id}`}</td>
                 <td style="font-weight: bold; color: ${s.side === 'YES' ? '#27ae60' : '#c0392b'}">${s.side}</td>
                 <td>${displayPrice}%</td>
                 <td>${middleCol}</td>

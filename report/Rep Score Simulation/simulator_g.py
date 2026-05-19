@@ -81,23 +81,26 @@ os.makedirs(CHART_DIR, exist_ok=True)
 # scenarios below construct a fresh CPMM market and DO NOT stake the
 # creator on YES at t=0.
 
-MIN_LOSER_VOTERS = 3       # refund if losing side has fewer distinct voters
-MIN_TOTAL_VOTERS = 5       # refund if claim attracts fewer total voters
-                           # (anti-sybil: closes "3 puppets per side" loophole)
-CREATOR_LISTING_FEE = 2.0  # creator pays this at claim creation, burned
-G_INIT_L = 30.0            # CPMM virtual seed under G (was 100 under F);
-                           # smaller seed → smaller per-claim mint cap
+MIN_LOSER_VOTERS = 3        # refund if losing side has fewer distinct voters
+MIN_TOTAL_VOTERS = 5        # refund if claim attracts fewer total voters
+CREATOR_LISTING_FEE = 2.0   # creator pays this at claim creation, burned
+G_INIT_L = 30.0             # CPMM virtual seed under G (was 100 under F)
+CREATOR_MIN_STAKE = 10      # creator's auto-stake range
+CREATOR_MAX_STAKE = 100
+CREATOR_DEFAULT_STAKE = 10
 
 
 class ModelG(CPMM):
     """Model G — locked-reward CPMM with hardened trivial-claim defenses.
 
     Differences from Model F (CPMM):
-      1. **No creator auto-YES at creation.**  Enforced by harness;
-         creator must vote manually using their own energy.
+      1. **Creator auto-stake with chosen amount + side.**  At claim
+         creation, the creator picks a side (YES/NO) and a stake size
+         in ``[CREATOR_MIN_STAKE, CREATOR_MAX_STAKE]`` rep.  That stake
+         is recorded as their position in the market.  Replaces F's
+         fixed-10-rep auto-YES.
       2. **Listing fee.**  Creator pays ``CREATOR_LISTING_FEE`` rep at
-         claim creation, permanently burned.  Anti-spam.  Forces
-         attacker break-even point higher.
+         claim creation, permanently burned.  Anti-spam.
       3. **Refund-if-trivial.**  At resolution, if the losing side has
          < ``MIN_LOSER_VOTERS`` voters OR the claim attracted
          < ``MIN_TOTAL_VOTERS`` stakers total, every stake is refunded
@@ -114,7 +117,9 @@ class ModelG(CPMM):
 
     def __init__(self, claim_id: int = 0, creator_uid: int | None = None,
                  init_L: float = G_INIT_L,
-                 listing_fee: float = CREATOR_LISTING_FEE):
+                 listing_fee: float = CREATOR_LISTING_FEE,
+                 creator_side: str = 'YES',
+                 creator_stake: float = CREATOR_DEFAULT_STAKE):
         super().__init__(claim_id)
         # Override CPMM's INIT_L by resetting reserves
         self.y_reserve = init_L
@@ -122,6 +127,12 @@ class ModelG(CPMM):
         self.init_L = init_L
         self.creator_uid = creator_uid
         self.listing_fee = listing_fee if creator_uid is not None else 0.0
+
+        # Validate + clamp creator stake to allowed band
+        if creator_uid is not None:
+            stake = max(CREATOR_MIN_STAKE,
+                        min(CREATOR_MAX_STAKE, creator_stake))
+            self.buy(creator_uid, creator_side, stake)
 
     def resolve(self, winning_side: str) -> dict[int, float]:
         losing_side = 'NO' if winning_side == 'YES' else 'YES'
