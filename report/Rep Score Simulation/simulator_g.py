@@ -4,23 +4,26 @@ After exploring more invasive redesigns (zero-sum + info-gain bonus,
 LP-funded CPMM, etc.) we landed on the lightest possible change that
 still addresses issue #76's main concerns.
 
-G = F + two tiny changes
-------------------------
+G = F + three tiny changes
+--------------------------
   1. **No auto-YES at claim creation.**  Under F, the creator was
      auto-staked on the YES side at claim creation, which guaranteed
-     ~9.17 rep of profit on any claim that resolved YES.  This was the
-     main trivial-claim farming vector: post an obvious "did event X
-     happen" claim, collect free rep.  In G, the creator does not
-     auto-bet.  They may vote manually like any other user (using their
-     own energy + stake).
+     ~9.17 rep of profit on any claim that resolved YES.  In G, the
+     creator does not auto-bet.  They may vote manually like any
+     other user (using their own energy + stake).
 
-  2. **Display percentile rank, not raw rep, in the leaderboard UI.**
-     F's headline inflation (~244% drift over 180 days in the realistic
-     sim) does not reshuffle ranks (Spearman ρ ≈ 0.87) or block
-     newcomers (median-skill newcomer caught up to peers within 90
-     days).  It just makes raw numbers harder to compare across time.
-     Switching the visible leaderboard from `"3812 rep"` to `"top 12%"`
-     makes the inflation literally invisible to users.
+  2. **Refund-if-uncontested rule.**  If the losing side attracted
+     fewer than ``MIN_LOSER_VOTERS`` (3) distinct stakers, the claim
+     is declared *trivial* — all stakes are refunded, no winners, no
+     losers, no mint.  Solves the "everyone bets YES, everyone wins
+     from the system pool" inflation hole.  Honest claims always
+     attract dissenters; one-sided farmable claims auto-cancel.
+
+  3. **Display percentile rank, not raw rep, in the leaderboard UI.**
+     F's headline inflation does not reshuffle ranks (Spearman ρ
+     ≈ 0.87) or block newcomers.  Switching the visible leaderboard
+     from `"3812 rep"` to `"top 12%"` makes the residual inflation
+     invisible to users.
 
 Everything else from F is unchanged:
   - CPMM payouts (Polymarket-style, shares × 1 rep locked at buy time)
@@ -79,14 +82,41 @@ os.makedirs(CHART_DIR, exist_ok=True)
 # scenarios below construct a fresh CPMM market and DO NOT stake the
 # creator on YES at t=0.
 
+MIN_LOSER_VOTERS = 3        # losing side must have ≥ this many distinct
+                            # voters for the claim to resolve.  Catches
+                            # the "everyone voted YES" mint hole even
+                            # when CPMM's virtual liquidity hides the
+                            # extreme in the price.
+
+
 class ModelG(CPMM):
-    """Model G payout math is identical to CPMM.  The only behavioural
-    difference vs F is at claim creation: in F, the harness auto-stakes
-    the creator on YES.  In G, it does not.  This class exists for
-    semantic clarity in the report; scenarios use it interchangeably
-    with CPMM."""
+    """Model G = Model F (CPMM) + two rule tweaks at resolution time.
+
+    1. No creator auto-YES at creation (enforced by the harness — this
+       class doesn't auto-stake on construction).
+    2. ``resolve()`` checks whether each side attracted real
+       disagreement.  If the losing side has fewer than
+       ``MIN_LOSER_VOTERS`` distinct stakers, the claim is declared
+       trivial and all stakes are refunded.  No winners, no losers,
+       no system mint.
+
+    Why a vote-count rule and not a price-band rule: CPMM's virtual
+    liquidity (Y₀ = N₀ = 100) smooths the YES price so a one-sided
+    claim with ~30 voters only pushes price to ~0.73, well below any
+    sensible "extreme price" threshold.  Counting actual voters on
+    the losing side bypasses the smoothing.
+    """
 
     name = "model_g"
+
+    def resolve(self, winning_side: str) -> dict[int, float]:
+        losing_side = 'NO' if winning_side == 'YES' else 'YES'
+        loser_voters = {s.user_id for s in self.stakes
+                        if s.side == losing_side}
+        if len(loser_voters) < MIN_LOSER_VOTERS:
+            # Refund every stake; system mint = 0.
+            return {s.user_id: 0.0 for s in self.stakes}
+        return super().resolve(winning_side)
 
 
 # ---------------------------------------------------------------------------
@@ -136,6 +166,68 @@ def scenario_trivial_claim_farming(n_trials: int = 200,
             'avg_creator_profit_G': g_profit / n_trials,
         }
     return out
+
+
+def scenario_one_sided_mint(n_trials: int = 100, n_voters: int = 30):
+    """Worst-case mint test: everyone bets YES, YES wins.  Under F,
+    house mints rep equal to (total winning shares - total stakes).
+    Under G, refund-on-extreme triggers and mint is 0.
+
+    Measures per-claim system-level rep mint (sum of winning payouts
+    minus sum of stakes).
+    """
+    f_mints = []
+    g_mints = []
+    g_refunds = 0
+    for trial in range(n_trials):
+        mF = CPMM()
+        mG = ModelG()
+        for u in range(n_voters):
+            mF.buy(u, 'YES', 10.0)
+            mG.buy(u, 'YES', 10.0)
+        pF = mF.resolve('YES')
+        pG = mG.resolve('YES')
+        # System mint = sum of net changes (winners gained more than losers lost)
+        f_mints.append(sum(pF.values()))
+        g_mints.append(sum(pG.values()))
+        # G should refund (every value ≈ 0)
+        if all(abs(v) < 0.01 for v in pG.values()):
+            g_refunds += 1
+    return {
+        'F_mean_mint': float(np.mean(f_mints)),
+        'F_total_mint': float(sum(f_mints)),
+        'G_mean_mint': float(np.mean(g_mints)),
+        'G_total_mint': float(sum(g_mints)),
+        'G_refund_rate': g_refunds / n_trials,
+        'n_trials': n_trials,
+        'n_voters': n_voters,
+    }
+
+
+def scenario_contested_claims_still_work(n_trials: int = 200):
+    """Sanity: G's refund rule should NOT trigger on genuinely contested
+    claims.  Run 50/50-ish voter splits and check the resolution still
+    pays normally."""
+    rng = random.Random(13)
+    triggered_refunds = 0
+    normal_resolutions = 0
+    for trial in range(n_trials):
+        m = ModelG()
+        for u in range(40):
+            side = 'YES' if rng.random() < 0.55 else 'NO'  # near 50/50
+            m.buy(u, side, 10.0)
+        p_final = m.yes_price()
+        truth = rng.choice(['YES', 'NO'])
+        out = m.resolve(truth)
+        if all(abs(v) < 0.01 for v in out.values()):
+            triggered_refunds += 1
+        else:
+            normal_resolutions += 1
+    return {
+        'contested_total': n_trials,
+        'triggered_refunds': triggered_refunds,
+        'normal_resolutions': normal_resolutions,
+    }
 
 
 def scenario_locked_reward_preserved():
@@ -290,20 +382,25 @@ def chart_creator(creator):
 # REPORT
 # ---------------------------------------------------------------------------
 
-def write_report(triv, locked, creator):
+def write_report(triv, locked, creator, mint, contested):
     L = []
     A = L.append
-    A("# Model G — F minus creator auto-YES\n")
+    A("# Model G — F + 2 tiny rule tweaks\n")
     A("Built by `simulator_g.py`.  Sister analysis: `leaderboard_analysis.md` "
       "(does F's inflation actually hurt the leaderboard?).\n")
 
     A("## What changed\n")
     A("```")
-    A("Model F  =  CPMM payouts + v2 hard rules + energy gate + creator auto-YES on creation")
-    A("Model G  =  CPMM payouts + v2 hard rules + energy gate    (NO creator auto-YES)")
+    A("Model F  =  CPMM payouts + v2 hard rules + energy gate")
+    A("            + creator auto-YES at claim creation")
+    A("")
+    A("Model G  =  CPMM payouts + v2 hard rules + energy gate")
+    A("            - drop creator auto-YES")
+    A("            + refund-if-uncontested: if losing side has < 3")
+    A("              distinct voters, all stakes refunded (no mint)")
     A("```\n")
-    A("Everything else from F is kept verbatim.  Locked reward, copy-trade "
-      "immunity, whale rules, energy gate — all unchanged.\n")
+    A("Locked reward, copy-trade immunity, whale rules, energy gate — "
+      "all unchanged from F.\n")
 
     # ----
     A("## Scenario 1 — trivial-claim farming\n")
@@ -320,6 +417,39 @@ def write_report(triv, locked, creator):
     A("**Reading.** Under F, a creator posting an obvious-YES claim earns "
       "~9 rep for free.  Under G, they earn 0 unless they personally vote.  "
       "Trivial-farming attack closed.\n")
+
+    # ----
+    A("## Scenario 1b — \"everyone YES, everyone wins from the pool\"\n")
+    A(f"The trivial-claim mint problem.  {mint['n_voters']} voters all "
+      "bet YES, YES wins.  How much rep does the system mint out of thin "
+      "air per claim?\n")
+    A("| Model | Mean mint per claim | Total mint over "
+      f"{mint['n_trials']} trials | Refund rate |")
+    A("|---|---|---|---|")
+    A(f"| F | **{mint['F_mean_mint']:+.2f} rep** | "
+      f"{mint['F_total_mint']:+.0f} rep | 0% |")
+    A(f"| G | {mint['G_mean_mint']:+.2f} rep | "
+      f"{mint['G_total_mint']:+.0f} rep | **{mint['G_refund_rate']*100:.0f}%** |")
+    A("\n![mint](charts/g_04_mint.png)\n")
+    A("**Reading.** Under F, every one-sided claim mints rep equal to "
+      f"~{mint['F_mean_mint']:.0f} per claim ({mint['F_total_mint']:.0f} "
+      f"over {mint['n_trials']} trials).  Under G the refund-on-extreme "
+      "rule triggers — every voter gets their stake back, system mint "
+      "is zero.  Trivial claims become no-ops.\n")
+
+    # ----
+    A("## Scenario 1c — refund rule doesn't break contested claims\n")
+    A(f"Sanity check: run {contested['contested_total']} near-50/50 "
+      "claims under G.  Refund rule should NOT fire.\n")
+    A(f"- Contested claims that resolved normally: "
+      f"**{contested['normal_resolutions']}** / "
+      f"{contested['contested_total']}")
+    A(f"- Contested claims that hit the extreme-price refund: "
+      f"{contested['triggered_refunds']}\n")
+    rate = contested['normal_resolutions'] / contested['contested_total']
+    A(f"**Reading.** {rate*100:.0f}% of contested claims resolve as "
+      "expected; the refund rule only catches the genuinely one-sided "
+      "ones.\n")
 
     # ----
     A("## Scenario 2 — locked reward preserved\n")
@@ -396,10 +526,36 @@ def write_report(triv, locked, creator):
     return out
 
 
+def chart_mint(mint):
+    fig, ax = plt.subplots(figsize=(9, 5))
+    labels = ['F (no rule)', 'G (refund-on-extreme)']
+    vals = [mint['F_mean_mint'], mint['G_mean_mint']]
+    colors = ['#c0392b', '#27ae60']
+    bars = ax.bar(labels, vals, color=colors)
+    for b, v in zip(bars, vals):
+        ax.text(b.get_x() + b.get_width()/2, v + 0.5, f"{v:+.1f}",
+                ha='center', fontsize=11)
+    ax.axhline(0, color='gray', linewidth=0.8)
+    ax.set_title(f"System mint per one-sided claim "
+                 f"({mint['n_voters']} all-YES voters, truth=YES)")
+    ax.set_ylabel("Net rep created from thin air")
+    ax.grid(alpha=0.3, axis='y')
+    fig.tight_layout()
+    fig.savefig(os.path.join(CHART_DIR, "g_04_mint.png"), dpi=120)
+    plt.close(fig)
+
+
 def main():
     print("Scenario: trivial claim farming (F vs G) ...")
     triv = scenario_trivial_claim_farming()
     chart_trivial(triv)
+
+    print("Scenario: one-sided claim system-mint ...")
+    mint = scenario_one_sided_mint()
+    chart_mint(mint)
+
+    print("Scenario: contested claims still resolve normally ...")
+    contested = scenario_contested_claims_still_work()
 
     print("Scenario: locked reward preserved ...")
     locked = scenario_locked_reward_preserved()
@@ -409,7 +565,7 @@ def main():
     creator = scenario_creator_earnings_real_claims()
     chart_creator(creator)
 
-    out = write_report(triv, locked, creator)
+    out = write_report(triv, locked, creator, mint, contested)
     print(f"\nDone. Report: {out}")
 
 

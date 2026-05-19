@@ -1,15 +1,20 @@
-# Model G — F minus creator auto-YES
+# Model G — F + 2 tiny rule tweaks
 
 Built by `simulator_g.py`.  Sister analysis: `leaderboard_analysis.md` (does F's inflation actually hurt the leaderboard?).
 
 ## What changed
 
 ```
-Model F  =  CPMM payouts + v2 hard rules + energy gate + creator auto-YES on creation
-Model G  =  CPMM payouts + v2 hard rules + energy gate    (NO creator auto-YES)
+Model F  =  CPMM payouts + v2 hard rules + energy gate
+            + creator auto-YES at claim creation
+
+Model G  =  CPMM payouts + v2 hard rules + energy gate
+            - drop creator auto-YES
+            + refund-if-uncontested: if losing side has < 3
+              distinct voters, all stakes refunded (no mint)
 ```
 
-Everything else from F is kept verbatim.  Locked reward, copy-trade immunity, whale rules, energy gate — all unchanged.
+Locked reward, copy-trade immunity, whale rules, energy gate — all unchanged from F.
 
 ## Scenario 1 — trivial-claim farming
 
@@ -25,6 +30,28 @@ Everything else from F is kept verbatim.  Locked reward, copy-trade immunity, wh
 ![trivial](charts/g_01_trivial.png)
 
 **Reading.** Under F, a creator posting an obvious-YES claim earns ~9 rep for free.  Under G, they earn 0 unless they personally vote.  Trivial-farming attack closed.
+
+## Scenario 1b — "everyone YES, everyone wins from the pool"
+
+The trivial-claim mint problem.  30 voters all bet YES, YES wins.  How much rep does the system mint out of thin air per claim?
+
+| Model | Mean mint per claim | Total mint over 100 trials | Refund rate |
+|---|---|---|---|
+| F | **+142.97 rep** | +14297 rep | 0% |
+| G | +0.00 rep | +0 rep | **100%** |
+
+![mint](charts/g_04_mint.png)
+
+**Reading.** Under F, every one-sided claim mints rep equal to ~143 per claim (14297 over 100 trials).  Under G the refund-on-extreme rule triggers — every voter gets their stake back, system mint is zero.  Trivial claims become no-ops.
+
+## Scenario 1c — refund rule doesn't break contested claims
+
+Sanity check: run 200 near-50/50 claims under G.  Refund rule should NOT fire.
+
+- Contested claims that resolved normally: **200** / 200
+- Contested claims that hit the extreme-price refund: 0
+
+**Reading.** 100% of contested claims resolve as expected; the refund rule only catches the genuinely one-sided ones.
 
 ## Scenario 2 — locked reward preserved
 
