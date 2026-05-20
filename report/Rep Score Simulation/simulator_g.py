@@ -244,7 +244,7 @@ def scenario_sybil_attack(n_trials: int = 500, n_sybils: int = 10,
             mF.buy(u, 'NO', 10.0)
         pF = mF.resolve('YES')
 
-        # G: zero-sum cap.
+        # G: refund-if-trivial applies at resolve time.
         mG = ModelG()
         for u in range(n_sybils):
             mG.buy(u, 'YES', 10.0)
@@ -541,23 +541,25 @@ def write_report(triv, locked, creator, mint, contested,
     A("\n![mint](charts/g_04_mint.png)\n")
     A("**Reading.** Under F, every one-sided claim mints rep equal to "
       f"~{mint['F_mean_mint']:.0f} per claim ({mint['F_total_mint']:.0f} "
-      f"over {mint['n_trials']} trials).  Under G the zero-sum cap "
-      "scales winners back to break-even — system mint is zero across "
-      "all claims, regardless of voter mix.\n")
+      f"over {mint['n_trials']} trials).  Under G, refund-if-trivial "
+      "fires (loser side has 0 voters, below MIN_LOSER_VOTERS=3) so all "
+      "stakes are refunded — system mint is zero across all claims, "
+      "regardless of voter mix.\n")
 
     # ----
     A("## Scenario 1c — contested claims still resolve\n")
     A(f"Sanity check: run {contested['contested_total']} near-50/50 "
-      "claims under G.  Cap should not significantly disturb payouts.\n")
+      "claims under G.  Refund-if-trivial should not fire on well-"
+      "contested claims.\n")
     A(f"- Contested claims that resolved normally: "
       f"**{contested['normal_resolutions']}** / "
       f"{contested['contested_total']}")
-    A(f"- Contested claims that net-zeroed (cap fired hard): "
+    A(f"- Contested claims that triggered trivial refund: "
       f"{contested['triggered_refunds']}\n")
     rate = contested['normal_resolutions'] / contested['contested_total']
     A(f"**Reading.** {rate*100:.0f}% of contested claims resolve "
-      "normally; the cap only adjusts payouts on claims where CPMM "
-      "would otherwise mint rep.\n")
+      "normally; refund-if-trivial only fires when both sides are too "
+      "small, not on well-contested claims.\n")
 
     # ----
     A("## Scenario 2 — locked reward preserved\n")
@@ -599,8 +601,8 @@ def write_report(triv, locked, creator, mint, contested,
     A("## Sybil attack — influencer + sock puppets\n")
     A("An influencer creates a trivial claim and votes YES on 10 sock-"
       "puppet accounts.  Test with 0, 1, and 5 honest NO voters.  We "
-      "want to confirm: **G's zero-sum cap prevents minting rep, even "
-      "when the attacker controls the entire YES side.**\n")
+      "want to confirm: **G's refund-if-trivial prevents minting rep "
+      "when there are too few dissenters.**\n")
     if sybil_alone:
         A("| Setup | F mint/claim | G mint/claim | F attacker net | "
           "G attacker net | G honest dissenter net |")
@@ -618,9 +620,9 @@ def write_report(triv, locked, creator, mint, contested,
         A(f"- System mint per claim is **{sybil_alone['G_mean_mint']:.2f} "
           "rep**.  No new rep enters the system from a sybil attack.")
         A(f"- With 0 honest dissenters, attacker profit per claim = "
-          f"**{sybil_alone['G_mean_attacker_profit']:.2f} rep** — the cap "
-          "pulls winners back to break-even because there's no loser pool "
-          "to feed them.")
+          f"**{sybil_alone['G_mean_attacker_profit']:.2f} rep** — "
+          "refund-if-trivial fires (0 loser voters < MIN_LOSER_VOTERS=3) "
+          "so all stakes are refunded.")
         A(f"- With 1 honest dissenter, attacker gains "
           f"**{sybil_vs_one['G_mean_attacker_profit']:.2f} rep** in total — "
           "exactly the dissenter's 10 rep, transferred but not minted.")

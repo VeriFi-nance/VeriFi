@@ -15,13 +15,14 @@ Numbering kept consistent with the [v1 wiki page](https://github.com/ArdaSaygan/
 | **C** | Split-the-pot (parimutuel) | v1 wiki — currently implemented | ⚠ has the late-adoption and copy-trade problems |
 | **D** | Late-adoption variant of C | Arda's `notes.md` on `rep_score_simulator` | ✅ fixes the late-loss problem but not the copy-trade dilution |
 | **E** | Stock-market-style (CPMM) | This branch — new proposal | ✅ fixes both problems; reward is locked when you bet |
-| **F** | E + daily energy token | This branch — final pick for v2 | ✅ E plus a daily activity cap so the leaderboard stays competitive |
+| **F** | E + daily energy token | This branch | ✅ E plus a daily activity cap so the leaderboard stays competitive |
+| **G** | F + creator-funded pool + trivial refund | This branch — **actual final pick** | ✅ closes trivial-claim farming; creator funds the pool depth they want |
 
-This report focuses on C, D, E, and F. A and B were dropped before implementation — see the v1 wiki for the original reasoning.
+This report focuses on C, D, E, and F. A and B were dropped before implementation — see the v1 wiki for the original reasoning. **Model G is the final recommendation** — see `model_g_report.md` for full analysis.
 
 ## In one paragraph
 
-We compared **Model C** (the current split-the-pot system), **Model D** (Arda's late-adoption fix), and **Model E** (a stock-market-style payout). Model C punishes people who join late even when they're right, and lets piggybackers steal the original predictor's reward. Model E fixes both — your reward is locked the moment you click Buy. v2 keeps the existing rules **fixed 10-rep stake, 1 bet per user per claim**, so whales literally cannot exist. We add a **daily energy token** to stop the leaderboard from running away from new users — combined system is **Model F**. **Final pick: Model F = Model E (CPMM) + fixed 10-rep stake + 1-position rule + daily energy token.**
+We compared **Model C** (the current split-the-pot system), **Model D** (Arda's late-adoption fix), and **Model E** (a stock-market-style payout). Model C punishes people who join late even when they're right, and lets piggybackers steal the original predictor's reward. Model E fixes both — your reward is locked the moment you click Buy. v2 keeps the existing rules **fixed 10-rep stake, 1 bet per user per claim**, so whales literally cannot exist. We add a **daily energy token** to stop the leaderboard from running away from new users (Model F). We then harden the system further with **Model G**: the creator funds the pool depth at claim creation (picking X rep in [10, 100]) and the system refunds all stakes if a claim is trivially one-sided (<3 distinct dissenters or <5 total stakers). **Final pick: Model G = Model F + creator-funded pool seed + refund-if-trivial.**
 
 ## What each payout model does (plain words)
 
@@ -143,54 +144,67 @@ All four assume v2 hard rules: fixed 10-rep stake, 1 bet per user per claim, 1 e
 
 A: arbitrary per-asset accuracy formula. B: rep + token but with token gating *staking* (rejected as redundant). v1 wiki has the original A/B reasoning.
 
-## Final recommendation — adopt Model F
+## Final recommendation — adopt Model G
 
-Model F = Model E (CPMM payouts) + the v1 spec's hard rules + a daily energy token.
+Model G = Model F + creator-funded pool seed + refund-if-trivial.  See `model_g_report.md` for the full simulation analysis.
 
-**1. Replace Model C (split-the-pot) with Model E (stock-market-style).**
+**1. Replace Model C (split-the-pot) with Model E (stock-market-style CPMM).**
 
-- Each claim starts with two virtual pools of 100 shares each (Y₀ = N₀ = 100). Initial price = 50/50.
-- Each bet is **fixed 10 rep**, **1 bet per user per claim**, **1 energy per bet**. These v1 rules already make whales impossible — no per-claim cap needed.
+- Each claim's pool is funded by the creator (see point 2 below). Initial price = 50/50.
+- Each bet is **fixed 10 rep**, **1 bet per user per claim**, **1 energy per bet**. These rules make whales impossible.
 - Buying YES with 10 rep gives you `10 + (Y+10)·10/(N+20)` YES shares.
 - Each share pays 1 rep if your side wins, 0 if not. **Reward locked at buy time.**
-- House (admin reserve) covers up to ~100 rep of subsidy per claim. Cap total open claims to bound the platform's exposure.
 
-**2. Add a daily energy token (this is what makes Model F different from E).**
+**2. Creator funds the pool depth at claim creation (this is what G adds over F).**
 
-- Every user gets 3 energy at midnight. Maximum balance = 4 (so saving up beyond 1 day is impossible).
+- Creator picks X rep in [10, 100] and a starting side (YES or NO).
+- X is deposited as X locked shares on the chosen side; system mirrors X as virtual liquidity on the opposite side. Pool starts Y = N = X.
+- Creator also pays a **2-rep listing fee**, burned permanently (spam deterrent).
+- Smaller X = thinner pool, less mint capacity, bigger price impact per stake. Larger X = deeper pool, smoother trading, higher mint cap. Creator picks the trade-off based on how contested they expect the claim to be.
+
+**3. Refund-if-trivial.**
+
+- At resolution, if the losing side has fewer than 3 distinct voters OR the claim attracted fewer than 5 stakers total, every stake is refunded in full.
+- Trivial refund prevents one-sided "farming" claims from minting rep.
+
+**4. Add a daily energy token (from Model F).**
+
+- Every user gets 3 energy at midnight. Maximum balance = 4 (saving beyond 1 day is impossible).
 - Betting on a claim costs 1 energy. Creating a claim costs 2.
 - Energy is not tradeable, not refundable, not buyable.
 - Effect: even the most active user can place ~3 bets/day. New users always have the same daily allowance as veterans.
 
-**3. Stop new accounts from sybil-farming the energy.**
+**5. Stop new accounts from sybil-farming the energy.**
 
 - First 7 days: only 1 ENERGY per day instead of 3.
 - Email or Discord verification required to graduate to full daily grant.
-- Optional: 5-rep deposit to create a claim, refunded if claim resolves cleanly.
 
-**4. What this changes in the wiki/code.**
+**6. What this changes in the wiki/code.**
 
 - Drop Model C's `weight = 1/entry_price` formula entirely.
-- Replace `distribute_pool()` with `redeem_shares()` (1 rep per winning share).
+- Replace `distribute_pool()` with `redeem_shares()` (1 rep per winning share) + refund path.
 - Add `Position` model (replaces `ClaimStake`): `shares` field locked at bet time.
+- Add `Claim.pool_seed` (X), `Claim.creator_side`, `Claim.listing_fee_burned` fields.
 - Add `energy`, `energy_cap`, `last_grant` fields to `WalletUser`.
 - Profile UI shows: rep, accuracy %, energy / cap.
-- Claim card shows: live YES/NO price, *your locked payout if correct*.
+- Claim card shows: live YES/NO price, *your locked payout if correct*, pool depth.
 
-**5. Things we're keeping from the original spec.**
+**7. Things we're keeping from the original spec.**
 
-- Fixed 10-rep buy-in (familiar UX). Variable amounts can be a v2.1 toggle.
-- Creator auto-stakes YES at claim creation.
+- Fixed 10-rep buy-in per trader (familiar UX). Variable amounts can be a v2.1 toggle.
 - One position per user per claim, no exit before resolution.
+- Creator no longer auto-stakes on YES — they pick side manually with their pool seed.
 
 ## Numbers in a nutshell
 
 - Going from Model C to E cuts "right-but-lost" cases from **46% to 0%**.
 - Going from C to E cuts copy-trade dilution from **96% to 0%**.
 - Going from E to F (adding the energy token) compresses the leaderboard spread by **~34%** (Gini 0.64 → 0.42).
+- Going from F to G cuts 180-day inflation drift from **+425% to +102%** (typical mix), and closes the trivial-claim farming attack.
 
 ## Things still to decide
 
 - Public name of the energy token. Options: `Charge`, `Insight`, `Spark`, `Pulse`.
-- Whether profile shows raw rep or a derived "truth score" (e.g. accuracy ×log(rep)).
-- Cap on number of simultaneously open claims to bound house subsidy.
+- Whether profile shows raw rep or a derived "truth score" (e.g. accuracy × log(rep)).
+- Default pool seed X for new creators (suggest X=10 as conservative start).
+- Cap on number of simultaneously open claims to bound platform's listing-fee revenue.

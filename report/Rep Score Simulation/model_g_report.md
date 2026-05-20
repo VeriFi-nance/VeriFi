@@ -43,16 +43,16 @@ The trivial-claim mint problem.  30 voters all bet YES, YES wins.  How much rep 
 
 ![mint](charts/g_04_mint.png)
 
-**Reading.** Under F, every one-sided claim mints rep equal to ~143 per claim (14297 over 100 trials).  Under G the zero-sum cap scales winners back to break-even — system mint is zero across all claims, regardless of voter mix.
+**Reading.** Under F, every one-sided claim mints rep equal to ~143 per claim (14297 over 100 trials).  Under G, refund-if-trivial fires (loser side has 0 voters, below MIN_LOSER_VOTERS=3) so all stakes are refunded — system mint is zero across all claims, regardless of voter mix.
 
 ## Scenario 1c — contested claims still resolve
 
-Sanity check: run 200 near-50/50 claims under G.  Cap should not significantly disturb payouts.
+Sanity check: run 200 near-50/50 claims under G.  Refund-if-trivial should not fire on well-contested claims.
 
 - Contested claims that resolved normally: **200** / 200
-- Contested claims that net-zeroed (cap fired hard): 0
+- Contested claims that triggered trivial refund: 0
 
-**Reading.** 100% of contested claims resolve normally; the cap only adjusts payouts on claims where CPMM would otherwise mint rep.
+**Reading.** 100% of contested claims resolve normally; refund-if-trivial only fires when both sides are too small, not on well-contested claims.
 
 ## Scenario 2 — locked reward preserved
 
@@ -84,7 +84,7 @@ Creator with skill 0.65 (better than random) posts claims.  Under F, they get au
 
 ## Sybil attack — influencer + sock puppets
 
-An influencer creates a trivial claim and votes YES on 10 sock-puppet accounts.  Test with 0, 1, and 5 honest NO voters.  We want to confirm: **G's zero-sum cap prevents minting rep, even when the attacker controls the entire YES side.**
+An influencer creates a trivial claim and votes YES on 10 sock-puppet accounts.  Test with 0, 1, and 5 honest NO voters.  We want to confirm: **G's refund-if-trivial prevents minting rep when there are too few dissenters.**
 
 | Setup | F mint/claim | G mint/claim | F attacker net | G attacker net | G honest dissenter net |
 |---|---|---|---|---|---|
@@ -94,7 +94,7 @@ An influencer creates a trivial claim and votes YES on 10 sock-puppet accounts. 
 
 **Reading.** Under G:
 - System mint per claim is **0.00 rep**.  No new rep enters the system from a sybil attack.
-- With 0 honest dissenters, attacker profit per claim = **0.00 rep** — the cap pulls winners back to break-even because there's no loser pool to feed them.
+- With 0 honest dissenters, attacker profit per claim = **0.00 rep** — refund-if-trivial fires (0 loser voters < MIN_LOSER_VOTERS=3) so all stakes are refunded.
 - With 1 honest dissenter, attacker gains **0.00 rep** in total — exactly the dissenter's 10 rep, transferred but not minted.
 - Attacker profit is bounded by **honest participation only**.  If nobody honest dissents, attack yields 0 rep.
 
