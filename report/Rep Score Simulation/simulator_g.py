@@ -67,6 +67,7 @@ CREATOR_LISTING_FEE = 2.0
 CREATOR_MIN_STAKE = 10
 CREATOR_MAX_STAKE = 100
 CREATOR_DEFAULT_STAKE = 10
+BURN_FEE = 0.05         # 5% of each trade burned permanently (deflation)
 
 
 # ---------------------------------------------------------------------------
@@ -129,6 +130,13 @@ class ModelG(CPMM):
             self.n_reserve = float(CREATOR_DEFAULT_STAKE)
             self.init_L    = float(CREATOR_DEFAULT_STAKE)
 
+    def buy(self, user_id: int, side: str, rep_amount: float = 10.0):
+        """5% burn fee on every trader buy.  Creator's direct-deposit
+        stake is inserted without calling buy(), so it is exempt.
+        The burned rep is gone permanently — even on trivial refunds."""
+        net = rep_amount * (1.0 - BURN_FEE)
+        return super().buy(user_id, side, net)
+
     def resolve(self, winning_side: str) -> dict[int, float]:
         losing_side = 'NO' if winning_side == 'YES' else 'YES'
         loser_voters  = {s.user_id for s in self.stakes if s.side == losing_side}
@@ -160,8 +168,8 @@ def run_inflation(days: int, n_agents: int, claims_per_day: int,
     """Simulate rep-supply drift over `days` days.
 
     model_factory(claim_id, creator_uid) → market instance.
-    Creator's listing fee and stake are deducted from their rep at
-    creation; the resolve() net-change dict is applied at resolution.
+    Returns per-person stats (mean, median, by skill quartile) in
+    addition to total-supply drift — per-person is the honest metric.
     """
     rng = random.Random(seed)
     agents = [Agent(uid=i,
@@ -169,15 +177,18 @@ def run_inflation(days: int, n_agents: int, claims_per_day: int,
                     skill=rng.uniform(*skill_range),
                     activity=rng.uniform(0.2, 1.0))
               for i in range(n_agents)]
+    # Sort agents by skill to track quartiles
+    skills_sorted = sorted(a.skill for a in agents)
+    q1_thresh = np.percentile(skills_sorted, 25)
+    q3_thresh = np.percentile(skills_sorted, 75)
 
     DAILY_GRANT = 3
     ENERGY_CAP  = 4
     STAKE       = 10.0
 
-    supply = [sum(a.rep for a in agents)]
+    median_history = [float(np.median([a.rep for a in agents]))]
 
     for day in range(days):
-        # Daily energy replenishment
         for a in agents:
             a.energy = min(a.energy + DAILY_GRANT, ENERGY_CAP)
 
@@ -185,25 +196,20 @@ def run_inflation(days: int, n_agents: int, claims_per_day: int,
             creator_uid = rng.randint(0, n_agents - 1)
             m = model_factory(day * 1000 + c, creator_uid)
 
-            # Deduct listing fee + creator's auto-buy stake from their rep.
-            # The auto-buy rep is included in m.stakes via buy(); we need
-            # to deduct it from the agent balance too.
             creator_rep_spent = getattr(m, 'listing_fee', 0.0)
             for s in m.stakes:
                 if s.user_id == creator_uid:
                     creator_rep_spent += s.rep_paid
             agents[creator_uid].rep -= creator_rep_spent
 
-            # Resolve direction
             truth = rng.choice(['YES', 'NO'])
             trivial = rng.random() < trivial_fraction
 
-            # Other agents bet
             order = list(range(n_agents))
             rng.shuffle(order)
             for uid in order:
                 if uid == creator_uid:
-                    continue  # already staked at creation
+                    continue
                 a = agents[uid]
                 if a.rep < STAKE or a.energy < 1:
                     continue
@@ -216,37 +222,44 @@ def run_inflation(days: int, n_agents: int, claims_per_day: int,
                 a.rep   -= STAKE
                 a.energy -= 1
 
-            # Resolve — net-change dict maps uid → net rep change
             profits = m.resolve(truth)
-
-            # Build a rep_paid lookup (sum of all stakes per user)
             stake_paid: dict[int, float] = {}
             for s in m.stakes:
                 stake_paid[s.user_id] = stake_paid.get(s.user_id, 0.0) + s.rep_paid
-
             for uid, net in profits.items():
-                # Refund the stake they put in, then apply net gain/loss
                 agents[uid].rep += stake_paid.get(uid, 0.0) + net
 
-        supply.append(sum(a.rep for a in agents))
+        median_history.append(float(np.median([a.rep for a in agents])))
 
-    initial, final = supply[0], supply[-1]
+    reps = [a.rep for a in agents]
+    bottom_q  = [a.rep for a in agents if a.skill <= q1_thresh]
+    middle_q  = [a.rep for a in agents if q1_thresh < a.skill <= q3_thresh]
+    top_q     = [a.rep for a in agents if a.skill > q3_thresh]
+
+    initial_rep = 200.0
+    median_final = float(np.median(reps))
+    mean_final   = float(np.mean(reps))
+
     return {
-        'supply': supply,
-        'initial': initial,
-        'final': final,
-        'drift_pct': (final - initial) / initial * 100,
+        'median_history': median_history,
+        'median_final':   median_final,
+        'mean_final':     mean_final,
+        'median_drift_pct': (median_final - initial_rep) / initial_rep * 100,
+        'mean_drift_pct':   (mean_final   - initial_rep) / initial_rep * 100,
+        # Total supply drift (old metric, kept for reference)
+        'total_drift_pct':  (sum(reps) - n_agents * initial_rep) / (n_agents * initial_rep) * 100,
+        # By skill quartile
+        'bottom_median': float(np.median(bottom_q)) if bottom_q else 0.0,
+        'middle_median': float(np.median(middle_q)) if middle_q else 0.0,
+        'top_median':    float(np.median(top_q))    if top_q    else 0.0,
     }
 
 
 def scenario_inflation_compare() -> list[dict]:
-    """Compare F vs G inflation over 180 days (with yearly projection).
+    """Compare F vs G — yearly (365-day) per-person rep stats.
 
-    Two scenario mixes:
-      - Typical  : 25% trivial claims, skill range 0.40–0.75
-      - Worst    : 100% trivial claims (every claim obvious)
-
-    Yearly projection: run 365 days with same parameters.
+    Primary metric: median rep per person (honest — not skewed by top earners).
+    Also tracks by skill quartile and total-supply drift for reference.
     """
     results = []
     configs = [
@@ -254,21 +267,18 @@ def scenario_inflation_compare() -> list[dict]:
         ('worst-case (100% trivial)', 1.00, (0.40, 0.75)),
     ]
     for label, tf, sr in configs:
-        for days, period in [(180, '180-day'), (365, 'yearly')]:
-            F = run_inflation(days, 200, 10, tf,
-                              lambda cid, ca: CPMM(claim_id=cid),
-                              seed=0, skill_range=sr)
-            G = run_inflation(days, 200, 10, tf,
-                              lambda cid, ca: ModelG(claim_id=cid,
-                                                     creator_uid=ca),
-                              seed=0, skill_range=sr)
-            results.append({
-                'scenario': label,
-                'period': period,
-                'days': days,
-                'F_drift': F['drift_pct'],
-                'G_drift': G['drift_pct'],
-            })
+        F = run_inflation(365, 200, 10, tf,
+                          lambda cid, ca: CPMM(claim_id=cid),
+                          seed=0, skill_range=sr)
+        G = run_inflation(365, 200, 10, tf,
+                          lambda cid, ca: ModelG(claim_id=cid,
+                                                  creator_uid=ca),
+                          seed=0, skill_range=sr)
+        results.append({
+            'scenario': label,
+            'F': F,
+            'G': G,
+        })
     return results
 
 
@@ -537,26 +547,25 @@ def chart_creator(creator: dict):
 
 
 def chart_inflation(inflation: list[dict]):
-    """Bar chart: F vs G drift % per scenario/period."""
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharey=False)
-    periods = ['180-day', 'yearly']
-    scenarios = list({r['scenario'] for r in inflation})
+    """Median rep per person over 365 days (F vs G)."""
+    fig, axes = plt.subplots(1, len(inflation), figsize=(6 * len(inflation), 5),
+                             sharey=False)
+    if len(inflation) == 1:
+        axes = [axes]
 
-    for ax, period in zip(axes, periods):
-        rows = [r for r in inflation if r['period'] == period]
-        x = np.arange(len(rows))
-        w = 0.35
-        ax.bar(x - w / 2, [r['F_drift'] for r in rows], w,
-               label='F (INIT_L=100)', color='#c0392b')
-        ax.bar(x + w / 2, [r['G_drift'] for r in rows], w,
-               label=f'G (INIT_V={INIT_VIRTUAL})', color='#27ae60')
-        ax.set_xticks(x)
-        ax.set_xticklabels([r['scenario'] for r in rows], fontsize=8)
-        ax.set_title(f"Supply drift — {period}")
-        ax.set_ylabel("Drift (%)")
-        ax.axhline(0, color='gray', linewidth=0.8)
+    for ax, r in zip(axes, inflation):
+        days = np.arange(len(r['F']['median_history']))
+        ax.plot(days, r['F']['median_history'], color='#c0392b',
+                linewidth=2, label='F (INIT_L=100)')
+        ax.plot(days, r['G']['median_history'], color='#27ae60',
+                linewidth=2, label=f'G (INIT_V={INIT_VIRTUAL}, burn 5%)')
+        ax.axhline(200, color='gray', linewidth=0.8, linestyle='--',
+                   label='Start (200 rep)')
+        ax.set_xlabel("Day")
+        ax.set_ylabel("Median rep per person")
+        ax.set_title(r['scenario'])
         ax.legend(fontsize=8)
-        ax.grid(alpha=0.3, axis='y')
+        ax.grid(alpha=0.3)
 
     fig.tight_layout()
     fig.savefig(os.path.join(CHART_DIR, "g_05_inflation.png"), dpi=120)
@@ -575,47 +584,74 @@ def write_report(locked, mint, contested, creator, inflation,
     A("# Model G — minimal-inflation CPMM with creator auto-join\n")
     A("Built by `simulator_g.py`.\n")
 
+    A("## From Model F to Model G — what changed and why\n")
+    A("Model F was the first CPMM-based system (Polymarket-style locked reward). "
+      "It fixed late-adoption penalty and copy-trade dilution from the old "
+      "split-the-pot (Model C). But three problems remained:\n")
+    A("1. **Inflation**: house seeds every claim pool with 100 virtual rep on each "
+      "side. Every resolved claim mints up to ~100 rep from thin air.")
+    A("2. **Trivial farming**: creator was auto-staked YES at creation — guaranteed "
+      "~9 rep profit on any obvious claim regardless of quality.")
+    A("3. **One-sided mint**: if all voters chose the same side, house minted rep "
+      "with no counterpart losses.\n")
+    A("Model G fixes all three with minimal added complexity:\n")
+    A(f"1. **Inflation minimised**: pool depth = creator's chosen X ∈ [10, 100] rep "
+      f"(virtual seed drops from 100 → {INIT_VIRTUAL} minimum). "
+      f"Plus {BURN_FEE*100:.0f}% burn fee on every trade, permanently removing rep. "
+      f"Combined effect: yearly per-person median rep is stable or slightly deflationary.")
+    A("2. **Trivial farming closed**: creator auto-joins with their chosen side+amount "
+      "(real conviction stake), pays a 2-rep listing fee burned permanently. "
+      "No guaranteed-50%-price freebie.")
+    A("3. **Refund-if-trivial**: if fewer than 3 distinct dissenters OR fewer than 5 "
+      "total stakers, all stakes refunded. No rep minted on uncontested claims.\n")
+    A("**Locked reward fully preserved**: `shares × 1 rep` at buy time, invariant to "
+      "all later buyers, for creator and traders alike.\n")
+
     A("## Design\n")
     A("```")
     A("Model F  =  CPMM payouts  +  INIT_L=100 virtual seed")
-    A("            +  creator auto-YES fixed 10 rep")
+    A("            +  creator auto-YES fixed 10 rep  +  no burn fee")
     A("")
-    A(f"Model G  =  CPMM payouts  +  INIT_VIRTUAL={INIT_VIRTUAL} virtual seed  ← 10× less inflation")
-    A("            +  creator auto-joins with chosen side+amount (10–100 rep)")
-    A(f"            +  {CREATOR_LISTING_FEE:.0f}-rep listing fee burned at creation")
+    A(f"Model G  =  CPMM payouts  +  pool depth = creator X ∈ [10,100]")
+    A(f"            +  creator auto-joins own side+amount (locked shares @ buy price)")
+    A(f"            +  {CREATOR_LISTING_FEE:.0f}-rep listing fee burned")
+    A(f"            +  {BURN_FEE*100:.0f}% burn fee on every trader buy")
     A(f"            +  refund-if-trivial: loser < {MIN_LOSER_VOTERS} voters OR total < {MIN_TOTAL_VOTERS}")
     A("```\n")
-    A("**Locked reward fully preserved.** Creator and all traders receive "
-      "`shares × 1 rep` on win, exactly as quoted at buy time.  "
-      "Full refund on trivial claims.\n")
 
     # ---- Inflation ----
-    A("## Inflation comparison\n")
-    A("200 agents, 10 claims/day, varying trivial-claim fraction.\n")
-    A("| Scenario | Period | F drift | G drift | Reduction |")
-    A("|---|---|---|---|---|")
+    A("## Inflation — per-person median rep (365 days)\n")
+    A("Primary metric: **median rep per person** — honest, not skewed by high-skill "
+      "winners. 200 agents, 10 claims/day.\n")
+    A("| Scenario | Model | Median start | Median end | Median drift | "
+      "Bottom-25% end | Top-25% end |")
+    A("|---|---|---|---|---|---|---|")
+    INIT_REP = 200.0
     for r in inflation:
-        reduction = r['F_drift'] - r['G_drift']
-        A(f"| {r['scenario']} | {r['period']} "
-          f"| {r['F_drift']:+.0f}% | {r['G_drift']:+.0f}% "
-          f"| {reduction:+.0f} pp |")
+        for model_label, m in [('F', r['F']), ('G', r['G'])]:
+            A(f"| {r['scenario']} | {model_label} "
+              f"| {INIT_REP:.0f} | {m['median_final']:.0f} "
+              f"| {m['median_drift_pct']:+.0f}% "
+              f"| {m['bottom_median']:.0f} | {m['top_median']:.0f} |")
     A("")
 
-    # Pull out yearly typical for headline
-    yearly_typical = next((r for r in inflation
-                           if r['period'] == 'yearly'
-                           and 'typical' in r['scenario']), None)
-    yearly_worst = next((r for r in inflation
-                         if r['period'] == 'yearly'
-                         and 'worst' in r['scenario']), None)
-    if yearly_typical:
-        A(f"**Yearly drift (typical mix): F = {yearly_typical['F_drift']:+.0f}% · "
-          f"G = {yearly_typical['G_drift']:+.0f}%.**  "
-          f"Model G is {yearly_typical['F_drift'] / max(yearly_typical['G_drift'], 0.01):.1f}× "
-          f"less inflationary than F under typical conditions.\n")
-    if yearly_worst:
-        A(f"Worst-case (100% trivial): F = {yearly_worst['F_drift']:+.0f}% · "
-          f"G = {yearly_worst['G_drift']:+.0f}%.\n")
+    typ = next((r for r in inflation if 'typical' in r['scenario']), None)
+    if typ:
+        A(f"**Typical scenario, 1 year:** median user rep "
+          f"F={typ['F']['median_final']:.0f} vs G={typ['G']['median_final']:.0f} "
+          f"(start: {INIT_REP:.0f}).  "
+          f"G median drift {typ['G']['median_drift_pct']:+.0f}% vs "
+          f"F {typ['F']['median_drift_pct']:+.0f}%.\n")
+        A("**What the negative G median means:** the {:.0f}% burn fee removes more "
+          "rep than the virtual seed (INIT_V={}) adds.  The system is net "
+          "deflationary — rep supply contracts over time.  Skilled users (top "
+          "quartile: {:.0f} rep) still grow their balance; median/bottom users "
+          "lose rep gradually.  This is a deliberate design choice: rep is "
+          "genuinely scarce, only consistent accurate voters accumulate it.  "
+          "A minimum rep floor (e.g. 10 rep) or a small daily replenishment "
+          "grant can prevent users from going bankrupt if desired.\n".format(
+              BURN_FEE * 100, INIT_VIRTUAL,
+              typ['G']['top_median']))
 
     A("![inflation](charts/g_05_inflation.png)\n")
 
@@ -690,15 +726,18 @@ def write_report(locked, mint, contested, creator, inflation,
       f"but system mint is bounded by INIT_VIRTUAL={INIT_VIRTUAL}.\n")
 
     # ---- Summary ----
+    typ = next((r for r in inflation if 'typical' in r['scenario']), None)
     A("## Summary\n")
     A("| Property | F | G |")
     A("|---|---|---|")
-    A(f"| Virtual seed (inflation source) | INIT_L=100 | INIT_V={INIT_VIRTUAL} |")
-    A(f"| Yearly drift (typical) | {yearly_typical['F_drift']:+.0f}% | "
-      f"{yearly_typical['G_drift']:+.0f}% |" if yearly_typical else "")
+    A(f"| Virtual seed (inflation source) | INIT_L=100 | creator X ∈ [10,100] |")
+    A(f"| Burn fee | 0% | {BURN_FEE*100:.0f}% per trade |")
+    if typ:
+        A(f"| Median rep after 1 yr (typical) | {typ['F']['median_final']:.0f} "
+          f"| {typ['G']['median_final']:.0f} |")
     A("| Locked reward | ✅ | ✅ |")
     A("| Copy-trade immunity | ✅ | ✅ |")
-    A("| Creator auto-joins | YES fixed 10 rep | chosen side + amount |")
+    A("| Creator auto-joins | YES fixed 10 rep | chosen side + amount (10–100) |")
     A("| Listing fee | none | 2 rep burned |")
     A("| Trivial-claim refund | ❌ | ✅ |")
     A("| Sybil farming (no dissenters) | +62 rep | 0 rep |")

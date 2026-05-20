@@ -133,6 +133,7 @@
 <script>
     // --- SİSTEM DEĞİŞKENLERİ ---
     const STAKE = 10;
+    const G_BURN_FEE = 0.05;   // 5% of each trade burned in Model G
     let stakes = [];
     let yesCount = 0;
     let noCount = 0;
@@ -169,12 +170,11 @@
         return (yesCount + 1) / (yesCount + noCount + 2);
     }
 
-    // Sum of all rep currently inside the system.
+    // Sum of all rep currently inside the system (spent by users).
     function totalRepIn() {
         let total = stakes.reduce(
             (a, s) => a + (s.stakeAmount != null ? s.stakeAmount : STAKE), 0);
-        // G also has the burned listing fee in flight (not part of pool
-        // but spent from creator's balance)
+        // G also has the burned listing fee in flight
         if (payoutMode === 'g' && stakes.some(s => s.isCreator)) {
             total += G_LISTING_FEE;
         }
@@ -284,8 +284,10 @@
         let weight, shares = null;
 
         if (payoutMode === 'cpmm' || payoutMode === 'g') {
-            shares = cpmmBuy(side, STAKE);
-            weight = shares / STAKE;       // for display: shares per rep
+            // Model G applies 5% burn: only (1-BURN_FEE)×STAKE enters AMM
+            const effectiveStake = payoutMode === 'g' ? STAKE * (1 - G_BURN_FEE) : STAKE;
+            shares = cpmmBuy(side, effectiveStake);
+            weight = shares / STAKE;       // for display: shares per rep paid
         } else {
             weight = 1 / entryPrice;
         }
@@ -409,13 +411,13 @@
             `;
         } else if (payoutMode === 'g') {
             formulaDiv.innerHTML = `
-                <strong>Model G:</strong><br>
-                <strong>1. Yaratıcı havuzu fonlar:</strong> Açılışta X rep (10-100 arası) seçer ve kendi tarafına direkt ekler. Sistem X'i karşı tarafa mirror'lar. Pool Y=N=X ile başlar. Yaratıcı X share alır, 50% giriş fiyatında kilitli.<br>
-                <strong>2. Listing fee:</strong> 2 rep claim açılışında yakılır.<br>
-                <strong>3. Trivial iadesi:</strong> Kaybeden tarafta &lt; 3 oy <em>VEYA</em> toplam &lt; 5 oy → tüm stake iadesi.<br>
-                <strong>Trader payoutu:</strong> shares × 1 Rep (kilitli, alım anında belirlenir). Trivial sayılırsa tam iade.<br>
-                <strong>Mint kapasitesi:</strong> claim başına X ile sınırlı (F'de sabit 100). Küçük X → az mint, ince havuz; büyük X → fazla mint, derin havuz.<br>
-                <strong>Sim sonucu:</strong> Yıllık enflasyon — F +878%, G +256% (tipik %25 trivial mix). 3.4× daha az şişirme. Trivial-farming attack 0 rep (refund). Listing fee -2 rep (yakılır).
+                <strong>Model G — Final Design:</strong><br>
+                <strong>1. Yaratıcı havuzu fonlar:</strong> X rep (10-100) seçer, kendi tarafına direkt koyar. Sistem X'i karşı tarafa mirror (sanal). Pool Y=N=X başlar. Yaratıcı X share alır, 50% giriş fiyatında kilitli.<br>
+                <strong>2. Listing fee:</strong> 2 rep açılışta yakılır (spam önlemi).<br>
+                <strong>3. Burn fee:</strong> Her trade'de %5 yakılır. Örnek: 10 rep bahis → 0.5 rep yakılır, 9.5 rep AMM'e girer.<br>
+                <strong>4. Trivial iadesi:</strong> Kaybeden &lt; 3 oy <em>VEYA</em> toplam &lt; 5 oy → tüm stake iadesi (burn korunur).<br>
+                <strong>Trader payoutu:</strong> shares × 1 Rep (kilitli, alım anında belirlenir).<br>
+                <strong>Enflasyon etkisi:</strong> Burn fee, sanal seed'in yarattığı enflasyonu aşar → sistem net deflationary. Yetenekli kullanıcılar (top %25) rep kazanır; median kullanıcı yavaşça rep kaybeder. Rep gerçekten kıt ve değerlidir.
             `;
         } else {
             formulaDiv.innerHTML = `
@@ -467,18 +469,24 @@
                     noProfit = STAKE * yesCount * (s.weight / noTotalWeight);
                 }
             } else if (payoutMode === 'cpmm' || payoutMode === 'g') {
-                // Both F and G use locked CPMM payouts.
-                // Each stake's rep amount: STAKE for regular voters,
-                // s.stakeAmount for the creator's auto-stake under G.
+                // Both F and G: locked CPMM payouts.
+                // myStake = what user actually paid out of their balance (always STAKE=10
+                // for traders; creator's stakeAmount for the seeded position).
+                // In G, 5% burn means only 9.5 rep entered AMM → fewer shares,
+                // but user is still charged the full STAKE.
                 const myStake = s.stakeAmount != null ? s.stakeAmount : STAKE;
                 const trivialYes = (payoutMode === 'g') && gIsTrivial('YES');
                 const trivialNo  = (payoutMode === 'g') && gIsTrivial('NO');
+                // On trivial refund, user gets back the AMM portion (burn lost).
+                // Net change ≈ -burn_fee for G traders (0 for creator who bypasses burn).
+                const gBurnLoss = (payoutMode === 'g' && s.stakeAmount == null)
+                    ? myStake * G_BURN_FEE : 0;
                 if (s.side === 'YES') {
-                    yesProfit = trivialYes ? 0 : (s.shares - myStake);
-                    noProfit  = trivialNo  ? 0 : -myStake;
+                    yesProfit = trivialYes ? -gBurnLoss : (s.shares - myStake);
+                    noProfit  = trivialNo  ? -gBurnLoss : -myStake;
                 } else {
-                    noProfit  = trivialNo  ? 0 : (s.shares - myStake);
-                    yesProfit = trivialYes ? 0 : -myStake;
+                    noProfit  = trivialNo  ? -gBurnLoss : (s.shares - myStake);
+                    yesProfit = trivialYes ? -gBurnLoss : -myStake;
                 }
             }
 
