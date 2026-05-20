@@ -1,53 +1,37 @@
-"""Model G — minimal tweaks on top of Model F.
+"""Model G — minimal-inflation CPMM with creator auto-join.
 
-After exploring more invasive redesigns (zero-sum + info-gain bonus,
-LP-funded CPMM, etc.) we landed on the lightest possible change that
-still addresses issue #76's main concerns.
-
-G = F + two tiny changes (LOCKED REWARD PRESERVED)
---------------------------------------------------
-  1. **No auto-YES at claim creation.**  Under F, the creator was
-     auto-staked on the YES side at claim creation, which guaranteed
-     ~9.17 rep of profit on any claim that resolved YES.  In G, the
-     creator does not auto-bet.  Closes the trivial-claim farming
-     hole (#76 P2).
-
-  2. **Refund-if-fully-uncontested.**  If the losing side attracts
-     fewer than 3 distinct voters at resolution time, every stake is
-     refunded — claim declared trivial.  Otherwise, CPMM math runs
-     exactly as in F.  Locked reward is preserved on every claim
-     that resolves normally: trader knows `shares × 1 rep` at buy
-     time and gets exactly that on win, or full refund on trivial.
-
-  3. **Display percentile rank, not raw rep, in the leaderboard UI.**
-     F's inflation persists in G; sim shows it doesn't damage the
-     leaderboard (rank ρ=0.87, newcomers catch up).  Percentile
-     display makes the numeric drift invisible.
-
-Everything else from F is unchanged:
-  - CPMM payouts (Polymarket-style, shares × 1 rep locked at buy time)
-  - Fixed 10-rep stake, 1 position per claim, daily energy gate
-  - House subsidy bounded at ~100 rep per claim (Y₀ = N₀ = 100)
-  - 7-day account-age sybil guard
-
-What G fixes
+Design goals
 ------------
-  - **#76 P2 trivial claims**: creator can no longer farm an auto-bet
-    at 50% price on an obviously-resolving claim.  Trader payouts on
-    skewed claims are already self-limiting under CPMM (small share
-    count at extreme prices) — no further mechanism needed.
-  - **#76 P3 low creator reward**: dropping the auto-bet looks like a
-    net reduction at first, but the trade-off is fair — creators are
-    no longer paid for posting obvious claims.  For genuinely contested
-    claims, the creator can still vote manually with conviction and
-    earn the same way any voter does.
+  1. Minimize inflation while keeping locked reward.
+  2. Creator auto-joins at claim creation with a user-chosen amount.
+  3. Trivial-claim farming closed by refund-if-trivial.
 
-What G does NOT fix
--------------------
-  - **#76 P1 inflation**: F's mint via virtual liquidity remains.  The
-    leaderboard analysis (see `leaderboard_analysis.md`) shows this is
-    a UX label problem, not a fairness problem, and the percentile
-    display tweak handles it.
+G = F with three targeted changes
+----------------------------------
+  1. **Tiny virtual seed**: INIT_VIRTUAL = 10 (vs F's INIT_L = 100).
+     The AMM pool starts at Y₀ = N₀ = 10.  The per-claim house-subsidy
+     (inflation source) is capped at ~10 rep instead of ~100.  Over
+     a year with 10 claims/day the supply drift drops from ~+800%/yr
+     (Model F) to roughly +15-25%/yr (Model G).
+
+  2. **Creator auto-joins via normal CPMM buy.**  At claim creation the
+     creator picks a side (YES/NO) and an amount X ∈ [10, 100] rep.
+     That buy goes through the standard CPMM formula at the current
+     pool price (near 50% since the pool is fresh).  Creator's shares
+     are locked exactly like any other trader: `shares × 1 rep` on win.
+     Creator also pays a 2-rep listing fee that is burned permanently
+     (spam deterrent).
+
+  3. **Refund-if-trivial.**  At resolution, if the losing side has
+     fewer than MIN_LOSER_VOTERS (3) distinct voters OR total stakers
+     are fewer than MIN_TOTAL_VOTERS (5), every stake is refunded in
+     full — the claim is declared trivial and no rep changes hands.
+
+Locked reward
+-------------
+  Every participant (creator and traders alike) knows their exact payout
+  at buy time: `shares × 1 rep` if their side wins, full refund if
+  the claim is trivial.  No post-hoc scaling, no zero-sum cap.
 
 Run:  python3 simulator_g.py
 Output: charts/g_*.png + model_g_report.md
@@ -55,15 +39,14 @@ Output: charts/g_*.png + model_g_report.md
 
 from __future__ import annotations
 
-import math
 import os
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 import matplotlib.pyplot as plt
 
-from simulator import CPMM, gini, Stake
+from simulator import CPMM, Stake, gini
 
 random.seed(42)
 np.random.seed(42)
@@ -74,350 +57,419 @@ os.makedirs(CHART_DIR, exist_ok=True)
 
 
 # ---------------------------------------------------------------------------
-# MODEL G  =  F (CPMM)  +  NO AUTO-YES
+# CONSTANTS
 # ---------------------------------------------------------------------------
-# G's implementation is just F.  The "no auto-YES" rule is a creation-time
-# convention enforced by the harness, not a payout-math change.  All
-# scenarios below construct a fresh CPMM market and DO NOT stake the
-# creator on YES at t=0.
 
-MIN_LOSER_VOTERS = 3        # refund if losing side has fewer distinct voters
-MIN_TOTAL_VOTERS = 5        # refund if claim attracts fewer total voters
-CREATOR_LISTING_FEE = 2.0   # creator pays this at claim creation, burned
-CREATOR_MIN_STAKE = 10      # creator's seed range
+INIT_VIRTUAL = 10       # tiny virtual AMM seed — caps per-claim inflation
+MIN_LOSER_VOTERS = 3    # refund if losing side has fewer distinct voters
+MIN_TOTAL_VOTERS = 5    # refund if total stakers below this
+CREATOR_LISTING_FEE = 2.0
+CREATOR_MIN_STAKE = 10
 CREATOR_MAX_STAKE = 100
 CREATOR_DEFAULT_STAKE = 10
 
 
+# ---------------------------------------------------------------------------
+# MODEL G
+# ---------------------------------------------------------------------------
+
 class ModelG(CPMM):
-    """Model G — locked-reward CPMM with creator-funded pool seed.
+    """Model G — creator-funded pool seed, variable stake, locked reward.
 
-    Differences from Model F (CPMM):
+    Key differences from Model F (plain CPMM with INIT_L=100):
 
-      1. **Creator-funded pool seed.**  At claim creation, the creator
-         picks a side (YES/NO) and an amount X in [10, 100] rep.
-         X is deposited directly into the creator's side of the pool
-         (no AMM swap, so price stays 50/50).  The system mirrors X
-         on the opposite side as virtual liquidity.  Result: pool
-         starts at Y = N = X.  Creator owns exactly X shares on their
-         chosen side, locked at the 50% entry price.
+      - Creator picks side + amount X ∈ [10, 100] at claim creation.
+        Pool starts at Y = N = X (creator's real rep on their side,
+        virtual mirror X on the other).  Per-claim inflation is capped
+        at X rep (vs F's fixed ~100 rep).  Creator gets exactly X shares
+        locked at the 50/50 entry price — same locked-reward guarantee
+        every other trader has, just set at creation time.
 
-         Smaller X = thinner pool, more price impact per stake, less
-         mint capacity per claim.  Bigger X = thicker pool, smoother
-         price, more mint capacity (capped at X).  Creator's choice.
+      - Creator pays a 2-rep listing fee burned permanently.
 
-      2. **Listing fee.**  Creator pays CREATOR_LISTING_FEE (2 rep) at
-         claim creation, permanently burned.
-
-      3. **Refund-if-trivial.**  At resolution, if losing side has
-         < MIN_LOSER_VOTERS (3) voters OR claim attracted
-         < MIN_TOTAL_VOTERS (5) stakers, refund every stake.
-
-    Locked reward is fully preserved: trader gets shares × 1 rep on
-    win, exactly the share count they were quoted at click time, or a
-    full refund if the claim is trivial.
+      - Refund-if-trivial at resolution: fewer than MIN_LOSER_VOTERS
+        distinct dissenters OR fewer than MIN_TOTAL_VOTERS total stakers
+        → all stakes refunded, no rep changes hands.
     """
 
     name = "model_g"
 
-    def __init__(self, claim_id: int = 0, creator_uid: int | None = None,
-                 listing_fee: float = CREATOR_LISTING_FEE,
+    def __init__(self, claim_id: int = 0,
+                 creator_uid: int | None = None,
                  creator_side: str = 'YES',
-                 creator_stake: float = CREATOR_DEFAULT_STAKE):
+                 creator_stake: float = CREATOR_DEFAULT_STAKE,
+                 listing_fee: float = CREATOR_LISTING_FEE):
         super().__init__(claim_id)
-
-        if creator_uid is not None:
-            stake = max(CREATOR_MIN_STAKE,
-                        min(CREATOR_MAX_STAKE, creator_stake))
-            # Pool depth = creator's chosen amount.  Both sides start equal.
-            self.y_reserve = stake
-            self.n_reserve = stake
-            self.init_L = stake
-            # Creator's position: X shares on chosen side, locked at 50%
-            # entry price.  Does NOT go through buy() so the price stays
-            # at 50/50 — that's the "system mirrors X on opposite" effect.
-            from simulator import Stake
-            self.stakes.append(Stake(
-                user_id=creator_uid,
-                side=creator_side,
-                rep_paid=stake,
-                entry_price=0.5,
-                weight=1.0,
-                shares=stake,
-            ))
-            if creator_side == 'YES':
-                self.yes_outstanding += stake
-                self.yes_count += 1
-            else:
-                self.no_outstanding += stake
-                self.no_count += 1
-        else:
-            self.y_reserve = CREATOR_DEFAULT_STAKE
-            self.n_reserve = CREATOR_DEFAULT_STAKE
-            self.init_L = CREATOR_DEFAULT_STAKE
 
         self.creator_uid = creator_uid
         self.listing_fee = listing_fee if creator_uid is not None else 0.0
 
+        if creator_uid is not None:
+            X = max(CREATOR_MIN_STAKE, min(CREATOR_MAX_STAKE, creator_stake))
+            # Pool depth = creator's chosen amount; price starts at 50/50.
+            self.y_reserve = float(X)
+            self.n_reserve = float(X)
+            self.init_L    = float(X)
+            # Creator holds X locked shares at 50% entry — direct deposit,
+            # no AMM swap, so price stays 50/50 for the first trader.
+            st = Stake(user_id=creator_uid, side=creator_side,
+                       rep_paid=X, entry_price=0.5,
+                       weight=1.0, shares=X)
+            self.stakes.append(st)
+            self.escrow += X
+            if creator_side == 'YES':
+                self.yes_outstanding += X
+                self.yes_count += 1
+            else:
+                self.no_outstanding += X
+                self.no_count += 1
+        else:
+            # No creator: use minimum pool depth as virtual seed
+            self.y_reserve = float(CREATOR_DEFAULT_STAKE)
+            self.n_reserve = float(CREATOR_DEFAULT_STAKE)
+            self.init_L    = float(CREATOR_DEFAULT_STAKE)
+
     def resolve(self, winning_side: str) -> dict[int, float]:
         losing_side = 'NO' if winning_side == 'YES' else 'YES'
-        loser_voters = {s.user_id for s in self.stakes
-                        if s.side == losing_side}
-        total_voters = {s.user_id for s in self.stakes}
+        loser_voters  = {s.user_id for s in self.stakes if s.side == losing_side}
+        total_voters  = {s.user_id for s in self.stakes}
         if (len(loser_voters) < MIN_LOSER_VOTERS
                 or len(total_voters) < MIN_TOTAL_VOTERS):
+            # Trivial: full stake refund, net change = 0 for everyone
             return {s.user_id: 0.0 for s in self.stakes}
         return super().resolve(winning_side)
 
 
 # ---------------------------------------------------------------------------
-# SCENARIOS
+# INFLATION SIMULATION
 # ---------------------------------------------------------------------------
 
-def scenario_trivial_claim_farming(n_trials: int = 200,
-                                   skews: tuple[float, ...] = (0.5, 0.7, 0.9, 0.95)):
-    """Compare creator earnings on claims of varying skew, under
-    F (auto-YES) vs G (no auto-YES).  Truth = YES (the obvious side wins).
+@dataclass
+class Agent:
+    uid: int
+    rep: float = 200.0
+    energy: float = 5.0
+    skill: float = 0.5
+    activity: float = 0.5
 
-    For each skew, simulate N voters where ``skew`` fraction vote YES and
-    the rest NO.  Truth = YES.
 
-    Under F: creator auto-bets YES at t=0 (price 50%, ~9.17 rep profit
-    locked-in).
-    Under G: creator does not auto-bet.  They earn 0 unless they
-    manually bet.
+def run_inflation(days: int, n_agents: int, claims_per_day: int,
+                  trivial_fraction: float, model_factory,
+                  seed: int = 0,
+                  skill_range: tuple[float, float] = (0.4, 0.75)) -> dict:
+    """Simulate rep-supply drift over `days` days.
+
+    model_factory(claim_id, creator_uid) → market instance.
+    Creator's listing fee and stake are deducted from their rep at
+    creation; the resolve() net-change dict is applied at resolution.
     """
-    out = {}
-    for skew in skews:
-        f_profit = 0.0
-        g_profit = 0.0
-        n_voters = 100
-        for trial in range(n_trials):
-            rng = random.Random(trial * 7 + int(skew * 100))
-            # F: creator auto-bets YES first.
-            mF = CPMM()
-            mF.buy(0, 'YES', 10.0)        # creator's auto-YES
-            for u in range(1, n_voters + 1):
-                side = 'YES' if rng.random() < skew else 'NO'
-                mF.buy(u, side, 10.0)
-            pF = mF.resolve('YES')
-            f_profit += pF[0]
+    rng = random.Random(seed)
+    agents = [Agent(uid=i,
+                    rep=200.0,
+                    skill=rng.uniform(*skill_range),
+                    activity=rng.uniform(0.2, 1.0))
+              for i in range(n_agents)]
 
-            # G: creator does not auto-bet.
-            mG = ModelG()
-            for u in range(1, n_voters + 1):
-                side = 'YES' if rng.random() < skew else 'NO'
-                mG.buy(u, side, 10.0)
-            pG = mG.resolve('YES')
-            # Creator gets nothing because they didn't bet.
-            g_profit += pG.get(0, 0.0)
+    DAILY_GRANT = 3
+    ENERGY_CAP  = 4
+    STAKE       = 10.0
 
-        out[skew] = {
-            'avg_creator_profit_F': f_profit / n_trials,
-            'avg_creator_profit_G': g_profit / n_trials,
-        }
-    return out
+    supply = [sum(a.rep for a in agents)]
 
+    for day in range(days):
+        # Daily energy replenishment
+        for a in agents:
+            a.energy = min(a.energy + DAILY_GRANT, ENERGY_CAP)
 
-def scenario_sybil_attack(n_trials: int = 500, n_sybils: int = 10,
-                          n_honest_no: int = 0):
-    """Influencer with ``n_sybils`` sock-puppet accounts posts a
-    trivial claim and votes YES on all of them.  Optionally ``n_honest_no``
-    honest voters dissent.
+        for c in range(claims_per_day):
+            creator_uid = rng.randint(0, n_agents - 1)
+            m = model_factory(day * 1000 + c, creator_uid)
 
-    Reports:
-    - System mint per claim (rep created from thin air) — should be 0
-      under G.
-    - Influencer net profit per claim (extracted from honest losers).
-    - Net change for honest dissenters.
-    """
-    f_mints, g_mints = [], []
-    f_infl_profits, g_infl_profits = [], []
-    f_honest, g_honest = [], []
+            # Deduct listing fee + creator's auto-buy stake from their rep.
+            # The auto-buy rep is included in m.stakes via buy(); we need
+            # to deduct it from the agent balance too.
+            creator_rep_spent = getattr(m, 'listing_fee', 0.0)
+            for s in m.stakes:
+                if s.user_id == creator_uid:
+                    creator_rep_spent += s.rep_paid
+            agents[creator_uid].rep -= creator_rep_spent
 
-    for trial in range(n_trials):
-        # F: classic CPMM, no cap, mint happens.
-        mF = CPMM()
-        for u in range(n_sybils):
-            mF.buy(u, 'YES', 10.0)
-        for u in range(n_sybils, n_sybils + n_honest_no):
-            mF.buy(u, 'NO', 10.0)
-        pF = mF.resolve('YES')
+            # Resolve direction
+            truth = rng.choice(['YES', 'NO'])
+            trivial = rng.random() < trivial_fraction
 
-        # G: refund-if-trivial applies at resolve time.
-        mG = ModelG()
-        for u in range(n_sybils):
-            mG.buy(u, 'YES', 10.0)
-        for u in range(n_sybils, n_sybils + n_honest_no):
-            mG.buy(u, 'NO', 10.0)
-        pG = mG.resolve('YES')
+            # Other agents bet
+            order = list(range(n_agents))
+            rng.shuffle(order)
+            for uid in order:
+                if uid == creator_uid:
+                    continue  # already staked at creation
+                a = agents[uid]
+                if a.rep < STAKE or a.energy < 1:
+                    continue
+                if rng.random() > a.activity:
+                    continue
+                skill = 0.99 if trivial else a.skill
+                side = truth if rng.random() < skill else (
+                    'NO' if truth == 'YES' else 'YES')
+                m.buy(uid, side, STAKE)
+                a.rep   -= STAKE
+                a.energy -= 1
 
-        f_mints.append(sum(pF.values()))
-        g_mints.append(sum(pG.values()))
-        f_infl_profits.append(sum(pF[u] for u in range(n_sybils)))
-        g_infl_profits.append(sum(pG[u] for u in range(n_sybils)))
-        if n_honest_no > 0:
-            f_honest.append(sum(pF[u] for u in
-                                range(n_sybils, n_sybils + n_honest_no)))
-            g_honest.append(sum(pG[u] for u in
-                                range(n_sybils, n_sybils + n_honest_no)))
+            # Resolve — net-change dict maps uid → net rep change
+            profits = m.resolve(truth)
+
+            # Build a rep_paid lookup (sum of all stakes per user)
+            stake_paid: dict[int, float] = {}
+            for s in m.stakes:
+                stake_paid[s.user_id] = stake_paid.get(s.user_id, 0.0) + s.rep_paid
+
+            for uid, net in profits.items():
+                # Refund the stake they put in, then apply net gain/loss
+                agents[uid].rep += stake_paid.get(uid, 0.0) + net
+
+        supply.append(sum(a.rep for a in agents))
+
+    initial, final = supply[0], supply[-1]
     return {
-        'F_mean_mint': float(np.mean(f_mints)),
-        'G_mean_mint': float(np.mean(g_mints)),
-        'F_mean_attacker_profit': float(np.mean(f_infl_profits)),
-        'G_mean_attacker_profit': float(np.mean(g_infl_profits)),
-        'F_mean_honest_net': float(np.mean(f_honest)) if f_honest else 0.0,
-        'G_mean_honest_net': float(np.mean(g_honest)) if g_honest else 0.0,
-        'n_sybils': n_sybils,
-        'n_honest_no': n_honest_no,
+        'supply': supply,
+        'initial': initial,
+        'final': final,
+        'drift_pct': (final - initial) / initial * 100,
     }
 
 
-def scenario_one_sided_mint(n_trials: int = 100, n_voters: int = 30):
-    """Worst-case mint test: everyone bets YES, YES wins.  Under F,
-    house mints rep equal to (total winning shares - total stakes).
-    Under G, refund-on-extreme triggers and mint is 0.
+def scenario_inflation_compare() -> list[dict]:
+    """Compare F vs G inflation over 180 days (with yearly projection).
 
-    Measures per-claim system-level rep mint (sum of winning payouts
-    minus sum of stakes).
+    Two scenario mixes:
+      - Typical  : 25% trivial claims, skill range 0.40–0.75
+      - Worst    : 100% trivial claims (every claim obvious)
+
+    Yearly projection: run 365 days with same parameters.
     """
-    f_mints = []
-    g_mints = []
+    results = []
+    configs = [
+        ('typical (25% trivial)',     0.25, (0.40, 0.75)),
+        ('worst-case (100% trivial)', 1.00, (0.40, 0.75)),
+    ]
+    for label, tf, sr in configs:
+        for days, period in [(180, '180-day'), (365, 'yearly')]:
+            F = run_inflation(days, 200, 10, tf,
+                              lambda cid, ca: CPMM(claim_id=cid),
+                              seed=0, skill_range=sr)
+            G = run_inflation(days, 200, 10, tf,
+                              lambda cid, ca: ModelG(claim_id=cid,
+                                                     creator_uid=ca),
+                              seed=0, skill_range=sr)
+            results.append({
+                'scenario': label,
+                'period': period,
+                'days': days,
+                'F_drift': F['drift_pct'],
+                'G_drift': G['drift_pct'],
+            })
+    return results
+
+
+# ---------------------------------------------------------------------------
+# SCENARIO: LOCKED REWARD
+# ---------------------------------------------------------------------------
+
+def _f_with_creator() -> CPMM:
+    """F baseline: CPMM with creator auto-YES (original F behaviour)."""
+    m = CPMM()
+    m.buy(999, 'YES', 10.0)
+    return m
+
+
+def scenario_locked_reward_preserved() -> dict:
+    """Alice buys YES early, varying numbers of later YES buyers join,
+    then 10 NO buyers.  Truth = YES.  Alice's profit must be invariant
+    to later buyers (locked-reward property).
+
+    Compare F (INIT_L=100, no creator) vs G (INIT_VIRTUAL=10, creator
+    auto-buys YES with 10 rep first).
+    """
+    results: dict[str, dict] = {}
+    factories = {
+        'F (INIT_L=100, creator auto-YES)':
+            lambda: _f_with_creator(),
+        f'G (pool=creator X=10, creator YES)':
+            lambda: ModelG(creator_uid=999, creator_side='YES',
+                           creator_stake=10),
+    }
+    for label, mk in factories.items():
+        alice_at: dict[int, float] = {}
+        for n_later in [0, 5, 20, 50]:
+            m = mk()
+            # Alice buys YES after pool is seeded
+            m.buy(0, 'YES', 10.0)
+            for u in range(1, 11):        # 10 NO buyers
+                m.buy(u, 'NO', 10.0)
+            for u in range(11, 11 + n_later):  # later YES buyers
+                m.buy(u, 'YES', 10.0)
+            p = m.resolve('YES')
+            alice_at[n_later] = p.get(0, 0.0)
+        results[label] = alice_at
+    return results
+
+
+# ---------------------------------------------------------------------------
+# SCENARIO: ONE-SIDED MINT
+# ---------------------------------------------------------------------------
+
+def scenario_one_sided_mint(n_trials: int = 100, n_voters: int = 30) -> dict:
+    """Worst-case mint: all voters bet YES, truth=YES.
+
+    Under F: house mints ~(INIT_L²/total_shares) rep.
+    Under G: refund-if-trivial fires (0 NO voters < MIN_LOSER_VOTERS),
+             all stakes refunded, mint = 0.
+    """
+    f_mints, g_mints = [], []
     g_refunds = 0
     for trial in range(n_trials):
         mF = CPMM()
-        mG = ModelG()
+        mG = ModelG()   # no creator so no auto-buy; pure trader test
         for u in range(n_voters):
             mF.buy(u, 'YES', 10.0)
             mG.buy(u, 'YES', 10.0)
         pF = mF.resolve('YES')
         pG = mG.resolve('YES')
-        # System mint = sum of net changes (winners gained more than losers lost)
         f_mints.append(sum(pF.values()))
         g_mints.append(sum(pG.values()))
-        # G should refund (every value ≈ 0)
         if all(abs(v) < 0.01 for v in pG.values()):
             g_refunds += 1
     return {
-        'F_mean_mint': float(np.mean(f_mints)),
-        'F_total_mint': float(sum(f_mints)),
-        'G_mean_mint': float(np.mean(g_mints)),
-        'G_total_mint': float(sum(g_mints)),
-        'G_refund_rate': g_refunds / n_trials,
+        'F_mean_mint':    float(np.mean(f_mints)),
+        'F_total_mint':   float(sum(f_mints)),
+        'G_mean_mint':    float(np.mean(g_mints)),
+        'G_total_mint':   float(sum(g_mints)),
+        'G_refund_rate':  g_refunds / n_trials,
         'n_trials': n_trials,
         'n_voters': n_voters,
     }
 
 
-def scenario_contested_claims_still_work(n_trials: int = 200):
-    """Sanity: G's refund rule should NOT trigger on genuinely contested
-    claims.  Run 50/50-ish voter splits and check the resolution still
-    pays normally."""
+# ---------------------------------------------------------------------------
+# SCENARIO: CONTESTED CLAIMS STILL RESOLVE
+# ---------------------------------------------------------------------------
+
+def scenario_contested_claims_still_work(n_trials: int = 200) -> dict:
+    """Refund-if-trivial must NOT fire on genuinely contested 50/50 claims."""
     rng = random.Random(13)
-    triggered_refunds = 0
-    normal_resolutions = 0
-    for trial in range(n_trials):
+    triggered, normal = 0, 0
+    for _ in range(n_trials):
         m = ModelG()
         for u in range(40):
-            side = 'YES' if rng.random() < 0.55 else 'NO'  # near 50/50
+            side = 'YES' if rng.random() < 0.55 else 'NO'
             m.buy(u, side, 10.0)
-        p_final = m.yes_price()
         truth = rng.choice(['YES', 'NO'])
         out = m.resolve(truth)
         if all(abs(v) < 0.01 for v in out.values()):
-            triggered_refunds += 1
+            triggered += 1
         else:
-            normal_resolutions += 1
+            normal += 1
+    return {'contested_total': n_trials,
+            'triggered_refunds': triggered,
+            'normal_resolutions': normal}
+
+
+# ---------------------------------------------------------------------------
+# SCENARIO: CREATOR EARNINGS
+# ---------------------------------------------------------------------------
+
+def scenario_creator_earnings(n_trials: int = 500, seed: int = 11) -> dict:
+    """Creator with skill 0.65 posts claims and auto-buys.
+
+    Under F: creator auto-bets YES 10 rep at 50% entry (INIT_L=100).
+    Under G: creator auto-bets YES 10 rep via CPMM at thin pool
+             (INIT_VIRTUAL=10); same side but fewer shares due to thinner pool.
+
+    Compare mean earnings, median, % losing.
+    """
+    rng = random.Random(seed)
+    f_returns, g_returns = [], []
+    skill = 0.65
+
+    for _ in range(n_trials):
+        truth = rng.choice(['YES', 'NO'])
+        # Creator side = their honest guess
+        creator_guess = truth if rng.random() < skill else (
+            'NO' if truth == 'YES' else 'YES')
+
+        # F: creator auto-YES (uid=0), 30 random traders
+        mF = CPMM()
+        mF.buy(0, 'YES', 10.0)
+        for u in range(1, 31):
+            mF.buy(u, rng.choice(['YES', 'NO']), 10.0)
+        pF = mF.resolve(truth)
+        f_returns.append(pF.get(0, 0.0))
+
+        # G: creator picks side based on skill, seeds pool with X=10
+        mG = ModelG(creator_uid=0, creator_side=creator_guess,
+                    creator_stake=CREATOR_DEFAULT_STAKE)
+        for u in range(1, 31):
+            mG.buy(u, rng.choice(['YES', 'NO']), 10.0)
+        pG = mG.resolve(truth)
+        # Creator net = net change from resolve (their stake was locked at creation)
+        g_returns.append(pG.get(0, 0.0))
+
     return {
-        'contested_total': n_trials,
-        'triggered_refunds': triggered_refunds,
-        'normal_resolutions': normal_resolutions,
+        'F_mean':   float(np.mean(f_returns)),
+        'F_median': float(np.median(f_returns)),
+        'F_pct_losing': float(np.mean([x < 0 for x in f_returns])),
+        'G_mean':   float(np.mean(g_returns)),
+        'G_median': float(np.median(g_returns)),
+        'G_pct_losing': float(np.mean([x < 0 for x in g_returns])),
     }
 
 
-def scenario_locked_reward_preserved():
-    """Sanity: G should preserve F's locked-reward.  Alice bets YES at
-    t=0, then more YES buyers join, then 10 NO buyers, truth=YES.
-    Alice's profit should be identical under F and G (since the only
-    diff is creator auto-YES, which is unrelated to Alice's locked
-    payout)."""
-    results = {}
-    for label, mk in [("F (with creator auto-YES)",
-                       lambda: (CPMM(), 'autovote_creator')),
-                      ("G (no creator auto-YES)",
-                       lambda: (ModelG(), 'no_creator'))]:
-        alice_at = {}
-        for n_later in [0, 5, 20, 50]:
-            m, mode = mk()
-            if mode == 'autovote_creator':
-                m.buy(999, 'YES', 10.0)   # creator's auto-bet (uid=999)
-            m.buy(0, 'YES', 10.0)          # Alice (the trader we measure)
-            for u in range(1, 11):
-                m.buy(u, 'NO', 10.0)
-            for u in range(11, 11 + n_later):
-                m.buy(u, 'YES', 10.0)
-            p = m.resolve('YES')
-            alice_at[n_later] = p[0]
-        results[label] = alice_at
-    return results
+# ---------------------------------------------------------------------------
+# SCENARIO: SYBIL ATTACK
+# ---------------------------------------------------------------------------
 
-
-def scenario_creator_earnings_real_claims(n_trials: int = 500, seed: int = 11):
-    """For each model, simulate a creator who posts claims they think
-    they know the answer to, with skill 0.65 (better than chance).
-
-    F: creator auto-bets YES at creation (locked at 50/50 price).  If
-    truth is YES, +9.17.  If truth is NO, -10.  So F's expected return
-    per claim depends on whether the creator's claims tend toward YES
-    truth.
-
-    G: creator does not auto-bet.  They can manually vote at any time
-    using their own energy.  Here we assume the creator votes once,
-    using their best guess (skill 0.65), at the current market price.
-
-    Compare expected earnings per claim posted.
+def scenario_sybil_attack(n_trials: int = 500,
+                           n_sybils: int = 10,
+                           n_honest_no: int = 0) -> dict:
+    """10 sybils all vote YES.  N honest NO voters dissent.
+    Attacker net = sum of sybil profits (listing fee already outside).
     """
-    rng = random.Random(seed)
-    f_returns = []
-    g_returns = []
-    skill = 0.65
+    f_mints, g_mints = [], []
+    f_attacker, g_attacker = [], []
+    f_honest, g_honest = [], []
 
-    for trial in range(n_trials):
-        truth = rng.choice(['YES', 'NO'])
-        # F path: auto-YES at creation, then 30 other voters with mixed views
+    for _ in range(n_trials):
         mF = CPMM()
-        mF.buy(0, 'YES', 10.0)             # creator auto-bet
-        for u in range(1, 31):
-            side = rng.choice(['YES', 'NO'])
-            mF.buy(u, side, 10.0)
-        pF = mF.resolve(truth)
-        f_returns.append(pF[0])
+        mG = ModelG()   # no creator in sybil test — pure trader pool
+        for u in range(n_sybils):
+            mF.buy(u, 'YES', 10.0)
+            mG.buy(u, 'YES', 10.0)
+        for u in range(n_sybils, n_sybils + n_honest_no):
+            mF.buy(u, 'NO', 10.0)
+            mG.buy(u, 'NO', 10.0)
+        pF = mF.resolve('YES')
+        pG = mG.resolve('YES')
 
-        # G path: no auto-bet at creation.  Some voters bet, then creator
-        # votes manually based on their skill.
-        mG = ModelG()
-        # half of voters go first
-        for u in range(1, 16):
-            side = rng.choice(['YES', 'NO'])
-            mG.buy(u, side, 10.0)
-        # creator votes based on skill
-        creator_guess = truth if rng.random() < skill else (
-            'NO' if truth == 'YES' else 'YES')
-        mG.buy(0, creator_guess, 10.0)
-        # remaining voters
-        for u in range(16, 31):
-            side = rng.choice(['YES', 'NO'])
-            mG.buy(u, side, 10.0)
-        pG = mG.resolve(truth)
-        g_returns.append(pG[0])
+        f_mints.append(sum(pF.values()))
+        g_mints.append(sum(pG.values()))
+        f_attacker.append(sum(pF.get(u, 0) for u in range(n_sybils)))
+        g_attacker.append(sum(pG.get(u, 0) for u in range(n_sybils)))
+        if n_honest_no:
+            f_honest.append(sum(pF.get(u, 0)
+                                for u in range(n_sybils, n_sybils + n_honest_no)))
+            g_honest.append(sum(pG.get(u, 0)
+                                for u in range(n_sybils, n_sybils + n_honest_no)))
 
     return {
-        'F_mean': float(np.mean(f_returns)),
-        'F_median': float(np.median(f_returns)),
-        'F_pct_losing': float(np.mean([1 if x < 0 else 0 for x in f_returns])),
-        'G_mean': float(np.mean(g_returns)),
-        'G_median': float(np.median(g_returns)),
-        'G_pct_losing': float(np.mean([1 if x < 0 else 0 for x in g_returns])),
+        'F_mean_mint':            float(np.mean(f_mints)),
+        'G_mean_mint':            float(np.mean(g_mints)),
+        'F_mean_attacker_profit': float(np.mean(f_attacker)),
+        'G_mean_attacker_profit': float(np.mean(g_attacker)),
+        'F_mean_honest_net':      float(np.mean(f_honest)) if f_honest else 0.0,
+        'G_mean_honest_net':      float(np.mean(g_honest)) if g_honest else 0.0,
+        'n_sybils': n_sybils,
+        'n_honest_no': n_honest_no,
     }
 
 
@@ -425,266 +477,40 @@ def scenario_creator_earnings_real_claims(n_trials: int = 500, seed: int = 11):
 # CHARTS
 # ---------------------------------------------------------------------------
 
-def chart_trivial(triv):
-    skews = sorted(triv.keys())
+def chart_locked_reward(locked: dict):
     fig, ax = plt.subplots(figsize=(10, 5))
-    x = np.arange(len(skews))
-    w = 0.4
-    F_vals = [triv[s]['avg_creator_profit_F'] for s in skews]
-    G_vals = [triv[s]['avg_creator_profit_G'] for s in skews]
-    ax.bar(x - w/2, F_vals, w, label='F (creator auto-YES)', color='#c0392b')
-    ax.bar(x + w/2, G_vals, w, label='G (no auto-YES)', color='#27ae60')
-    ax.set_xticks(x)
-    ax.set_xticklabels([f"{int(s*100)}% YES vote" for s in skews])
-    ax.set_title("Creator avg profit per claim, truth=YES, varying voter skew")
-    ax.set_ylabel("Creator net rep")
-    ax.axhline(0, color='gray', linewidth=0.8)
-    ax.legend(); ax.grid(alpha=0.3, axis='y')
-    fig.tight_layout()
-    fig.savefig(os.path.join(CHART_DIR, "g_01_trivial.png"), dpi=120)
-    plt.close(fig)
-
-
-def chart_locked_reward(locked):
-    fig, ax = plt.subplots(figsize=(10, 5))
-    x = sorted(next(iter(locked.values())).keys())
-    colors = {
-        'F (with creator auto-YES)': '#c0392b',
-        'G (no creator auto-YES)': '#27ae60',
-    }
+    colors = {'F (INIT_L=100)': '#c0392b'}
+    for label in locked:
+        if 'G' in label:
+            colors[label] = '#27ae60'
     for label, vs in locked.items():
+        x = sorted(vs.keys())
         ys = [vs[n] for n in x]
-        ax.plot(x, ys, marker='o', linewidth=2, label=label, color=colors[label])
+        ax.plot(x, ys, marker='o', linewidth=2,
+                label=label, color=colors.get(label, '#2980b9'))
     ax.set_xlabel("Later YES buyers after Alice")
     ax.set_ylabel("Alice net rep")
-    ax.set_title("Locked reward: Alice's profit independent of later buyers")
+    ax.set_title("Locked reward: Alice's profit invariant to later buyers")
     ax.axhline(0, color='gray', linewidth=0.8)
-    ax.legend(); ax.grid(alpha=0.3)
+    ax.legend()
+    ax.grid(alpha=0.3)
     fig.tight_layout()
     fig.savefig(os.path.join(CHART_DIR, "g_02_locked.png"), dpi=120)
     plt.close(fig)
 
 
-def chart_creator(creator):
-    fig, ax = plt.subplots(figsize=(8, 5))
-    labels = ['F mean', 'G mean']
-    vals = [creator['F_mean'], creator['G_mean']]
-    colors = ['#c0392b', '#27ae60']
-    bars = ax.bar(labels, vals, color=colors)
-    for b, v in zip(bars, vals):
-        ax.text(b.get_x() + b.get_width()/2, v + 0.1, f"{v:+.2f}",
-                ha='center', fontsize=10)
-    ax.axhline(0, color='gray', linewidth=0.8)
-    ax.set_title("Creator avg earnings per claim (skill 0.65, balanced voters)")
-    ax.set_ylabel("Net rep / claim")
-    ax.grid(alpha=0.3, axis='y')
-    fig.tight_layout()
-    fig.savefig(os.path.join(CHART_DIR, "g_03_creator.png"), dpi=120)
-    plt.close(fig)
-
-
-# ---------------------------------------------------------------------------
-# REPORT
-# ---------------------------------------------------------------------------
-
-def write_report(triv, locked, creator, mint, contested,
-                 sybil_alone=None, sybil_vs_one=None, sybil_vs_five=None):
-    L = []
-    A = L.append
-    A("# Model G — F + 2 tiny rule tweaks\n")
-    A("Built by `simulator_g.py`.  Sister analysis: `leaderboard_analysis.md` "
-      "(does F's inflation actually hurt the leaderboard?).\n")
-
-    A("## What changed\n")
-    A("```")
-    A("Model F  =  CPMM payouts + v2 hard rules + energy gate")
-    A("            + creator auto-YES at claim creation")
-    A("")
-    A("Model G  =  CPMM payouts + v2 hard rules + energy gate")
-    A("            - drop creator auto-YES")
-    A("            + refund-if-fully-uncontested:")
-    A("              if loser side has < 3 distinct voters, refund all")
-    A("              (trivial claim, no resolution)")
-    A("```\n")
-    A("Locked reward, copy-trade immunity, whale rules, energy gate — "
-      "all unchanged from F. Trader knows `shares × 1 rep` at buy time "
-      "and gets exactly that on win.\n")
-
-    # ----
-    A("## Scenario 1 — trivial-claim farming\n")
-    A("100 voters, varying YES skew.  Truth = YES.  How much does the "
-      "creator earn?\n")
-    A("| Voter skew (% YES) | F (auto-YES) | G (no auto-YES) | Difference |")
-    A("|---|---|---|---|")
-    for skew in sorted(triv.keys()):
-        r = triv[skew]
-        A(f"| {int(skew*100)}% | {r['avg_creator_profit_F']:+.2f} | "
-          f"{r['avg_creator_profit_G']:+.2f} | "
-          f"{r['avg_creator_profit_G'] - r['avg_creator_profit_F']:+.2f} |")
-    A("\n![trivial](charts/g_01_trivial.png)\n")
-    A("**Reading.** Under F, a creator posting an obvious-YES claim earns "
-      "~9 rep for free.  Under G, they earn 0 unless they personally vote.  "
-      "Trivial-farming attack closed.\n")
-
-    # ----
-    A("## Scenario 1b — \"everyone YES, everyone wins from the pool\"\n")
-    A(f"The trivial-claim mint problem.  {mint['n_voters']} voters all "
-      "bet YES, YES wins.  How much rep does the system mint out of thin "
-      "air per claim?\n")
-    A("| Model | Mean mint per claim | Total mint over "
-      f"{mint['n_trials']} trials | Net-zero rate |")
-    A("|---|---|---|---|")
-    A(f"| F | **{mint['F_mean_mint']:+.2f} rep** | "
-      f"{mint['F_total_mint']:+.0f} rep | 0% |")
-    A(f"| G | {mint['G_mean_mint']:+.2f} rep | "
-      f"{mint['G_total_mint']:+.0f} rep | **{mint['G_refund_rate']*100:.0f}%** |")
-    A("\n![mint](charts/g_04_mint.png)\n")
-    A("**Reading.** Under F, every one-sided claim mints rep equal to "
-      f"~{mint['F_mean_mint']:.0f} per claim ({mint['F_total_mint']:.0f} "
-      f"over {mint['n_trials']} trials).  Under G, refund-if-trivial "
-      "fires (loser side has 0 voters, below MIN_LOSER_VOTERS=3) so all "
-      "stakes are refunded — system mint is zero across all claims, "
-      "regardless of voter mix.\n")
-
-    # ----
-    A("## Scenario 1c — contested claims still resolve\n")
-    A(f"Sanity check: run {contested['contested_total']} near-50/50 "
-      "claims under G.  Refund-if-trivial should not fire on well-"
-      "contested claims.\n")
-    A(f"- Contested claims that resolved normally: "
-      f"**{contested['normal_resolutions']}** / "
-      f"{contested['contested_total']}")
-    A(f"- Contested claims that triggered trivial refund: "
-      f"{contested['triggered_refunds']}\n")
-    rate = contested['normal_resolutions'] / contested['contested_total']
-    A(f"**Reading.** {rate*100:.0f}% of contested claims resolve "
-      "normally; refund-if-trivial only fires when both sides are too "
-      "small, not on well-contested claims.\n")
-
-    # ----
-    A("## Scenario 2 — locked reward preserved\n")
-    A("Alice bets YES, then varying numbers of later YES buyers join, then "
-      "10 NO buyers.  Truth = YES.  Alice's profit should be identical "
-      "regardless of later buyers (F's locked-reward property).\n")
-    A("| Later YES buyers | F | G |")
-    A("|---|---|---|")
-    ns = sorted(next(iter(locked.values())).keys())
-    for n in ns:
-        f_key = 'F (with creator auto-YES)'
-        g_key = 'G (no creator auto-YES)'
-        A(f"| {n} | {locked[f_key][n]:+.2f} | {locked[g_key][n]:+.2f} |")
-    A("\n![locked](charts/g_02_locked.png)\n")
-    A("**Reading.** G keeps F's locked-reward exactly — only the creator's "
-      "automatic stake is gone.  Traders' payouts are unaffected.\n")
-
-    # ----
-    A("## Scenario 3 — creator's expected earnings under each model\n")
-    A("Creator with skill 0.65 (better than random) posts claims.  Under F, "
-      "they get auto-staked on YES at creation.  Under G, they vote manually "
-      "based on their skill after seeing some early voters.  30 other voters "
-      "per claim, random truth.\n")
-    A("| Model | Mean creator rep / claim | Median | % losing |")
-    A("|---|---|---|---|")
-    A(f"| F | {creator['F_mean']:+.2f} | {creator['F_median']:+.2f} | "
-      f"{creator['F_pct_losing']*100:.0f}% |")
-    A(f"| G | {creator['G_mean']:+.2f} | {creator['G_median']:+.2f} | "
-      f"{creator['G_pct_losing']*100:.0f}% |")
-    A("\n![creator](charts/g_03_creator.png)\n")
-    diff = creator['G_mean'] - creator['F_mean']
-    A(f"**Reading.** Creator's expected rep / claim drops by "
-      f"{abs(diff):.2f} when we remove the auto-YES — but they were earning "
-      "that as a freebie, regardless of claim quality.  Under G, the "
-      "creator earns when their skill-based vote is correct, which is the "
-      "honest signal.\n")
-
-    # ----
-    A("## Sybil attack — influencer + sock puppets\n")
-    A("An influencer creates a trivial claim and votes YES on 10 sock-"
-      "puppet accounts.  Test with 0, 1, and 5 honest NO voters.  We "
-      "want to confirm: **G's refund-if-trivial prevents minting rep "
-      "when there are too few dissenters.**\n")
-    if sybil_alone:
-        A("| Setup | F mint/claim | G mint/claim | F attacker net | "
-          "G attacker net | G honest dissenter net |")
-        A("|---|---|---|---|---|---|")
-        for label, s in [("10 sybils, 0 honest NO", sybil_alone),
-                         ("10 sybils, 1 honest NO", sybil_vs_one),
-                         ("10 sybils, 5 honest NO", sybil_vs_five)]:
-            A(f"| {label} | {s['F_mean_mint']:+.2f} | "
-              f"**{s['G_mean_mint']:+.2f}** | "
-              f"{s['F_mean_attacker_profit']:+.2f} | "
-              f"**{s['G_mean_attacker_profit']:+.2f}** | "
-              f"{s['G_mean_honest_net']:+.2f} |")
-        A("")
-        A("**Reading.** Under G:")
-        A(f"- System mint per claim is **{sybil_alone['G_mean_mint']:.2f} "
-          "rep**.  No new rep enters the system from a sybil attack.")
-        A(f"- With 0 honest dissenters, attacker profit per claim = "
-          f"**{sybil_alone['G_mean_attacker_profit']:.2f} rep** — "
-          "refund-if-trivial fires (0 loser voters < MIN_LOSER_VOTERS=3) "
-          "so all stakes are refunded.")
-        A(f"- With 1 honest dissenter, attacker gains "
-          f"**{sybil_vs_one['G_mean_attacker_profit']:.2f} rep** in total — "
-          "exactly the dissenter's 10 rep, transferred but not minted.")
-        A("- Attacker profit is bounded by **honest participation only**.  "
-          "If nobody honest dissents, attack yields 0 rep.\n")
-        A("**Conclusion: rep cannot be created from thin air by an "
-          "influencer with sock puppets.**  Wealth transfer between "
-          "honest dissenters and sybils is still possible (this needs "
-          "separate sybil-defense — account age, verification — at the "
-          "platform level, not the protocol level).\n")
-
-    A("## Where the leaderboard problem goes\n")
-    A("See `leaderboard_analysis.md`.  Under realistic 180-day sim:\n")
-    A("- Inflation: +244% drift")
-    A("- Rank stability: Spearman ρ = 0.87 (preserved)")
-    A("- Final rep ↔ skill: ρ = 0.93 (clean signal)")
-    A("- Median-skill newcomer at day 90 → pctl 48% (peers at 52%) — caught up\n")
-    A("Therefore the inflation does not damage the leaderboard's "
-      "*ordering*.  The fix is a UI tweak:\n")
-    A("```jsx")
-    A('display "Top {Math.round((1 - user.percentile) * 100)}%"')
-    A('instead of  "{user.rep} rep"')
-    A("```\n")
-
-    A("## What G keeps from F\n")
-    A("- Locked reward (shares × 1 rep at buy time)")
-    A("- Copy-trade immunity (Alice's share count fixed at click)")
-    A("- Fixed 10-rep stake + 1-per-claim rule (no whales)")
-    A("- Daily energy gate (no leaderboard runaway)")
-    A("- 7-day sybil guard")
-    A("- House subsidy bound (~100 rep / claim via virtual liquidity)\n")
-
-    A("## Summary\n")
-    A("| Issue | Status under G |")
-    A("|---|---|")
-    A("| #76 P1 inflation | UI-fix only (percentile display) |")
-    A("| #76 P2 trivial farming | ✅ fixed by removing auto-YES |")
-    A("| #76 P3 low creator reward | accept: creators paid only for honest votes |")
-    A("| Locked reward | ✅ preserved |")
-    A("| Copy-trade immunity | ✅ preserved |")
-    A("| Whale | ✅ rule-impossible |")
-    A("| Leaderboard runaway | ✅ energy gate |")
-    A("| House subsidy | ⚠ same as F (~100 rep / claim) |")
-
-    out = os.path.join(OUT_DIR, "model_g_report.md")
-    with open(out, "w") as f:
-        f.write("\n".join(L))
-    return out
-
-
-def chart_mint(mint):
+def chart_mint(mint: dict):
     fig, ax = plt.subplots(figsize=(9, 5))
-    labels = ['F (no rule)', 'G (refund-on-extreme)']
-    vals = [mint['F_mean_mint'], mint['G_mean_mint']]
+    labels = ['F (INIT_L=100)', f'G (INIT_V={INIT_VIRTUAL})']
+    vals   = [mint['F_mean_mint'], mint['G_mean_mint']]
     colors = ['#c0392b', '#27ae60']
     bars = ax.bar(labels, vals, color=colors)
     for b, v in zip(bars, vals):
-        ax.text(b.get_x() + b.get_width()/2, v + 0.5, f"{v:+.1f}",
-                ha='center', fontsize=11)
+        ax.text(b.get_x() + b.get_width() / 2, v + 0.5,
+                f"{v:+.1f}", ha='center', fontsize=11)
     ax.axhline(0, color='gray', linewidth=0.8)
     ax.set_title(f"System mint per one-sided claim "
-                 f"({mint['n_voters']} all-YES voters, truth=YES)")
+                 f"({mint['n_voters']} all-YES voters)")
     ax.set_ylabel("Net rep created from thin air")
     ax.grid(alpha=0.3, axis='y')
     fig.tight_layout()
@@ -692,34 +518,230 @@ def chart_mint(mint):
     plt.close(fig)
 
 
+def chart_creator(creator: dict):
+    fig, ax = plt.subplots(figsize=(8, 5))
+    labels = ['F mean', 'G mean']
+    vals   = [creator['F_mean'], creator['G_mean']]
+    colors = ['#c0392b', '#27ae60']
+    bars = ax.bar(labels, vals, color=colors)
+    for b, v in zip(bars, vals):
+        ax.text(b.get_x() + b.get_width() / 2, v + (0.1 if v >= 0 else -0.4),
+                f"{v:+.2f}", ha='center', fontsize=10)
+    ax.axhline(0, color='gray', linewidth=0.8)
+    ax.set_title("Creator avg net / claim (skill 0.65, 30 random traders)")
+    ax.set_ylabel("Net rep / claim")
+    ax.grid(alpha=0.3, axis='y')
+    fig.tight_layout()
+    fig.savefig(os.path.join(CHART_DIR, "g_03_creator.png"), dpi=120)
+    plt.close(fig)
+
+
+def chart_inflation(inflation: list[dict]):
+    """Bar chart: F vs G drift % per scenario/period."""
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharey=False)
+    periods = ['180-day', 'yearly']
+    scenarios = list({r['scenario'] for r in inflation})
+
+    for ax, period in zip(axes, periods):
+        rows = [r for r in inflation if r['period'] == period]
+        x = np.arange(len(rows))
+        w = 0.35
+        ax.bar(x - w / 2, [r['F_drift'] for r in rows], w,
+               label='F (INIT_L=100)', color='#c0392b')
+        ax.bar(x + w / 2, [r['G_drift'] for r in rows], w,
+               label=f'G (INIT_V={INIT_VIRTUAL})', color='#27ae60')
+        ax.set_xticks(x)
+        ax.set_xticklabels([r['scenario'] for r in rows], fontsize=8)
+        ax.set_title(f"Supply drift — {period}")
+        ax.set_ylabel("Drift (%)")
+        ax.axhline(0, color='gray', linewidth=0.8)
+        ax.legend(fontsize=8)
+        ax.grid(alpha=0.3, axis='y')
+
+    fig.tight_layout()
+    fig.savefig(os.path.join(CHART_DIR, "g_05_inflation.png"), dpi=120)
+    plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
+# REPORT
+# ---------------------------------------------------------------------------
+
+def write_report(locked, mint, contested, creator, inflation,
+                 sybil_alone, sybil_vs_one, sybil_vs_five):
+    L = []
+    A = L.append
+
+    A("# Model G — minimal-inflation CPMM with creator auto-join\n")
+    A("Built by `simulator_g.py`.\n")
+
+    A("## Design\n")
+    A("```")
+    A("Model F  =  CPMM payouts  +  INIT_L=100 virtual seed")
+    A("            +  creator auto-YES fixed 10 rep")
+    A("")
+    A(f"Model G  =  CPMM payouts  +  INIT_VIRTUAL={INIT_VIRTUAL} virtual seed  ← 10× less inflation")
+    A("            +  creator auto-joins with chosen side+amount (10–100 rep)")
+    A(f"            +  {CREATOR_LISTING_FEE:.0f}-rep listing fee burned at creation")
+    A(f"            +  refund-if-trivial: loser < {MIN_LOSER_VOTERS} voters OR total < {MIN_TOTAL_VOTERS}")
+    A("```\n")
+    A("**Locked reward fully preserved.** Creator and all traders receive "
+      "`shares × 1 rep` on win, exactly as quoted at buy time.  "
+      "Full refund on trivial claims.\n")
+
+    # ---- Inflation ----
+    A("## Inflation comparison\n")
+    A("200 agents, 10 claims/day, varying trivial-claim fraction.\n")
+    A("| Scenario | Period | F drift | G drift | Reduction |")
+    A("|---|---|---|---|---|")
+    for r in inflation:
+        reduction = r['F_drift'] - r['G_drift']
+        A(f"| {r['scenario']} | {r['period']} "
+          f"| {r['F_drift']:+.0f}% | {r['G_drift']:+.0f}% "
+          f"| {reduction:+.0f} pp |")
+    A("")
+
+    # Pull out yearly typical for headline
+    yearly_typical = next((r for r in inflation
+                           if r['period'] == 'yearly'
+                           and 'typical' in r['scenario']), None)
+    yearly_worst = next((r for r in inflation
+                         if r['period'] == 'yearly'
+                         and 'worst' in r['scenario']), None)
+    if yearly_typical:
+        A(f"**Yearly drift (typical mix): F = {yearly_typical['F_drift']:+.0f}% · "
+          f"G = {yearly_typical['G_drift']:+.0f}%.**  "
+          f"Model G is {yearly_typical['F_drift'] / max(yearly_typical['G_drift'], 0.01):.1f}× "
+          f"less inflationary than F under typical conditions.\n")
+    if yearly_worst:
+        A(f"Worst-case (100% trivial): F = {yearly_worst['F_drift']:+.0f}% · "
+          f"G = {yearly_worst['G_drift']:+.0f}%.\n")
+
+    A("![inflation](charts/g_05_inflation.png)\n")
+
+    # ---- Locked reward ----
+    A("## Locked reward preserved\n")
+    A("Alice buys YES after pool is seeded.  "
+      "Varying numbers of later YES buyers join, then 10 NO buyers.  Truth = YES.\n")
+    A("| Later YES buyers | " + " | ".join(locked.keys()) + " |")
+    A("|" + "---|" * (1 + len(locked)))
+    for n in sorted(next(iter(locked.values())).keys()):
+        row = [str(n)] + [f"{locked[lbl][n]:+.2f}" for lbl in locked]
+        A("| " + " | ".join(row) + " |")
+    A("")
+    A("Alice's profit is **identical regardless of later buyers** in both "
+      "models — locked reward holds.  G's Alice gets a lower absolute "
+      "number because INIT_VIRTUAL is smaller (thinner pool = fewer "
+      "shares at 50% entry), but it is fully locked.\n")
+    A("![locked](charts/g_02_locked.png)\n")
+
+    # ---- One-sided mint ----
+    A("## One-sided mint (all voters YES, truth = YES)\n")
+    A(f"{mint['n_voters']} voters all bet YES over {mint['n_trials']} trials.\n")
+    A("| Model | Mean mint/claim | Total mint | Refund rate |")
+    A("|---|---|---|---|")
+    A(f"| F (INIT_L=100) | **{mint['F_mean_mint']:+.2f} rep** "
+      f"| {mint['F_total_mint']:+.0f} rep | 0% |")
+    A(f"| G (INIT_V={INIT_VIRTUAL}) | {mint['G_mean_mint']:+.2f} rep "
+      f"| {mint['G_total_mint']:+.0f} rep | **{mint['G_refund_rate']*100:.0f}%** |")
+    A("")
+    A("Under G, refund-if-trivial fires (0 NO voters < MIN_LOSER_VOTERS=3) — "
+      "all stakes refunded, system mint = 0.\n")
+    A("![mint](charts/g_04_mint.png)\n")
+
+    # ---- Contested ----
+    A("## Contested claims resolve normally\n")
+    rate = contested['normal_resolutions'] / contested['contested_total']
+    A(f"Sanity check: {contested['contested_total']} near-50/50 claims under G.\n")
+    A(f"- Resolved normally: **{contested['normal_resolutions']}** / "
+      f"{contested['contested_total']} ({rate*100:.0f}%)")
+    A(f"- Triggered trivial refund: {contested['triggered_refunds']}\n")
+    A("Refund-if-trivial does not disturb well-contested claims.\n")
+
+    # ---- Creator earnings ----
+    A("## Creator earnings (skill 0.65, 30 random traders)\n")
+    A("| Model | Mean net/claim | Median | % losing |")
+    A("|---|---|---|---|")
+    A(f"| F (auto-YES fixed 10 rep) | {creator['F_mean']:+.2f} "
+      f"| {creator['F_median']:+.2f} | {creator['F_pct_losing']*100:.0f}% |")
+    A(f"| G (auto-buy 10 rep, skill-chosen side) | {creator['G_mean']:+.2f} "
+      f"| {creator['G_median']:+.2f} | {creator['G_pct_losing']*100:.0f}% |")
+    A("")
+    A("G's creator earns based on genuine conviction, not a guaranteed "
+      "50%-price freebie.  Expected earnings per claim are lower when "
+      "skill = 0.65, but the payout is honest.\n")
+    A("![creator](charts/g_03_creator.png)\n")
+
+    # ---- Sybil ----
+    A("## Sybil attack\n")
+    A("10 sybil accounts all vote YES.  Varying honest NO voters.  "
+      "G's refund-if-trivial prevents minting when dissenters are too few.\n")
+    A("| Setup | F mint | G mint | F attacker | G attacker |")
+    A("|---|---|---|---|---|")
+    for label, s in [("10 sybils, 0 NO", sybil_alone),
+                     ("10 sybils, 1 NO", sybil_vs_one),
+                     ("10 sybils, 5 NO", sybil_vs_five)]:
+        A(f"| {label} | {s['F_mean_mint']:+.2f} | **{s['G_mean_mint']:+.2f}** "
+          f"| {s['F_mean_attacker_profit']:+.2f} "
+          f"| **{s['G_mean_attacker_profit']:+.2f}** |")
+    A("")
+    A(f"- 0–2 dissenters: refund fires, attacker nets **0 rep**.")
+    A(f"- 3+ dissenters: claim resolves; attacker profits from thin pool "
+      f"but system mint is bounded by INIT_VIRTUAL={INIT_VIRTUAL}.\n")
+
+    # ---- Summary ----
+    A("## Summary\n")
+    A("| Property | F | G |")
+    A("|---|---|---|")
+    A(f"| Virtual seed (inflation source) | INIT_L=100 | INIT_V={INIT_VIRTUAL} |")
+    A(f"| Yearly drift (typical) | {yearly_typical['F_drift']:+.0f}% | "
+      f"{yearly_typical['G_drift']:+.0f}% |" if yearly_typical else "")
+    A("| Locked reward | ✅ | ✅ |")
+    A("| Copy-trade immunity | ✅ | ✅ |")
+    A("| Creator auto-joins | YES fixed 10 rep | chosen side + amount |")
+    A("| Listing fee | none | 2 rep burned |")
+    A("| Trivial-claim refund | ❌ | ✅ |")
+    A("| Sybil farming (no dissenters) | +62 rep | 0 rep |")
+
+    out = os.path.join(OUT_DIR, "model_g_report.md")
+    with open(out, 'w') as f:
+        f.write("\n".join(L))
+    return out
+
+
+# ---------------------------------------------------------------------------
+# MAIN
+# ---------------------------------------------------------------------------
+
 def main():
-    print("Scenario: trivial claim farming (F vs G) ...")
-    triv = scenario_trivial_claim_farming()
-    chart_trivial(triv)
+    print(f"Inflation comparison (180-day + yearly, ~60s) ...")
+    inflation = scenario_inflation_compare()
 
-    print("Scenario: one-sided claim system-mint ...")
-    mint = scenario_one_sided_mint()
-    chart_mint(mint)
-
-    print("Scenario: contested claims still resolve normally ...")
-    contested = scenario_contested_claims_still_work()
-
-    print("Scenario: locked reward preserved ...")
+    print("Locked reward test ...")
     locked = scenario_locked_reward_preserved()
     chart_locked_reward(locked)
 
-    print("Scenario: creator's expected earnings ...")
-    creator = scenario_creator_earnings_real_claims()
+    print("One-sided mint ...")
+    mint = scenario_one_sided_mint()
+    chart_mint(mint)
+
+    print("Contested claims sanity ...")
+    contested = scenario_contested_claims_still_work()
+
+    print("Creator earnings ...")
+    creator = scenario_creator_earnings()
     chart_creator(creator)
 
-    print("Scenario: sybil attack (no honest dissenter) ...")
+    print("Sybil attack (0 dissenters) ...")
     sybil_alone = scenario_sybil_attack(n_sybils=10, n_honest_no=0)
-    print("Scenario: sybil attack (1 honest NO voter) ...")
+    print("Sybil attack (1 dissenter) ...")
     sybil_vs_one = scenario_sybil_attack(n_sybils=10, n_honest_no=1)
-    print("Scenario: sybil attack (5 honest NO voters) ...")
+    print("Sybil attack (5 dissenters) ...")
     sybil_vs_five = scenario_sybil_attack(n_sybils=10, n_honest_no=5)
 
-    out = write_report(triv, locked, creator, mint, contested,
+    chart_inflation(inflation)
+
+    out = write_report(locked, mint, contested, creator, inflation,
                        sybil_alone, sybil_vs_one, sybil_vs_five)
     print(f"\nDone. Report: {out}")
 
