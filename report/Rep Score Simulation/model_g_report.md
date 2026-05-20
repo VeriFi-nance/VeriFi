@@ -12,7 +12,7 @@ Model F was the first CPMM-based system (Polymarket-style locked reward). It fix
 
 Model G fixes all three with minimal added complexity:
 
-1. **Inflation minimised**: pool depth = creator's chosen X ∈ [10, 100] rep (virtual seed drops from 100 → 10 minimum). Plus 5% burn fee on every trade, permanently removing rep. Combined effect: yearly per-person median rep is stable or slightly deflationary.
+1. **Inflation minimised**: pool depth = creator's chosen X ∈ [10, 100] rep (virtual seed drops from 100 → 10 minimum). Plus 0.2% burn fee on every trade, permanently removing rep. Combined effect: yearly per-person median rep is stable or slightly deflationary.
 2. **Trivial farming closed**: creator auto-joins with their chosen side+amount (real conviction stake), pays a 2-rep listing fee burned permanently. No guaranteed-50%-price freebie.
 3. **Refund-if-trivial**: if fewer than 3 distinct dissenters OR fewer than 5 total stakers, all stakes refunded. No rep minted on uncontested claims.
 
@@ -27,7 +27,7 @@ Model F  =  CPMM payouts  +  INIT_L=100 virtual seed
 Model G  =  CPMM payouts  +  pool depth = creator X ∈ [10,100]
             +  creator auto-joins own side+amount (locked shares @ buy price)
             +  2-rep listing fee burned
-            +  5% burn fee on every trader buy
+            +  0.2% burn fee on every trader buy
             +  refund-if-trivial: loser < 3 voters OR total < 5
 ```
 
@@ -38,13 +38,13 @@ Primary metric: **median rep per person** — honest, not skewed by high-skill w
 | Scenario | Model | Median start | Median end | Median drift | Bottom-25% end | Top-25% end |
 |---|---|---|---|---|---|---|
 | typical (25% trivial) | F | 200 | 1920 | +860% | 8 | 3677 |
-| typical (25% trivial) | G | 200 | -32 | -116% | -80 | 1279 |
+| typical (25% trivial) | G | 200 | 227 | +14% | -81 | 1971 |
 | worst-case (100% trivial) | F | 200 | 4485 | +2142% | 4443 | 4500 |
-| worst-case (100% trivial) | G | 200 | 87 | -57% | 100 | 138 |
+| worst-case (100% trivial) | G | 200 | 711 | +255% | 740 | 786 |
 
-**Typical scenario, 1 year:** median user rep F=1920 vs G=-32 (start: 200).  G median drift -116% vs F +860%.
+**Typical scenario, 1 year:** median user rep F=1920 vs G=227 (start: 200).  G median drift +14% vs F +860%.
 
-**What the negative G median means:** the 5% burn fee removes more rep than the virtual seed (INIT_V=10) adds.  The system is net deflationary — rep supply contracts over time.  Skilled users (top quartile: 1279 rep) still grow their balance; median/bottom users lose rep gradually.  This is a deliberate design choice: rep is genuinely scarce, only consistent accurate voters accumulate it.  A minimum rep floor (e.g. 10 rep) or a small daily replenishment grant can prevent users from going bankrupt if desired.
+**What the G median drift means:** with only 0.2% burn fee and a thin virtual seed (INIT_V=10), the system is very close to zero-sum. Skilled users (top quartile: 1971 rep) grow their balance; median users see modest drift (~+14%/yr). Rep is genuinely scarce — only consistent accurate voters accumulate it.  A minimum rep floor (e.g. 10 rep) or a small daily replenishment grant can prevent users from going bankrupt if desired.
 
 ![inflation](charts/g_05_inflation.png)
 
@@ -54,10 +54,10 @@ Alice buys YES after pool is seeded.  Varying numbers of later YES buyers join, 
 
 | Later YES buyers | F (INIT_L=100, creator auto-YES) | G (pool=creator X=10, creator YES) |
 |---|---|---|
-| 0 | +7.92 | +6.39 |
-| 5 | +7.92 | +6.39 |
-| 20 | +7.92 | +6.39 |
-| 50 | +7.92 | +6.39 |
+| 0 | +7.92 | +6.66 |
+| 5 | +7.92 | +6.66 |
+| 20 | +7.92 | +6.66 |
+| 50 | +7.92 | +6.66 |
 
 Alice's profit is **identical regardless of later buyers** in both models — locked reward holds.  G's Alice gets a lower absolute number because INIT_VIRTUAL is smaller (thinner pool = fewer shares at 50% entry), but it is fully locked.
 
@@ -104,7 +104,7 @@ G's creator earns based on genuine conviction, not a guaranteed 50%-price freebi
 |---|---|---|---|---|
 | 10 sybils, 0 NO | +62.24 | **+0.00** | +62.24 | **+0.00** |
 | 10 sybils, 1 NO | +52.24 | **+0.00** | +62.24 | **+0.00** |
-| 10 sybils, 5 NO | +12.24 | **-8.70** | +62.24 | **+38.80** |
+| 10 sybils, 5 NO | +12.24 | **-9.34** | +62.24 | **+40.56** |
 
 - 0–2 dissenters: refund fires, attacker nets **0 rep**.
 - 3+ dissenters: claim resolves; attacker profits from thin pool but system mint is bounded by INIT_VIRTUAL=10.
@@ -114,8 +114,8 @@ G's creator earns based on genuine conviction, not a guaranteed 50%-price freebi
 | Property | F | G |
 |---|---|---|
 | Virtual seed (inflation source) | INIT_L=100 | creator X ∈ [10,100] |
-| Burn fee | 0% | 5% per trade |
-| Median rep after 1 yr (typical) | 1920 | -32 |
+| Burn fee | 0% | 0.2% per trade |
+| Median rep after 1 yr (typical) | 1920 | 227 |
 | Locked reward | ✅ | ✅ |
 | Copy-trade immunity | ✅ | ✅ |
 | Creator auto-joins | YES fixed 10 rep | chosen side + amount (10–100) |

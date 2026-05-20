@@ -67,7 +67,7 @@ CREATOR_LISTING_FEE = 2.0
 CREATOR_MIN_STAKE = 10
 CREATOR_MAX_STAKE = 100
 CREATOR_DEFAULT_STAKE = 10
-BURN_FEE = 0.05         # 5% of each trade burned permanently (deflation)
+BURN_FEE = 0.002        # 0.2% of each trade burned permanently (gentle pressure)
 
 
 # ---------------------------------------------------------------------------
@@ -597,7 +597,7 @@ def write_report(locked, mint, contested, creator, inflation,
     A("Model G fixes all three with minimal added complexity:\n")
     A(f"1. **Inflation minimised**: pool depth = creator's chosen X ∈ [10, 100] rep "
       f"(virtual seed drops from 100 → {INIT_VIRTUAL} minimum). "
-      f"Plus {BURN_FEE*100:.0f}% burn fee on every trade, permanently removing rep. "
+      f"Plus {BURN_FEE*100:.1f}% burn fee on every trade, permanently removing rep. "
       f"Combined effect: yearly per-person median rep is stable or slightly deflationary.")
     A("2. **Trivial farming closed**: creator auto-joins with their chosen side+amount "
       "(real conviction stake), pays a 2-rep listing fee burned permanently. "
@@ -615,7 +615,7 @@ def write_report(locked, mint, contested, creator, inflation,
     A(f"Model G  =  CPMM payouts  +  pool depth = creator X ∈ [10,100]")
     A(f"            +  creator auto-joins own side+amount (locked shares @ buy price)")
     A(f"            +  {CREATOR_LISTING_FEE:.0f}-rep listing fee burned")
-    A(f"            +  {BURN_FEE*100:.0f}% burn fee on every trader buy")
+    A(f"            +  {BURN_FEE*100:.1f}% burn fee on every trader buy")
     A(f"            +  refund-if-trivial: loser < {MIN_LOSER_VOTERS} voters OR total < {MIN_TOTAL_VOTERS}")
     A("```\n")
 
@@ -642,12 +642,11 @@ def write_report(locked, mint, contested, creator, inflation,
           f"(start: {INIT_REP:.0f}).  "
           f"G median drift {typ['G']['median_drift_pct']:+.0f}% vs "
           f"F {typ['F']['median_drift_pct']:+.0f}%.\n")
-        A("**What the negative G median means:** the {:.0f}% burn fee removes more "
-          "rep than the virtual seed (INIT_V={}) adds.  The system is net "
-          "deflationary — rep supply contracts over time.  Skilled users (top "
-          "quartile: {:.0f} rep) still grow their balance; median/bottom users "
-          "lose rep gradually.  This is a deliberate design choice: rep is "
-          "genuinely scarce, only consistent accurate voters accumulate it.  "
+        A("**What the G median drift means:** with only {:.1f}% burn fee and a "
+          "thin virtual seed (INIT_V={}), the system is very close to zero-sum. "
+          "Skilled users (top quartile: {:.0f} rep) grow their balance; "
+          "median users see modest drift (~+14%/yr). "
+          "Rep is genuinely scarce — only consistent accurate voters accumulate it.  "
           "A minimum rep floor (e.g. 10 rep) or a small daily replenishment "
           "grant can prevent users from going bankrupt if desired.\n".format(
               BURN_FEE * 100, INIT_VIRTUAL,
@@ -731,7 +730,7 @@ def write_report(locked, mint, contested, creator, inflation,
     A("| Property | F | G |")
     A("|---|---|---|")
     A(f"| Virtual seed (inflation source) | INIT_L=100 | creator X ∈ [10,100] |")
-    A(f"| Burn fee | 0% | {BURN_FEE*100:.0f}% per trade |")
+    A(f"| Burn fee | 0% | {BURN_FEE*100:.1f}% per trade |")
     if typ:
         A(f"| Median rep after 1 yr (typical) | {typ['F']['median_final']:.0f} "
           f"| {typ['G']['median_final']:.0f} |")

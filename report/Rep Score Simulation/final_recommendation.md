@@ -160,6 +160,7 @@ Model G = Model F + creator-funded pool seed + refund-if-trivial.  See `model_g_
 - Creator picks X rep in [10, 100] and a starting side (YES or NO).
 - X is deposited as X locked shares on the chosen side; system mirrors X as virtual liquidity on the opposite side. Pool starts Y = N = X.
 - Creator also pays a **2-rep listing fee**, burned permanently (spam deterrent).
+- Every trader buy has a **0.2% burn fee** (rep destroyed before entering AMM). Gentle rep sink that keeps inflation near zero without being deflationary.
 - Smaller X = thinner pool, less mint capacity, bigger price impact per stake. Larger X = deeper pool, smoother trading, higher mint cap. Creator picks the trade-off based on how contested they expect the claim to be.
 
 **3. Refund-if-trivial.**
@@ -200,7 +201,7 @@ Model G = Model F + creator-funded pool seed + refund-if-trivial.  See `model_g_
 - Going from Model C to E cuts "right-but-lost" cases from **46% to 0%**.
 - Going from C to E cuts copy-trade dilution from **96% to 0%**.
 - Going from E to F (adding the energy token) compresses the leaderboard spread by **~34%** (Gini 0.64 → 0.42).
-- Going from F to G cuts 180-day inflation drift from **+425% to +102%** (typical mix), and closes the trivial-claim farming attack.
+- Going from F to G cuts yearly median rep drift from **+860% to +14%** (typical mix, 365 days), and closes the trivial-claim farming attack.
 
 ## Things still to decide
 

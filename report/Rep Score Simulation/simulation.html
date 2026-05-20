@@ -133,7 +133,7 @@
 <script>
     // --- SİSTEM DEĞİŞKENLERİ ---
     const STAKE = 10;
-    const G_BURN_FEE = 0.05;   // 5% of each trade burned in Model G
+    const G_BURN_FEE = 0.002;  // 0.2% of each trade burned in Model G
     let stakes = [];
     let yesCount = 0;
     let noCount = 0;
@@ -284,7 +284,7 @@
         let weight, shares = null;
 
         if (payoutMode === 'cpmm' || payoutMode === 'g') {
-            // Model G applies 5% burn: only (1-BURN_FEE)×STAKE enters AMM
+            // Model G applies 0.2% burn: only (1-BURN_FEE)×STAKE enters AMM
             const effectiveStake = payoutMode === 'g' ? STAKE * (1 - G_BURN_FEE) : STAKE;
             shares = cpmmBuy(side, effectiveStake);
             weight = shares / STAKE;       // for display: shares per rep paid
