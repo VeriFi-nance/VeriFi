@@ -5,7 +5,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.utils import timezone as django_timezone
 
 from .models import Position, PositionEvent
-from .ohlc_fetcher import get_ohlc_data, OHLCFetchError
+from .ohlc_fetcher import get_ohlc_data, OHLCFetchError, Interval
 from .resolution import fetch_current_price, ResolutionError
 
 logger = logging.getLogger(__name__)
@@ -18,6 +18,48 @@ def calculate_pnl(direction, entry_price, exit_price):
 
 def _round_decimal(value: float, places: str = "0.01") -> float:
     return float(Decimal(str(value)).quantize(Decimal(places), rounding=ROUND_HALF_UP))
+
+def _check_hits(candle, pos: Position) -> tuple[bool, bool]:
+    sl_hit = False
+    tp_hit = False
+    if pos.direction == Position.Direction.LONG:
+        if candle.low <= pos.stop_loss:
+            sl_hit = True
+        if candle.high >= pos.take_profit:
+            tp_hit = True
+    else:  # SHORT
+        if candle.high >= pos.stop_loss:
+            sl_hit = True
+        if candle.low <= pos.take_profit:
+            tp_hit = True
+    return sl_hit, tp_hit
+
+def _resolve_ambiguous_candle(pos: Position, target_date) -> tuple[bool, float | None, str | None, bool]:
+    """
+    Returns (resolved, exit_price, exit_status, is_ambiguous_flag).
+    Zoom into 1h -> 15m -> 1m to break ambiguity.
+    """
+    intervals_to_try = [Interval.ONE_HOUR, Interval.FIFTEEN_MIN, Interval.ONE_MIN]
+    
+    for interval in intervals_to_try:
+        try:
+            # Fetch for the single target_date
+            intraday_rows = get_ohlc_data(pos.asset, target_date, target_date, interval)
+            for candle in intraday_rows:
+                sl_hit, tp_hit = _check_hits(candle, pos)
+                if sl_hit and tp_hit:
+                    # Still ambiguous at this level! Break inner loop to try next deeper interval.
+                    break
+                elif sl_hit:
+                    return True, pos.stop_loss, Position.Status.REJECTED, False
+                elif tp_hit:
+                    return True, pos.take_profit, Position.Status.CONFIRMED, False
+        except OHLCFetchError:
+            logger.warning("Failed to fetch %s data for ambiguity resolution for %s.", interval.name, pos.asset.symbol)
+            # Fall through to next interval
+
+    # If exhausted all intervals and still ambiguous, return worst-case SL
+    return True, pos.stop_loss, Position.Status.REJECTED, True
 
 def resolve_positions(community_id: int | None = None):
     """Run Phase 1 and Phase 2 of position resolution.
@@ -63,12 +105,12 @@ def _resolve_pending(pos: Position, now: datetime):
         if pos.direction == Position.Direction.LONG:
             if candle.low <= pos.entry_price:
                 triggered = True
-                trigger_date = candle.date
+                trigger_date = candle.timestamp.date()
                 break
         else: # SHORT
             if candle.high >= pos.entry_price:
                 triggered = True
-                trigger_date = candle.date
+                trigger_date = candle.timestamp.date()
                 break
                 
     if triggered:
@@ -109,29 +151,17 @@ def _resolve_active(pos: Position, now: datetime):
     resolved = False
     exit_price = None
     exit_status = None
+    ambiguous_flag = False
     
     for candle in ohlc_rows:
-        # Check both SL and TP
-        sl_hit = False
-        tp_hit = False
-        
-        if pos.direction == Position.Direction.LONG:
-            if candle.low <= pos.stop_loss:
-                sl_hit = True
-            if candle.high >= pos.take_profit:
-                tp_hit = True
-        else: # SHORT
-            if candle.high >= pos.stop_loss:
-                sl_hit = True
-            if candle.low <= pos.take_profit:
-                tp_hit = True
+        sl_hit, tp_hit = _check_hits(candle, pos)
                 
         if sl_hit and tp_hit:
-            # Worst case: SL hit
-            exit_price = pos.stop_loss
-            exit_status = Position.Status.REJECTED
-            resolved = True
-            break
+            # Ambiguous daily candle! Fallback to higher resolutions.
+            target_date = candle.timestamp.date()
+            resolved, exit_price, exit_status, ambiguous_flag = _resolve_ambiguous_candle(pos, target_date)
+            if resolved:
+                break
         elif sl_hit:
             exit_price = pos.stop_loss
             exit_status = Position.Status.REJECTED
@@ -149,10 +179,14 @@ def _resolve_active(pos: Position, now: datetime):
         pos.status = exit_status
         pos.save(update_fields=['exit_price', 'pnl_percentage', 'status'])
         
+        details = {"message": f"Position closed via {exit_status}"}
+        if ambiguous_flag:
+            details["ambiguous"] = True
+
         PositionEvent.objects.create(
             position=pos,
             event_type=PositionEvent.EventType.RESOLUTION,
-            details={"message": f"Position closed via {exit_status}"}
+            details=details
         )
     elif now > pos.lifetime:
         # Expired. Close at latest known price

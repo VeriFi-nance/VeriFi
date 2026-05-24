@@ -46,7 +46,7 @@ class HardClaimAdmin(admin.ModelAdmin):
 
 @admin.register(OHLCData)
 class OHLCDataAdmin(admin.ModelAdmin):
-    list_display = ["id", "asset", "date", "open", "high", "low", "close"]
-    list_filter = ["asset", "date"]
+    list_display = ["id", "asset", "timestamp", "interval", "open", "high", "low", "close"]
+    list_filter = ["asset", "interval", "timestamp"]
     search_fields = ["asset__symbol"]
-    ordering = ["-date"]
+    ordering = ["-timestamp"]

@@ -55,7 +55,8 @@ def update_asset_price(asset: Asset) -> list[OHLCData]:
     new_ohlc = [
         OHLCData(
             asset=asset,
-            date=row["date"],
+            timestamp=row["timestamp"],
+            interval="1d",
             open=row["open"],
             high=row["high"],
             low=row["low"],
@@ -73,8 +74,8 @@ def update_asset_price(asset: Asset) -> list[OHLCData]:
     # 4. Return the saved OHLCData model instances for notification
     return list(
         OHLCData.objects.filter(
-            asset=asset, date__range=(start_date, today)
-        ).order_by("date")
+            asset=asset, timestamp__date__gte=start_date, timestamp__date__lte=today, interval="1d"
+        ).order_by("timestamp")
     )
 
 

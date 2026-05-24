@@ -38,6 +38,11 @@ class ObserverTestBase(TestCase):
     """Shared setup for Observer pattern tests."""
 
     def setUp(self):
+        # Prevent hitting real external APIs during tests by mocking fetch_ohlc_for_asset
+        patcher = patch("posts.ohlc_fetcher.fetch_ohlc_for_asset", return_value=[])
+        self.addCleanup(patcher.stop)
+        self.mock_fetch = patcher.start()
+
         self.user = WalletUser.objects.create(address="0x" + "a" * 40)
         self.community = Community.objects.create(
             name="Test Community", creator=self.user
@@ -169,7 +174,8 @@ class StateTransitionTests(ObserverTestBase):
         # Create OHLC data where low hits entry price
         OHLCData.objects.create(
             asset=self.asset_btc,
-            date=date.today(),
+            timestamp=timezone.now(),
+            interval="1d",
             open=105.0, high=110.0, low=99.0, close=102.0,
         )
 
@@ -197,7 +203,8 @@ class StateTransitionTests(ObserverTestBase):
         # Create OHLC data where high hits take-profit
         OHLCData.objects.create(
             asset=self.asset_btc,
-            date=date.today(),
+            timestamp=timezone.now(),
+            interval="1d",
             open=105.0, high=125.0, low=102.0, close=122.0,
         )
 
@@ -224,7 +231,8 @@ class StateTransitionTests(ObserverTestBase):
         # Create OHLC data where low hits stop-loss
         OHLCData.objects.create(
             asset=self.asset_btc,
-            date=date.today(),
+            timestamp=timezone.now(),
+            interval="1d",
             open=95.0, high=97.0, low=88.0, close=89.0,
         )
 
@@ -233,6 +241,80 @@ class StateTransitionTests(ObserverTestBase):
 
         self.assertEqual(pos.status, Position.Status.REJECTED)
         self.assertFalse(AssetSubscription.objects.filter(id=sub.id).exists())
+
+    def test_ambiguity_fallback_loop(self):
+        """If a daily candle hits both SL and TP, it falls back to 1h -> 15m to resolve."""
+        pos = self._create_position(
+            self.asset_btc, direction="long", entry_price=100.0,
+            stop_loss=90.0, take_profit=120.0, status="active",
+        )
+        PositionEvent.objects.create(
+            position=pos,
+            event_type=PositionEvent.EventType.ENTRY_TRIGGERED,
+            details={"trigger_date": timezone.now().date().isoformat()},
+        )
+        sub = AssetSubscription.objects.create(asset=self.asset_btc, position=pos)
+
+        # 1. Ambiguous Daily Candle
+        OHLCData.objects.create(
+            asset=self.asset_btc,
+            timestamp=timezone.now(),
+            interval="1d",
+            open=105.0, high=125.0, low=85.0, close=102.0,  # Hits both 90 and 120
+        )
+        
+        # 2. Ambiguous 1h Candle (Still ambiguous!)
+        OHLCData.objects.create(
+            asset=self.asset_btc,
+            timestamp=timezone.now(),
+            interval="1h",
+            open=105.0, high=125.0, low=85.0, close=102.0,
+        )
+        
+        # 3. Resolving 15m Candle (Hits TP, misses SL)
+        OHLCData.objects.create(
+            asset=self.asset_btc,
+            timestamp=timezone.now(),
+            interval="15m",
+            open=105.0, high=125.0, low=95.0, close=120.0,
+        )
+
+        _notify_position(pos, [], sub)
+        pos.refresh_from_db()
+
+        # Should be CONFIRMED because the 15m candle hit TP and not SL
+        self.assertEqual(pos.status, Position.Status.CONFIRMED)
+        self.assertFalse(AssetSubscription.objects.filter(id=sub.id).exists())
+
+    def test_ambiguity_fallback_worst_case(self):
+        """If ambiguous down to 1m, resolves to SL (worst case) and sets ambiguous flag."""
+        pos = self._create_position(
+            self.asset_btc, direction="long", entry_price=100.0,
+            stop_loss=90.0, take_profit=120.0, status="active",
+        )
+        PositionEvent.objects.create(
+            position=pos,
+            event_type=PositionEvent.EventType.ENTRY_TRIGGERED,
+            details={"trigger_date": timezone.now().date().isoformat()},
+        )
+        sub = AssetSubscription.objects.create(asset=self.asset_btc, position=pos)
+
+        for interval in ["1d", "1h", "15m", "1m"]:
+            OHLCData.objects.create(
+                asset=self.asset_btc,
+                timestamp=timezone.now(),
+                interval=interval,
+                open=105.0, high=125.0, low=85.0, close=102.0,  # Ambiguous
+            )
+
+        _notify_position(pos, [], sub)
+        pos.refresh_from_db()
+
+        self.assertEqual(pos.status, Position.Status.REJECTED)
+        
+        # Check event for ambiguous flag
+        resolution_event = pos.events.filter(event_type=PositionEvent.EventType.RESOLUTION).last()
+        self.assertTrue(resolution_event.details.get("ambiguous", False))
 
 
 class UnsubscribeTests(ObserverTestBase):
@@ -282,7 +364,7 @@ class UpdateAllAssetsTests(ObserverTestBase):
             name="FailCoin", symbol="FAIL", market_type=Asset.MarketType.CRYPTO,
         )
 
-        def side_effect(asset, start, end):
+        def side_effect(asset, start, end, interval=None):
             if asset.id == failing_asset.id:
                 raise OHLCFetchError("All providers down")
             return []

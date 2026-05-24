@@ -154,18 +154,19 @@ class HardClaimEvent(models.Model):
 
 class OHLCData(models.Model):
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE, related_name="ohlc_data")
-    date = models.DateField()
+    timestamp = models.DateTimeField()
+    interval = models.CharField(max_length=5, default="1d")
     open = models.FloatField()
     high = models.FloatField()
     low = models.FloatField()
     close = models.FloatField()
 
     class Meta:
-        unique_together = ("asset", "date")
-        ordering = ["date"]
+        unique_together = ("asset", "timestamp", "interval")
+        ordering = ["timestamp"]
 
     def __str__(self):
-        return f"{self.asset.symbol} {self.date} O={self.open} H={self.high} L={self.low} C={self.close}"
+        return f"{self.asset.symbol} {self.timestamp} ({self.interval}) O={self.open} H={self.high} L={self.low} C={self.close}"
 
 class Position(models.Model):
     class Direction(models.TextChoices):
