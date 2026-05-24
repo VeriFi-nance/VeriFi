@@ -722,33 +722,47 @@ class PositionCloseView(APIView):
         if position.author != user:
             return Response({"detail": "Only the author can close this position."}, status=status.HTTP_403_FORBIDDEN)
             
-        if position.status != Position.Status.ACTIVE:
+        if position.status not in [Position.Status.ACTIVE, Position.Status.PENDING]:
             return Response({"detail": f"Position cannot be closed manually. Current status: {position.status}."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            now = timezone.now()
-            current_price, source_url = fetch_current_price(position.asset, now)
-            
-            position.exit_price = current_price
-            
-            if position.direction == Position.Direction.LONG:
-                position.pnl_percentage = ((current_price - position.entry_price) / position.entry_price) * 100
-            else:
-                position.pnl_percentage = ((position.entry_price - current_price) / position.entry_price) * 100
+            if position.status == Position.Status.PENDING:
+                position.status = Position.Status.CLOSED_EARLY
+                position.exit_price = None
+                position.pnl_percentage = 0.0
+                position.save()
                 
-            position.status = Position.Status.CLOSED_EARLY
-            position.save()
-            
-            PositionEvent.objects.create(
-                position=position,
-                event_type=PositionEvent.EventType.MANUAL_CLOSE,
-                details={
-                    "exit_price": current_price,
-                    "pnl_percentage": position.pnl_percentage,
-                    "source": source_url,
-                    "message": "Manually closed by author"
-                }
-            )
+                PositionEvent.objects.create(
+                    position=position,
+                    event_type=PositionEvent.EventType.MANUAL_CLOSE,
+                    details={
+                        "message": "Manually cancelled by author before entry"
+                    }
+                )
+            else:
+                now = timezone.now()
+                current_price, source_url = fetch_current_price(position.asset, now)
+                
+                position.exit_price = current_price
+                
+                if position.direction == Position.Direction.LONG:
+                    position.pnl_percentage = ((current_price - position.entry_price) / position.entry_price) * 100
+                else:
+                    position.pnl_percentage = ((position.entry_price - current_price) / position.entry_price) * 100
+                    
+                position.status = Position.Status.CLOSED_EARLY
+                position.save()
+                
+                PositionEvent.objects.create(
+                    position=position,
+                    event_type=PositionEvent.EventType.MANUAL_CLOSE,
+                    details={
+                        "exit_price": current_price,
+                        "pnl_percentage": position.pnl_percentage,
+                        "source": source_url,
+                        "message": "Manually closed by author"
+                    }
+                )
             
             # Observer Pattern: unsubscribe from asset on manual close
             AssetSubscription.objects.filter(position=position).delete()
