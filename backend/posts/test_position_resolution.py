@@ -39,8 +39,8 @@ class PositionResolutionTestCase(TestCase):
         )
 
     class MockCandle:
-        def __init__(self, date, low, high, close=0):
-            self.date = date
+        def __init__(self, timestamp, low, high, close=0):
+            self.timestamp = timestamp
             self.low = low
             self.high = high
             self.close = close
@@ -51,8 +51,8 @@ class PositionResolutionTestCase(TestCase):
         
         # entry_price is 50000, so a low <= 50000 should trigger
         mock_get_ohlc.return_value = [
-            self.MockCandle(self.now.date(), low=51000, high=52000),
-            self.MockCandle((self.now + timedelta(days=1)).date(), low=49000, high=51000)
+            self.MockCandle(self.now, low=51000, high=52000),
+            self.MockCandle(self.now + timedelta(days=1), low=49000, high=51000)
         ]
         
         _resolve_pending(pos, self.now)
@@ -66,7 +66,7 @@ class PositionResolutionTestCase(TestCase):
         
         # entry_price is 50000, low never reaches it
         mock_get_ohlc.return_value = [
-            self.MockCandle(self.now.date(), low=51000, high=52000)
+            self.MockCandle(self.now, low=51000, high=52000)
         ]
         
         _resolve_pending(pos, self.now + timedelta(days=3)) # Past entry interval
@@ -76,11 +76,11 @@ class PositionResolutionTestCase(TestCase):
     @patch('posts.position_resolution.get_ohlc_data')
     def test_active_to_confirmed_long(self, mock_get_ohlc):
         pos = self.create_position(Position.Direction.LONG, 50000, 40000, 60000, status=Position.Status.ACTIVE)
-        PositionEvent.objects.create(position=pos, event_type=PositionEvent.EventType.ENTRY_TRIGGERED, details={"trigger_date": self.now.date().isoformat()})
+        PositionEvent.objects.create(position=pos, event_type=PositionEvent.EventType.ENTRY_TRIGGERED, details={"trigger_time": self.now.isoformat()})
         
         # TP is 60000
         mock_get_ohlc.return_value = [
-            self.MockCandle(self.now.date(), low=45000, high=61000)
+            self.MockCandle(self.now, low=45000, high=61000)
         ]
         
         _resolve_active(pos, self.now)
@@ -92,11 +92,11 @@ class PositionResolutionTestCase(TestCase):
     @patch('posts.position_resolution.get_ohlc_data')
     def test_active_to_rejected_long(self, mock_get_ohlc):
         pos = self.create_position(Position.Direction.LONG, 50000, 40000, 60000, status=Position.Status.ACTIVE)
-        PositionEvent.objects.create(position=pos, event_type=PositionEvent.EventType.ENTRY_TRIGGERED, details={"trigger_date": self.now.date().isoformat()})
+        PositionEvent.objects.create(position=pos, event_type=PositionEvent.EventType.ENTRY_TRIGGERED, details={"trigger_time": self.now.isoformat()})
         
         # SL is 40000
         mock_get_ohlc.return_value = [
-            self.MockCandle(self.now.date(), low=39000, high=55000)
+            self.MockCandle(self.now, low=39000, high=55000)
         ]
         
         _resolve_active(pos, self.now)
@@ -108,11 +108,11 @@ class PositionResolutionTestCase(TestCase):
     @patch('posts.position_resolution.get_ohlc_data')
     def test_active_conflict_resolves_to_sl(self, mock_get_ohlc):
         pos = self.create_position(Position.Direction.LONG, 50000, 40000, 60000, status=Position.Status.ACTIVE)
-        PositionEvent.objects.create(position=pos, event_type=PositionEvent.EventType.ENTRY_TRIGGERED, details={"trigger_date": self.now.date().isoformat()})
+        PositionEvent.objects.create(position=pos, event_type=PositionEvent.EventType.ENTRY_TRIGGERED, details={"trigger_time": self.now.isoformat()})
         
         # Both SL and TP hit
         mock_get_ohlc.return_value = [
-            self.MockCandle(self.now.date(), low=39000, high=61000)
+            self.MockCandle(self.now, low=39000, high=61000)
         ]
         
         _resolve_active(pos, self.now)
@@ -124,10 +124,10 @@ class PositionResolutionTestCase(TestCase):
     @patch('posts.position_resolution.get_ohlc_data')
     def test_active_to_expired(self, mock_get_ohlc, mock_fetch):
         pos = self.create_position(Position.Direction.LONG, 50000, 40000, 60000, status=Position.Status.ACTIVE)
-        PositionEvent.objects.create(position=pos, event_type=PositionEvent.EventType.ENTRY_TRIGGERED, details={"trigger_date": self.now.date().isoformat()})
+        PositionEvent.objects.create(position=pos, event_type=PositionEvent.EventType.ENTRY_TRIGGERED, details={"trigger_time": self.now.isoformat()})
         
         mock_get_ohlc.return_value = [
-            self.MockCandle(self.now.date(), low=45000, high=55000, close=48000)
+            self.MockCandle(self.now, low=45000, high=55000, close=48000)
         ]
         
         _resolve_active(pos, self.now + timedelta(days=8)) # Past lifetime
@@ -141,3 +141,4 @@ class PositionResolutionTestCase(TestCase):
         self.assertEqual(calculate_pnl(Position.Direction.LONG, 100, 80), -20.0)
         self.assertEqual(calculate_pnl(Position.Direction.SHORT, 100, 80), 20.0)
         self.assertEqual(calculate_pnl(Position.Direction.SHORT, 100, 120), -20.0)
+
