@@ -95,10 +95,12 @@ def _resolve_pending(pos: Position, now: datetime):
 def _resolve_active(pos: Position, now: datetime):
     # Determine when it became active. Find the ENTRY_TRIGGERED event.
     trigger_event = pos.events.filter(event_type=PositionEvent.EventType.ENTRY_TRIGGERED).first()
-    start_date = pos.created_at.date()
-    if trigger_event and "trigger_date" in trigger_event.details:
-        start_date = datetime.fromisoformat(trigger_event.details["trigger_date"]).date()
+    if not trigger_event or "trigger_date" not in trigger_event.details:
+        raise AssertionError(
+            f"The position #{pos.id} you tried to resolve active is still not triggered. You cant resolve_active an untriggered event."
+        )
         
+    start_date = datetime.fromisoformat(trigger_event.details["trigger_date"]).date()
     end_date = min(now.date(), pos.lifetime.date())
     
     try:
