@@ -356,9 +356,9 @@ def preview_resolution(hard_claim: HardClaim) -> dict[str, Any]:
     reference_price, reference_url = fetch_reference_price(hard_claim)
 
     # 2. Load OHLC data for the claim period
-    start_date = hard_claim.created_at.date()
-    end_date = hard_claim.until
-    ohlc_rows = get_ohlc_data(hard_claim.asset, start_date, end_date)
+    start_time = datetime.combine(hard_claim.created_at.date(), datetime.min.time(), tzinfo=timezone.utc)
+    end_time = datetime.combine(hard_claim.until, datetime.min.time(), tzinfo=timezone.utc)
+    ohlc_rows = get_ohlc_data(hard_claim.asset, start_time, end_time)
 
     if not ohlc_rows:
         raise ResolutionError("NO_OHLC_DATA", "Could not obtain any OHLC data for the claim period.")
