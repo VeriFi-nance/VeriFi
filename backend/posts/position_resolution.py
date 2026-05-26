@@ -4,7 +4,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from django.utils import timezone as django_timezone
 
-from .models import Position, PositionEvent
+from .models import Position, PositionEvent, OHLCData
 from .ohlc_fetcher import get_ohlc_data, OHLCFetchError, Interval
 from .resolution import fetch_current_price, ResolutionError
 
