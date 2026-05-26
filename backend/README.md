@@ -84,7 +84,7 @@ cp .env.example .env
 | `TWELVE_DATA_API_KEY` | OHLC API key (required in production) |
 | `ADMIN_ADDRESSES` | Comma-separated wallet addresses for claim admin |
 
-Production deploy uses [Render](../render.yaml) with Gunicorn, WhiteNoise, and PostgreSQL. See [DEPLOYMENT.md](../DEPLOYMENT.md) for platform setup.
+Production ($0): Render free web + Neon Postgres + GitHub Actions crons. See [DEPLOYMENT.md](../DEPLOYMENT.md).
 
 ## Useful Commands
 
