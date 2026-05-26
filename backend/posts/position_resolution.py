@@ -102,8 +102,51 @@ def _resolve_pending(pos: Position, now: datetime):
     
     try:
         ohlc_rows = get_ohlc_data(pos.asset, pos.created_at, end_time, mixed_resolution=True)
-    except OHLCFetchError:
-        return # Skip and retry later
+    except OHLCFetchError as e:
+        logger.warning(f"Failed to fetch OHLC data for pending position {pos.id}: {e}")
+        
+        # If expired, we must resolve it now
+        if now > pos.entry_interval:
+            try:
+                # Fallback check: see if the daily price ever hit the entry price
+                daily_rows = get_ohlc_data(pos.asset, pos.created_at, end_time, interval=Interval.ONE_DAY, mixed_resolution=False)
+                hit_in_daily = False
+                for candle in daily_rows:
+                    if pos.direction == Position.Direction.LONG:
+                        if candle.low <= pos.entry_price:
+                            hit_in_daily = True
+                            break
+                    else:
+                        if candle.high >= pos.entry_price:
+                            hit_in_daily = True
+                            break
+                
+                if not hit_in_daily:
+                    # It was never hit even daily, so it is a standard MISSED position
+                    pos.status = Position.Status.MISSED
+                    pos.save(update_fields=['status'])
+                    PositionEvent.objects.create(
+                        position=pos,
+                        event_type=PositionEvent.EventType.RESOLUTION,
+                        details={"message": "Missed entry price within interval"}
+                    )
+                    return
+            except Exception:
+                pass # If daily query also fails, fallback to transition below
+            
+            # Either it hit in daily (but intraday failed) or we couldn't fetch daily at all.
+            # Resolve to MISSED but mark as ambiguous.
+            pos.status = Position.Status.MISSED
+            pos.save(update_fields=['status'])
+            PositionEvent.objects.create(
+                position=pos,
+                event_type=PositionEvent.EventType.RESOLUTION,
+                details={
+                    "message": "Missed entry: Trigger occurred on creation day but hourly data was unavailable to resolve time ambiguity.",
+                    "ambiguous": True
+                }
+            )
+        return
     
     triggered = False
     trigger_time = None
@@ -156,8 +199,90 @@ def _resolve_active(pos: Position, now: datetime):
     
     try:
         ohlc_rows = get_ohlc_data(pos.asset, start_time, end_time, mixed_resolution=True)
-    except OHLCFetchError:
-        return # Skip and retry later
+    except OHLCFetchError as e:
+        logger.warning(f"Failed to fetch OHLC data for active position {pos.id}: {e}")
+        # If the lifetime has expired, we must resolve it.
+        if now > pos.lifetime:
+            try:
+                # Try fetching only daily data to check for SL/TP hits
+                daily_rows = get_ohlc_data(pos.asset, start_time, end_time, interval=Interval.ONE_DAY, mixed_resolution=False)
+                resolved = False
+                exit_price = None
+                exit_status = None
+                ambiguous_flag = False
+                
+                for candle in daily_rows:
+                    sl_hit, tp_hit = _check_hits(candle, pos)
+                    if sl_hit and tp_hit:
+                        exit_price = pos.stop_loss
+                        exit_status = Position.Status.REJECTED
+                        resolved = True
+                        ambiguous_flag = True
+                        break
+                    elif sl_hit:
+                        exit_price = pos.stop_loss
+                        exit_status = Position.Status.REJECTED
+                        resolved = True
+                        break
+                    elif tp_hit:
+                        exit_price = pos.take_profit
+                        exit_status = Position.Status.CONFIRMED
+                        resolved = True
+                        break
+                
+                if resolved:
+                    pos.exit_price = exit_price
+                    pos.pnl_percentage = calculate_pnl(pos.direction, pos.entry_price, exit_price)
+                    pos.status = exit_status
+                    pos.save(update_fields=['exit_price', 'pnl_percentage', 'status'])
+                    
+                    details = {"message": f"Position closed via {exit_status}"}
+                    if ambiguous_flag:
+                        details["ambiguous"] = True
+                    
+                    PositionEvent.objects.create(
+                        position=pos,
+                        event_type=PositionEvent.EventType.RESOLUTION,
+                        details=details
+                    )
+                    return
+            except Exception:
+                pass # Fall through to closing at latest known price
+            
+            # If we couldn't resolve via daily check, close at last known price (or current price) as EXPIRED
+            exit_price = None
+            try:
+                cached_daily = OHLCData.objects.filter(
+                    asset=pos.asset,
+                    timestamp__gte=start_time,
+                    timestamp__lte=end_time,
+                    interval=Interval.ONE_DAY.value
+                ).order_by('timestamp').last()
+                if cached_daily:
+                    exit_price = cached_daily.close
+            except Exception:
+                pass
+            
+            if exit_price is None:
+                try:
+                    exit_price, _ = fetch_current_price(pos.asset, now)
+                except ResolutionError:
+                    return # Can't fetch, retry later
+            
+            pos.exit_price = exit_price
+            pos.pnl_percentage = calculate_pnl(pos.direction, pos.entry_price, exit_price)
+            pos.status = Position.Status.EXPIRED
+            pos.save(update_fields=['exit_price', 'pnl_percentage', 'status'])
+            
+            PositionEvent.objects.create(
+                position=pos,
+                event_type=PositionEvent.EventType.RESOLUTION,
+                details={
+                    "message": "Position expired, closed at market (ambiguous due to fetch failure)",
+                    "ambiguous": True
+                }
+            )
+        return
 
     resolved = False
     exit_price = None
@@ -168,7 +293,7 @@ def _resolve_active(pos: Position, now: datetime):
         sl_hit, tp_hit = _check_hits(candle, pos)
                 
         if sl_hit and tp_hit:
-            # Ambiguous daily candle! Fallback to higher resolutions.
+            # Ambiguous candle! Fallback to higher resolutions.
             target_date = candle.timestamp.date()
             resolved, exit_price, exit_status, ambiguous_flag = _resolve_ambiguous_candle(pos, target_date)
             if resolved:
