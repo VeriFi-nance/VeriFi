@@ -474,6 +474,7 @@ def _ensure_daily_cached(asset: Asset, start_date: date, end_date: date):
                 OHLCData.objects.bulk_create(new_rows, ignore_conflicts=True)
         except OHLCFetchError:
             logger.warning("Could not fetch missing daily OHLC data for %s (%s -> %s)", asset.symbol, min_missing, max_missing)
+            raise
 
 
 def _ensure_interval_cached(asset: Asset, start_time: datetime, end_time: datetime, interval: Interval):
@@ -540,6 +541,7 @@ def _ensure_interval_cached(asset: Asset, start_time: datetime, end_time: dateti
                 OHLCData.objects.bulk_create(new_rows, ignore_conflicts=True)
         except OHLCFetchError:
             logger.warning("Could not fetch missing OHLC data for %s (%s -> %s) at interval %s", asset.symbol, min_missing, max_missing, interval.name)
+            raise
 
 
 def _ensure_sub_day_cached(asset: Asset, sub_start: R1mDateTime, sub_end: R1mDateTime, interval: Interval):
@@ -596,6 +598,7 @@ def _ensure_sub_day_cached(asset: Asset, sub_start: R1mDateTime, sub_end: R1mDat
                 OHLCData.objects.bulk_create(new_rows, ignore_conflicts=True)
         except OHLCFetchError:
             logger.warning("Could not fetch missing sub-day OHLC data for %s (%s -> %s) at interval %s", asset.symbol, min_missing, max_missing, interval.name)
+            raise
 
 
 def _partition_range(start_time: R1mDateTime, end_time: R1mDateTime) -> list[tuple[R1mDateTime, R1mDateTime, Interval]]:
