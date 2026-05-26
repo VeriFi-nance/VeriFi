@@ -23,6 +23,41 @@ from .models import Asset, OHLCData
 logger = logging.getLogger(__name__)
 
 
+class R1mDateTime(datetime):
+    """
+    A subclass of datetime representing a timezone-aware UTC datetime 
+    aligned strictly to 1-minute precision (seconds/microseconds set to 0).
+    """
+
+    @classmethod
+    def floor(cls, dt: datetime) -> R1mDateTime:
+        """
+        Constructs an R1mDateTime by rounding down (truncating seconds and microseconds).
+        Also enforces timezone-aware UTC.
+        """
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = dt.astimezone(timezone.utc)
+        return cls(dt.year, dt.month, dt.day, dt.hour, dt.minute, tzinfo=dt.tzinfo)
+
+    @classmethod
+    def ceil(cls, dt: datetime) -> R1mDateTime:
+        """
+        Constructs an R1mDateTime by rounding up to the next minute if there are non-zero seconds/microseconds.
+        Also enforces timezone-aware UTC.
+        """
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = dt.astimezone(timezone.utc)
+            
+        if dt.second > 0 or dt.microsecond > 0:
+            dt = dt + timedelta(minutes=1)
+            
+        return cls(dt.year, dt.month, dt.day, dt.hour, dt.minute, tzinfo=dt.tzinfo)
+
+
 class OHLCRow(TypedDict):
     timestamp: datetime
     open: float
