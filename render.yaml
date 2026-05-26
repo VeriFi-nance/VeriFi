@@ -1,60 +1,76 @@
 databases:
   - name: verifi-db
-    plan: free
+    plan: basic-256mb
     databaseName: verifi
     user: verifi
 
 envVarGroups:
-  - name: verifi-backend-env
+  - name: verifi-common
     envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: verifi-db
-          property: connectionString
-      - key: DJANGO_SECRET_KEY
-        generateValue: true
       - key: DJANGO_DEBUG
         value: "false"
       - key: DJANGO_ALLOWED_HOSTS
         value: verifi-backend.onrender.com
       - key: CORS_ALLOWED_ORIGINS
         value: https://your-app.vercel.app
-      - key: TWELVE_DATA_API_KEY
-        sync: false
-      - key: ADMIN_ADDRESSES
-        sync: false
       - key: PYTHON_VERSION
         value: "3.12"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
 
 services:
   - type: web
     name: verifi-backend
     runtime: python
-    plan: free
+    plan: starter
     rootDir: backend
     buildCommand: "./build.sh"
     startCommand: "uv run gunicorn core.wsgi:application --bind 0.0.0.0:$PORT"
     envVars:
-      - fromGroup: verifi-backend-env
+      - fromGroup: verifi-common
+      - key: DATABASE_URL
+        fromDatabase:
+          name: verifi-db
+          property: connectionString
+      - key: TWELVE_DATA_API_KEY
+        sync: false
+      - key: ADMIN_ADDRESSES
+        sync: false
 
   - type: cron
     name: verifi-price-updater
     runtime: python
-    plan: free
+    plan: starter
     rootDir: backend
     schedule: "*/10 * * * *"
     buildCommand: "pip install uv && uv sync"
     startCommand: "uv run python manage.py update_and_notify"
     envVars:
-      - fromGroup: verifi-backend-env
+      - fromGroup: verifi-common
+      - key: DATABASE_URL
+        fromDatabase:
+          name: verifi-db
+          property: connectionString
+      - key: TWELVE_DATA_API_KEY
+        sync: false
+      - key: ADMIN_ADDRESSES
+        sync: false
 
   - type: cron
     name: verifi-resolve-claims
     runtime: python
-    plan: free
+    plan: starter
     rootDir: backend
     schedule: "0 * * * *"
     buildCommand: "pip install uv && uv sync"
     startCommand: "uv run python manage.py resolve_claims"
     envVars:
-      - fromGroup: verifi-backend-env
+      - fromGroup: verifi-common
+      - key: DATABASE_URL
+        fromDatabase:
+          name: verifi-db
+          property: connectionString
+      - key: TWELVE_DATA_API_KEY
+        sync: false
+      - key: ADMIN_ADDRESSES
+        sync: false
