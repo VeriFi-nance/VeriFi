@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.utils import timezone as django_timezone
@@ -41,10 +41,17 @@ def _resolve_ambiguous_candle(pos: Position, target_date) -> tuple[bool, float |
     """
     intervals_to_try = [Interval.ONE_HOUR, Interval.FIFTEEN_MIN, Interval.ONE_MIN]
     
+    target_start = datetime.combine(target_date, datetime.min.time(), tzinfo=timezone.utc)
+    duration_map = {
+        Interval.ONE_HOUR: timedelta(hours=23),
+        Interval.FIFTEEN_MIN: timedelta(hours=23, minutes=45),
+        Interval.ONE_MIN: timedelta(hours=23, minutes=59)
+    }
+    
     for interval in intervals_to_try:
         try:
-            # Fetch for the single target_date
-            intraday_rows = get_ohlc_data(pos.asset, target_date, target_date, interval)
+            target_end = target_start + duration_map[interval]
+            intraday_rows = get_ohlc_data(pos.asset, target_start, target_end, interval)
             for candle in intraday_rows:
                 sl_hit, tp_hit = _check_hits(candle, pos)
                 if sl_hit and tp_hit:
@@ -90,39 +97,38 @@ def resolve_positions(community_id: int | None = None):
             logger.error(f"Error resolving active position {pos.id}: {e}")
 
 def _resolve_pending(pos: Position, now: datetime):
-    # OHLC data from creation up to today or entry_interval, whichever is earlier
-    end_date = min(now.date(), pos.entry_interval.date())
+    # Query window: from position creation up to the entry limit
+    end_time = min(now, pos.entry_interval)
     
     try:
-        ohlc_rows = get_ohlc_data(pos.asset, pos.created_at.date(), end_date)
+        ohlc_rows = get_ohlc_data(pos.asset, pos.created_at, end_time, mixed_resolution=True)
     except OHLCFetchError:
         return # Skip and retry later
     
     triggered = False
-    trigger_date = None
+    trigger_time = None
     
     for candle in ohlc_rows:
         if pos.direction == Position.Direction.LONG:
             if candle.low <= pos.entry_price:
                 triggered = True
-                trigger_date = candle.timestamp.date()
+                trigger_time = candle.timestamp
                 break
         else: # SHORT
             if candle.high >= pos.entry_price:
                 triggered = True
-                trigger_date = candle.timestamp.date()
+                trigger_time = candle.timestamp
                 break
                 
     if triggered:
         pos.status = Position.Status.ACTIVE
         pos.save(update_fields=['status'])
         
-        # We need to record when it was triggered, possibly updating created_at logic,
-        # but since we only have created_at, we will record an event.
+        # Record trigger_time as ISO string for the active phase start
         PositionEvent.objects.create(
             position=pos,
             event_type=PositionEvent.EventType.ENTRY_TRIGGERED,
-            details={"trigger_date": trigger_date.isoformat()}
+            details={"trigger_time": trigger_time.isoformat()}
         )
     elif now > pos.entry_interval:
         # Time ran out, missed entry
@@ -137,14 +143,19 @@ def _resolve_pending(pos: Position, now: datetime):
 def _resolve_active(pos: Position, now: datetime):
     # Determine when it became active. Find the ENTRY_TRIGGERED event.
     trigger_event = pos.events.filter(event_type=PositionEvent.EventType.ENTRY_TRIGGERED).first()
-    start_date = pos.created_at.date()
-    if trigger_event and "trigger_date" in trigger_event.details:
-        start_date = datetime.fromisoformat(trigger_event.details["trigger_date"]).date()
+    start_time = pos.created_at
+    if trigger_event:
+        if "trigger_time" in trigger_event.details:
+            start_time = datetime.fromisoformat(trigger_event.details["trigger_time"])
+        elif "trigger_date" in trigger_event.details:
+            # Fallback for legacy database records
+            trigger_date = datetime.fromisoformat(trigger_event.details["trigger_date"]).date()
+            start_time = datetime.combine(trigger_date, datetime.min.time(), tzinfo=timezone.utc)
         
-    end_date = min(now.date(), pos.lifetime.date())
+    end_time = min(now, pos.lifetime)
     
     try:
-        ohlc_rows = get_ohlc_data(pos.asset, start_date, end_date)
+        ohlc_rows = get_ohlc_data(pos.asset, start_time, end_time, mixed_resolution=True)
     except OHLCFetchError:
         return # Skip and retry later
 
@@ -208,3 +219,4 @@ def _resolve_active(pos: Position, now: datetime):
             event_type=PositionEvent.EventType.RESOLUTION,
             details={"message": "Position expired, closed at market"}
         )
+
