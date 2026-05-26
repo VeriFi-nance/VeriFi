@@ -68,13 +68,23 @@ backend/
 
 ## Environment Variables
 
-Create a `.env` file in the backend directory if needed for sensitive configuration:
+Copy [`.env.example`](.env.example) to `.env` in this directory for local development:
 
 ```bash
-DEBUG=True
-SECRET_KEY=your-secret-key-here
-ALLOWED_HOSTS=localhost,127.0.0.1
+cp .env.example .env
 ```
+
+| Variable | Description |
+|----------|-------------|
+| `DJANGO_SECRET_KEY` | Django secret key (required in production) |
+| `DJANGO_DEBUG` | `True` locally; `false` on Render |
+| `DJANGO_ALLOWED_HOSTS` | Comma-separated hostnames |
+| `DATABASE_URL` | Defaults to SQLite; Render sets Postgres URL |
+| `CORS_ALLOWED_ORIGINS` | Frontend origin(s), e.g. `http://localhost:5173` |
+| `TWELVE_DATA_API_KEY` | OHLC API key (required in production) |
+| `ADMIN_ADDRESSES` | Comma-separated wallet addresses for claim admin |
+
+Production deploy uses [Render](../render.yaml) with Gunicorn, WhiteNoise, and PostgreSQL. See [DEPLOYMENT.md](../DEPLOYMENT.md) for platform setup.
 
 ## Useful Commands
 
@@ -97,11 +107,4 @@ uv run python manage.py test
 
 ## CORS Configuration
 
-Update `core/settings.py` to configure CORS if needed:
-
-```python
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",  # Frontend dev server
-    "http://localhost:3000",
-]
-```
+Set `CORS_ALLOWED_ORIGINS` in `.env` (comma-separated). Production must list your Vercel URL exactly (no wildcard).
