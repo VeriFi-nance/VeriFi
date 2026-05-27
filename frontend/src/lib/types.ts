@@ -108,6 +108,63 @@ export interface ProfileStats {
   following: string[];
   is_following?: boolean;
   profitability?: ProfitabilityData | null;
+  rep?: number;
+  energy?: number;
+  energy_cap?: number;
+}
+
+export interface MarketYourStake {
+  side: 'YES' | 'NO';
+  shares: number;
+  rep_paid_gross: number;
+  entry_price: number;
+  is_creator: boolean;
+  locked_payout_if_win: number;
+}
+
+export interface ClaimMarketItem {
+  claim_id: number;
+  yes_price: number;
+  y_reserve: number;
+  n_reserve: number;
+  yes_outstanding: number;
+  no_outstanding: number;
+  escrow: number;
+  total_burned: number;
+  creator_side: 'YES' | 'NO';
+  creator_stake_rep: number;
+  listing_fee_burned: number;
+  resolved: boolean;
+  refunded_trivial: boolean;
+  stake_count: number;
+  your_stake: MarketYourStake | null;
+  trader_stake: number;
+  burn_fee: number;
+  min_loser_voters: number;
+  min_total_voters: number;
+}
+
+export interface BuyPreviewResult {
+  side: 'YES' | 'NO';
+  rep_amount: number;
+  shares: number;
+  entry_price: number;
+  locked_payout_if_win: number;
+  new_yes_price: number;
+}
+
+export interface BuyResult {
+  market: ClaimMarketItem;
+  stake: {
+    side: 'YES' | 'NO';
+    shares: number;
+    rep_paid_gross: number;
+    rep_paid_net: number;
+    entry_price: number;
+    locked_payout_if_win: number;
+  };
+  user_rep: number;
+  user_energy: number;
 }
 
 export interface CommunityItem {

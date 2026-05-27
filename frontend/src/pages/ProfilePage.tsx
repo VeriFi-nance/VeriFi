@@ -134,7 +134,7 @@ export default function ProfilePage() {
           </div>
           
           {stats && (
-            <div className="flex gap-6 text-sm pt-2">
+            <div className="flex gap-6 text-sm pt-2 flex-wrap">
               <div className="flex flex-col">
                 <span className="font-semibold text-lg">{stats.followers_count}</span>
                 <span className="text-muted-foreground text-xs uppercase tracking-wider">Followers</span>
@@ -143,6 +143,20 @@ export default function ProfilePage() {
                 <span className="font-semibold text-lg">{stats.following_count}</span>
                 <span className="text-muted-foreground text-xs uppercase tracking-wider">Following</span>
               </div>
+              {stats.rep != null && (
+                <div className="flex flex-col">
+                  <span className="font-semibold text-lg font-mono">{stats.rep.toFixed(0)}</span>
+                  <span className="text-muted-foreground text-xs uppercase tracking-wider">Rep</span>
+                </div>
+              )}
+              {stats.energy != null && (
+                <div className="flex flex-col">
+                  <span className="font-semibold text-lg font-mono">
+                    {Math.floor(stats.energy)}/{stats.energy_cap ?? 4}
+                  </span>
+                  <span className="text-muted-foreground text-xs uppercase tracking-wider">Energy</span>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

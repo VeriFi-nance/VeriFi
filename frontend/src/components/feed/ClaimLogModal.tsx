@@ -6,6 +6,7 @@ import type { HardClaimItem, AssetItem, ClaimChartData } from '@/lib/types';
 import { truncateAddress } from '../HardClaimCard';
 import { getClaimChartData } from '@/lib/api';
 import { PriceChart } from './PriceChart';
+import { MarketPanel } from '../MarketPanel';
 
 interface ClaimLogModalProps {
   isOpen: boolean;
@@ -63,6 +64,10 @@ export function ClaimLogModal({ isOpen, onClose, claim, assets }: ClaimLogModalP
             {assetSymbol} {isBullish ? '▲' : '▼'} {claim.percentage.toFixed(1)}%
           </DialogTitle>
         </DialogHeader>
+
+        <div className="mt-4">
+          <MarketPanel claimId={claim.id} />
+        </div>
 
         <div className="mt-4 space-y-6 relative before:absolute before:inset-y-0 before:left-[15px] before:w-px before:bg-border">
           {/* Fallback creation event if not in DB */}

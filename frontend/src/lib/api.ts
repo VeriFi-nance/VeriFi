@@ -1,5 +1,5 @@
 import { getToken } from './auth';
-import type { ReviewClaim, PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, ProfileStats, CommunityItem, CommunityMembershipItem, PositionItem } from './types';
+import type { ReviewClaim, PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, ProfileStats, CommunityItem, CommunityMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult } from './types';
 
 const BASE_URL = 'http://localhost:8000';
 
@@ -104,11 +104,50 @@ export async function createHardClaim(data: {
   direction: string;
   percentage: number;
   until: string;
+  market?: { side: 'YES' | 'NO'; stake_rep: number };
 }): Promise<HardClaimItem> {
   return request('/api/posts/hard-claims/', {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(data),
+  });
+}
+
+export async function getMarket(claimId: number): Promise<ClaimMarketItem> {
+  return request(`/api/posts/hard-claims/${claimId}/market/`, {
+    headers: authHeaders(),
+  });
+}
+
+export async function createMarket(
+  claimId: number,
+  body: { side: 'YES' | 'NO'; stake_rep: number }
+): Promise<ClaimMarketItem> {
+  return request(`/api/posts/hard-claims/${claimId}/market/create/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  });
+}
+
+export async function previewBuy(
+  claimId: number,
+  side: 'YES' | 'NO'
+): Promise<BuyPreviewResult> {
+  return request(
+    `/api/posts/hard-claims/${claimId}/market/preview/?side=${side}`,
+    { headers: authHeaders() }
+  );
+}
+
+export async function buyShares(
+  claimId: number,
+  side: 'YES' | 'NO'
+): Promise<BuyResult> {
+  return request(`/api/posts/hard-claims/${claimId}/market/buy/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ side }),
   });
 }
 

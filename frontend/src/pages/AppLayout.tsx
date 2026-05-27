@@ -6,6 +6,7 @@ import { Home, User, LogOut, Sun, Moon, Users } from 'lucide-react';
 import { clearAuth, loadAddress } from '@/lib/auth';
 import { clearPrivateKey } from '@/lib/crypto';
 import { loadTheme, toggleTheme, type Theme } from '@/lib/theme';
+import { EnergyMeter } from '@/components/EnergyMeter';
 
 /** Derive a stable avatar background hue from an address. */
 function avatarColor(addr: string): string {
@@ -159,6 +160,8 @@ export default function AppLayout() {
 
             {/* Right side controls */}
             <div className="flex items-center gap-3">
+              <EnergyMeter />
+
               {/* Theme toggle */}
               <Button
                 variant="ghost"
