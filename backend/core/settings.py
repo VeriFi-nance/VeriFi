@@ -39,14 +39,20 @@ ALLOWED_HOSTS = [
     if h.strip()
 ]
 
-CORS_ALLOWED_ORIGINS = [
-    o.strip()
-    for o in os.environ.get(
-        "CORS_ALLOWED_ORIGINS",
-        "http://localhost:5173",
-    ).split(",")
-    if o.strip()
-]
+def _parse_origins(raw: str, default: str) -> list[str]:
+    """Parse comma-separated origins; strip whitespace and trailing slashes."""
+    origins = []
+    for o in os.environ.get(raw, default).split(","):
+        o = o.strip().rstrip("/")
+        if o:
+            origins.append(o)
+    return origins
+
+
+CORS_ALLOWED_ORIGINS = _parse_origins(
+    "CORS_ALLOWED_ORIGINS",
+    "http://localhost:5173",
+)
 
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
