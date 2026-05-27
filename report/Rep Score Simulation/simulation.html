@@ -34,10 +34,14 @@
     <h1>Repütasyon Skoru Simülatörü</h1>
     
     <div class="formulas">
-        <strong>Sistem Kuralları:</strong> Sabit Stake: 10 Rep<br>
-        <strong>EVET Fiyatı</strong> = (x + 1) / (Toplam_Oy + 2)<br>
-        <strong>Ağırlık (Weight)</strong> = 1 / Giriş_Fiyatı<br>
-        <strong>Kazanma Durumunda Payout</strong> = Toplam_Havuz * (Kişinin_Ağırlığı / Kazanan_Taraf_Toplam_Ağırlığı)
+        <strong>Model G — Final Design (yaratıcı = normal trader + kazanç payı):</strong><br>
+        <strong>1. Sanal seed:</strong> Pool Y=N=10 başlar (protokol mint, gerçek backing yok).<br>
+        <strong>2. Yaratıcı X rep yatırır:</strong> Adil CPMM share sayısı (sanki Y=N=10 anında alım yapmış gibi). Pool her iki tarafa da X eklenerek <strong>50/50</strong> kalır (mirror).<br>
+        <strong>3. Listing fee:</strong> 2 rep açılışta yakılır (spam önlemi).<br>
+        <strong>4. Burn fee:</strong> Her trade'de %5 yakılır (yaratıcı dahil).<br>
+        <strong>5. Yaratıcı kazanç payı:</strong> Yaratıcının tarafı kazanırsa, kaybedenlerin net havuzunun <strong>%5</strong>'ini ekstra alır (transfer, mint değil).<br>
+        <strong>6. Trivial iadesi:</strong> Kaybeden &lt; 3 oy <em>VEYA</em> toplam &lt; 5 oy → tüm stake iadesi (burn korunur).<br>
+        <strong>Trader payoutu:</strong> shares × 1 Rep (kilitli, alım anında belirlenir; locked reward invariant korunur).
     </div>
 
     <div class="dashboard" style="margin-top: 15px;">
@@ -53,11 +57,18 @@
                     <button class="btn btn-no" onclick="addMany('NO', 10)">10 HAYIR</button>
                     <button class="btn btn-yes" onclick="addRandom(50)">50 Rastgele</button>
                 </div>
+                <div id="gNote" style="font-size:0.9em; padding: 8px; background: #eafaf1; border-radius: 5px; color:#16a085;">
+                    <div style="padding:6px; background:#fff; border-radius:4px; border:1px solid #d5e8e1;">
+                        <strong>Yaratıcı:</strong>
+                        Taraf: <select id="gCreatorSide"><option value="YES">EVET</option><option value="NO">HAYIR</option></select>
+                        · Stake (X): <input id="gCreatorStake" type="number" min="10" max="100" step="10" value="10" style="width:60px;">
+                        <button class="btn btn-reset" style="padding:3px 8px; font-size:0.85em; background-color:#16a085;" onclick="applyCreatorAutoStake()">Uygula + Sıfırla</button>
+                    </div>
+                    <span style="color:#7f8c8d; font-size:0.85em;">Yaratıcı X küçük (10) → normal trader gibi davranır + %5 kesinti kazançlı çıkma fırsatı verir.</span>
+                </div>
                 <div style="display: flex; gap: 5px; flex-wrap: wrap;">
-                    <button class="btn btn-reset" onclick="togglePayoutMethod()">Payout Değiştir</button>
                     <button class="btn btn-reset" onclick="resetSim()">Sıfırla</button>
                 </div>
-                <div style="font-size: 0.95em; margin-top: 5px;">Aktif Model: <span id="payoutMethodLabel">Model C, Default (Parimutuel)</span></div>
             </div>
         </div>
         <div class="panel text-center">
@@ -65,16 +76,28 @@
             <div class="stats">Toplam Havuz: <span id="poolVal">0</span> Rep</div>
             <div class="stats" style="color: #27ae60;">EVET Fiyatı: <span id="yesPrice">50.0</span>%</div>
             <div class="stats" style="color: #c0392b;">HAYIR Fiyatı: <span id="noPrice">50.0</span>%</div>
-            <div id="cpmmStats" style="display:none; font-size: 0.95em; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ccc;">
-                <div>Y reserve: <span id="yReserveVal">100.00</span> · N reserve: <span id="nReserveVal">100.00</span></div>
-                <div>LP subsidy exposure: <span id="lpSubsidyVal" style="color:#c0392b;">0.00</span> Rep</div>
+            <div id="cpmmStats" style="font-size: 0.95em; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ccc;">
+                <div>Y reserve: <span id="yReserveVal">10.00</span> · N reserve: <span id="nReserveVal">10.00</span></div>
+                <div id="gTrivialInfo" style="margin-top: 4px; padding-top: 4px; border-top: 1px dotted #ccc;">
+                    Trivial check (EVET kazanırsa): <span id="gTrivialYes" style="font-weight:bold;">—</span>
+                    · Trivial check (HAYIR kazanırsa): <span id="gTrivialNo" style="font-weight:bold;">—</span>
+                    <br><span style="color:#7f8c8d; font-size:0.9em;">"İade" = kaybeden tarafta &lt; 3 oy <em>VEYA</em> toplam &lt; 5 oy → tüm stake'ler iade edilir. "Normal" = claim CPMM math ile çözülür, ödüller kilitli.</span>
+                </div>
             </div>
         </div>
-    </div>
-
-    <div class="chart-container" id="weightChartContainer">
-        <h3>EVET Ağırlık Eğrisi</h3>
-        <canvas id="ammChart"></canvas>
+        <div class="panel text-center" style="background:#fff8e1; border-color:#ffe082;">
+            <h3>Sistem Rep Takibi</h3>
+            <div class="stats">Sistemdeki Toplam Rep: <span id="repIn">0</span></div>
+            <div style="font-size: 0.95em; margin-top: 8px;">EVET kazanırsa ödeme: <span id="repOutYes" style="color:#27ae60;">0.00</span></div>
+            <div style="font-size: 0.95em;">HAYIR kazanırsa ödeme: <span id="repOutNo" style="color:#27ae60;">0.00</span></div>
+            <div style="font-size: 0.95em; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ccc;">
+                Enflasyon (EVET): <span id="driftYes" style="font-weight:bold;">+0.00</span> Rep
+                <br>Enflasyon (HAYIR): <span id="driftNo" style="font-weight:bold;">+0.00</span> Rep
+            </div>
+            <div style="font-size: 0.85em; color: #7f8c8d; margin-top: 6px;">
+                Sıfır enflasyon = LP'ler ve oyuncular arasında rep yeniden dağıtılıyor, sisteme yeni rep eklenmiyor.
+            </div>
+        </div>
     </div>
 
     <div class="chart-container">
@@ -105,27 +128,83 @@
     let stakes = [];
     let yesCount = 0;
     let noCount = 0;
-    let chartInstance = null;
     let yesPriceChart = null;
     let yesPriceHistory = [];
     let voteHistory = [];
-    // payoutMode: 'default' (parimutuel) | 'late' (late-adoption parimutuel) | 'cpmm' (Polymarket-style)
-    let payoutMode = 'default';
-
-    // --- CPMM (Polymarket-style) STATE ---
-    const CPMM_INIT_L = 100;          // virtual liquidity seed each side
-    let yReserve = CPMM_INIT_L;       // YES shares in AMM pool
-    let nReserve = CPMM_INIT_L;       // NO shares in AMM pool
+    // --- POOL STATE ---
+    let yReserve = 10;                // YES shares in AMM pool
+    let nReserve = 10;                // NO shares in AMM pool
     let yesOutstanding = 0;           // YES shares held by users (sum)
     let noOutstanding = 0;            // NO shares held by users (sum)
     let cpmmEscrow = 0;               // total real rep deposited as collateral
 
+    // Model G — virtual seed + creator-as-trader + loser-pool cut.
+    //   - Pool seeds at Y=N=G_VIRTUAL_SEED (protocol-minted, no real backing).
+    //   - Creator picks side + stake X in [10,100]. Gets fair CPMM share count
+    //     (as if buying at pre-creator pool). Reserves bumped on both sides
+    //     via mirror → price stays 50/50 after creator commits.
+    //   - On win, creator earns G_CREATOR_CUT_PCT of losers' net pool (transfer,
+    //     not mint).
+    //   - 2-rep listing fee burned, 5% burn fee on every trade,
+    //     refund-if-trivial when losing side < 3 voters or total < 5.
+    const G_VIRTUAL_SEED = 10;
+    const G_BURN_FEE = 0.05;          // 5% of each trade burned
+    const G_LISTING_FEE = 2;
+    const G_CREATOR_CUT_PCT = 0.05;   // 5% of losers' pool to creator on win
+    const G_MIN_LOSER_VOTERS = 3;
+    const G_MIN_TOTAL_VOTERS = 5;
+    let gCreatorSide = 'YES';
+    let gCreatorStake = 10;
+    const G_CREATOR_MIN_STAKE = 10;
+    const G_CREATOR_MAX_STAKE = 100;
+
     // --- MATEMATİK FONKSİYONLARI ---
     function getYesPrice() {
-        if (payoutMode === 'cpmm') {
-            return nReserve / (yReserve + nReserve);
+        return nReserve / (yReserve + nReserve);
+    }
+
+    // Sum of all rep currently inside the system.
+    function totalRepIn() {
+        let total = stakes.reduce(
+            (a, s) => a + (s.stakeAmount != null ? s.stakeAmount : STAKE), 0);
+        if (stakes.some(s => s.isCreator)) total += G_LISTING_FEE;
+        return total;
+    }
+
+    function totalRepOut(winningSide) {
+        if (stakes.length === 0) return 0;
+        if (gIsTrivial(winningSide)) {
+            // Refund every stake at its original amount.
+            return stakes.reduce(
+                (a, s) => a + (s.stakeAmount != null ? s.stakeAmount : STAKE), 0);
         }
-        return (yesCount + 1) / (yesCount + noCount + 2);
+        let total = stakes
+            .filter(s => s.side === winningSide && s.shares != null)
+            .reduce((a, s) => a + s.shares, 0);
+        // Creator cut of losers' net pool on win.
+        const creator = stakes.find(s => s.isCreator);
+        if (creator && creator.side === winningSide) {
+            const losingSide = winningSide === 'YES' ? 'NO' : 'YES';
+            const losersPool = stakes
+                .filter(s => s.side === losingSide)
+                .reduce((a, s) => {
+                    const myStake = s.stakeAmount != null ? s.stakeAmount : STAKE;
+                    return a + myStake * (1 - G_BURN_FEE);
+                }, 0);
+            total += G_CREATOR_CUT_PCT * losersPool;
+        }
+        return total;
+    }
+
+    // Trivial check: losing side < 3 voters OR total < 5 voters → refund all.
+    function gIsTrivial(winningSide) {
+        const losingSide = winningSide === 'YES' ? 'NO' : 'YES';
+        const loserVoters = new Set(
+            stakes.filter(s => s.side === losingSide).map(s => s.id)
+        );
+        const totalVoters = new Set(stakes.map(s => s.id));
+        return loserVoters.size < G_MIN_LOSER_VOTERS
+            || totalVoters.size < G_MIN_TOTAL_VOTERS;
     }
 
     // CPMM buy: spend r rep, receive shares of `side`. Mints r complete sets, swaps opposite side for more.
@@ -154,41 +233,18 @@
         return shares;
     }
 
-    function getYesPriceAt(yesCount, totalVotes) {
-        return (yesCount + 1) / (totalVotes + 2);
-    }
-
-    function getYesWeightAt(yesCount, totalVotes) {
-        return 1 / getYesPriceAt(yesCount, totalVotes);
-    }
-
-    function createYesCurve(totalVotes) {
-        const data = [];
-        const maxX = Math.max(totalVotes, 10);
-        for (let x = 0; x <= maxX; x++) {
-            data.push({ x: x, y: getYesWeightAt(x, totalVotes) });
-        }
-        return data;
-    }
-
     function addStake(side) {
         const yesPrice = getYesPrice();
-        const noPrice = 1 - yesPrice;
-        const entryPrice = side === 'YES' ? yesPrice : noPrice;
-        let weight, shares = null;
-
-        if (payoutMode === 'cpmm') {
-            shares = cpmmBuy(side, STAKE);
-            weight = shares / STAKE;       // for display: shares per rep
-        } else {
-            weight = 1 / entryPrice;
-        }
+        const entryPrice = side === 'YES' ? yesPrice : (1 - yesPrice);
+        // 5% burn on every trader buy
+        const effectiveStake = STAKE * (1 - G_BURN_FEE);
+        const shares = cpmmBuy(side, effectiveStake);
 
         stakes.push({
             id: stakes.length + 1,
             side: side,
             entryPrice: entryPrice,
-            weight: weight,
+            weight: shares / STAKE,
             shares: shares
         });
 
@@ -205,53 +261,54 @@
         stakes = [];
         yesCount = 0;
         noCount = 0;
-        yReserve = CPMM_INIT_L;
-        nReserve = CPMM_INIT_L;
-        lpSubsidyExposure = 0;
-        yesPriceHistory = [getYesPrice()];
-        voteHistory = [0];
-        updatePayoutMethodUI();
+        yReserve = G_VIRTUAL_SEED;
+        nReserve = G_VIRTUAL_SEED;
+        yesOutstanding = 0;
+        noOutstanding = 0;
+        cpmmEscrow = 0;
+        // Creator joins with mirror trick: fair CPMM share count from pre-buy
+        // pool depth (Y=N=G_VIRTUAL_SEED), then both reserves bumped by
+        // effectiveX so price stays 50/50.
+        const X = gCreatorStake;
+        const effectiveX = X * (1 - G_BURN_FEE);
+        const v = G_VIRTUAL_SEED;
+        const shares = effectiveX + (v + effectiveX) * effectiveX / (v + 2 * effectiveX);
+        yReserve = v + effectiveX;
+        nReserve = v + effectiveX;
+        cpmmEscrow += effectiveX;
+        if (gCreatorSide === 'YES') {
+            yesOutstanding += shares;
+            yesCount++;
+        } else {
+            noOutstanding += shares;
+            noCount++;
+        }
+        stakes.push({
+            id: stakes.length + 1,
+            side: gCreatorSide,
+            entryPrice: X / shares,
+            weight: shares / X,
+            shares: shares,
+            isCreator: true,
+            stakeAmount: X
+        });
+        yesPriceHistory = [0.5, getYesPrice()];
+        voteHistory = [0, yesCount + noCount];
         updateUI();
     }
 
-    function togglePayoutMethod() {
-        // Cycle: default -> late -> cpmm -> default
-        if (payoutMode === 'default') payoutMode = 'late';
-        else if (payoutMode === 'late') payoutMode = 'cpmm';
-        else payoutMode = 'default';
-        resetSim();
-    }
-
-    function updatePayoutMethodUI() {
-        const label = document.getElementById('payoutMethodLabel');
-        const formulaDiv = document.querySelector('.formulas');
-        if (!label || !formulaDiv) return;
-        const modelLabels = { 'default': 'Model C, Default (Parimutuel)', 'late': 'Model D, Late Adoption', 'cpmm': 'Model E/F, CPMM (Polymarket)' };
-        label.innerText = modelLabels[payoutMode];
-
-        if (payoutMode === 'late') {
-            formulaDiv.innerHTML = `
-                <strong>Sistem Kuralları:</strong> Sabit Stake: 10 Rep<br>
-                <strong>EVET Fiyatı</strong> = (x + 1) / (Toplam_Oy + 2)<br>
-                <strong>Ağırlık (Weight)</strong> = 1 / Giriş_Fiyatı<br>
-                <strong>Kazanma Durumunda Payout</strong> = 10 + 10 * (n_losers) × (weight_i / sum of weights on winning side)
-            `;
-        } else if (payoutMode === 'cpmm') {
-            formulaDiv.innerHTML = `
-                <strong>Polymarket Modu — Reward LOCKED at buy time:</strong> Sabit Stake: 10 Rep<br>
-                <strong>EVET Fiyatı</strong> = N_reserve / (Y_reserve + N_reserve)<br>
-                <strong>YES Buy:</strong> shares = 10 + (Y+10) * 10 / (N + 20). Each share = 1 Rep if YES wins.<br>
-                <strong>Net Kâr (kazanırsa)</strong> = shares - 10 (stake-time'da kilitli, sonradan değişmez)<br>
-                <strong>Virtual liquidity seed:</strong> Y₀ = N₀ = ${CPMM_INIT_L}. LP subsidy tracked below.
-            `;
-        } else {
-            formulaDiv.innerHTML = `
-                <strong>Sistem Kuralları:</strong> Sabit Stake: 10 Rep<br>
-                <strong>EVET Fiyatı</strong> = (x + 1) / (Toplam_Oy + 2)<br>
-                <strong>Ağırlık (Weight)</strong> = 1 / Giriş_Fiyatı<br>
-                <strong>Kazanma Durumunda Payout</strong> = Toplam_Havuz * (Kişinin_Ağırlığı / Kazanan_Taraf_Toplam_Ağırlığı)
-            `;
+    function applyCreatorAutoStake() {
+        const sideEl = document.getElementById('gCreatorSide');
+        const stakeEl = document.getElementById('gCreatorStake');
+        if (!sideEl || !stakeEl) return;
+        const stake = parseFloat(stakeEl.value);
+        if (!isFinite(stake) || stake < G_CREATOR_MIN_STAKE || stake > G_CREATOR_MAX_STAKE) {
+            alert(`Stake ${G_CREATOR_MIN_STAKE}-${G_CREATOR_MAX_STAKE} arası olmalı`);
+            return;
         }
+        gCreatorSide = sideEl.value;
+        gCreatorStake = stake;
+        resetSim();
     }
 
     function addMany(side, amount) {
@@ -268,42 +325,36 @@
     }
 
     function calculatePayouts() {
-        const totalPool = (yesCount + noCount) * STAKE;
-        let yesTotalWeight = 0;
-        let noTotalWeight = 0;
-
-        stakes.forEach(s => {
-            if (s.side === 'YES') yesTotalWeight += s.weight;
-            if (s.side === 'NO') noTotalWeight += s.weight;
-        });
+        const trivialYes = gIsTrivial('YES');
+        const trivialNo  = gIsTrivial('NO');
+        // Losers' net pool (after burn) for creator cut, per outcome.
+        const yesLosersPool = stakes
+            .filter(x => x.side === 'NO')
+            .reduce((a, x) => a + (x.stakeAmount != null ? x.stakeAmount : STAKE) * (1 - G_BURN_FEE), 0);
+        const noLosersPool = stakes
+            .filter(x => x.side === 'YES')
+            .reduce((a, x) => a + (x.stakeAmount != null ? x.stakeAmount : STAKE) * (1 - G_BURN_FEE), 0);
 
         return stakes.map(s => {
-            let yesProfit = -STAKE;
-            let noProfit = -STAKE;
-
-            if (payoutMode === 'default') {
-                if (s.side === 'YES' && yesTotalWeight > 0) {
-                    yesProfit = (totalPool * (s.weight / yesTotalWeight)) - STAKE;
-                } else if (s.side === 'NO' && noTotalWeight > 0) {
-                    noProfit = (totalPool * (s.weight / noTotalWeight)) - STAKE;
-                }
-            } else if (payoutMode === 'late') {
-                if (s.side === 'YES' && yesTotalWeight > 0) {
-                    yesProfit = STAKE * noCount * (s.weight / yesTotalWeight);
-                } else if (s.side === 'NO' && noTotalWeight > 0) {
-                    noProfit = STAKE * yesCount * (s.weight / noTotalWeight);
-                }
-            } else if (payoutMode === 'cpmm') {
-                // Each share pays 1 Rep if user's side wins. Profit locked at buy time.
-                if (s.side === 'YES') {
-                    yesProfit = s.shares - STAKE;
-                    noProfit  = -STAKE;
-                } else {
-                    noProfit  = s.shares - STAKE;
-                    yesProfit = -STAKE;
-                }
+            const myStake = s.stakeAmount != null ? s.stakeAmount : STAKE;
+            const burnLoss = myStake * G_BURN_FEE;
+            const creatorFee = s.isCreator ? G_LISTING_FEE : 0;
+            // Creator cut on win: % of losers' net pool (only if not trivial).
+            let creatorCutYes = 0, creatorCutNo = 0;
+            if (s.isCreator) {
+                if (s.side === 'YES' && !trivialYes) creatorCutYes = G_CREATOR_CUT_PCT * yesLosersPool;
+                if (s.side === 'NO'  && !trivialNo)  creatorCutNo  = G_CREATOR_CUT_PCT * noLosersPool;
             }
-
+            // Trivial-refund net = -(burn already taken) - creator listing fee.
+            const trivialNet = -burnLoss - creatorFee;
+            let yesProfit, noProfit;
+            if (s.side === 'YES') {
+                yesProfit = trivialYes ? trivialNet : (s.shares - myStake + creatorCutYes - creatorFee);
+                noProfit  = trivialNo  ? trivialNet : (-myStake - creatorFee);
+            } else {
+                noProfit  = trivialNo  ? trivialNet : (s.shares - myStake + creatorCutNo - creatorFee);
+                yesProfit = trivialYes ? trivialNet : (-myStake - creatorFee);
+            }
             return { ...s, yesProfit, noProfit };
         });
     }
@@ -312,127 +363,69 @@
     function updateUI() {
         const currentYesPrice = getYesPrice();
 
-        // Üst Panelleri Güncelle
         document.getElementById('poolVal').innerText = (yesCount + noCount) * STAKE;
         document.getElementById('yesPrice').innerText = (currentYesPrice * 100).toFixed(1);
         document.getElementById('noPrice').innerText = ((1 - currentYesPrice) * 100).toFixed(1);
 
-        // CPMM-only stats
-        const cpmmStats = document.getElementById('cpmmStats');
-        if (cpmmStats) {
-            if (payoutMode === 'cpmm') {
-                cpmmStats.style.display = 'block';
-                document.getElementById('yReserveVal').innerText = yReserve.toFixed(2);
-                document.getElementById('nReserveVal').innerText = nReserve.toFixed(2);
-                document.getElementById('lpSubsidyVal').innerText = lpSubsidyExposure.toFixed(2);
-            } else {
-                cpmmStats.style.display = 'none';
-            }
-        }
-        // Hide weight curve chart in CPMM mode (concept doesn't apply)
-        const weightChartContainer = document.getElementById('weightChartContainer');
-        if (weightChartContainer) {
-            weightChartContainer.style.display = payoutMode === 'cpmm' ? 'none' : 'block';
-        }
+        // Pool reserves + trivial-claim status
+        document.getElementById('yReserveVal').innerText = yReserve.toFixed(2);
+        document.getElementById('nReserveVal').innerText = nReserve.toFixed(2);
+        const tY = gIsTrivial('YES');
+        const tN = gIsTrivial('NO');
+        const labelY = document.getElementById('gTrivialYes');
+        const labelN = document.getElementById('gTrivialNo');
+        labelY.innerText = tY ? 'İade (trivial)' : 'Normal';
+        labelN.innerText = tN ? 'İade (trivial)' : 'Normal';
+        labelY.style.color = tY ? '#c0392b' : '#16a085';
+        labelN.style.color = tN ? '#c0392b' : '#16a085';
 
-        // Tabloyu Güncelle
+        // Rep tracking panel
+        const repInVal = totalRepIn();
+        const repOutYes = totalRepOut('YES');
+        const repOutNo  = totalRepOut('NO');
+        document.getElementById('repIn').innerText = repInVal.toFixed(2);
+        document.getElementById('repOutYes').innerText = repOutYes.toFixed(2);
+        document.getElementById('repOutNo').innerText = repOutNo.toFixed(2);
+        const driftYesEl = document.getElementById('driftYes');
+        const driftNoEl  = document.getElementById('driftNo');
+        const dy = repOutYes - repInVal;
+        const dn = repOutNo - repInVal;
+        driftYesEl.innerText = (dy >= 0 ? '+' : '') + dy.toFixed(2);
+        driftNoEl.innerText  = (dn >= 0 ? '+' : '') + dn.toFixed(2);
+        driftYesEl.style.color = Math.abs(dy) < 0.01 ? '#16a085' : (dy > 0 ? '#c0392b' : '#2980b9');
+        driftNoEl.style.color  = Math.abs(dn) < 0.01 ? '#16a085' : (dn > 0 ? '#c0392b' : '#2980b9');
+
+        // Table
         const results = calculatePayouts();
         const tbody = document.getElementById('tableBody');
         tbody.innerHTML = '';
-        
-        // Update weight column header per mode
         const weightHeader = document.getElementById('weightHeader');
-        if (weightHeader) {
-            weightHeader.innerText = payoutMode === 'cpmm' ? 'Shares (locked)' : 'Ağırlık (Weight)';
-        }
+        if (weightHeader) weightHeader.innerText = 'Shares (locked)';
+
+        const formatMoney = (val) => {
+            if (val > 0.005) return `<span class="profit">+${val.toFixed(2)}</span>`;
+            if (val < -0.005) return `<span class="loss">${val.toFixed(2)}</span>`;
+            return `0.00`;
+        };
 
         results.forEach(s => {
             const tr = document.createElement('tr');
-
-            const formatMoney = (val) => {
-                if (val > 0) return `<span class="profit">+${val.toFixed(2)}</span>`;
-                if (val < 0) return `<span class="loss">${val.toFixed(2)}</span>`;
-                return `0.00`;
-            };
-
-            // In CPMM mode, show effective price paid (10/shares) and shares received
-            const displayPrice = (payoutMode === 'cpmm' && s.shares != null)
-                ? (STAKE / s.shares * 100).toFixed(1)
-                : (s.entryPrice * 100).toFixed(1);
-            const middleCol = (payoutMode === 'cpmm' && s.shares != null)
-                ? s.shares.toFixed(3)
-                : s.weight.toFixed(3);
-
+            const displayPrice = (STAKE / s.shares * 100).toFixed(1);
             tr.innerHTML = `
-                <td>Kullanıcı ${s.id}</td>
+                <td>${s.isCreator ? `Yaratıcı (stake ${s.stakeAmount})` : `Kullanıcı ${s.id}`}</td>
                 <td style="font-weight: bold; color: ${s.side === 'YES' ? '#27ae60' : '#c0392b'}">${s.side}</td>
                 <td>${displayPrice}%</td>
-                <td>${middleCol}</td>
+                <td>${s.shares.toFixed(3)}</td>
                 <td>${formatMoney(s.yesProfit)}</td>
                 <td>${formatMoney(s.noProfit)}</td>
             `;
-            tbody.prepend(tr); // En son eklenen en üstte görünsün
+            tbody.prepend(tr);
         });
 
-        // Grafikleri Güncelle
-        updateChart(currentYesPrice);
         updateYesPriceChart();
     }
 
     // --- GRAFİK (CHART.JS) AYARLARI ---
-    function initChart() {
-        const ctx = document.getElementById('ammChart').getContext('2d');
-
-        chartInstance = new Chart(ctx, {
-            type: 'scatter',
-            data: {
-                datasets: [
-                    {
-                        label: 'EVET Ağırlığı = 1 / ((x + 1) / (toplam_oy + 2))',
-                        data: createYesCurve(0),
-                        borderColor: '#27ae60',
-                        backgroundColor: 'rgba(39, 174, 96, 0.15)',
-                        showLine: true,
-                        fill: true,
-                        pointRadius: 0,
-                        tension: 0.3,
-                        parsing: false
-                    },
-                    {
-                        label: 'Mevcut Durum',
-                        data: [{ x: 0, y: 1 / ((0 + 1) / (0 + 2)) }],
-                        backgroundColor: '#2980b9',
-                        borderColor: '#34495e',
-                        pointRadius: 8,
-                        pointHoverRadius: 10,
-                        showLine: false,
-                        parsing: false
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    x: {
-                        type: 'linear',
-                        title: { display: true, text: 'EVET Oy Sayısı x' },
-                        min: 0,
-                        max: 10,
-                        ticks: { stepSize: 1 }
-                    },
-                    y: {
-                        type: 'linear',
-                        title: { display: true, text: 'Ağırlık (1 / fiyat)' },
-                        min: 0,
-                        max: 20
-                    }
-                },
-                animation: { duration: 400 }
-            }
-        });
-    }
-
     function initYesPriceChart() {
         const ctx = document.getElementById('yesPriceChart').getContext('2d');
         yesPriceChart = new Chart(ctx, {
@@ -481,20 +474,7 @@
         yesPriceChart.update();
     }
 
-    function updateChart(currentYesPrice) {
-        if (!chartInstance) return;
-
-        const totalVotes = yesCount + noCount;
-        const currentYesWeight = 1 / currentYesPrice;
-        chartInstance.data.datasets[0].data = createYesCurve(totalVotes);
-        chartInstance.data.datasets[1].data = [{ x: yesCount, y: currentYesWeight }];
-        chartInstance.options.scales.x.max = Math.max(totalVotes, 10);
-        chartInstance.update();
-    }
-
-    // Sayfa yüklendiğinde grafikleri başlat
     window.onload = function() {
-        initChart();
         initYesPriceChart();
         resetSim();
     };
