@@ -38,6 +38,10 @@ ALLOWED_HOSTS = [
     for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
     if h.strip()
 ]
+# Render sets this automatically; append so deploy works without hardcoding the hostname.
+_render_host = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "").strip()
+if _render_host and _render_host not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_render_host)
 
 def _parse_origins(raw: str, default: str) -> list[str]:
     """Parse comma-separated origins; strip whitespace and trailing slashes."""
