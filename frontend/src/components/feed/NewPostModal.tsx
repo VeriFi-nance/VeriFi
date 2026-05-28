@@ -36,8 +36,6 @@ interface ClaimDraft {
   direction: ClaimDirection | '';
   percentage: string;
   until: string;
-  marketEnabled: boolean;
-  stakeSide: 'YES' | 'NO';
   stakeRep: string;
 }
 
@@ -47,15 +45,13 @@ interface AttachedClaim {
   direction: ClaimDirection;
   percentage: string;
   until: string;
-  marketEnabled: boolean;
-  stakeSide: 'YES' | 'NO';
   stakeRep: string;
 }
 
 function emptyDraft(): ClaimDraft {
   return {
     asset_id: '', assetSymbol: '', direction: '', percentage: '', until: '',
-    marketEnabled: true, stakeSide: 'YES', stakeRep: '10',
+    stakeRep: '10',
   };
 }
 
@@ -178,6 +174,11 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
       setError('Target date must be tomorrow or later.');
       return;
     }
+    const stakeRepNum = parseFloat(draft.stakeRep);
+    if (isNaN(stakeRepNum) || stakeRepNum < 10 || stakeRepNum > 100) {
+      setError('Stake must be between 10 and 100 rep.');
+      return;
+    }
     setError('');
     setClaims((prev) => [...prev, { ...draft, direction: draft.direction as ClaimDirection }]);
     setDraft(emptyDraft());
@@ -210,8 +211,8 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
         claims.map((c) => {
           const stakeRepNum = parseFloat(c.stakeRep);
           const market =
-            c.marketEnabled && !isNaN(stakeRepNum) && stakeRepNum >= 10 && stakeRepNum <= 100
-              ? { side: c.stakeSide, stake_rep: stakeRepNum }
+            !isNaN(stakeRepNum) && stakeRepNum >= 10 && stakeRepNum <= 100
+              ? { side: 'YES' as const, stake_rep: stakeRepNum }
               : undefined;
           return createHardClaim({
             asset_id: parseInt(c.asset_id, 10),
@@ -323,8 +324,6 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
                                   direction: c.direction === 'bullish' ? 'Bullish' : 'Bearish',
                                   percentage: c.percentage!,
                                   until: c.until!,
-                                  marketEnabled: true,
-                                  stakeSide: 'YES',
                                   stakeRep: '10',
                                 };
                                 setClaims((prev) => [...prev, newClaim]);
@@ -345,8 +344,6 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
                                 direction: c.direction === 'bullish' ? 'Bullish' : 'Bearish',
                                 percentage: c.percentage || '',
                                 until: c.until || '',
-                                marketEnabled: true,
-                                stakeSide: 'YES',
                                 stakeRep: '10',
                               });
                               setShowClaimForm(true);
@@ -491,59 +488,29 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
 
               {/* ── Reputation market (Model G) ──────────────── */}
               <div className="rounded-lg border bg-background/60 p-3 space-y-2">
-                <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={draft.marketEnabled}
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  Reputation market (Model G)
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Creator side is auto-set to <span className="font-semibold text-emerald-600">YES</span>.
+                </p>
+                <div className="space-y-1">
+                  <Label className="text-xs">Stake (10–100 rep)</Label>
+                  <Input
+                    type="number"
+                    min={10}
+                    max={100}
+                    step={1}
+                    value={draft.stakeRep}
                     onChange={(e) =>
-                      setDraft((d) => ({ ...d, marketEnabled: e.target.checked }))
+                      setDraft((d) => ({ ...d, stakeRep: e.target.value }))
                     }
+                    className="h-8 text-sm"
                   />
-                  Open reputation market (Model G)
-                </label>
-                {draft.marketEnabled && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs">Your side</Label>
-                      <div className="flex gap-2">
-                        {(['YES', 'NO'] as const).map((s) => (
-                          <button
-                            key={s}
-                            type="button"
-                            onClick={() => setDraft((d) => ({ ...d, stakeSide: s }))}
-                            className={[
-                              'flex-1 py-1 rounded-md border text-xs font-semibold',
-                              draft.stakeSide === s
-                                ? s === 'YES'
-                                  ? 'bg-emerald-500 text-white border-emerald-500'
-                                  : 'bg-red-500 text-white border-red-500'
-                                : 'border-border text-muted-foreground',
-                            ].join(' ')}
-                          >
-                            {s}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Stake (10–100 rep)</Label>
-                      <Input
-                        type="number"
-                        min={10}
-                        max={100}
-                        step={1}
-                        value={draft.stakeRep}
-                        onChange={(e) =>
-                          setDraft((d) => ({ ...d, stakeRep: e.target.value }))
-                        }
-                        className="h-8 text-sm"
-                      />
-                    </div>
-                    <p className="col-span-2 text-[10px] text-muted-foreground leading-snug">
-                      Plus 2-rep listing fee (burned) and 5% trade burn. Costs 2 energy.
-                    </p>
-                  </div>
-                )}
+                </div>
+                <p className="text-[10px] text-muted-foreground leading-snug">
+                  Plus 2-rep listing fee (burned) and 5% trade burn. Costs 2 energy.
+                </p>
               </div>
 
               {/* Form actions */}
