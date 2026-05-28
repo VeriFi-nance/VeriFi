@@ -1,7 +1,7 @@
 import { getToken } from './auth';
 import type { ReviewClaim, PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, ProfileStats, CommunityItem, CommunityMembershipItem, PositionItem } from './types';
 
-const BASE_URL = 'http://localhost:8000';
+const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
 async function request<T>(
   path: string,

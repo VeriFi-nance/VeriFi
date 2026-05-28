@@ -27,10 +27,20 @@ function toReviewClaim(c: ExtractedClaimContract): ReviewClaim {
 
 const MAX_CHARS = 500;
 
+type ClaimDirection = 'Bullish' | 'Bearish';
+
 interface ClaimDraft {
   asset_id: string;       // asset id (for HardClaim)
   assetSymbol: string;    // display
-  direction: 'Bullish' | 'Bearish' | '';
+  direction: ClaimDirection | '';
+  percentage: string;
+  until: string;
+}
+
+interface AttachedClaim {
+  asset_id: string;
+  assetSymbol: string;
+  direction: ClaimDirection;
   percentage: string;
   until: string;
 }
@@ -85,7 +95,7 @@ interface NewPostModalProps {
 
 export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewPostModalProps) {
   const [content, setContent] = useState('');
-  const [claims, setClaims] = useState<ClaimDraft[]>([]);
+  const [claims, setClaims] = useState<AttachedClaim[]>([]);
   const [showClaimForm, setShowClaimForm] = useState(false);
   const [draft, setDraft] = useState<ClaimDraft>(emptyDraft());
   const [assets, setAssets] = useState<AssetItem[]>([]);
@@ -156,7 +166,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
       return;
     }
     setError('');
-    setClaims((prev) => [...prev, { ...draft }]);
+    setClaims((prev) => [...prev, { ...draft, direction: draft.direction as ClaimDirection }]);
     setDraft(emptyDraft());
     setShowClaimForm(false);
   }
@@ -284,7 +294,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
                             onClick={() => {
                               const asset = assets.find((a) => a.symbol === c.asset);
                               if (asset) {
-                                const newClaim: ClaimDraft = {
+                                const newClaim: AttachedClaim = {
                                   asset_id: asset.id.toString(),
                                   assetSymbol: asset.symbol,
                                   direction: c.direction === 'bullish' ? 'Bullish' : 'Bearish',
