@@ -24,6 +24,26 @@ function readAuthState(): AuthState {
   };
 }
 
+let lastSnapshot: AuthState | null = null;
+
+function getAuthSnapshot(): AuthState {
+  const next = readAuthState();
+  if (
+    lastSnapshot &&
+    lastSnapshot.token === next.token &&
+    lastSnapshot.address === next.address &&
+    lastSnapshot.authenticated === next.authenticated
+  ) {
+    return lastSnapshot;
+  }
+  lastSnapshot = next;
+  return next;
+}
+
+function getServerSnapshot(): AuthState {
+  return lastSnapshot ?? { token: null, address: null, authenticated: false };
+}
+
 export function saveToken(token: string): void {
   localStorage.setItem(TOKEN_KEY, token);
   notifyAuthChange();
@@ -74,7 +94,11 @@ function subscribeAuthStore(listener: () => void): () => void {
 }
 
 export function useAuthState(): AuthState {
-  return useSyncExternalStore(subscribeAuthStore, readAuthState, readAuthState);
+  return useSyncExternalStore(
+    subscribeAuthStore,
+    getAuthSnapshot,
+    getServerSnapshot
+  );
 }
 
 export function loginPathWithReturn(returnTo: string): string {
