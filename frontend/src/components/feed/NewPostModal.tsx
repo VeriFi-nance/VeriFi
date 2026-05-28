@@ -35,6 +35,9 @@ interface ClaimDraft {
   direction: ClaimDirection | '';
   percentage: string;
   until: string;
+  marketEnabled: boolean;
+  stakeSide: 'YES' | 'NO';
+  stakeRep: string;
 }
 
 interface AttachedClaim {
