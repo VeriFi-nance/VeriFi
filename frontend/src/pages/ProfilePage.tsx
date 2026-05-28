@@ -152,7 +152,8 @@ export default function ProfilePage() {
               {stats.energy != null && (
                 <div className="flex flex-col">
                   <span className="font-semibold text-lg font-mono">
-                    {Math.floor(stats.energy)}/{stats.energy_cap ?? 4}
+                    {Math.floor(stats.energy)}
+                    {stats.energy_cap != null ? `/${stats.energy_cap}` : ''}
                   </span>
                   <span className="text-muted-foreground text-xs uppercase tracking-wider">Energy</span>
                 </div>

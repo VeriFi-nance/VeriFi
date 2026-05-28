@@ -10,7 +10,7 @@ from .claim_extraction import rule_based_claims_from_prompt
 from django.shortcuts import get_object_or_404
 from .resolution import CONTRACT_VERSION, ResolutionError, preview_resolution, resolve_hard_claim
 from . import rep_market
-from accounts.energy import grant_energy, spend, CLAIM_ENERGY_COST, STAKE_ENERGY_COST, ENERGY_CAP
+from accounts.energy import grant_energy, spend, CLAIM_ENERGY_COST, STAKE_ENERGY_COST
 
 
 def _get_wallet_user(request) -> WalletUser | None:
