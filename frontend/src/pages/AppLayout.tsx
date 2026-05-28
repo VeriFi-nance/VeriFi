@@ -93,7 +93,6 @@ export default function AppLayout() {
   function handleDisconnect() {
     clearAuth();
     clearPrivateKey();
-    navigate('/login');
   }
 
   return (
