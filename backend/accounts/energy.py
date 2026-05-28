@@ -7,7 +7,8 @@ from django.db import transaction
 from django.utils import timezone
 
 DAILY_GRANT = 3
-ENERGY_CAP = 4
+ENERGY_CAP = None
+INITIAL_ENERGY = 4
 CLAIM_ENERGY_COST = 2
 STAKE_ENERGY_COST = 1
 
@@ -17,19 +18,18 @@ def _utc_midnight(dt: datetime) -> datetime:
 
 
 def grant_energy(user) -> None:
-    """Idempotent lazy regrant. Adds DAILY_GRANT per whole UTC day elapsed
-    since last_energy_grant, capped at ENERGY_CAP."""
+    """Idempotent lazy regrant. Adds DAILY_GRANT per whole UTC day elapsed."""
     now = timezone.now()
     last = user.last_energy_grant
     if last is None:
-        user.energy = min(ENERGY_CAP, max(user.energy, float(ENERGY_CAP)))
+        user.energy = max(user.energy, float(INITIAL_ENERGY))
         user.last_energy_grant = now
         user.save(update_fields=["energy", "last_energy_grant"])
         return
     days = (_utc_midnight(now) - _utc_midnight(last)).days
     if days <= 0:
         return
-    user.energy = min(float(ENERGY_CAP), user.energy + days * DAILY_GRANT)
+    user.energy = user.energy + days * DAILY_GRANT
     user.last_energy_grant = now
     user.save(update_fields=["energy", "last_energy_grant"])
 

@@ -110,7 +110,7 @@ export interface ProfileStats {
   profitability?: ProfitabilityData | null;
   rep?: number;
   energy?: number;
-  energy_cap?: number;
+  energy_cap?: number | null;
 }
 
 export interface MarketYourStake {
