@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { HardClaimCard } from '@/components/HardClaimCard';
-import { clearAuth, loadAddress } from '@/lib/auth';
+import { clearAuth, loginPathWithReturn, useAuthState } from '@/lib/auth';
 import { clearPrivateKey, loadEncryptedKey, decryptPrivateKey } from '@/lib/crypto';
 import { getHardClaimsByAddress, getAssets, getProfileStats } from '@/lib/api';
 import type { HardClaimItem, AssetItem, ProfileStats } from '@/lib/types';
@@ -30,7 +30,8 @@ function CopyButton({ text }: { text: string }) {
 
 export default function ProfilePage() {
   const navigate = useNavigate();
-  const address = loadAddress() ?? '';
+  const auth = useAuthState();
+  const address = auth.address ?? '';
   const hasEncryptedKey = loadEncryptedKey() !== null;
 
   const [hardClaims, setHardClaims] = useState<HardClaimItem[]>([]);
@@ -105,6 +106,16 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-4">
+      {!auth.authenticated && (
+        <Alert>
+          <AlertDescription>
+            Login is required to manage your profile and private key.
+            <Button variant="link" className="px-2" onClick={() => navigate(loginPathWithReturn('/app/profile'))}>
+              Go to login
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate('/app')}>
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>

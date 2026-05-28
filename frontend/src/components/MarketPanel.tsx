@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Coins, Flame, TrendingDown, TrendingUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { buyShares, getMarket, previewBuy } from '@/lib/api';
+import { loginPathWithReturn, useAuthState } from '@/lib/auth';
 import type { BuyPreviewResult, ClaimMarketItem } from '@/lib/types';
 
 interface Props {
@@ -12,6 +14,9 @@ interface Props {
 }
 
 export function MarketPanel({ claimId, onChange }: Props) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const auth = useAuthState();
   const [market, setMarket] = useState<ClaimMarketItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +53,10 @@ export function MarketPanel({ claimId, onChange }: Props) {
   }, [claimId]);
 
   const handleBuy = async (side: 'YES' | 'NO') => {
+    if (!auth.authenticated) {
+      navigate(loginPathWithReturn(location.pathname), { replace: true });
+      return;
+    }
     setBusy(true);
     setActionError(null);
     try {
