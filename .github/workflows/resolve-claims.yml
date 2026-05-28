@@ -1,0 +1,33 @@
+# Resolves expired hard claims hourly (replaces Render cron).
+# Requires repo secrets — see DEPLOYMENT.md.
+
+name: Resolve claims
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - run: uv sync
+
+      - name: Run resolve_claims
+        run: uv run python manage.py resolve_claims
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+          DJANGO_DEBUG: "false"
+          TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+          ADMIN_ADDRESSES: ${{ secrets.ADMIN_ADDRESSES }}

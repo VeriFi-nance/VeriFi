@@ -1,11 +1,5 @@
 import { useState } from "react";
-
-interface ProfitabilityData {
-  pnl_7d: number;
-  pnl_30d: number;
-  pnl_all: number;
-  updated_at: string | null;
-}
+import type { ProfitabilityData } from "@/lib/types";
 
 interface Props {
   data?: ProfitabilityData | null;
@@ -17,7 +11,7 @@ type Timeframe = "7D" | "30D" | "ALL";
 export default function ProfitabilityBadge({ data, className = "" }: Props) {
   const [timeframe, setTimeframe] = useState<Timeframe>("30D");
 
-  if (!data || data.updated_at === null) {
+  if (!data || data.updated_at == null) {
     return (
       <span className={`inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800 ${className}`}>
         No PnL Data
