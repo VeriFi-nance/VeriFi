@@ -252,9 +252,9 @@ def _evaluate_ohlc(
         if direction == "bullish":
             # Check if high reached or exceeded target
             if candle.high >= target_price:
-                hit_days.append(candle.date.isoformat())
+                hit_days.append(candle.timestamp.date().isoformat())
                 if first_hit_date is None:
-                    first_hit_date = candle.date.isoformat()
+                    first_hit_date = candle.timestamp.date().isoformat()
             # Track closest approach via high
             distance = abs(candle.high - target_price)
             if distance < closest_distance:
@@ -263,9 +263,9 @@ def _evaluate_ohlc(
         else:
             # Bearish: check if low reached or went below target
             if candle.low <= target_price:
-                hit_days.append(candle.date.isoformat())
+                hit_days.append(candle.timestamp.date().isoformat())
                 if first_hit_date is None:
-                    first_hit_date = candle.date.isoformat()
+                    first_hit_date = candle.timestamp.date().isoformat()
             # Track closest approach via low
             distance = abs(candle.low - target_price)
             if distance < closest_distance:
@@ -299,7 +299,7 @@ def _evaluate_ohlc(
     # Build OHLC array for chart
     ohlc_list = [
         {
-            "date": c.date.isoformat(),
+            "date": c.timestamp.date().isoformat(),
             "open": _round_decimal(c.open),
             "high": _round_decimal(c.high),
             "low": _round_decimal(c.low),

@@ -23,14 +23,14 @@ export default function CommunitiesPage() {
   const [postPermission, setPostPermission] = useState<'all' | 'creator_only'>('all');
   const [open, setOpen] = useState(false);
 
-  useEffect(() => {
-    fetchCommunities();
-  }, []);
-
   const fetchCommunities = () => {
     setLoading(true);
     getCommunities().then(setCommunities).catch(console.error).finally(() => setLoading(false));
   };
+
+  useEffect(() => {
+    fetchCommunities();
+  }, []);
 
   const handleCreate = async () => {
     if (!auth.authenticated) {

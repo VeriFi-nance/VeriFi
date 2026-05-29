@@ -39,8 +39,8 @@ class PositionResolutionTestCase(TestCase):
         )
 
     class MockCandle:
-        def __init__(self, date, low, high, close=0):
-            self.date = date
+        def __init__(self, timestamp, low, high, close=0):
+            self.timestamp = timestamp
             self.low = low
             self.high = high
             self.close = close
@@ -51,8 +51,8 @@ class PositionResolutionTestCase(TestCase):
         
         # entry_price is 50000, so a low <= 50000 should trigger
         mock_get_ohlc.return_value = [
-            self.MockCandle(self.now.date(), low=51000, high=52000),
-            self.MockCandle((self.now + timedelta(days=1)).date(), low=49000, high=51000)
+            self.MockCandle(self.now, low=51000, high=52000),
+            self.MockCandle((self.now + timedelta(days=1)), low=49000, high=51000)
         ]
         
         _resolve_pending(pos, self.now)
@@ -66,7 +66,7 @@ class PositionResolutionTestCase(TestCase):
         
         # entry_price is 50000, low never reaches it
         mock_get_ohlc.return_value = [
-            self.MockCandle(self.now.date(), low=51000, high=52000)
+            self.MockCandle(self.now, low=51000, high=52000)
         ]
         
         _resolve_pending(pos, self.now + timedelta(days=3)) # Past entry interval
@@ -80,7 +80,7 @@ class PositionResolutionTestCase(TestCase):
         
         # TP is 60000
         mock_get_ohlc.return_value = [
-            self.MockCandle(self.now.date(), low=45000, high=61000)
+            self.MockCandle(self.now, low=45000, high=61000)
         ]
         
         _resolve_active(pos, self.now)
@@ -96,7 +96,7 @@ class PositionResolutionTestCase(TestCase):
         
         # SL is 40000
         mock_get_ohlc.return_value = [
-            self.MockCandle(self.now.date(), low=39000, high=55000)
+            self.MockCandle(self.now, low=39000, high=55000)
         ]
         
         _resolve_active(pos, self.now)
@@ -112,7 +112,7 @@ class PositionResolutionTestCase(TestCase):
         
         # Both SL and TP hit
         mock_get_ohlc.return_value = [
-            self.MockCandle(self.now.date(), low=39000, high=61000)
+            self.MockCandle(self.now, low=39000, high=61000)
         ]
         
         _resolve_active(pos, self.now)
@@ -127,7 +127,7 @@ class PositionResolutionTestCase(TestCase):
         PositionEvent.objects.create(position=pos, event_type=PositionEvent.EventType.ENTRY_TRIGGERED, details={"trigger_date": self.now.date().isoformat()})
         
         mock_get_ohlc.return_value = [
-            self.MockCandle(self.now.date(), low=45000, high=55000, close=48000)
+            self.MockCandle(self.now, low=45000, high=55000, close=48000)
         ]
         
         _resolve_active(pos, self.now + timedelta(days=8)) # Past lifetime
