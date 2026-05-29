@@ -366,7 +366,7 @@ class HardClaimChartDataView(APIView):
 
         ohlc_data = [
             {
-                "date": row.date.isoformat(),
+                "date": row.timestamp.isoformat(),
                 "open": row.open,
                 "high": row.high,
                 "low": row.low,
