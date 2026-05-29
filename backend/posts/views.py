@@ -10,7 +10,7 @@ from .claim_extraction import rule_based_claims_from_prompt
 from django.shortcuts import get_object_or_404
 from .resolution import CONTRACT_VERSION, ResolutionError, preview_resolution, resolve_hard_claim
 from . import rep_market
-from accounts.energy import grant_energy, spend, CLAIM_ENERGY_COST, STAKE_ENERGY_COST
+from accounts.energy import grant_energy, spend, CLAIM_ENERGY_COST
 
 
 def _get_wallet_user(request) -> WalletUser | None:
@@ -916,8 +916,6 @@ class HardClaimMarketBuyView(APIView):
             return Response({"detail": "side must be YES or NO."}, status=status.HTTP_400_BAD_REQUEST)
         if user.rep < rep_market.TRADER_STAKE:
             return Response({"detail": "Insufficient rep."}, status=status.HTTP_400_BAD_REQUEST)
-        if not spend(user, STAKE_ENERGY_COST):
-            return Response({"detail": "Insufficient energy."}, status=status.HTTP_400_BAD_REQUEST)
         try:
             stake = rep_market.buy(market, user, side)
         except rep_market.MarketError as e:
