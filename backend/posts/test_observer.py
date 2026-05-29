@@ -165,17 +165,21 @@ class StateTransitionTests(ObserverTestBase):
 
     def test_pending_to_active_on_entry_hit(self):
         """PENDING position transitions to ACTIVE when entry price is hit in OHLC."""
+        base_time = timezone.now().replace(minute=0, second=0, microsecond=0)
         pos = self._create_position(
             self.asset_btc, direction="long", entry_price=100.0,
             stop_loss=90.0, take_profit=120.0,
         )
+        Position.objects.filter(id=pos.id).update(created_at=base_time - timedelta(hours=2))
+        pos.refresh_from_db()
+
         sub = AssetSubscription.objects.create(asset=self.asset_btc, position=pos)
 
-        # Create OHLC data where low hits entry price
+        # Create 1h candle where low hits entry price
         OHLCData.objects.create(
             asset=self.asset_btc,
-            timestamp=timezone.now(),
-            interval="1d",
+            timestamp=base_time - timedelta(hours=1),
+            interval="1h",
             open=105.0, high=110.0, low=99.0, close=102.0,
         )
 
@@ -188,23 +192,27 @@ class StateTransitionTests(ObserverTestBase):
 
     def test_active_to_confirmed_on_tp_hit(self):
         """ACTIVE position transitions to CONFIRMED when take-profit is hit."""
+        base_time = timezone.now().replace(minute=0, second=0, microsecond=0)
         pos = self._create_position(
             self.asset_btc, direction="long", entry_price=100.0,
             stop_loss=90.0, take_profit=120.0, status="active",
         )
+        Position.objects.filter(id=pos.id).update(created_at=base_time - timedelta(hours=2))
+        pos.refresh_from_db()
+
         # Create entry triggered event so resolution knows the trigger date
         PositionEvent.objects.create(
             position=pos,
             event_type=PositionEvent.EventType.ENTRY_TRIGGERED,
-            details={"trigger_date": date.today().isoformat()},
+            details={"trigger_time": (base_time - timedelta(hours=2)).isoformat()},
         )
         sub = AssetSubscription.objects.create(asset=self.asset_btc, position=pos)
 
-        # Create OHLC data where high hits take-profit
+        # Create 1h candle where high hits take-profit
         OHLCData.objects.create(
             asset=self.asset_btc,
-            timestamp=timezone.now(),
-            interval="1d",
+            timestamp=base_time - timedelta(hours=1),
+            interval="1h",
             open=105.0, high=125.0, low=102.0, close=122.0,
         )
 
@@ -217,22 +225,26 @@ class StateTransitionTests(ObserverTestBase):
 
     def test_active_to_rejected_on_sl_hit(self):
         """ACTIVE position transitions to REJECTED when stop-loss is hit."""
+        base_time = timezone.now().replace(minute=0, second=0, microsecond=0)
         pos = self._create_position(
             self.asset_btc, direction="long", entry_price=100.0,
             stop_loss=90.0, take_profit=120.0, status="active",
         )
+        Position.objects.filter(id=pos.id).update(created_at=base_time - timedelta(hours=2))
+        pos.refresh_from_db()
+
         PositionEvent.objects.create(
             position=pos,
             event_type=PositionEvent.EventType.ENTRY_TRIGGERED,
-            details={"trigger_date": date.today().isoformat()},
+            details={"trigger_time": (base_time - timedelta(hours=2)).isoformat()},
         )
         sub = AssetSubscription.objects.create(asset=self.asset_btc, position=pos)
 
-        # Create OHLC data where low hits stop-loss
+        # Create 1h candle where low hits stop-loss
         OHLCData.objects.create(
             asset=self.asset_btc,
-            timestamp=timezone.now(),
-            interval="1d",
+            timestamp=base_time - timedelta(hours=1),
+            interval="1h",
             open=95.0, high=97.0, low=88.0, close=89.0,
         )
 
@@ -244,21 +256,28 @@ class StateTransitionTests(ObserverTestBase):
 
     def test_ambiguity_fallback_loop(self):
         """If a daily candle hits both SL and TP, it falls back to 1h -> 15m to resolve."""
+        today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        yesterday_start = today_start - timedelta(days=1)
+        two_days_ago = today_start - timedelta(days=2)
+
         pos = self._create_position(
             self.asset_btc, direction="long", entry_price=100.0,
             stop_loss=90.0, take_profit=120.0, status="active",
         )
+        Position.objects.filter(id=pos.id).update(created_at=two_days_ago)
+        pos.refresh_from_db()
+
         PositionEvent.objects.create(
             position=pos,
             event_type=PositionEvent.EventType.ENTRY_TRIGGERED,
-            details={"trigger_date": timezone.now().date().isoformat()},
+            details={"trigger_time": two_days_ago.isoformat()},
         )
         sub = AssetSubscription.objects.create(asset=self.asset_btc, position=pos)
 
         # 1. Ambiguous Daily Candle
         OHLCData.objects.create(
             asset=self.asset_btc,
-            timestamp=timezone.now(),
+            timestamp=yesterday_start,
             interval="1d",
             open=105.0, high=125.0, low=85.0, close=102.0,  # Hits both 90 and 120
         )
@@ -266,7 +285,7 @@ class StateTransitionTests(ObserverTestBase):
         # 2. Ambiguous 1h Candle (Still ambiguous!)
         OHLCData.objects.create(
             asset=self.asset_btc,
-            timestamp=timezone.now(),
+            timestamp=yesterday_start,
             interval="1h",
             open=105.0, high=125.0, low=85.0, close=102.0,
         )
@@ -274,7 +293,7 @@ class StateTransitionTests(ObserverTestBase):
         # 3. Resolving 15m Candle (Hits TP, misses SL)
         OHLCData.objects.create(
             asset=self.asset_btc,
-            timestamp=timezone.now(),
+            timestamp=yesterday_start,
             interval="15m",
             open=105.0, high=125.0, low=95.0, close=120.0,
         )
@@ -288,21 +307,28 @@ class StateTransitionTests(ObserverTestBase):
 
     def test_ambiguity_fallback_worst_case(self):
         """If ambiguous down to 1m, resolves to SL (worst case) and sets ambiguous flag."""
+        today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        yesterday_start = today_start - timedelta(days=1)
+        two_days_ago = today_start - timedelta(days=2)
+
         pos = self._create_position(
             self.asset_btc, direction="long", entry_price=100.0,
             stop_loss=90.0, take_profit=120.0, status="active",
         )
+        Position.objects.filter(id=pos.id).update(created_at=two_days_ago)
+        pos.refresh_from_db()
+
         PositionEvent.objects.create(
             position=pos,
             event_type=PositionEvent.EventType.ENTRY_TRIGGERED,
-            details={"trigger_date": timezone.now().date().isoformat()},
+            details={"trigger_time": two_days_ago.isoformat()},
         )
         sub = AssetSubscription.objects.create(asset=self.asset_btc, position=pos)
 
         for interval in ["1d", "1h", "15m", "1m"]:
             OHLCData.objects.create(
                 asset=self.asset_btc,
-                timestamp=timezone.now(),
+                timestamp=yesterday_start,
                 interval=interval,
                 open=105.0, high=125.0, low=85.0, close=102.0,  # Ambiguous
             )

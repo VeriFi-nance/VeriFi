@@ -23,6 +23,41 @@ from .models import Asset, OHLCData
 logger = logging.getLogger(__name__)
 
 
+class R1mDateTime(datetime):
+    """
+    A subclass of datetime representing a timezone-aware UTC datetime 
+    aligned strictly to 1-minute precision (seconds/microseconds set to 0).
+    """
+
+    @classmethod
+    def floor(cls, dt: datetime) -> R1mDateTime:
+        """
+        Constructs an R1mDateTime by rounding down (truncating seconds and microseconds).
+        Also enforces timezone-aware UTC.
+        """
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = dt.astimezone(timezone.utc)
+        return cls(dt.year, dt.month, dt.day, dt.hour, dt.minute, tzinfo=dt.tzinfo)
+
+    @classmethod
+    def ceil(cls, dt: datetime) -> R1mDateTime:
+        """
+        Constructs an R1mDateTime by rounding up to the next minute if there are non-zero seconds/microseconds.
+        Also enforces timezone-aware UTC.
+        """
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = dt.astimezone(timezone.utc)
+            
+        if dt.second > 0 or dt.microsecond > 0:
+            dt = dt + timedelta(minutes=1)
+            
+        return cls(dt.year, dt.month, dt.day, dt.hour, dt.minute, tzinfo=dt.tzinfo)
+
+
 class OHLCRow(TypedDict):
     timestamp: datetime
     open: float
@@ -60,14 +95,14 @@ def _http_get_json(url: str, timeout: int = 15) -> dict | list:
 # Crypto fetchers
 # ---------------------------------------------------------------------------
 
-def _fetch_binance_ohlc(symbol: str, start: date, end: date, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
+def _fetch_binance_ohlc(symbol: str, start: datetime, end: datetime, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
     """
     Binance klines endpoint.  symbol e.g. 'BTCUSDT'.
-    Returns OHLC candles in the [start, end] date range (inclusive) with intervals.
+    Returns OHLC candles in the [start, end] datetime range (inclusive) with intervals.
     Intervals: 1d, 1h, 15m, 1m
     """
-    start_ms = int(datetime.combine(start, time.min, tzinfo=timezone.utc).timestamp() * 1000)
-    end_ms = int(datetime.combine(end, time.max, tzinfo=timezone.utc).timestamp() * 1000)
+    start_ms = int(start.timestamp() * 1000)
+    end_ms = int(end.timestamp() * 1000)
     
     interval_map = {
         Interval.ONE_DAY: "1d",
@@ -95,13 +130,13 @@ def _fetch_binance_ohlc(symbol: str, start: date, end: date, interval: Interval 
     return rows
 
 
-def _fetch_kucoin_ohlc(symbol: str, start: date, end: date, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
+def _fetch_kucoin_ohlc(symbol: str, start: datetime, end: datetime, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
     """
     Kucoin kline endpoint.  symbol e.g. 'BTC-USDT'.
     Intervals: 1day, 1hour, 15min, 1min
     """
-    start_sec = int(datetime.combine(start, time.min, tzinfo=timezone.utc).timestamp())
-    end_sec = int(datetime.combine(end, time.max, tzinfo=timezone.utc).timestamp())
+    start_sec = int(start.timestamp())
+    end_sec = int(end.timestamp())
     
     interval_map = {
         Interval.ONE_DAY: "1day",
@@ -138,13 +173,13 @@ def _fetch_kucoin_ohlc(symbol: str, start: date, end: date, interval: Interval =
     return rows
 
 
-def _fetch_kraken_ohlc(pair: str, start: date, end: date, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
+def _fetch_kraken_ohlc(pair: str, start: datetime, end: datetime, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
     """
     Kraken OHLC endpoint.  pair e.g. 'XBTUSD'.
     Note: Kraken returns up to 720 entries and only recent data.
     Intervals (in minutes): 1440 (1 day), 60 (1 hour), 15, 1
     """
-    since_sec = int(datetime.combine(start, time.min, tzinfo=timezone.utc).timestamp())
+    since_sec = int(start.timestamp())
     
     interval_map = {
         Interval.ONE_DAY: 1440,
@@ -173,12 +208,11 @@ def _fetch_kraken_ohlc(pair: str, start: date, end: date, interval: Interval = I
     if not candles:
         raise OHLCFetchError("Kraken returned no candle data.")
 
-    end_dt = datetime.combine(end, time.max, tzinfo=timezone.utc)
     rows: list[OHLCRow] = []
     for candle in candles:
         # Kraken: [time, open, high, low, close, vwap, volume, count]
         candle_timestamp = datetime.fromtimestamp(int(candle[0]), tz=timezone.utc)
-        if candle_timestamp.date() > end:
+        if candle_timestamp > end:
             continue
         rows.append({
             "timestamp": candle_timestamp,
@@ -194,13 +228,13 @@ def _fetch_kraken_ohlc(pair: str, start: date, end: date, interval: Interval = I
 # Traditional fetchers (stocks, forex, commodity, index)
 # ---------------------------------------------------------------------------
 
-def _fetch_yfinance_ohlc(symbol: str, start: date, end: date, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
+def _fetch_yfinance_ohlc(symbol: str, start: datetime, end: datetime, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
     """
     Yahoo Finance v8 chart API.  symbol e.g. 'AAPL', 'GC=F' (gold futures).
     Intervals: 1d, 1h, 15m, 1m
     """
-    period1 = int(datetime.combine(start, time.min, tzinfo=timezone.utc).timestamp())
-    period2 = int(datetime.combine(end, time.max, tzinfo=timezone.utc).timestamp())
+    period1 = int(start.timestamp())
+    period2 = int(end.timestamp())
     
     interval_map = {
         Interval.ONE_DAY: "1d",
@@ -248,7 +282,7 @@ def _fetch_yfinance_ohlc(symbol: str, start: date, end: date, interval: Interval
     return rows
 
 
-def _fetch_twelvedata_ohlc(symbol: str, start: date, end: date, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
+def _fetch_twelvedata_ohlc(symbol: str, start: datetime, end: datetime, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
     """
     Twelve Data time_series API.  symbol e.g. 'AAPL', 'XAU/USD'.
     Requires TWELVE_DATA_API_KEY in Django settings.
@@ -268,8 +302,8 @@ def _fetch_twelvedata_ohlc(symbol: str, start: date, end: date, interval: Interv
     params = urlencode({
         "symbol": symbol,
         "interval": interval_map[interval],
-        "start_date": start.isoformat(),
-        "end_date": end.isoformat(),
+        "start_date": start.strftime("%Y-%m-%d %H:%M:%S"),
+        "end_date": end.strftime("%Y-%m-%d %H:%M:%S"),
         "apikey": api_key,
         "format": "JSON",
         "outputsize": 5000,
@@ -305,7 +339,7 @@ def _fetch_twelvedata_ohlc(symbol: str, start: date, end: date, interval: Interv
 # Fallback chains
 # ---------------------------------------------------------------------------
 
-def _try_crypto_chain(asset: Asset, start: date, end: date, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
+def _try_crypto_chain(asset: Asset, start: datetime, end: datetime, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
     """Try Binance → Kucoin → Kraken for crypto assets."""
     errors: list[str] = []
 
@@ -336,7 +370,7 @@ def _try_crypto_chain(asset: Asset, start: date, end: date, interval: Interval =
     raise OHLCFetchError(f"All crypto OHLC sources failed for {asset.symbol}: {'; '.join(errors)}")
 
 
-def _try_traditional_chain(asset: Asset, start: date, end: date, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
+def _try_traditional_chain(asset: Asset, start: datetime, end: datetime, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
     """Try Yahoo Finance → Twelve Data for stocks/forex/commodity/index."""
     errors: list[str] = []
 
@@ -363,7 +397,7 @@ def _try_traditional_chain(asset: Asset, start: date, end: date, interval: Inter
 # Router + DB caching
 # ---------------------------------------------------------------------------
 
-def fetch_ohlc_for_asset(asset: Asset, start: date, end: date, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
+def fetch_ohlc_for_asset(asset: Asset, start: datetime, end: datetime, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
     """Route to the correct API chain based on asset.market_type."""
     if asset.market_type == Asset.MarketType.CRYPTO:
         return _try_crypto_chain(asset, start, end, interval)
@@ -371,53 +405,120 @@ def fetch_ohlc_for_asset(asset: Asset, start: date, end: date, interval: Interva
         return _try_traditional_chain(asset, start, end, interval)
 
 
-def get_ohlc_data(asset: Asset, start_date: date, end_date: date, interval: Interval = Interval.ONE_DAY) -> list[OHLCData]:
+def _assert_aligned(dt: datetime, interval: Interval):
     """
-    Get OHLC data for an asset in [start_date, end_date].
-    Checks DB first; fetches and caches only missing dates.
-    Returns a list of OHLCData model instances ordered by timestamp.
+    Enforces that when querying in uniform resolution mode (mixed_resolution=False),
+    the developer passes datetime inputs that align exactly with the candle boundaries 
+    of the chosen interval (e.g., 00:00:00 UTC for daily candles).
     """
-    # For daily intervals, we compare by date.
-    # For intraday intervals, we still fetch by date range, but we might want to check existing intervals
+    if interval == Interval.ONE_DAY:
+        if not (dt.hour == 0 and dt.minute == 0 and dt.second == 0 and dt.microsecond == 0):
+            raise AssertionError(f"datetime {dt} is not aligned with ONE_DAY boundary (needs to be 00:00:00 UTC)")
+    elif interval == Interval.ONE_HOUR:
+        if not (dt.minute == 0 and dt.second == 0 and dt.microsecond == 0):
+            raise AssertionError(f"datetime {dt} is not aligned with ONE_HOUR boundary")
+    elif interval == Interval.FIFTEEN_MIN:
+        if not (dt.minute % 15 == 0 and dt.second == 0 and dt.microsecond == 0):
+            raise AssertionError(f"datetime {dt} is not aligned with FIFTEEN_MIN boundary")
+    elif interval == Interval.ONE_MIN:
+        if not (dt.second == 0 and dt.microsecond == 0):
+            raise AssertionError(f"datetime {dt} is not aligned with ONE_MIN boundary")
+
+
+def _ensure_daily_cached(asset: Asset, start_date: date, end_date: date):
+    """
+    Ensures that the 1d (daily) candles for all dates in the range [start_date, end_date]
+    are present in the database. When mixed_resolution=True, this pass is executed first
+    to establish basic daily cache coverage for the entire query period.
+    """
     existing = list(OHLCData.objects.filter(
-        asset=asset, 
-        timestamp__date__gte=start_date, 
+        asset=asset,
+        timestamp__date__gte=start_date,
         timestamp__date__lte=end_date,
-        interval=interval.value
+        interval=Interval.ONE_DAY.value
     ))
-    
-    # Group existing by date to count how many candles we have per day
     from collections import Counter
     date_counts = Counter(row.timestamp.date() for row in existing)
-
+    
     all_dates = set()
     current = start_date
     while current <= end_date:
         all_dates.add(current)
         current += timedelta(days=1)
-
+        
     today = datetime.now(timezone.utc).date()
     missing_dates = set()
+    for d in all_dates:
+        if d == today or date_counts[d] == 0:
+            missing_dates.add(d)
+            
+    if missing_dates:
+        min_missing = min(missing_dates)
+        max_missing = max(missing_dates)
+        try:
+            fetched = fetch_ohlc_for_asset(asset, min_missing, max_missing, Interval.ONE_DAY)
+            new_rows = [
+                OHLCData(
+                    asset=asset,
+                    timestamp=row["timestamp"],
+                    interval=Interval.ONE_DAY.value,
+                    open=row["open"],
+                    high=row["high"],
+                    low=row["low"],
+                    close=row["close"]
+                )
+                for row in fetched
+                if row["timestamp"].date() in missing_dates
+            ]
+            if new_rows:
+                OHLCData.objects.bulk_create(new_rows, ignore_conflicts=True)
+        except OHLCFetchError:
+            logger.warning("Could not fetch missing daily OHLC data for %s (%s -> %s)", asset.symbol, min_missing, max_missing)
+            raise
+
+
+def _ensure_interval_cached(asset: Asset, start_time: datetime, end_time: datetime, interval: Interval):
+    """
+    Used ONLY when mixed_resolution=False (uniform resolution queries, e.g., for charting).
+    Checks cache completeness at the daily granularity: for each date in the range, it counts
+    cached candles and compares against the expected count (e.g. 24 hourly candles per day).
+    If any day has missing candles, it fetches the entire day from the API.
+    """
+    start_date = start_time.date()
+    end_date = end_time.date()
+    existing = list(OHLCData.objects.filter(
+        asset=asset,
+        timestamp__date__gte=start_date,
+        timestamp__date__lte=end_date,
+        interval=interval.value
+    ))
+    from collections import Counter
+    date_counts = Counter(row.timestamp.date() for row in existing)
     
+    all_dates = set()
+    current = start_date
+    while current <= end_date:
+        all_dates.add(current)
+        current += timedelta(days=1)
+        
+    today = datetime.now(timezone.utc).date()
+    missing_dates = set()
     expected_crypto_counts = {
         Interval.ONE_DAY.value: 1,
         Interval.ONE_HOUR.value: 24,
         Interval.FIFTEEN_MIN.value: 96,
         Interval.ONE_MIN.value: 1440
     }
-
+    
     for d in all_dates:
-        # Always fetch if it's today (day is incomplete)
         if d == today:
             missing_dates.add(d)
-        # For past days in crypto, check if we have the full expected candle count
         elif asset.market_type == Asset.MarketType.CRYPTO and interval.value != Interval.ONE_DAY.value:
             if date_counts[d] < expected_crypto_counts.get(interval.value, 1):
                 missing_dates.add(d)
-        # For non-crypto or daily crypto, just check if we have at least 1 candle
         elif date_counts[d] == 0:
             missing_dates.add(d)
-
+            
     if missing_dates:
         min_missing = min(missing_dates)
         max_missing = max(missing_dates)
@@ -425,12 +526,12 @@ def get_ohlc_data(asset: Asset, start_date: date, end_date: date, interval: Inte
             fetched = fetch_ohlc_for_asset(asset, min_missing, max_missing, interval)
             new_rows = [
                 OHLCData(
-                    asset=asset, 
-                    timestamp=row["timestamp"], 
+                    asset=asset,
+                    timestamp=row["timestamp"],
                     interval=interval.value,
-                    open=row["open"], 
-                    high=row["high"], 
-                    low=row["low"], 
+                    open=row["open"],
+                    high=row["high"],
+                    low=row["low"],
                     close=row["close"]
                 )
                 for row in fetched
@@ -440,10 +541,203 @@ def get_ohlc_data(asset: Asset, start_date: date, end_date: date, interval: Inte
                 OHLCData.objects.bulk_create(new_rows, ignore_conflicts=True)
         except OHLCFetchError:
             logger.warning("Could not fetch missing OHLC data for %s (%s -> %s) at interval %s", asset.symbol, min_missing, max_missing, interval.name)
+            raise
 
-    return list(OHLCData.objects.filter(
-        asset=asset, 
-        timestamp__date__gte=start_date, 
-        timestamp__date__lte=end_date,
+
+def _ensure_sub_day_cached(asset: Asset, sub_start: R1mDateTime, sub_end: R1mDateTime, interval: Interval):
+    """
+    Used ONLY when mixed_resolution=True (multi-resolution queries, e.g., for position resolution boundaries).
+    Checks cache completeness for specific intraday segments (e.g. 18:00 to 24:00 on the creation day).
+    Unlike _ensure_interval_cached, it cannot check daily counts because the range is only a partial day.
+    Instead, it calculates the exact list of expected timestamps, checks if they exist in the DB,
+    identifies the missing sub-range, and fetches/caches them.
+    """
+    duration_map = {
+        Interval.ONE_HOUR: timedelta(hours=1),
+        Interval.FIFTEEN_MIN: timedelta(minutes=15),
+        Interval.ONE_MIN: timedelta(minutes=1)
+    }
+    duration = duration_map[interval]
+    
+    expected_timestamps = []
+    curr = sub_start
+    while curr < sub_end:
+        expected_timestamps.append(curr)
+        curr += duration
+        
+    if not expected_timestamps:
+        return
+        
+    existing_timestamps = set(OHLCData.objects.filter(
+        asset=asset,
+        timestamp__in=expected_timestamps,
         interval=interval.value
-    ).order_by("timestamp"))
+    ).values_list('timestamp', flat=True))
+    
+    missing_timestamps = [ts for ts in expected_timestamps if ts not in existing_timestamps]
+    
+    if missing_timestamps:
+        min_missing = min(missing_timestamps)
+        max_missing = max(missing_timestamps)
+        try:
+            fetched = fetch_ohlc_for_asset(asset, min_missing, max_missing, interval)
+            new_rows = [
+                OHLCData(
+                    asset=asset,
+                    timestamp=row["timestamp"],
+                    interval=interval.value,
+                    open=row["open"],
+                    high=row["high"],
+                    low=row["low"],
+                    close=row["close"]
+                )
+                for row in fetched
+                if row["timestamp"] in missing_timestamps
+            ]
+            if new_rows:
+                OHLCData.objects.bulk_create(new_rows, ignore_conflicts=True)
+        except OHLCFetchError:
+            logger.warning("Could not fetch missing sub-day OHLC data for %s (%s -> %s) at interval %s", asset.symbol, min_missing, max_missing, interval.name)
+            raise
+
+
+def _partition_range(start_time: R1mDateTime, end_time: R1mDateTime) -> list[tuple[R1mDateTime, R1mDateTime, Interval]]:
+    """
+    Partitions the [start_time, end_time] range into optimal, non-overlapping chunks.
+    It uses a greedy algorithm starting from the beginning of the range:
+    It tries to fit the largest possible interval (1d -> 1h -> 15m -> 1m) that is:
+      1. Aligned to the start boundary of that interval.
+      2. Does not exceed end_time.
+    This guarantees that boundaries (like start day and end day) use fine resolution 
+    where alignment requires it, while intermediate days use daily resolution.
+    
+    Assumes start_time and end_time are already strictly 1-minute aligned.
+    """
+    if not (start_time.second == 0 and start_time.microsecond == 0):
+        raise ValueError(f"start_time {start_time} is not aligned to 1-minute boundary")
+    if not (end_time.second == 0 and end_time.microsecond == 0):
+        raise ValueError(f"end_time {end_time} is not aligned to 1-minute boundary")
+
+    INTERVAL_SPECS = [
+        (Interval.ONE_DAY, timedelta(days=1), lambda dt: dt.hour == 0 and dt.minute == 0),
+        (Interval.ONE_HOUR, timedelta(hours=1), lambda dt: dt.minute == 0),
+        (Interval.FIFTEEN_MIN, timedelta(minutes=15), lambda dt: dt.minute % 15 == 0),
+        (Interval.ONE_MIN, timedelta(minutes=1), lambda dt: True),
+    ]
+    
+    chunks = []
+    current = start_time
+    while current < end_time:
+        selected = False
+        for interval, duration, align_check in INTERVAL_SPECS:
+            if align_check(current) and current + duration <= end_time:
+                chunks.append((current, current + duration, interval))
+                current += duration
+                selected = True
+                break
+        if not selected:
+            break
+            
+    return chunks
+
+
+def _merge_chunks(chunks: list[tuple[R1mDateTime, R1mDateTime, Interval]]) -> list[tuple[R1mDateTime, R1mDateTime, Interval]]:
+    """
+    Cooperates with _partition_range to optimize API requests.
+    _partition_range outputs many small adjacent chunks of the same resolution (e.g. six 1-hour chunks).
+    If we fetched these individually, it would result in six separate API requests.
+    This function merges adjacent chunks of the same interval (e.g., merging six 1-hour chunks
+    into a single 6-hour range [18:00, 24:00)), so we only make one API call to cache the range.
+    """
+    if not chunks:
+        return []
+    merged = []
+    current_start, current_end, current_interval = chunks[0]
+    for next_start, next_end, next_interval in chunks[1:]:
+        if next_interval == current_interval and next_start == current_end:
+            current_end = next_end
+        else:
+            merged.append((current_start, current_end, current_interval))
+            current_start, current_end, current_interval = next_start, next_end, next_interval
+    merged.append((current_start, current_end, current_interval))
+    return merged
+
+
+def get_ohlc_data(
+    asset: Asset, 
+    start_time: datetime, 
+    end_time: datetime, 
+    interval: Interval = Interval.ONE_DAY, 
+    mixed_resolution: bool = False
+) -> list[OHLCData]:
+    """
+    Main router to fetch and query OHLC data from the database cache.
+    
+    If mixed_resolution=False:
+      - Validates and enforces alignment assertions for the start and end datetimes.
+      - Checks cache completeness at daily granularity and returns a list of candles of uniform resolution.
+      
+    If mixed_resolution=True:
+      - Normalizes boundaries (rounds start_time UP to prevent past leakage, end_time DOWN to prevent future leakage).
+      - Ensures all 1d daily candles are cached for basic daily coverage.
+      - Partitions the range into non-overlapping resolution segments (1d, 1h, 15m, 1m).
+      - Consolidates contiguous segments to perform bulk cache checks and fetch missing sub-day data.
+      - Queries and returns the exact non-overlapping sequence covering the range.
+    """
+    from django.utils.timezone import is_naive, make_aware
+    
+    if is_naive(start_time):
+        start_time = make_aware(start_time, timezone.utc)
+    else:
+        start_time = start_time.astimezone(timezone.utc)
+        
+    if is_naive(end_time):
+        end_time = make_aware(end_time, timezone.utc)
+    else:
+        end_time = end_time.astimezone(timezone.utc)
+
+    if not mixed_resolution:
+        _assert_aligned(start_time, interval)
+        _assert_aligned(end_time, interval)
+
+    start_date = start_time.date()
+    end_date = end_time.date()
+
+    _ensure_daily_cached(asset, start_date, end_date)
+
+    if not mixed_resolution:
+        _ensure_interval_cached(asset, start_time, end_time, interval)
+        return list(OHLCData.objects.filter(
+            asset=asset,
+            timestamp__gte=start_time,
+            timestamp__lte=end_time,
+            interval=interval.value
+        ).order_by("timestamp"))
+
+    # mixed_resolution = True
+    # Convert/round start_time UP and end_time DOWN to R1mDateTime to prevent past/future leakage
+    start_time = R1mDateTime.ceil(start_time)
+    end_time = R1mDateTime.floor(end_time)
+
+    if start_time >= end_time:
+        return []
+
+    chunks = _partition_range(start_time, end_time)
+    merged_chunks = _merge_chunks(chunks)
+
+    for sub_start, sub_end, sub_interval in merged_chunks:
+        if sub_interval == Interval.ONE_DAY:
+            continue
+        _ensure_sub_day_cached(asset, sub_start, sub_end, sub_interval)
+
+    result_candles = []
+    for sub_start, sub_end, sub_interval in chunks:
+        candles = list(OHLCData.objects.filter(
+            asset=asset,
+            timestamp__gte=sub_start,
+            timestamp__lt=sub_end,
+            interval=sub_interval.value
+        ).order_by("timestamp"))
+        result_candles.extend(candles)
+
+    return result_candles

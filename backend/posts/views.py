@@ -319,13 +319,15 @@ class HardClaimChartDataView(APIView):
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
         asset = hard_claim.asset
-        start_date = hard_claim.created_at.date()
-        end_date = hard_claim.until
+        # get_ohlc_data requires aligned UTC datetime objects
+        from datetime import datetime, timezone
+        start_time = datetime.combine(hard_claim.created_at.date(), datetime.min.time(), tzinfo=timezone.utc)
+        end_time = datetime.combine(hard_claim.until, datetime.min.time(), tzinfo=timezone.utc)
 
         # Get or fetch OHLC data
         from .ohlc_fetcher import get_ohlc_data, OHLCFetchError
         try:
-            ohlc_rows = get_ohlc_data(asset, start_date, end_date)
+            ohlc_rows = get_ohlc_data(asset, start_time, end_time)
         except OHLCFetchError as e:
             return Response({"detail": str(e)}, status=status.HTTP_502_BAD_GATEWAY)
 
