@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { createHardClaim, getAssets } from '@/lib/api';
+import { loginPathWithReturn, useAuthState } from '@/lib/auth';
 import type { AssetItem } from '@/lib/types';
 
 interface Props {
@@ -14,6 +16,9 @@ interface Props {
 
 /** Standalone dialog for creating a single HardClaim (used in Profile etc.) */
 export function CreateClaimDialog({ onCreated }: Props) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const auth = useAuthState();
   const [open, setOpen] = useState(false);
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [assetId, setAssetId] = useState('');
@@ -32,6 +37,10 @@ export function CreateClaimDialog({ onCreated }: Props) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!auth.authenticated) {
+      navigate(loginPathWithReturn(location.pathname), { replace: true });
+      return;
+    }
     if (!assetId || !direction || !percentage || !until) {
       setError('Please fill all fields');
       return;

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Zap } from 'lucide-react';
 import { getProfileStats } from '@/lib/api';
-import { loadAddress } from '@/lib/auth';
+import { useAuthState } from '@/lib/auth';
 
 interface Props {
   /** Bump this counter to force a refetch after a market action. */
@@ -12,7 +12,7 @@ export function EnergyMeter({ refreshKey }: Props) {
   const [energy, setEnergy] = useState<number | null>(null);
   const [cap, setCap] = useState<number | null>(null);
   const [rep, setRep] = useState<number | null>(null);
-  const address = loadAddress();
+  const { address } = useAuthState();
 
   useEffect(() => {
     if (!address) return;

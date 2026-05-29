@@ -5,7 +5,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { HardClaimCard } from '@/components/HardClaimCard';
 import { getHardClaimsByAddress, getAssets, getProfileStats, toggleFollow } from '@/lib/api';
 import type { HardClaimItem, AssetItem, ProfileStats } from '@/lib/types';
-import { loadAddress } from '@/lib/auth';
+import { loginPathWithReturn, useAuthState } from '@/lib/auth';
 
 export default function UserPostsPage() {
   const { address } = useParams();
@@ -16,7 +16,8 @@ export default function UserPostsPage() {
   const [following, setFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const myAddress = loadAddress();
+  const auth = useAuthState();
+  const myAddress = auth.address;
 
   useEffect(() => {
     if (!address) return;
@@ -37,6 +38,10 @@ export default function UserPostsPage() {
 
   async function handleFollow() {
     if (!address) return;
+    if (!auth.authenticated) {
+      navigate(loginPathWithReturn(`/app/user/${address}`), { replace: true });
+      return;
+    }
     try {
       const res = await toggleFollow(address);
       setFollowing(res.following);

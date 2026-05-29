@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { closePosition, getPositionResolveStatus, triggerPositionResolve } from '@/lib/api';
 import type { PositionItem, AssetItem } from '@/lib/types';
-import { loadAddress } from '@/lib/auth';
+import { useAuthState } from '@/lib/auth';
 import ProfitabilityBadge from './ProfitabilityBadge';
 import { Link } from 'react-router-dom';
 import { truncateAddress } from './HardClaimCard';
@@ -23,7 +23,7 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
   const [resolveMsg, setResolveMsg] = useState('');
   const [countdown, setCountdown] = useState(0);
 
-  const myAddress = loadAddress();
+  const { address: myAddress } = useAuthState();
   const asset = assets.find(a => a.id === position.asset);
   const isAuthor = !!myAddress && myAddress.toLowerCase() === position.author_address.toLowerCase();
   const canResolve = isAuthor && (position.status === 'pending' || position.status === 'active');

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -9,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { PenSquare, Plus, X, TrendingUp, TrendingDown, CalendarDays } from 'lucide-react';
 import { createPost, createHardClaim, getAssets, extractClaims } from '@/lib/api';
-import { isAuthenticated } from '@/lib/auth';
+import { loginPathWithReturn, useAuthState } from '@/lib/auth';
 import type { AssetItem, ReviewClaim, ExtractedClaimContract } from '@/lib/types';
 
 const DEBOUNCE_MS = 700;
@@ -99,6 +100,9 @@ interface NewPostModalProps {
 }
 
 export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewPostModalProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const auth = useAuthState();
   const [content, setContent] = useState('');
   const [claims, setClaims] = useState<AttachedClaim[]>([]);
   const [showClaimForm, setShowClaimForm] = useState(false);
@@ -192,6 +196,10 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
 
   async function handleSubmit() {
     if (!content.trim()) return;
+    if (!auth.authenticated) {
+      navigate(loginPathWithReturn(location.pathname), { replace: true });
+      return;
+    }
     setError('');
     setSubmitting(true);
     try {
@@ -557,16 +565,23 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
 
 /** Trigger button — place anywhere to open the modal */
 export function NewPostButton({ onPosted, communityId }: { onPosted: () => void, communityId?: number }) {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [open, setOpen] = useState(false);
-  const authed = isAuthenticated();
-  if (!authed) return null;
+  const auth = useAuthState();
 
   return (
     <>
       <Button
         size="sm"
         className="gap-2 font-semibold bg-emerald-300/90 text-gray-900 border border-emerald-500/50 hover:bg-emerald-500/90 shadow-[0_0_18px_rgba(16,185,129,0.5)] rounded-xl"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          if (!auth.authenticated) {
+            navigate(loginPathWithReturn(location.pathname), { replace: true });
+            return;
+          }
+          setOpen(true);
+        }}
       >
         <PenSquare className="size-4" />
         New Post

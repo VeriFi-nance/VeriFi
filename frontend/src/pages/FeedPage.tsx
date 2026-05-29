@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { FeedList } from '@/components/feed/FeedList';
 import { NewPostButton } from '@/components/feed/NewPostModal';
-import { isAuthenticated } from '@/lib/auth';
+import { useAuthState } from '@/lib/auth';
 import { Info } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function FeedPage() {
-  const authed = isAuthenticated();
+  const { authenticated: authed } = useAuthState();
   const [feedType, setFeedType] = useState('global');
 
   return (

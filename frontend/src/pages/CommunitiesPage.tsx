@@ -8,9 +8,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { loginPathWithReturn, useAuthState } from '@/lib/auth';
 
 export default function CommunitiesPage() {
   const navigate = useNavigate();
+  const auth = useAuthState();
   const [communities, setCommunities] = useState<CommunityItem[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -31,6 +33,10 @@ export default function CommunitiesPage() {
   };
 
   const handleCreate = async () => {
+    if (!auth.authenticated) {
+      navigate(loginPathWithReturn('/app/communities'), { replace: true });
+      return;
+    }
     try {
       const comm = await createCommunity(name, description, privacy, postPermission);
       setOpen(false);
