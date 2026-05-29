@@ -207,10 +207,18 @@ def extract_raw_claims(output) -> List[RawClaim]:
 
 def map_asset_token(token: str) -> Optional[str]:
     """Map natural-language asset names/synonyms to whitelist tickers."""
-    normalized = re.sub(r"[^a-zA-ZÇĞİÖŞÜçğıöşü\s]", "", token.strip().lower())
-    upper = token.strip().upper()
+    stripped = token.strip()
+    normalized = re.sub(r"[^a-zA-ZÇĞİÖŞÜçğıöşü\s]", "", stripped.lower())
 
-    # Accept all whitelist tickers directly.
+    # A bare ticker SYMBOL is only accepted when the source token is written in
+    # uppercase (e.g. "USD", "BTC", "COIN", "TRY"). This is critical because several
+    # tickers are spelled like ordinary words once lower-cased — COIN/"coin",
+    # LINK/"link", DOT/"dot", META/"meta", TRY/"try" — and must NOT be captured from
+    # plain prose. Full names / synonyms ("bitcoin", "dolar") are matched separately
+    # via alias_map and stay case-insensitive.
+    is_symbol_style = stripped.isupper()
+
+    # Accept all whitelist tickers directly (lower-cased lookup key -> canonical ticker).
     ticker_map = {ticker.lower(): ticker for ticker in TOTAL_WHITELIST}
 
     # Common synonyms and company names for all whitelist groups.
@@ -300,24 +308,29 @@ def map_asset_token(token: str) -> Optional[str]:
         "netfliix": "NFLX",
     }
 
-    mapped = ticker_map.get(normalized) or alias_map.get(normalized) or upper
-    if mapped in TOTAL_WHITELIST:
-        return mapped
+    # 1) Natural-language alias / full name (case-insensitive, always allowed).
+    if alias_map.get(normalized) in TOTAL_WHITELIST:
+        return alias_map[normalized]
 
-    # Fuzzy fallback for common human typos.
-    candidate_pool = list(alias_map.keys()) + list(ticker_map.keys())
-    close = get_close_matches(normalized, candidate_pool, n=1, cutoff=0.82)
-    if close:
-        close_key = close[0]
-        mapped = alias_map.get(close_key) or ticker_map.get(close_key)
-        if mapped in TOTAL_WHITELIST:
-            return mapped
+    # 2) Bare ticker symbol — only when written in uppercase in the source text.
+    if is_symbol_style and ticker_map.get(normalized) in TOTAL_WHITELIST:
+        return ticker_map[normalized]
 
-    # Multi-token fallback: check each token independently (e.g., "ether fiyatı").
-    for part in normalized.split():
-        mapped_part = alias_map.get(part) or ticker_map.get(part)
-        if mapped_part in TOTAL_WHITELIST:
-            return mapped_part
+    # 3) Fuzzy fallback for human typos — restricted to alias/name keys only.
+    #    (Fuzzy-matching short ticker symbols is unsafe: "try"->TRY, "dot"->DOT, etc.)
+    close = get_close_matches(normalized, list(alias_map.keys()), n=1, cutoff=0.82)
+    if close and alias_map.get(close[0]) in TOTAL_WHITELIST:
+        return alias_map[close[0]]
+
+    # 4) Multi-token fallback: check each word independently (e.g., "ether fiyatı").
+    #    Symbols still require uppercase; names are matched via alias_map.
+    raw_parts = stripped.split()
+    for raw_part in raw_parts:
+        part_norm = re.sub(r"[^a-zA-ZÇĞİÖŞÜçğıöşü]", "", raw_part.lower())
+        if alias_map.get(part_norm) in TOTAL_WHITELIST:
+            return alias_map[part_norm]
+        if raw_part.isupper() and ticker_map.get(part_norm) in TOTAL_WHITELIST:
+            return ticker_map[part_norm]
     return None
 
 
@@ -491,8 +504,9 @@ def _extract_base_payda_from_text(text: str) -> Optional[str]:
 
 def _extract_primary_asset(text: str) -> Optional[str]:
     tokens = re.findall(r"[A-Za-zÇĞİÖŞÜçğıöşü]+", text)
-    # First check unigrams then bigrams/trigrams for aliases like "us dollar".
-    for n in (1, 2, 3):
+    # Prefer the longest n-gram first so multi-word names ("binance coin",
+    # "us dollar") match before a single token inside them ("coin" -> COIN).
+    for n in (3, 2, 1):
         for i in range(len(tokens) - n + 1):
             phrase = " ".join(tokens[i:i + n])
             mapped = map_asset_token(phrase)
