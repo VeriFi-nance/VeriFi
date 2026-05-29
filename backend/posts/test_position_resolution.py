@@ -136,6 +136,16 @@ class PositionResolutionTestCase(TestCase):
         self.assertEqual(pos.exit_price, 48000)
         self.assertEqual(pos.pnl_percentage, -4.0)
 
+    def test_active_without_trigger_event_raises_assertion_error(self):
+        pos = self.create_position(Position.Direction.LONG, 50000, 40000, 60000, status=Position.Status.ACTIVE)
+        # No ENTRY_TRIGGERED event is created
+        with self.assertRaises(AssertionError) as ctx:
+            _resolve_active(pos, self.now)
+        self.assertIn(
+            f"The position #{pos.id} you tried to resolve active is still not triggered. You cant resolve_active an untriggered event.",
+            str(ctx.exception)
+        )
+
     def test_calculate_pnl(self):
         self.assertEqual(calculate_pnl(Position.Direction.LONG, 100, 120), 20.0)
         self.assertEqual(calculate_pnl(Position.Direction.LONG, 100, 80), -20.0)

@@ -70,7 +70,7 @@ class ResolutionTests(TestCase):
             price = base_price * (1 + trend_pct * i / 100)
             rows.append(OHLCData(
                 asset=self.asset,
-                date=d,
+                timestamp=d,
                 open=price,
                 high=price * 1.02,
                 low=price * 0.98,
@@ -92,7 +92,7 @@ class ResolutionTests(TestCase):
                 break
             price = 1000 + i * 30  # 1000, 1030, 1060, 1090, 1120
             OHLCData.objects.create(
-                asset=self.asset, date=d,
+                asset=self.asset, timestamp=d,
                 open=price, high=price + 20, low=price - 20, close=price + 10,
             )
         mock_ohlc_fetch.return_value = []  # Already in DB, won't be called
@@ -122,7 +122,7 @@ class ResolutionTests(TestCase):
                 break
             price = 1000 + i * 10  # 1000, 1010, 1020, 1030, 1040 — max high = 1060
             OHLCData.objects.create(
-                asset=self.asset, date=d,
+                asset=self.asset, timestamp=d,
                 open=price, high=price + 20, low=price - 20, close=price + 5,
             )
         mock_ohlc_fetch.return_value = []
@@ -148,7 +148,7 @@ class ResolutionTests(TestCase):
                 break
             price = 1000 - i * 30  # 1000, 970, 940, 910, 880
             OHLCData.objects.create(
-                asset=self.asset, date=d,
+                asset=self.asset, timestamp=d,
                 open=price, high=price + 10, low=price - 20, close=price - 5,
             )
         mock_ohlc_fetch.return_value = []
