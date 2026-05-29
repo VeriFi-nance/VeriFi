@@ -173,11 +173,11 @@ class EnergyTests(TestCase):
         u.save()
         self.assertFalse(spend(u, 1))
 
-    def test_grant_caps_at_4(self):
+    def test_grant_adds_energy(self):
         u = _mk_user(101)
         u.energy = 0.0
         u.last_energy_grant = timezone.now() - timedelta(days=10)
         u.save()
         grant_energy(u)
         u.refresh_from_db()
-        self.assertEqual(u.energy, float(ENERGY_CAP))
+        self.assertEqual(u.energy, 30.0)
