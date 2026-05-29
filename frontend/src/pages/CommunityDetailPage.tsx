@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { getCommunity, joinCommunity, approveCommunityMember, banCommunityMember, getFeed, getAssets, getCommunityMembers, getPositions, updateCommunity } from '@/lib/api';
 import type { CommunityItem, PostItem, AssetItem, CommunityMembershipItem, PositionItem } from '@/lib/types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { loadAddress } from '@/lib/auth';
+import { loginPathWithReturn, useAuthState } from '@/lib/auth';
 import { PostCard } from '@/components/feed/PostCard';
 import { NewPostButton } from '@/components/feed/NewPostModal';
 import ProfitabilityBadge from '@/components/ProfitabilityBadge';
@@ -18,7 +18,8 @@ import { Settings } from 'lucide-react';
 export default function CommunityDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const myAddress = loadAddress();
+  const auth = useAuthState();
+  const myAddress = auth.address;
   
   const [community, setCommunity] = useState<CommunityItem | null>(null);
   const [posts, setPosts] = useState<PostItem[]>([]);
@@ -73,6 +74,10 @@ export default function CommunityDetailPage() {
 
   const handleJoin = async () => {
     if (!id) return;
+    if (!auth.authenticated) {
+      navigate(loginPathWithReturn(`/app/communities/${id}`), { replace: true });
+      return;
+    }
     try {
       await joinCommunity(Number(id));
       await fetchCommunityAndPosts();

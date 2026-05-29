@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { createHardClaim, getAssets } from '@/lib/api';
+import { loginPathWithReturn, useAuthState } from '@/lib/auth';
 import type { AssetItem } from '@/lib/types';
 
 interface Props {
@@ -14,12 +16,18 @@ interface Props {
 
 /** Standalone dialog for creating a single HardClaim (used in Profile etc.) */
 export function CreateClaimDialog({ onCreated }: Props) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const auth = useAuthState();
   const [open, setOpen] = useState(false);
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [assetId, setAssetId] = useState('');
   const [direction, setDirection] = useState('');
   const [percentage, setPercentage] = useState('');
   const [until, setUntil] = useState('');
+  const [stakeSide, setStakeSide] = useState<'YES' | 'NO'>('YES');
+  const [stakeRep, setStakeRep] = useState('10');
+  const [enableMarket, setEnableMarket] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -29,6 +37,10 @@ export function CreateClaimDialog({ onCreated }: Props) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!auth.authenticated) {
+      navigate(loginPathWithReturn(location.pathname), { replace: true });
+      return;
+    }
     if (!assetId || !direction || !percentage || !until) {
       setError('Please fill all fields');
       return;
@@ -38,12 +50,28 @@ export function CreateClaimDialog({ onCreated }: Props) {
       setError('Percentage must be a positive number');
       return;
     }
+    let market: { side: 'YES' | 'NO'; stake_rep: number } | undefined;
+    if (enableMarket) {
+      const s = parseFloat(stakeRep);
+      if (isNaN(s) || s < 10 || s > 100) {
+        setError('Stake must be a number between 10 and 100 rep');
+        return;
+      }
+      market = { side: stakeSide, stake_rep: s };
+    }
     setError('');
     setSubmitting(true);
     try {
-      await createHardClaim({ asset_id: parseInt(assetId, 10), direction, percentage: pct, until });
+      await createHardClaim({
+        asset_id: parseInt(assetId, 10),
+        direction,
+        percentage: pct,
+        until,
+        ...(market ? { market } : {}),
+      });
       setOpen(false);
       setAssetId(''); setDirection(''); setPercentage(''); setUntil('');
+      setStakeSide('YES'); setStakeRep('10'); setEnableMarket(true);
       onCreated();
     } catch (err: any) {
       setError(err.message);
@@ -99,6 +127,50 @@ export function CreateClaimDialog({ onCreated }: Props) {
             <Input type="date" required
               min={new Date(Date.now() + 86400000).toISOString().split('T')[0]}
               value={until} onChange={(e) => setUntil(e.target.value)} />
+          </div>
+
+          <div className="rounded-md border p-3 space-y-3">
+            <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+              <input
+                type="checkbox"
+                checked={enableMarket}
+                onChange={(e) => setEnableMarket(e.target.checked)}
+              />
+              Open reputation market (Model G)
+            </label>
+            {enableMarket && (
+              <>
+                <div className="space-y-2">
+                  <Label>Stake side</Label>
+                  <Select
+                    value={stakeSide}
+                    onValueChange={(v) => setStakeSide(v as 'YES' | 'NO')}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="YES">YES (claim hits target)</SelectItem>
+                      <SelectItem value="NO">NO (claim misses)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Your stake (10–100 rep)</Label>
+                  <Input
+                    type="number"
+                    min={10}
+                    max={100}
+                    step={1}
+                    value={stakeRep}
+                    onChange={(e) => setStakeRep(e.target.value)}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Plus a 2-rep listing fee (burned) and 5% trade burn. Costs 2 energy.
+                  </p>
+                </div>
+              </>
+            )}
           </div>
 
           <Button type="submit" disabled={submitting} className="w-full">

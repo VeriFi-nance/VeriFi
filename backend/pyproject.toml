@@ -11,4 +11,8 @@ dependencies = [
     "djangorestframework-simplejwt>=5.5.1",
     "eth-account>=0.13.0",
     "gunicorn>=25.1.0",
+    "dj-database-url>=2.2.0",
+    "psycopg[binary]>=3.2.0",
+    "whitenoise>=6.8.0",
+    "python-dotenv>=1.0.0",
 ]

@@ -387,4 +387,17 @@ def resolve_hard_claim(hard_claim: HardClaim) -> dict[str, Any]:
             "hit_days": result["hit_days"],
         },
     )
+
+    # Model G rep market: settle stakes if a market is attached.
+    if hard_claim.status in (HardClaim.Status.CONFIRMED, HardClaim.Status.REJECTED):
+        try:
+            market = hard_claim.market
+        except HardClaim.market.RelatedObjectDoesNotExist:
+            market = None
+        if market is not None and not market.resolved:
+            from .rep_market import resolve as resolve_market
+
+            winning_side = "YES" if hard_claim.status == HardClaim.Status.CONFIRMED else "NO"
+            resolve_market(market, winning_side)
+
     return result

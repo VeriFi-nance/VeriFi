@@ -3,9 +3,10 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Home, User, LogOut, Sun, Moon, Users } from 'lucide-react';
-import { clearAuth, loadAddress } from '@/lib/auth';
+import { clearAuth, loginPathWithReturn, useAuthState } from '@/lib/auth';
 import { clearPrivateKey } from '@/lib/crypto';
 import { loadTheme, toggleTheme, type Theme } from '@/lib/theme';
+import { EnergyMeter } from '@/components/EnergyMeter';
 
 /** Derive a stable avatar background hue from an address. */
 function avatarColor(addr: string): string {
@@ -64,7 +65,8 @@ function pageTitle(pathname: string): string {
 export default function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const address = loadAddress() ?? '';
+  const auth = useAuthState();
+  const address = auth.address ?? '';
   const [theme, setTheme] = useState<Theme>(loadTheme);
 
   useEffect(() => {
@@ -91,7 +93,6 @@ export default function AppLayout() {
   function handleDisconnect() {
     clearAuth();
     clearPrivateKey();
-    navigate('/login');
   }
 
   return (
@@ -134,17 +135,29 @@ export default function AppLayout() {
             />
           </nav>
 
-          {/* Disconnect button at bottom */}
+          {/* Session action at bottom */}
           <div className="px-3 pb-6 pt-3 border-t">
-            <Button
-              variant="ghost"
-              size="lg"
-              className="w-full justify-start gap-3 px-4 py-3 h-auto text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl font-semibold text-base transition-all duration-150"
-              onClick={handleDisconnect}
-            >
-              <LogOut className="size-5 shrink-0" />
-              Disconnect
-            </Button>
+            {auth.authenticated ? (
+              <Button
+                variant="ghost"
+                size="lg"
+                className="w-full justify-start gap-3 px-4 py-3 h-auto text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl font-semibold text-base transition-all duration-150"
+                onClick={handleDisconnect}
+              >
+                <LogOut className="size-5 shrink-0" />
+                Disconnect
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="lg"
+                className="w-full justify-start gap-3 px-4 py-3 h-auto text-muted-foreground hover:text-foreground hover:bg-accent rounded-xl font-semibold text-base transition-all duration-150"
+                onClick={() => navigate(loginPathWithReturn(location.pathname))}
+              >
+                <User className="size-5 shrink-0" />
+                Login
+              </Button>
+            )}
           </div>
         </aside>
 
@@ -159,6 +172,8 @@ export default function AppLayout() {
 
             {/* Right side controls */}
             <div className="flex items-center gap-3">
+              <EnergyMeter />
+
               {/* Theme toggle */}
               <Button
                 variant="ghost"

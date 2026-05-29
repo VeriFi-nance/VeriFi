@@ -4,11 +4,13 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from accounts.models import WalletUser
-from .models import Post, Claim, HardClaim, Asset, OHLCData, Community, CommunityMembership, AssetSubscription
+from .models import Post, Claim, HardClaim, Asset, OHLCData, Community, CommunityMembership, AssetSubscription, ClaimMarket, ClaimStake
 from .serializers import PostSerializer, ClaimInputSerializer, HardClaimInputSerializer, HardClaimSerializer, AssetSerializer, CommunitySerializer, CommunityMembershipSerializer
 from .claim_extraction import rule_based_claims_from_prompt
 from django.shortcuts import get_object_or_404
 from .resolution import CONTRACT_VERSION, ResolutionError, preview_resolution, resolve_hard_claim
+from . import rep_market
+from accounts.energy import grant_energy, spend, CLAIM_ENERGY_COST
 
 
 def _get_wallet_user(request) -> WalletUser | None:
@@ -209,6 +211,29 @@ class HardClaimView(APIView):
             except Community.DoesNotExist:
                 return Response({"detail": f"Community {community_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Optional Model G market block.
+        market_block = request.data.get("market") if isinstance(request.data, dict) else None
+        if market_block is not None:
+            try:
+                m_side = str(market_block.get("side", "")).upper()
+                m_stake = float(market_block.get("stake_rep", 0))
+            except (TypeError, ValueError):
+                return Response({"detail": "Invalid market block."}, status=status.HTTP_400_BAD_REQUEST)
+            if m_side not in ("YES", "NO"):
+                return Response({"detail": "market.side must be YES or NO."}, status=status.HTTP_400_BAD_REQUEST)
+            if not (rep_market.CREATOR_MIN_STAKE <= m_stake <= rep_market.CREATOR_MAX_STAKE):
+                return Response(
+                    {"detail": f"market.stake_rep must be in [{rep_market.CREATOR_MIN_STAKE}, {rep_market.CREATOR_MAX_STAKE}]."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if user.rep < rep_market.LISTING_FEE + m_stake:
+                return Response({"detail": "Insufficient rep for listing fee + stake."}, status=status.HTTP_400_BAD_REQUEST)
+            if not spend(user, CLAIM_ENERGY_COST):
+                return Response({"detail": "Insufficient energy to create market."}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            m_side = None
+            m_stake = None
+
         # Create HardClaim object in the database with the given data
         try:
             hard_claim = HardClaim.objects.create(
@@ -227,9 +252,13 @@ class HardClaimView(APIView):
                 event_type=HardClaimEvent.EventType.CREATION,
                 details={}
             )
+            if market_block is not None:
+                rep_market.init_market(hard_claim, user, m_side, m_stake)
+        except rep_market.MarketError as e:
+            return Response({"detail": f"market: {e}"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         return Response(HardClaimSerializer(hard_claim).data, status=status.HTTP_201_CREATED)
 
     def patch(self, request, pk):
@@ -771,9 +800,171 @@ class PositionCloseView(APIView):
 
             from .profitability import recalculate_profitability
             recalculate_profitability(user)
-            
+
             return Response(PositionSerializer(position).data, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"detail": f"Failed to close position: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ---------------------------------------------------------------------------
+# Model G — reputation market endpoints
+# ---------------------------------------------------------------------------
+
+
+def _serialize_market(market: ClaimMarket, viewer: WalletUser | None) -> dict:
+    your_stake = None
+    if viewer is not None:
+        st = ClaimStake.objects.filter(market=market, user=viewer).first()
+        if st is not None:
+            your_stake = {
+                "side": st.side,
+                "shares": st.shares,
+                "rep_paid_gross": st.rep_paid_gross,
+                "entry_price": st.entry_price,
+                "is_creator": st.is_creator,
+                "locked_payout_if_win": st.shares,
+            }
+    return {
+        "claim_id": market.hard_claim_id,
+        "yes_price": rep_market.yes_price(market),
+        "y_reserve": market.y_reserve,
+        "n_reserve": market.n_reserve,
+        "yes_outstanding": market.yes_outstanding,
+        "no_outstanding": market.no_outstanding,
+        "escrow": market.escrow,
+        "total_burned": market.total_burned,
+        "creator_side": market.creator_side,
+        "creator_stake_rep": market.creator_stake_rep,
+        "listing_fee_burned": market.listing_fee_burned,
+        "resolved": market.resolved,
+        "refunded_trivial": market.refunded_trivial,
+        "stake_count": market.stakes.count(),
+        "your_stake": your_stake,
+        "trader_stake": rep_market.TRADER_STAKE,
+        "burn_fee": rep_market.BURN_FEE,
+        "min_loser_voters": rep_market.MIN_LOSER_VOTERS,
+        "min_total_voters": rep_market.MIN_TOTAL_VOTERS,
+    }
+
+
+class HardClaimMarketView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        try:
+            market = ClaimMarket.objects.get(hard_claim_id=pk)
+        except ClaimMarket.DoesNotExist:
+            return Response({"detail": "No market."}, status=status.HTTP_404_NOT_FOUND)
+        viewer = _get_wallet_user(request)
+        return Response(_serialize_market(market, viewer))
+
+
+class HardClaimMarketCreateView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, pk):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            hard_claim = HardClaim.objects.get(pk=pk)
+        except HardClaim.DoesNotExist:
+            return Response({"detail": "Claim not found."}, status=status.HTTP_404_NOT_FOUND)
+        if hard_claim.author_id != user.pk:
+            return Response({"detail": "Only the claim author can create its market."}, status=status.HTTP_403_FORBIDDEN)
+        side = str(request.data.get("side", "")).upper()
+        try:
+            stake_rep = float(request.data.get("stake_rep", 0))
+        except (TypeError, ValueError):
+            return Response({"detail": "Invalid stake_rep."}, status=status.HTTP_400_BAD_REQUEST)
+        if side not in ("YES", "NO"):
+            return Response({"detail": "side must be YES or NO."}, status=status.HTTP_400_BAD_REQUEST)
+        if not (rep_market.CREATOR_MIN_STAKE <= stake_rep <= rep_market.CREATOR_MAX_STAKE):
+            return Response(
+                {"detail": f"stake_rep must be in [{rep_market.CREATOR_MIN_STAKE}, {rep_market.CREATOR_MAX_STAKE}]."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if hasattr(hard_claim, "market"):
+            return Response({"detail": "Market already exists."}, status=status.HTTP_409_CONFLICT)
+        if user.rep < rep_market.LISTING_FEE + stake_rep:
+            return Response({"detail": "Insufficient rep."}, status=status.HTTP_400_BAD_REQUEST)
+        if not spend(user, CLAIM_ENERGY_COST):
+            return Response({"detail": "Insufficient energy."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            market = rep_market.init_market(hard_claim, user, side, stake_rep)
+        except rep_market.MarketError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(_serialize_market(market, user), status=status.HTTP_201_CREATED)
+
+
+class HardClaimMarketBuyView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, pk):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            market = ClaimMarket.objects.get(hard_claim_id=pk)
+        except ClaimMarket.DoesNotExist:
+            return Response({"detail": "No market."}, status=status.HTTP_404_NOT_FOUND)
+        if market.resolved:
+            return Response({"detail": "Market resolved."}, status=status.HTTP_400_BAD_REQUEST)
+        side = str(request.data.get("side", "")).upper()
+        if side not in ("YES", "NO"):
+            return Response({"detail": "side must be YES or NO."}, status=status.HTTP_400_BAD_REQUEST)
+        if user.rep < rep_market.TRADER_STAKE:
+            return Response({"detail": "Insufficient rep."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            stake = rep_market.buy(market, user, side)
+        except rep_market.MarketError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {
+                "market": _serialize_market(market, user),
+                "stake": {
+                    "side": stake.side,
+                    "shares": stake.shares,
+                    "rep_paid_gross": stake.rep_paid_gross,
+                    "rep_paid_net": stake.rep_paid_net,
+                    "entry_price": stake.entry_price,
+                    "locked_payout_if_win": stake.shares,
+                },
+                "user_rep": user.rep,
+                "user_energy": user.energy,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class HardClaimMarketPreviewView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        try:
+            market = ClaimMarket.objects.get(hard_claim_id=pk)
+        except ClaimMarket.DoesNotExist:
+            return Response({"detail": "No market."}, status=status.HTTP_404_NOT_FOUND)
+        side = request.query_params.get("side", "").upper()
+        if side not in ("YES", "NO"):
+            return Response({"detail": "side must be YES or NO."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            preview = rep_market.preview_buy(market, side, rep_market.TRADER_STAKE)
+        except rep_market.MarketError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {
+                "side": side,
+                "rep_amount": rep_market.TRADER_STAKE,
+                "shares": preview.shares,
+                "entry_price": preview.entry_price,
+                "locked_payout_if_win": preview.locked_payout_if_win,
+                "new_yes_price": preview.new_yes_price,
+            }
+        )
 
 
