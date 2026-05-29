@@ -118,23 +118,28 @@ class ProfileView(APIView):
     permission_classes = []
 
     def get(self, request, address):
+        from .energy import grant_energy, ENERGY_CAP
         address = address.lower()
         target_user = get_object_or_404(WalletUser, address=address)
-        
+        grant_energy(target_user)
+
         followers = target_user.follower_set.all().select_related("follower")
         following = target_user.following_set.all().select_related("following")
-        
+
         followers_list = [f.follower.address for f in followers]
         following_list = [f.following.address for f in following]
-        
+
         is_following = False
-            
+
         data = {
             "address": target_user.address,
             "followers_count": len(followers_list),
             "following_count": len(following_list),
             "followers": followers_list,
             "following": following_list,
+            "rep": target_user.rep,
+            "energy": target_user.energy,
+            "energy_cap": ENERGY_CAP,
         }
         
         try:

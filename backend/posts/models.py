@@ -154,18 +154,19 @@ class HardClaimEvent(models.Model):
 
 class OHLCData(models.Model):
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE, related_name="ohlc_data")
-    date = models.DateField()
+    timestamp = models.DateTimeField()
+    interval = models.CharField(max_length=5, default="1d")
     open = models.FloatField()
     high = models.FloatField()
     low = models.FloatField()
     close = models.FloatField()
 
     class Meta:
-        unique_together = ("asset", "date")
-        ordering = ["date"]
+        unique_together = ("asset", "timestamp", "interval")
+        ordering = ["timestamp"]
 
     def __str__(self):
-        return f"{self.asset.symbol} {self.date} O={self.open} H={self.high} L={self.low} C={self.close}"
+        return f"{self.asset.symbol} {self.timestamp} ({self.interval}) O={self.open} H={self.high} L={self.low} C={self.close}"
 
 class Position(models.Model):
     class Direction(models.TextChoices):
@@ -235,3 +236,59 @@ class AssetSubscription(models.Model):
 
     def __str__(self):
         return f"Subscription: Position #{self.position.id} → {self.asset.symbol}"
+
+
+class ClaimMarket(models.Model):
+    """Model G — creator-as-trader CPMM market bound to a HardClaim."""
+
+    class Side(models.TextChoices):
+        YES = "YES"
+        NO = "NO"
+
+    hard_claim = models.OneToOneField(
+        HardClaim, on_delete=models.CASCADE, related_name="market", primary_key=True
+    )
+    y_reserve = models.FloatField()
+    n_reserve = models.FloatField()
+    yes_outstanding = models.FloatField(default=0.0)
+    no_outstanding = models.FloatField(default=0.0)
+    escrow = models.FloatField(default=0.0)
+    total_burned = models.FloatField(default=0.0)
+    creator_side = models.CharField(max_length=3, choices=Side.choices)
+    creator_stake_rep = models.FloatField()
+    listing_fee_burned = models.FloatField(default=2.0)
+    resolved = models.BooleanField(default=False)
+    refunded_trivial = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Market<claim={self.hard_claim_id} Y={self.y_reserve:.2f} N={self.n_reserve:.2f}>"
+
+
+class ClaimStake(models.Model):
+    """One row per (market, user). Locked-payout receipt."""
+
+    class Side(models.TextChoices):
+        YES = "YES"
+        NO = "NO"
+
+    market = models.ForeignKey(
+        ClaimMarket, on_delete=models.CASCADE, related_name="stakes"
+    )
+    user = models.ForeignKey(
+        WalletUser, on_delete=models.CASCADE, related_name="claim_stakes"
+    )
+    side = models.CharField(max_length=3, choices=Side.choices)
+    rep_paid_gross = models.FloatField()
+    rep_paid_net = models.FloatField()
+    shares = models.FloatField()
+    entry_price = models.FloatField()
+    is_creator = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("market", "user")
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"Stake<m={self.market_id} u={self.user_id} {self.side} {self.shares:.2f}sh>"

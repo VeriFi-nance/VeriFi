@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { closePosition, getPositionResolveStatus, triggerPositionResolve } from '@/lib/api';
 import type { PositionItem, AssetItem } from '@/lib/types';
-import { loadAddress } from '@/lib/auth';
+import { useAuthState } from '@/lib/auth';
 import ProfitabilityBadge from './ProfitabilityBadge';
 import { Link } from 'react-router-dom';
 import { truncateAddress } from './HardClaimCard';
@@ -23,11 +23,12 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
   const [resolveMsg, setResolveMsg] = useState('');
   const [countdown, setCountdown] = useState(0);
 
-  const myAddress = loadAddress();
+  const { address: myAddress } = useAuthState();
   const asset = assets.find(a => a.id === position.asset);
   const isAuthor = !!myAddress && myAddress.toLowerCase() === position.author_address.toLowerCase();
   const canResolve = isAuthor && (position.status === 'pending' || position.status === 'active');
   const canClose = isAuthor && position.status === 'active';
+  const canCancel = isAuthor && position.status === 'pending';
 
   // Fetch cooldown on mount (author only, resolvable positions only)
   const fetchCooldown = useCallback(async () => {
@@ -71,7 +72,11 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
   };
 
   const handleClose = async () => {
-    if (!confirm('Are you sure you want to close this position early?')) return;
+    const isPending = position.status === 'pending';
+    const msg = isPending 
+      ? 'Are you sure you want to cancel this pending position?' 
+      : 'Are you sure you want to close this position early?';
+    if (!confirm(msg)) return;
     setClosing(true);
     try {
       await closePosition(position.id);
@@ -171,6 +176,11 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
                 {canClose && (
                   <Button size="sm" variant="outline" onClick={handleClose} disabled={closing} className="h-7 text-xs">
                     {closing ? 'Closing…' : 'Close Early'}
+                  </Button>
+                )}
+                {canCancel && (
+                  <Button size="sm" variant="outline" onClick={handleClose} disabled={closing} className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10">
+                    {closing ? 'Canceling…' : 'Cancel Position'}
                   </Button>
                 )}
               </div>

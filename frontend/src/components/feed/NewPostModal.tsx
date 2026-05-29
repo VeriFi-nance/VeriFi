@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -9,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { PenSquare, Plus, X, TrendingUp, TrendingDown, CalendarDays } from 'lucide-react';
 import { createPost, createHardClaim, getAssets, extractClaims } from '@/lib/api';
-import { isAuthenticated } from '@/lib/auth';
+import { loginPathWithReturn, useAuthState } from '@/lib/auth';
 import type { AssetItem, ReviewClaim, ExtractedClaimContract } from '@/lib/types';
 
 const DEBOUNCE_MS = 700;
@@ -27,16 +28,31 @@ function toReviewClaim(c: ExtractedClaimContract): ReviewClaim {
 
 const MAX_CHARS = 500;
 
+type ClaimDirection = 'Bullish' | 'Bearish';
+
 interface ClaimDraft {
   asset_id: string;       // asset id (for HardClaim)
   assetSymbol: string;    // display
-  direction: 'Bullish' | 'Bearish' | '';
+  direction: ClaimDirection | '';
   percentage: string;
   until: string;
+  stakeRep: string;
+}
+
+interface AttachedClaim {
+  asset_id: string;
+  assetSymbol: string;
+  direction: ClaimDirection;
+  percentage: string;
+  until: string;
+  stakeRep: string;
 }
 
 function emptyDraft(): ClaimDraft {
-  return { asset_id: '', assetSymbol: '', direction: '', percentage: '', until: '' };
+  return {
+    asset_id: '', assetSymbol: '', direction: '', percentage: '', until: '',
+    stakeRep: '10',
+  };
 }
 
 interface ClaimViewerProps {
@@ -84,8 +100,11 @@ interface NewPostModalProps {
 }
 
 export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewPostModalProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const auth = useAuthState();
   const [content, setContent] = useState('');
-  const [claims, setClaims] = useState<ClaimDraft[]>([]);
+  const [claims, setClaims] = useState<AttachedClaim[]>([]);
   const [showClaimForm, setShowClaimForm] = useState(false);
   const [draft, setDraft] = useState<ClaimDraft>(emptyDraft());
   const [assets, setAssets] = useState<AssetItem[]>([]);
@@ -155,8 +174,13 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
       setError('Target date must be tomorrow or later.');
       return;
     }
+    const stakeRepNum = parseFloat(draft.stakeRep);
+    if (isNaN(stakeRepNum) || stakeRepNum < 10 || stakeRepNum > 100) {
+      setError('Stake must be between 10 and 100 rep.');
+      return;
+    }
     setError('');
-    setClaims((prev) => [...prev, { ...draft }]);
+    setClaims((prev) => [...prev, { ...draft, direction: draft.direction as ClaimDirection }]);
     setDraft(emptyDraft());
     setShowClaimForm(false);
   }
@@ -172,6 +196,10 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
 
   async function handleSubmit() {
     if (!content.trim()) return;
+    if (!auth.authenticated) {
+      navigate(loginPathWithReturn(location.pathname), { replace: true });
+      return;
+    }
     setError('');
     setSubmitting(true);
     try {
@@ -180,16 +208,22 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
 
       // 2. Create each HardClaim, linked to the new post
       await Promise.all(
-        claims.map((c) =>
-          createHardClaim({
+        claims.map((c) => {
+          const stakeRepNum = parseFloat(c.stakeRep);
+          const market =
+            !isNaN(stakeRepNum) && stakeRepNum >= 10 && stakeRepNum <= 100
+              ? { side: 'YES' as const, stake_rep: stakeRepNum }
+              : undefined;
+          return createHardClaim({
             asset_id: parseInt(c.asset_id, 10),
             post_id: newPost.id,
             community_id: communityId,
             direction: c.direction,
             percentage: parseFloat(c.percentage),
             until: c.until,
-          })
-        )
+            ...(market ? { market } : {}),
+          });
+        })
       );
 
       resetModal();
@@ -284,12 +318,13 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
                             onClick={() => {
                               const asset = assets.find((a) => a.symbol === c.asset);
                               if (asset) {
-                                const newClaim: ClaimDraft = {
+                                const newClaim: AttachedClaim = {
                                   asset_id: asset.id.toString(),
                                   assetSymbol: asset.symbol,
                                   direction: c.direction === 'bullish' ? 'Bullish' : 'Bearish',
                                   percentage: c.percentage!,
                                   until: c.until!,
+                                  stakeRep: '10',
                                 };
                                 setClaims((prev) => [...prev, newClaim]);
                               }
@@ -309,6 +344,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
                                 direction: c.direction === 'bullish' ? 'Bullish' : 'Bearish',
                                 percentage: c.percentage || '',
                                 until: c.until || '',
+                                stakeRep: '10',
                               });
                               setShowClaimForm(true);
                               const key = `${c.asset || 'null'}-${c.direction}-${c.percentage || 'null'}-${c.until || 'null'}`;
@@ -450,6 +486,33 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
                 </div>
               </div>
 
+              {/* ── Reputation market (Model G) ──────────────── */}
+              <div className="rounded-lg border bg-background/60 p-3 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  Reputation market (Model G)
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Creator side is auto-set to <span className="font-semibold text-emerald-600">YES</span>.
+                </p>
+                <div className="space-y-1">
+                  <Label className="text-xs">Stake (10–100 rep)</Label>
+                  <Input
+                    type="number"
+                    min={10}
+                    max={100}
+                    step={1}
+                    value={draft.stakeRep}
+                    onChange={(e) =>
+                      setDraft((d) => ({ ...d, stakeRep: e.target.value }))
+                    }
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <p className="text-[10px] text-muted-foreground leading-snug">
+                  Plus 2-rep listing fee (burned) and 5% trade burn. Costs 2 energy.
+                </p>
+              </div>
+
               {/* Form actions */}
               <div className="flex gap-2 pt-1">
                 <Button
@@ -502,16 +565,23 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
 
 /** Trigger button — place anywhere to open the modal */
 export function NewPostButton({ onPosted, communityId }: { onPosted: () => void, communityId?: number }) {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [open, setOpen] = useState(false);
-  const authed = isAuthenticated();
-  if (!authed) return null;
+  const auth = useAuthState();
 
   return (
     <>
       <Button
         size="sm"
         className="gap-2 font-semibold bg-emerald-300/90 text-gray-900 border border-emerald-500/50 hover:bg-emerald-500/90 shadow-[0_0_18px_rgba(16,185,129,0.5)] rounded-xl"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          if (!auth.authenticated) {
+            navigate(loginPathWithReturn(location.pathname), { replace: true });
+            return;
+          }
+          setOpen(true);
+        }}
       >
         <PenSquare className="size-4" />
         New Post

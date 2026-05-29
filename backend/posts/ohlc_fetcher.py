@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import date, datetime, time, timedelta, timezone
+from enum import Enum
 from typing import TypedDict
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -23,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class OHLCRow(TypedDict):
-    date: date
+    timestamp: datetime
     open: float
     high: float
     low: float
@@ -33,6 +34,13 @@ class OHLCRow(TypedDict):
 class OHLCFetchError(Exception):
     """Raised when all API sources fail for a given asset type."""
     pass
+
+
+class Interval(Enum):
+    ONE_DAY = "1d"
+    ONE_HOUR = "1h"
+    FIFTEEN_MIN = "15m"
+    ONE_MIN = "1m"
 
 
 # ---------------------------------------------------------------------------
@@ -52,14 +60,23 @@ def _http_get_json(url: str, timeout: int = 15) -> dict | list:
 # Crypto fetchers
 # ---------------------------------------------------------------------------
 
-def _fetch_binance_ohlc(symbol: str, start: date, end: date) -> list[OHLCRow]:
+def _fetch_binance_ohlc(symbol: str, start: date, end: date, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
     """
     Binance klines endpoint.  symbol e.g. 'BTCUSDT'.
-    Returns daily candles in the [start, end] date range (inclusive).
+    Returns OHLC candles in the [start, end] date range (inclusive) with intervals.
+    Intervals: 1d, 1h, 15m, 1m
     """
     start_ms = int(datetime.combine(start, time.min, tzinfo=timezone.utc).timestamp() * 1000)
     end_ms = int(datetime.combine(end, time.max, tzinfo=timezone.utc).timestamp() * 1000)
-    params = urlencode({"symbol": symbol, "interval": "1d", "startTime": start_ms, "endTime": end_ms, "limit": 1000})
+    
+    interval_map = {
+        Interval.ONE_DAY: "1d",
+        Interval.ONE_HOUR: "1h",
+        Interval.FIFTEEN_MIN: "15m",
+        Interval.ONE_MIN: "1m",
+    }
+    
+    params = urlencode({"symbol": symbol, "interval": interval_map[interval], "startTime": start_ms, "endTime": end_ms, "limit": 1000})
     url = f"https://api.binance.com/api/v3/klines?{params}"
     data = _http_get_json(url)
 
@@ -67,9 +84,9 @@ def _fetch_binance_ohlc(symbol: str, start: date, end: date) -> list[OHLCRow]:
     for candle in data:
         # Binance kline: [openTime, open, high, low, close, volume, closeTime, ...]
         open_time_ms = candle[0]
-        candle_date = datetime.fromtimestamp(open_time_ms / 1000, tz=timezone.utc).date()
+        candle_timestamp = datetime.fromtimestamp(open_time_ms / 1000, tz=timezone.utc)
         rows.append({
-            "date": candle_date,
+            "timestamp": candle_timestamp,
             "open": float(candle[1]),
             "high": float(candle[2]),
             "low": float(candle[3]),
@@ -78,16 +95,25 @@ def _fetch_binance_ohlc(symbol: str, start: date, end: date) -> list[OHLCRow]:
     return rows
 
 
-def _fetch_kucoin_ohlc(symbol: str, start: date, end: date) -> list[OHLCRow]:
+def _fetch_kucoin_ohlc(symbol: str, start: date, end: date, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
     """
     Kucoin kline endpoint.  symbol e.g. 'BTC-USDT'.
+    Intervals: 1day, 1hour, 15min, 1min
     """
     start_sec = int(datetime.combine(start, time.min, tzinfo=timezone.utc).timestamp())
     end_sec = int(datetime.combine(end, time.max, tzinfo=timezone.utc).timestamp())
+    
+    interval_map = {
+        Interval.ONE_DAY: "1day",
+        Interval.ONE_HOUR: "1hour",
+        Interval.FIFTEEN_MIN: "15min",
+        Interval.ONE_MIN: "1min",
+    }
+    
     params = urlencode({
         "tradeType": "SPOT",
         "symbol": symbol,
-        "interval": "1day",
+        "interval": interval_map[interval],
         "startAt": start_sec,
         "endAt": end_sec,
     })
@@ -101,9 +127,9 @@ def _fetch_kucoin_ohlc(symbol: str, start: date, end: date) -> list[OHLCRow]:
 
     rows: list[OHLCRow] = []
     for candle in candles:
-        candle_date = datetime.fromtimestamp(int(candle[0]), tz=timezone.utc).date()
+        candle_timestamp = datetime.fromtimestamp(int(candle[0]), tz=timezone.utc)
         rows.append({
-            "date": candle_date,
+            "timestamp": candle_timestamp,
             "open": float(candle[1]),
             "high": float(candle[3]),
             "low": float(candle[4]),
@@ -112,13 +138,22 @@ def _fetch_kucoin_ohlc(symbol: str, start: date, end: date) -> list[OHLCRow]:
     return rows
 
 
-def _fetch_kraken_ohlc(pair: str, start: date, end: date) -> list[OHLCRow]:
+def _fetch_kraken_ohlc(pair: str, start: date, end: date, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
     """
     Kraken OHLC endpoint.  pair e.g. 'XBTUSD'.
     Note: Kraken returns up to 720 entries and only recent data.
+    Intervals (in minutes): 1440 (1 day), 60 (1 hour), 15, 1
     """
     since_sec = int(datetime.combine(start, time.min, tzinfo=timezone.utc).timestamp())
-    params = urlencode({"pair": pair, "interval": 1440, "since": since_sec})
+    
+    interval_map = {
+        Interval.ONE_DAY: 1440,
+        Interval.ONE_HOUR: 60,
+        Interval.FIFTEEN_MIN: 15,
+        Interval.ONE_MIN: 1,
+    }
+    
+    params = urlencode({"pair": pair, "interval": interval_map[interval], "since": since_sec})
     url = f"https://api.kraken.com/0/public/OHLC?{params}"
     payload = _http_get_json(url)
 
@@ -142,11 +177,11 @@ def _fetch_kraken_ohlc(pair: str, start: date, end: date) -> list[OHLCRow]:
     rows: list[OHLCRow] = []
     for candle in candles:
         # Kraken: [time, open, high, low, close, vwap, volume, count]
-        candle_date = datetime.fromtimestamp(int(candle[0]), tz=timezone.utc).date()
-        if candle_date > end:
+        candle_timestamp = datetime.fromtimestamp(int(candle[0]), tz=timezone.utc)
+        if candle_timestamp.date() > end:
             continue
         rows.append({
-            "date": candle_date,
+            "timestamp": candle_timestamp,
             "open": float(candle[1]),
             "high": float(candle[2]),
             "low": float(candle[3]),
@@ -159,16 +194,25 @@ def _fetch_kraken_ohlc(pair: str, start: date, end: date) -> list[OHLCRow]:
 # Traditional fetchers (stocks, forex, commodity, index)
 # ---------------------------------------------------------------------------
 
-def _fetch_yfinance_ohlc(symbol: str, start: date, end: date) -> list[OHLCRow]:
+def _fetch_yfinance_ohlc(symbol: str, start: date, end: date, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
     """
     Yahoo Finance v8 chart API.  symbol e.g. 'AAPL', 'GC=F' (gold futures).
+    Intervals: 1d, 1h, 15m, 1m
     """
     period1 = int(datetime.combine(start, time.min, tzinfo=timezone.utc).timestamp())
     period2 = int(datetime.combine(end, time.max, tzinfo=timezone.utc).timestamp())
+    
+    interval_map = {
+        Interval.ONE_DAY: "1d",
+        Interval.ONE_HOUR: "1h",
+        Interval.FIFTEEN_MIN: "15m",
+        Interval.ONE_MIN: "1m",
+    }
+    
     params = urlencode({
         "period1": period1,
         "period2": period2,
-        "interval": "1d",
+        "interval": interval_map[interval],
         "includePrePost": "false",
         "events": "history",
     })
@@ -199,23 +243,31 @@ def _fetch_yfinance_ohlc(symbol: str, start: date, end: date) -> list[OHLCRow]:
         c = closes[i] if i < len(closes) else None
         if any(v is None for v in (o, h, l_, c)):
             continue
-        candle_date = datetime.fromtimestamp(ts, tz=timezone.utc).date()
-        rows.append({"date": candle_date, "open": float(o), "high": float(h), "low": float(l_), "close": float(c)})
+        candle_timestamp = datetime.fromtimestamp(ts, tz=timezone.utc)
+        rows.append({"timestamp": candle_timestamp, "open": float(o), "high": float(h), "low": float(l_), "close": float(c)})
     return rows
 
 
-def _fetch_twelvedata_ohlc(symbol: str, start: date, end: date) -> list[OHLCRow]:
+def _fetch_twelvedata_ohlc(symbol: str, start: date, end: date, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
     """
     Twelve Data time_series API.  symbol e.g. 'AAPL', 'XAU/USD'.
     Requires TWELVE_DATA_API_KEY in Django settings.
+    Intervals: 1day, 1h, 15min, 1min
     """
     api_key = getattr(settings, "TWELVE_DATA_API_KEY", "")
     if not api_key:
         raise OHLCFetchError("TWELVE_DATA_API_KEY not configured.")
 
+    interval_map = {
+        Interval.ONE_DAY: "1day",
+        Interval.ONE_HOUR: "1h",
+        Interval.FIFTEEN_MIN: "15min",
+        Interval.ONE_MIN: "1min",
+    }
+
     params = urlencode({
         "symbol": symbol,
-        "interval": "1day",
+        "interval": interval_map[interval],
         "start_date": start.isoformat(),
         "end_date": end.isoformat(),
         "apikey": api_key,
@@ -234,9 +286,13 @@ def _fetch_twelvedata_ohlc(symbol: str, start: date, end: date) -> list[OHLCRow]
 
     rows: list[OHLCRow] = []
     for item in values:
-        candle_date = datetime.strptime(item["datetime"], "%Y-%m-%d").date()
+        dt_str = item["datetime"]
+        if " " in dt_str:
+            candle_timestamp = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+        else:
+            candle_timestamp = datetime.strptime(dt_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
         rows.append({
-            "date": candle_date,
+            "timestamp": candle_timestamp,
             "open": float(item["open"]),
             "high": float(item["high"]),
             "low": float(item["low"]),
@@ -249,30 +305,30 @@ def _fetch_twelvedata_ohlc(symbol: str, start: date, end: date) -> list[OHLCRow]
 # Fallback chains
 # ---------------------------------------------------------------------------
 
-def _try_crypto_chain(asset: Asset, start: date, end: date) -> list[OHLCRow]:
+def _try_crypto_chain(asset: Asset, start: date, end: date, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
     """Try Binance → Kucoin → Kraken for crypto assets."""
     errors: list[str] = []
 
     if asset.binance_symbol:
         try:
-            logger.info("Trying Binance for %s (%s)", asset.symbol, asset.binance_symbol)
-            return _fetch_binance_ohlc(asset.binance_symbol, start, end)
+            logger.info("Trying Binance for %s (%s) [%s]", asset.symbol, asset.binance_symbol, interval.name)
+            return _fetch_binance_ohlc(asset.binance_symbol, start, end, interval)
         except OHLCFetchError as e:
             errors.append(f"Binance: {e}")
             logger.warning("Binance failed for %s: %s", asset.symbol, e)
 
     if asset.kucoin_symbol:
         try:
-            logger.info("Trying Kucoin for %s (%s)", asset.symbol, asset.kucoin_symbol)
-            return _fetch_kucoin_ohlc(asset.kucoin_symbol, start, end)
+            logger.info("Trying Kucoin for %s (%s) [%s]", asset.symbol, asset.kucoin_symbol, interval.name)
+            return _fetch_kucoin_ohlc(asset.kucoin_symbol, start, end, interval)
         except OHLCFetchError as e:
             errors.append(f"Kucoin: {e}")
             logger.warning("Kucoin failed for %s: %s", asset.symbol, e)
 
     if asset.kraken_pair:
         try:
-            logger.info("Trying Kraken for %s (%s)", asset.symbol, asset.kraken_pair)
-            return _fetch_kraken_ohlc(asset.kraken_pair, start, end)
+            logger.info("Trying Kraken for %s (%s) [%s]", asset.symbol, asset.kraken_pair, interval.name)
+            return _fetch_kraken_ohlc(asset.kraken_pair, start, end, interval)
         except OHLCFetchError as e:
             errors.append(f"Kraken: {e}")
             logger.warning("Kraken failed for %s: %s", asset.symbol, e)
@@ -280,22 +336,22 @@ def _try_crypto_chain(asset: Asset, start: date, end: date) -> list[OHLCRow]:
     raise OHLCFetchError(f"All crypto OHLC sources failed for {asset.symbol}: {'; '.join(errors)}")
 
 
-def _try_traditional_chain(asset: Asset, start: date, end: date) -> list[OHLCRow]:
+def _try_traditional_chain(asset: Asset, start: date, end: date, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
     """Try Yahoo Finance → Twelve Data for stocks/forex/commodity/index."""
     errors: list[str] = []
 
     if asset.provider_symbol:
         try:
-            logger.info("Trying Yahoo Finance for %s (%s)", asset.symbol, asset.provider_symbol)
-            return _fetch_yfinance_ohlc(asset.provider_symbol, start, end)
+            logger.info("Trying Yahoo Finance for %s (%s) [%s]", asset.symbol, asset.provider_symbol, interval.name)
+            return _fetch_yfinance_ohlc(asset.provider_symbol, start, end, interval)
         except OHLCFetchError as e:
             errors.append(f"Yahoo Finance: {e}")
             logger.warning("Yahoo Finance failed for %s: %s", asset.symbol, e)
 
     if asset.twelvedata_symbol:
         try:
-            logger.info("Trying Twelve Data for %s (%s)", asset.symbol, asset.twelvedata_symbol)
-            return _fetch_twelvedata_ohlc(asset.twelvedata_symbol, start, end)
+            logger.info("Trying Twelve Data for %s (%s) [%s]", asset.symbol, asset.twelvedata_symbol, interval.name)
+            return _fetch_twelvedata_ohlc(asset.twelvedata_symbol, start, end, interval)
         except OHLCFetchError as e:
             errors.append(f"Twelve Data: {e}")
             logger.warning("Twelve Data failed for %s: %s", asset.symbol, e)
@@ -307,22 +363,32 @@ def _try_traditional_chain(asset: Asset, start: date, end: date) -> list[OHLCRow
 # Router + DB caching
 # ---------------------------------------------------------------------------
 
-def fetch_ohlc_for_asset(asset: Asset, start: date, end: date) -> list[OHLCRow]:
+def fetch_ohlc_for_asset(asset: Asset, start: date, end: date, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
     """Route to the correct API chain based on asset.market_type."""
     if asset.market_type == Asset.MarketType.CRYPTO:
-        return _try_crypto_chain(asset, start, end)
+        return _try_crypto_chain(asset, start, end, interval)
     else:
-        return _try_traditional_chain(asset, start, end)
+        return _try_traditional_chain(asset, start, end, interval)
 
 
-def get_ohlc_data(asset: Asset, start_date: date, end_date: date) -> list[OHLCData]:
+def get_ohlc_data(asset: Asset, start_date: date, end_date: date, interval: Interval = Interval.ONE_DAY) -> list[OHLCData]:
     """
     Get OHLC data for an asset in [start_date, end_date].
     Checks DB first; fetches and caches only missing dates.
-    Returns a list of OHLCData model instances ordered by date.
+    Returns a list of OHLCData model instances ordered by timestamp.
     """
-    existing = list(OHLCData.objects.filter(asset=asset, date__range=(start_date, end_date)))
-    existing_dates = {row.date for row in existing}
+    # For daily intervals, we compare by date.
+    # For intraday intervals, we still fetch by date range, but we might want to check existing intervals
+    existing = list(OHLCData.objects.filter(
+        asset=asset, 
+        timestamp__date__gte=start_date, 
+        timestamp__date__lte=end_date,
+        interval=interval.value
+    ))
+    
+    # Group existing by date to count how many candles we have per day
+    from collections import Counter
+    date_counts = Counter(row.timestamp.date() for row in existing)
 
     all_dates = set()
     current = start_date
@@ -330,21 +396,54 @@ def get_ohlc_data(asset: Asset, start_date: date, end_date: date) -> list[OHLCDa
         all_dates.add(current)
         current += timedelta(days=1)
 
-    missing_dates = all_dates - existing_dates
+    today = datetime.now(timezone.utc).date()
+    missing_dates = set()
+    
+    expected_crypto_counts = {
+        Interval.ONE_DAY.value: 1,
+        Interval.ONE_HOUR.value: 24,
+        Interval.FIFTEEN_MIN.value: 96,
+        Interval.ONE_MIN.value: 1440
+    }
+
+    for d in all_dates:
+        # Always fetch if it's today (day is incomplete)
+        if d == today:
+            missing_dates.add(d)
+        # For past days in crypto, check if we have the full expected candle count
+        elif asset.market_type == Asset.MarketType.CRYPTO and interval.value != Interval.ONE_DAY.value:
+            if date_counts[d] < expected_crypto_counts.get(interval.value, 1):
+                missing_dates.add(d)
+        # For non-crypto or daily crypto, just check if we have at least 1 candle
+        elif date_counts[d] == 0:
+            missing_dates.add(d)
 
     if missing_dates:
         min_missing = min(missing_dates)
         max_missing = max(missing_dates)
         try:
-            fetched = fetch_ohlc_for_asset(asset, min_missing, max_missing)
+            fetched = fetch_ohlc_for_asset(asset, min_missing, max_missing, interval)
             new_rows = [
-                OHLCData(asset=asset, date=row["date"], open=row["open"], high=row["high"], low=row["low"], close=row["close"])
+                OHLCData(
+                    asset=asset, 
+                    timestamp=row["timestamp"], 
+                    interval=interval.value,
+                    open=row["open"], 
+                    high=row["high"], 
+                    low=row["low"], 
+                    close=row["close"]
+                )
                 for row in fetched
-                if row["date"] in missing_dates
+                if row["timestamp"].date() in missing_dates
             ]
             if new_rows:
                 OHLCData.objects.bulk_create(new_rows, ignore_conflicts=True)
         except OHLCFetchError:
-            logger.warning("Could not fetch missing OHLC data for %s (%s -> %s)", asset.symbol, min_missing, max_missing)
+            logger.warning("Could not fetch missing OHLC data for %s (%s -> %s) at interval %s", asset.symbol, min_missing, max_missing, interval.name)
 
-    return list(OHLCData.objects.filter(asset=asset, date__range=(start_date, end_date)).order_by("date"))
+    return list(OHLCData.objects.filter(
+        asset=asset, 
+        timestamp__date__gte=start_date, 
+        timestamp__date__lte=end_date,
+        interval=interval.value
+    ).order_by("timestamp"))

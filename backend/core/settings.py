@@ -10,22 +10,63 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
+
+import dj_database_url
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load .env from backend/ if present (local development).
+load_dotenv(BASE_DIR / ".env")
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-zy1)c@*64u=#w4ji10kw1(=m1(scxk@x4v0rf((y5@sc(&@u%t"
+SECRET_KEY = os.environ.get(
+    "DJANGO_SECRET_KEY",
+    "django-insecure-dev-only-change-me-in-env",
+)
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get("DJANGO_DEBUG", "True").lower() == "true"
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    h.strip()
+    for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    if h.strip()
+]
+# Render sets this automatically; append so deploy works without hardcoding the hostname.
+_render_host = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "").strip()
+if _render_host and _render_host not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_render_host)
+
+def _parse_origins(raw: str, default: str) -> list[str]:
+    """Parse comma-separated origins; strip whitespace and trailing slashes."""
+    origins = []
+    for o in os.environ.get(raw, default).split(","):
+        o = o.strip().rstrip("/")
+        if o:
+            origins.append(o)
+    return origins
+
+
+CORS_ALLOWED_ORIGINS = _parse_origins(
+    "CORS_ALLOWED_ORIGINS",
+    "http://localhost:5173",
+)
+
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
 
 
 # Application definition
@@ -47,6 +88,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -79,11 +121,18 @@ WSGI_APPLICATION = "core.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+_default_db = f"sqlite:///{BASE_DIR / 'db.sqlite3'}"
+_database_url = os.environ.get("DATABASE_URL", _default_db)
+_use_ssl = not DEBUG and _database_url.startswith(
+    ("postgres://", "postgresql://")
+)
+
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
-    }
+    "default": dj_database_url.config(
+        default=_default_db,
+        conn_max_age=600,
+        ssl_require=_use_ssl,
+    )
 }
 
 
@@ -122,22 +171,33 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # Admin wallet addresses — only these can change HardClaim status
-ADMIN_ADDRESSES: list[str] = ["0x8C66A1aBF7C949004aF7dE80A3fc0F691538ea74"] # Arda's Ethereum Address
+_DEFAULT_ADMIN = "0x8C66A1aBF7C949004aF7dE80A3fc0F691538ea74"
+ADMIN_ADDRESSES: list[str] = [
+    a.strip()
+    for a in os.environ.get("ADMIN_ADDRESSES", _DEFAULT_ADMIN).split(",")
+    if a.strip()
+]
 
-import os
 # Twelve Data API key for stock/forex/commodity OHLC fallback (free tier: 800 calls/day)
-TWELVE_DATA_API_KEY = os.environ.get("TWELVE_DATA_API_KEY", "4117d86e953d4430bfc7003d72d9ed97")
+TWELVE_DATA_API_KEY = os.environ.get("TWELVE_DATA_API_KEY", "").strip()
+if not TWELVE_DATA_API_KEY:
+    if DEBUG:
+        TWELVE_DATA_API_KEY = "4117d86e953d4430bfc7003d72d9ed97"
+    else:
+        import warnings
+
+        warnings.warn(
+            "TWELVE_DATA_API_KEY is not set; stock/forex OHLC fallback will fail.",
+            stacklevel=1,
+        )
 
 # Observer Pattern: how often the price updater runs (in minutes)
 # Used as a reference for the scheduler (cron / Render cron); not enforced in code.
 PRICE_UPDATE_INTERVAL_MINUTES = 10
-
-# CORS — allow frontend dev server in development
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-]
 
 # Django REST Framework
 REST_FRAMEWORK = {
