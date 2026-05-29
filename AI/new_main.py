@@ -639,8 +639,42 @@ def rule_based_claims_from_prompt(prompt: str) -> List[FinancialClaim]:
     ]
 
 
+def has_asset_signal(text: str) -> bool:
+    """Lenient check: does the text reference any whitelist asset at all?
+
+    Accepts a currency symbol ($/€/₺), an X/Y pair, or any name/ticker that
+    map_asset_token recognizes (full names like 'bitcoin'/'dolar' plus
+    uppercase symbols like 'BTC'/'USD'). Used only as a pre-AI gate, so it errs
+    toward 'yes' — final precision is still enforced downstream.
+    """
+    if re.search(r"[$€₺]", text):
+        return True
+    pay, payda = _extract_pair_assets(text)
+    if pay or payda:
+        return True
+    return _extract_primary_asset(text) is not None
+
+
+def passes_prefilter(prompt: str) -> bool:
+    """Deterministic gate run BEFORE any AI call.
+
+    Skips text that cannot become a whitelist financial claim, so we never spend
+    an AI request on obvious noise. A claim needs, at minimum, a numeric magnitude
+    AND a recognizable asset. Conservative by design: when unsure it returns True
+    and lets the AI + normalizer do the fine-grained filtering.
+    """
+    if not prompt or not prompt.strip():
+        return False
+    if not re.search(r"\d", prompt):  # no number => cannot carry a price/percentage
+        return False
+    return has_asset_signal(prompt)
+
+
 def analyze_prompt_to_claims(prompt: str) -> List[FinancialClaim]:
     """AI-first extraction, then strict normalization, then regex fallback."""
+    # Pre-AI gate: drop obvious non-claims before incurring any model call.
+    if not passes_prefilter(prompt):
+        return []
     try:
         strict_response = verifi_agent.run(prompt, response_model=VeriFiOutput)
         strict_output = getattr(strict_response, "content", strict_response)
