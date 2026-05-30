@@ -130,7 +130,7 @@ export default function AppLayout() {
               <img
                 src="/logo.png"
                 alt="VeriFi"
-                className="h-7 w-auto group-hover:scale-105 transition-transform"
+                className="h-7 w-7 lg:w-auto object-cover object-left shrink-0 group-hover:scale-105 transition-transform"
               />
             </Link>
           </div>
