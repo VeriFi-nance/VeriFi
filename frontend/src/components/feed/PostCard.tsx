@@ -96,51 +96,58 @@ export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) 
 
       {hasClaims && (
         <>
-          <button
-            type="button"
-            onClick={() => setClaimsOpen((o) => !o)}
-            className={cn(
-              'w-full flex items-center justify-center gap-2 border-t border-border py-2',
-              'text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-colors',
-            )}
-            aria-expanded={claimsOpen}
-            aria-label={
-              claimsOpen
-                ? 'Hide claims'
-                : `Show ${hardClaims.length} claim${hardClaims.length !== 1 ? 's' : ''}`
-            }
-          >
-            <div className="flex items-center gap-2 flex-wrap justify-center">
-              {hardClaims.map((hc) => {
-                const asset = assets.find((a) => a.id === hc.asset);
-                const symbol = asset?.symbol ?? `#${hc.asset}`;
-                const isBullish = hc.direction.toLowerCase() === 'bullish';
-                return (
-                  <span key={hc.id} className="inline-flex items-center gap-1">
-                    <span className="font-mono text-xs font-semibold text-foreground">{symbol}</span>
-                    <Badge
-                      variant={isBullish ? 'success' : 'destructive'}
-                      className="text-[10px] px-1.5 py-0 num"
-                    >
-                      {isBullish ? '▲' : '▼'} {hc.percentage.toFixed(1)}%
-                    </Badge>
-                  </span>
-                );
-              })}
-            </div>
-            <ChevronDown
-              className={cn('size-4 shrink-0 transition-transform duration-200', claimsOpen && 'rotate-180')}
-            />
-          </button>
+          {!claimsOpen && (
+            <button
+              type="button"
+              onClick={() => setClaimsOpen(true)}
+              className={cn(
+                'w-full flex items-center justify-center gap-2 border-t border-border py-2',
+                'text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-colors',
+              )}
+              aria-expanded={false}
+              aria-label={`Show ${hardClaims.length} claim${hardClaims.length !== 1 ? 's' : ''}`}
+            >
+              <div className="flex items-center gap-2 flex-wrap justify-center">
+                {hardClaims.map((hc) => {
+                  const asset = assets.find((a) => a.id === hc.asset);
+                  const symbol = asset?.symbol ?? `#${hc.asset}`;
+                  const isBullish = hc.direction.toLowerCase() === 'bullish';
+                  return (
+                    <span key={hc.id} className="inline-flex items-center gap-1">
+                      <span className="font-mono text-xs font-semibold text-foreground">{symbol}</span>
+                      <Badge
+                        variant={isBullish ? 'success' : 'destructive'}
+                        className="text-[10px] px-1.5 py-0 num"
+                      >
+                        {isBullish ? '▲' : '▼'} {hc.percentage.toFixed(1)}%
+                      </Badge>
+                    </span>
+                  );
+                })}
+              </div>
+              <ChevronDown className="size-4 shrink-0" />
+            </button>
+          )}
 
           {claimsOpen && (
-            <div className="px-4 sm:px-5 pb-4 space-y-2">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                Claims
-              </p>
-              {hardClaims.map((hc) => (
-                <HardClaimCard key={hc.id} claim={hc} assets={assets} />
-              ))}
+            <div className="border-t border-border">
+              <div className="px-4 sm:px-5 py-4 space-y-2">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  Claims
+                </p>
+                {hardClaims.map((hc) => (
+                  <HardClaimCard key={hc.id} claim={hc} assets={assets} />
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setClaimsOpen(false)}
+                className="w-full flex items-center justify-center border-t border-border py-2 text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-colors"
+                aria-expanded={true}
+                aria-label="Hide claims"
+              >
+                <ChevronDown className="size-4 rotate-180" />
+              </button>
             </div>
           )}
         </>
