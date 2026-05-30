@@ -210,9 +210,9 @@ class PostListCreateView(APIView):
 
                 try:
                     asset = Asset.objects.get(id=valid_hc["asset_id"])
-                except Asset.DoesNotExist as e:
+                except Asset.DoesNotExist:
                     transaction.set_rollback(True)
-                    return Response({"detail": f"Invalid reference: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response({"detail": "Invalid asset reference."}, status=status.HTTP_400_BAD_REQUEST)
                 
                 market_block = hc_data.get("market") if isinstance(hc_data, dict) else None
                 if market_block is not None:
