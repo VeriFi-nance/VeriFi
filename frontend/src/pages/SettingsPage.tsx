@@ -150,13 +150,8 @@ export default function SettingsPage() {
       )}
 
       {/* Appearance */}
-      <Card className="p-5 flex items-center justify-between gap-4">
-        <div className="space-y-1 min-w-0">
-          <h2 className="text-sm font-semibold">Appearance</h2>
-          <p className="text-xs text-muted-foreground">
-            Switch between light and dark theme.
-          </p>
-        </div>
+      <Card className="p-5 flex-row items-center justify-between gap-4">
+        <h2 className="text-sm font-semibold">Appearance</h2>
         <Button variant="outline" size="sm" onClick={handleThemeToggle} className="gap-2 shrink-0">
           {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
           {theme === 'dark' ? 'Light' : 'Dark'}
@@ -164,13 +159,8 @@ export default function SettingsPage() {
       </Card>
 
       {/* Session */}
-      <Card className="p-5 flex items-center justify-between gap-4">
-        <div className="space-y-1 min-w-0">
-          <h2 className="text-sm font-semibold">Disconnect</h2>
-          <p className="text-xs text-muted-foreground">
-            Sign out and clear local wallet from this device.
-          </p>
-        </div>
+      <Card className="p-5 flex-row items-center justify-between gap-4">
+        <h2 className="text-sm font-semibold">Disconnect</h2>
         <Button variant="destructive" size="sm" onClick={handleLogout} className="gap-2 shrink-0">
           <LogOut className="size-4" />
           Disconnect
