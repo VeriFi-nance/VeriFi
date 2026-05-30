@@ -224,16 +224,7 @@ export default function AppLayout() {
           <main className="relative flex-1 w-full px-4 sm:px-6 py-5 pb-24 md:pb-5">
             <div
               aria-hidden
-              className="pointer-events-none absolute inset-0 z-0"
-              style={{
-                backgroundImage:
-                  'linear-gradient(to right, var(--border) 1px, transparent 1px), linear-gradient(to bottom, var(--border) 1px, transparent 1px)',
-                backgroundSize: '32px 32px',
-                WebkitMaskImage:
-                  'radial-gradient(ellipse 75% 75% at 50% 50%, transparent 20%, black 95%)',
-                maskImage:
-                  'radial-gradient(ellipse 75% 75% at 50% 50%, transparent 20%, black 95%)',
-              }}
+              className="main-grid-bg pointer-events-none absolute inset-0 z-0"
             />
             <div className="relative z-10">
               <Outlet />

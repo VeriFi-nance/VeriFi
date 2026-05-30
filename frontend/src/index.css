@@ -86,6 +86,7 @@
     --success-foreground: oklch(0.985 0 0);
     --danger: oklch(0.60 0.22 25);
     --danger-foreground: oklch(0.985 0 0);
+    --grid-line: oklch(0.145 0 0 / 3.5%);
 }
 
 .dark {
@@ -125,6 +126,7 @@
     --success-foreground: oklch(0.145 0 0);
     --danger: oklch(0.70 0.20 25);
     --danger-foreground: oklch(0.145 0 0);
+    --grid-line: oklch(1 0 0 / 3%);
 }
 
 @layer base {
@@ -176,4 +178,20 @@
 /* Tabular numerals — use on price/percentage/PnL displays for column alignment */
 .num {
   font-variant-numeric: tabular-nums;
+}
+
+.main-grid-bg {
+  background-image:
+    radial-gradient(
+      ellipse 90% 80% at 50% 50%,
+      var(--background) 0%,
+      color-mix(in oklch, var(--background) 88%, transparent) 28%,
+      color-mix(in oklch, var(--background) 55%, transparent) 48%,
+      color-mix(in oklch, var(--background) 20%, transparent) 65%,
+      transparent 80%
+    ),
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: 100% 100%, 32px 32px, 32px 32px;
+  background-repeat: no-repeat, repeat, repeat;
 }
