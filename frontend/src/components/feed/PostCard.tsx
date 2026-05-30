@@ -29,25 +29,27 @@ export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) 
       <div className="flex items-center gap-3 px-4 sm:px-5 pt-4 sm:pt-5 pb-3">
         <UserAvatar address={post.author_address} size="md" />
 
-        <Button
-          variant="link"
-          size="sm"
-          asChild
-          className="h-auto p-0 font-mono font-semibold text-sm leading-none flex-1 justify-start min-w-0"
-        >
-          <Link to={`/u/${post.author_address}`}>
-            <span className="truncate">{truncateAddress(post.author_address)}</span>
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <Button
+            variant="link"
+            size="sm"
+            asChild
+            className="h-auto p-0 font-mono font-semibold text-sm leading-none justify-start min-w-0"
+          >
+            <Link to={`/u/${post.author_address}`}>
+              <span className="truncate">{truncateAddress(post.author_address)}</span>
+            </Link>
+          </Button>
+
+          <time
+            dateTime={post.created_at}
+            className="text-xs text-muted-foreground shrink-0 hidden sm:block num"
+          >
+            {new Date(post.created_at).toLocaleDateString()}
+          </time>
+        </div>
 
         <ProfitabilityBadge data={post.profitability} />
-
-        <time
-          dateTime={post.created_at}
-          className="text-xs text-muted-foreground shrink-0 hidden sm:block num"
-        >
-          {new Date(post.created_at).toLocaleDateString()}
-        </time>
 
         {hasClaims && (
           <button
