@@ -155,7 +155,7 @@ export default function CommunitiesPage() {
           {communities.map((c) => (
             <Card
               key={c.id}
-              className="cursor-pointer hover:bg-accent/40 transition-colors"
+              className="cursor-pointer bg-card hover:bg-muted transition-colors"
               onClick={() => navigate(`/c/${c.id}`)}
             >
               <CardHeader>
