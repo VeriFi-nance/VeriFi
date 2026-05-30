@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { LineChart } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { HardClaimCard } from '@/components/HardClaimCard';
 import { UserAvatar } from '@/components/UserAvatar';
 import ProfitabilityBadge from '@/components/ProfitabilityBadge';
@@ -50,23 +50,6 @@ export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) 
         </div>
 
         <ProfitabilityBadge data={post.profitability} />
-
-        {hasClaims && (
-          <button
-            onClick={() => setClaimsOpen((o) => !o)}
-            className={cn(
-              'ml-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium transition-colors shrink-0',
-              claimsOpen
-                ? 'bg-foreground text-background border-foreground'
-                : 'bg-background text-muted-foreground border-border hover:text-foreground hover:border-foreground/40',
-            )}
-            title={claimsOpen ? 'Hide claims' : 'View claims'}
-            aria-expanded={claimsOpen}
-          >
-            <LineChart className="size-3.5 shrink-0" />
-            <span className="num">{hardClaims.length}</span>
-          </button>
-        )}
       </div>
 
       {/* Body */}
@@ -109,18 +92,41 @@ export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) 
           );
         })()}
 
-        {/* Claims expand inline below the post body, at every breakpoint. */}
-        {claimsOpen && hasClaims && (
-          <div className="mt-3 pt-3 border-t border-border space-y-2">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Claims
-            </p>
-            {hardClaims.map((hc) => (
-              <HardClaimCard key={hc.id} claim={hc} assets={assets} />
-            ))}
-          </div>
-        )}
       </CardContent>
+
+      {hasClaims && (
+        <>
+          <button
+            type="button"
+            onClick={() => setClaimsOpen((o) => !o)}
+            className={cn(
+              'w-full flex items-center justify-center border-t border-border py-2',
+              'text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/30 transition-colors',
+            )}
+            aria-expanded={claimsOpen}
+            aria-label={
+              claimsOpen
+                ? 'Hide claims'
+                : `Show ${hardClaims.length} claim${hardClaims.length !== 1 ? 's' : ''}`
+            }
+          >
+            <ChevronDown
+              className={cn('size-4 transition-transform duration-200', claimsOpen && 'rotate-180')}
+            />
+          </button>
+
+          {claimsOpen && (
+            <div className="px-4 sm:px-5 pb-4 space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                Claims
+              </p>
+              {hardClaims.map((hc) => (
+                <HardClaimCard key={hc.id} claim={hc} assets={assets} />
+              ))}
+            </div>
+          )}
+        </>
+      )}
     </Card>
   );
 }
