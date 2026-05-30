@@ -7,7 +7,7 @@ import type { PositionItem, AssetItem } from '@/lib/types';
 import { useAuthState } from '@/lib/auth';
 import ProfitabilityBadge from './ProfitabilityBadge';
 import { Link } from 'react-router-dom';
-import { truncateAddress } from './HardClaimCard';
+import { truncateAddress } from '@/lib/wallet';
 import { RefreshCw } from 'lucide-react';
 
 interface PositionCardProps {
