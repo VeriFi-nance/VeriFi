@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 import { ClaimForm } from './composer/ClaimForm';
 import { emptyDraft, validateDraft, type ClaimDraft } from './composer/types';
 import { createHardClaim, getAssets } from '@/lib/api';
-import { loginPathWithReturn, useAuthState } from '@/lib/auth';
+import { useAuthState, useOpenLogin } from '@/lib/auth';
 import type { AssetItem } from '@/lib/types';
 
 interface Props {
@@ -15,8 +14,7 @@ interface Props {
 
 /** Standalone dialog for creating a single HardClaim (no parent post). */
 export function CreateClaimDialog({ onCreated }: Props) {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const openLogin = useOpenLogin();
   const auth = useAuthState();
   const [open, setOpen] = useState(false);
   const [assets, setAssets] = useState<AssetItem[]>([]);
@@ -35,13 +33,13 @@ export function CreateClaimDialog({ onCreated }: Props) {
   function handleTriggerClick(e: React.MouseEvent) {
     if (!auth.authenticated) {
       e.preventDefault();
-      navigate(loginPathWithReturn(location.pathname), { replace: true });
+      openLogin();
     }
   }
 
   async function handleSubmit() {
     if (!auth.authenticated) {
-      navigate(loginPathWithReturn(location.pathname), { replace: true });
+      openLogin();
       return;
     }
     const result = validateDraft(draft, assets);

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Home, LogOut, Moon, Settings, Sun, User, Users } from 'lucide-react';
-import { clearAuth, loginPathWithReturn, useAuthState } from '@/lib/auth';
+import { clearAuth, useAuthState, useOpenLogin } from '@/lib/auth';
 import { clearPrivateKey } from '@/lib/crypto';
 import { loadTheme, toggleTheme, type Theme } from '@/lib/theme';
 import { EnergyMeter } from '@/components/EnergyMeter';
@@ -86,7 +86,7 @@ function DesktopNavLink({
 
 export default function AppLayout() {
   const location = useLocation();
-  const navigate = useNavigate();
+  const openLogin = useOpenLogin();
   const auth = useAuthState();
   const address = auth.address ?? '';
   const [theme, setTheme] = useState<Theme>(loadTheme);
@@ -119,7 +119,7 @@ export default function AppLayout() {
   }
 
   function goLogin() {
-    navigate(loginPathWithReturn(location.pathname));
+    openLogin(location.pathname);
   }
 
   return (
@@ -134,7 +134,7 @@ export default function AppLayout() {
           aria-label="Primary navigation"
         >
           <div className="px-3 lg:px-5 pt-5 pb-4 flex items-center justify-center lg:justify-start">
-            <BrandLogo responsiveText showText />
+            <BrandLogo responsiveText />
           </div>
 
           <div className="mx-3 lg:mx-4 h-px bg-border mb-3" />
@@ -204,7 +204,7 @@ export default function AppLayout() {
                 {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
               </Button>
 
-              {address ? (
+              {address && (
                 <Link
                   to={`/u/${address}`}
                   className="flex items-center gap-2 hover:opacity-80 transition-opacity"
@@ -215,10 +215,6 @@ export default function AppLayout() {
                     {truncateAddress(address)}
                   </span>
                 </Link>
-              ) : (
-                <Button size="sm" onClick={goLogin}>
-                  Login
-                </Button>
               )}
             </div>
           </header>

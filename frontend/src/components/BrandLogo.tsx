@@ -3,44 +3,19 @@ import { cn } from '@/lib/utils';
 
 const sizeStyles = {
   sm: {
-    mark: 'size-7',
-    text: 'text-base',
-    gap: 'gap-2',
+    text: 'text-2xl',
   },
   lg: {
-    mark: 'size-12',
-    text: 'text-3xl',
-    gap: 'gap-3',
+    text: 'text-[3rem]',
   },
 } as const;
-
-function VeriFiMark({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 32 32"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={cn('shrink-0', className)}
-      aria-hidden
-    >
-      <rect width="32" height="32" rx="8" className="fill-foreground" />
-      <path
-        d="M8.5 11.5 15.5 24.5 22.5 11.5"
-        className="stroke-background"
-        strokeWidth="2.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx="23.5" cy="9.5" r="2.75" className="fill-success" />
-    </svg>
-  );
-}
 
 interface BrandLogoProps {
   to?: string;
   link?: boolean;
   size?: keyof typeof sizeStyles;
   showText?: boolean;
+  /** Show "V" when narrow, full wordmark at lg+ (sidebar). */
   responsiveText?: boolean;
   className?: string;
 }
@@ -54,30 +29,41 @@ export function BrandLogo({
   className,
 }: BrandLogoProps) {
   const styles = sizeStyles[size];
-  const showWordmark = showText ?? size === 'lg';
+  const showWordmark = showText ?? true;
 
-  const content = (
-    <>
-      <VeriFiMark className={cn(styles.mark, link && 'group-hover:scale-105 transition-transform')} />
-      {showWordmark && (
-        <span
-          className={cn(
-            'font-bold tracking-tight leading-none',
-            styles.text,
-            responsiveText && 'hidden lg:inline',
-          )}
-        >
-          Veri<span className="text-success">Fi</span>
-        </span>
-      )}
-    </>
+  const fullWordmark = (
+    <span className={cn('font-serif-logo leading-none tracking-normal', styles.text)}>
+      <span className="font-bold text-muted-foreground">Veri</span>
+      <span className="font-bold text-foreground">Fi</span>
+    </span>
   );
 
-  const classes = cn('inline-flex items-center', styles.gap, className);
+  const compactMark = (
+    <span
+      className={cn(
+        'font-serif-logo font-bold leading-none text-foreground tracking-normal',
+        styles.text,
+      )}
+      aria-hidden
+    >
+      V
+    </span>
+  );
+
+  const content = !showWordmark ? null : responsiveText ? (
+    <>
+      <span className="lg:hidden">{compactMark}</span>
+      <span className="hidden lg:inline">{fullWordmark}</span>
+    </>
+  ) : (
+    fullWordmark
+  );
+
+  const classes = cn('inline-flex items-center', className);
 
   if (link) {
     return (
-      <Link to={to} className={cn(classes, 'group')} aria-label="VeriFi home">
+      <Link to={to} className={classes} aria-label="VeriFi home">
         {content}
       </Link>
     );

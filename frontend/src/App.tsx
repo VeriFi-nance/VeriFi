@@ -1,14 +1,13 @@
 import { useEffect } from 'react';
-import type { ReactNode } from 'react';
 import {
   BrowserRouter,
   Navigate,
   Route,
   Routes,
+  useLocation,
   useNavigate,
   useParams,
 } from 'react-router-dom';
-import LoginPage from './pages/LoginPage';
 import AppLayout from './pages/AppLayout';
 import FeedPage from './pages/FeedPage';
 import PostDetailPage from './pages/PostDetailPage';
@@ -17,19 +16,14 @@ import SettingsPage from './pages/SettingsPage';
 import ClaimDetailPage from './pages/ClaimDetailPage';
 import CommunitiesPage from './pages/CommunitiesPage';
 import CommunityDetailPage from './pages/CommunityDetailPage';
-import { clearAuth, isAuthenticated, loadAddress } from './lib/auth';
+import { LoginModal } from './components/LoginModal';
+import { clearAuth, loadAddress, openLogin, useAuthState } from './lib/auth';
 import { clearPrivateKey } from './lib/crypto';
 import { authenticateMetaMaskAddress } from './lib/walletAuth';
 
-function ProtectedRoute({ children }: { children: ReactNode }) {
-  if (!isAuthenticated()) {
-    return <Navigate to="/login" replace />;
-  }
-  return <>{children}</>;
-}
-
 function WalletAccountSync() {
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     if (!window.ethereum?.on || !window.ethereum?.removeListener) return;
@@ -50,7 +44,7 @@ function WalletAccountSync() {
       } catch {
         clearAuth();
         clearPrivateKey();
-        navigate('/login', { replace: true });
+        openLogin(navigate, location, location.pathname);
       }
     };
 
@@ -59,13 +53,73 @@ function WalletAccountSync() {
       cancelled = true;
       window.ethereum?.removeListener?.('accountsChanged', onAccountsChanged);
     };
-  }, [navigate]);
+  }, [navigate, location]);
 
   return null;
 }
 
-function RootRedirect() {
-  return <Navigate to={isAuthenticated() ? '/feed' : '/login'} replace />;
+function SettingsGate() {
+  const auth = useAuthState();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (auth.authenticated) return;
+    if (location.pathname === '/login') return;
+    openLogin(navigate, location, '/settings', {
+      ...location,
+      pathname: '/feed',
+      search: '',
+      hash: '',
+    });
+  }, [auth.authenticated, navigate, location]);
+
+  if (!auth.authenticated) return null;
+  return <SettingsPage />;
+}
+
+function AppRoutes() {
+  const location = useLocation();
+  const loginOpen = location.pathname === '/login';
+  const backgroundState = (location.state as { background?: ReturnType<typeof useLocation> } | null)
+    ?.background;
+  const backgroundLocation =
+    loginOpen && backgroundState
+      ? backgroundState
+      : loginOpen
+        ? { pathname: '/feed', search: '', hash: '', key: 'login-default' }
+        : null;
+
+  return (
+    <>
+      <Routes location={backgroundLocation ?? location}>
+        <Route element={<AppLayout />}>
+          <Route path="/feed" element={<FeedPage />} />
+          <Route path="/post/:id" element={<PostDetailPage />} />
+          <Route path="/claim/:id" element={<ClaimDetailPage />} />
+          <Route path="/u/:address" element={<UserPage />} />
+          <Route path="/settings" element={<SettingsGate />} />
+          <Route path="/c" element={<CommunitiesPage />} />
+          <Route path="/c/:id" element={<CommunityDetailPage />} />
+          <Route path="/login" element={null} />
+        </Route>
+
+        <Route path="/" element={<Navigate to="/feed" replace />} />
+
+        {/* Legacy redirects */}
+        <Route path="/app" element={<Navigate to="/feed" replace />} />
+        <Route path="/app/profile" element={<UserLegacyRedirect />} />
+        <Route path="/app/communities" element={<Navigate to="/c" replace />} />
+        <Route path="/app/communities/:id" element={<CommunityLegacyRedirect />} />
+        <Route path="/app/post/:id" element={<PostLegacyRedirect />} />
+        <Route path="/app/user/:address" element={<UserLegacyRedirect />} />
+
+        <Route path="*" element={<Navigate to="/feed" replace />} />
+      </Routes>
+
+      {loginOpen && <LoginModal />}
+    </>
+  );
 }
 
 function UserLegacyRedirect() {
@@ -89,35 +143,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <WalletAccountSync />
-      <Routes>
-        <Route path="/" element={<RootRedirect />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route
-          element={
-            <ProtectedRoute>
-              <AppLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route path="/feed" element={<FeedPage />} />
-          <Route path="/post/:id" element={<PostDetailPage />} />
-          <Route path="/claim/:id" element={<ClaimDetailPage />} />
-          <Route path="/u/:address" element={<UserPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/c" element={<CommunitiesPage />} />
-          <Route path="/c/:id" element={<CommunityDetailPage />} />
-        </Route>
-
-        {/* Legacy redirects */}
-        <Route path="/app" element={<Navigate to="/feed" replace />} />
-        <Route path="/app/profile" element={<UserLegacyRedirect />} />
-        <Route path="/app/communities" element={<Navigate to="/c" replace />} />
-        <Route path="/app/communities/:id" element={<CommunityLegacyRedirect />} />
-        <Route path="/app/post/:id" element={<PostLegacyRedirect />} />
-        <Route path="/app/user/:address" element={<UserLegacyRedirect />} />
-
-        <Route path="*" element={<Navigate to="/feed" replace />} />
-      </Routes>
+      <AppRoutes />
     </BrowserRouter>
   );
 }

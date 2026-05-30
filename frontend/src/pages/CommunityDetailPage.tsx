@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { getCommunity, joinCommunity, approveCommunityMember, banCommunityMember, getAssets, getCommunityMembers, getPositions, updateCommunity } from '@/lib/api';
 import type { CommunityItem, AssetItem, CommunityMembershipItem, PositionItem } from '@/lib/types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { loginPathWithReturn, useAuthState } from '@/lib/auth';
+import { useAuthState, useOpenLogin } from '@/lib/auth';
 import { FeedList } from '@/components/feed/FeedList';
 import { NewPostButton } from '@/components/feed/NewPostModal';
 import ProfitabilityBadge from '@/components/ProfitabilityBadge';
@@ -19,6 +19,7 @@ import { PageContent } from '@/components/PageContent';
 export default function CommunityDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const openLogin = useOpenLogin();
   const auth = useAuthState();
   const myAddress = auth.address;
   
@@ -73,7 +74,7 @@ export default function CommunityDetailPage() {
   const handleJoin = async () => {
     if (!id) return;
     if (!auth.authenticated) {
-      navigate(loginPathWithReturn(`/app/communities/${id}`), { replace: true });
+      openLogin(`/c/${id}`);
       return;
     }
     try {

@@ -18,11 +18,12 @@ import { Skeleton } from '@/components/Skeleton';
 import { PageContent } from '@/components/PageContent';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 import { getCommunities, createCommunity } from '@/lib/api';
-import { loginPathWithReturn, useAuthState } from '@/lib/auth';
+import { useAuthState, useOpenLogin } from '@/lib/auth';
 import type { CommunityItem } from '@/lib/types';
 
 export default function CommunitiesPage() {
   const navigate = useNavigate();
+  const openLogin = useOpenLogin();
   const { authenticated } = useAuthState();
   const [communities, setCommunities] = useState<CommunityItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,21 +57,14 @@ export default function CommunitiesPage() {
 
   function newCommunity() {
     if (!authenticated) {
-      navigate(loginPathWithReturn('/c'));
+      openLogin('/c');
       return;
     }
     setOpen(true);
   }
 
   return (
-    <PageContent width="wide" className="space-y-6">
-      <div className="flex items-center justify-end">
-        <Button size="sm" className="gap-1.5" onClick={newCommunity}>
-          <Plus className="size-4" />
-          New
-        </Button>
-      </div>
-
+    <PageContent className="space-y-5">
       <RD.Root open={open} onOpenChange={setOpen}>
         <RD.Content>
           <RD.Header>
@@ -139,7 +133,7 @@ export default function CommunitiesPage() {
       </RD.Root>
 
       {loading ? (
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
           {[0, 1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-32" />
           ))}
@@ -149,9 +143,23 @@ export default function CommunitiesPage() {
           icon={<Users className="size-5" />}
           title="No communities yet"
           description="Create the first one and invite people."
+          action={
+            <Button size="sm" className="gap-1.5" onClick={newCommunity}>
+              <Plus className="size-4" />
+              New community
+            </Button>
+          }
         />
       ) : (
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={newCommunity}
+            className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card/50 p-5 text-muted-foreground transition-colors hover:border-foreground/20 hover:bg-muted/50 hover:text-foreground"
+          >
+            <Plus className="size-5" />
+            <span className="text-sm font-medium">New community</span>
+          </button>
           {communities.map((c) => (
             <Card
               key={c.id}

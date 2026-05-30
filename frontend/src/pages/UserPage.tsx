@@ -98,25 +98,6 @@ export default function UserPage() {
 
   return (
     <PageContent className="space-y-6">
-      <div className="flex items-center justify-end">
-        {isSelf ? (
-          <Button asChild variant="outline" size="sm" className="gap-2">
-            <Link to="/settings">
-              <SettingsIcon className="size-4" />
-              Settings
-            </Link>
-          </Button>
-        ) : (
-          <Button
-            variant={following ? 'outline' : 'default'}
-            size="sm"
-            onClick={handleFollow}
-          >
-            {following ? 'Unfollow' : 'Follow'}
-          </Button>
-        )}
-      </div>
-
       <Card className="p-5">
         <div className="flex items-center gap-4">
           <UserAvatar address={address} size="lg" />
@@ -141,6 +122,25 @@ export default function UserPage() {
             )}
           </div>
         )}
+
+        <div className="flex justify-end mt-5 pt-4 border-t border-border">
+          {isSelf ? (
+            <Button asChild variant="outline" size="sm" className="gap-2">
+              <Link to="/settings">
+                <SettingsIcon className="size-4" />
+                Settings
+              </Link>
+            </Button>
+          ) : (
+            <Button
+              variant={following ? 'outline' : 'default'}
+              size="sm"
+              onClick={handleFollow}
+            >
+              {following ? 'Unfollow' : 'Follow'}
+            </Button>
+          )}
+        </div>
       </Card>
 
       <section className="mt-4 space-y-2">

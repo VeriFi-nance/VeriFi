@@ -1,4 +1,6 @@
 import { useSyncExternalStore } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import type { Location, NavigateFunction } from 'react-router-dom';
 
 const TOKEN_KEY = 'verifi_jwt';
 const ADDRESS_STORAGE = 'verifi_address';
@@ -103,4 +105,45 @@ export function useAuthState(): AuthState {
 
 export function loginPathWithReturn(returnTo: string): string {
   return `/login?returnTo=${encodeURIComponent(returnTo)}`;
+}
+
+export function loginReturnTo(searchParams: URLSearchParams): string {
+  return searchParams.get('returnTo') || '/feed';
+}
+
+export function openLogin(
+  navigate: NavigateFunction,
+  location: Location,
+  returnTo?: string,
+  background?: Location,
+) {
+  const target = returnTo ?? `${location.pathname}${location.search}`;
+  navigate(
+    { pathname: '/login', search: `?returnTo=${encodeURIComponent(target)}` },
+    { state: { background: background ?? location } },
+  );
+}
+
+export function closeLogin(navigate: NavigateFunction, location: Location) {
+  const background = (location.state as { background?: Location } | null)?.background;
+  const params = new URLSearchParams(location.search);
+  const returnTo = params.get('returnTo') || '/feed';
+
+  if (background) {
+    const pathname = background.pathname === '/settings' ? '/feed' : background.pathname;
+    navigate(
+      { pathname, search: background.search, hash: background.hash },
+      { replace: true },
+    );
+    return;
+  }
+
+  const destination = returnTo === '/settings' ? '/feed' : returnTo;
+  navigate(destination, { replace: true });
+}
+
+export function useOpenLogin() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  return (returnTo?: string) => openLogin(navigate, location, returnTo);
 }

@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { PenSquare, Plus, X } from 'lucide-react';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
-import { loginPathWithReturn, useAuthState } from '@/lib/auth';
+import { useAuthState, useOpenLogin } from '@/lib/auth';
 import { createPost, createHardClaim, getAssets } from '@/lib/api';
 import type { AssetItem, ReviewClaim } from '@/lib/types';
 import { PostComposer, MAX_CHARS } from './PostComposer';
@@ -20,8 +19,7 @@ interface NewPostModalProps {
 }
 
 export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewPostModalProps) {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const openLogin = useOpenLogin();
   const auth = useAuthState();
   const [content, setContent] = useState('');
   const [attached, setAttached] = useState<AttachedClaim[]>([]);
@@ -89,7 +87,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
   async function submit() {
     if (!content.trim()) return;
     if (!auth.authenticated) {
-      navigate(loginPathWithReturn(location.pathname), { replace: true });
+      openLogin();
       return;
     }
     setError('');
@@ -237,14 +235,13 @@ export function NewPostButton({
   onPosted: () => void;
   communityId?: number;
 }) {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const openLogin = useOpenLogin();
   const auth = useAuthState();
   const [open, setOpen] = useState(false);
 
   function handleClick() {
     if (!auth.authenticated) {
-      navigate(loginPathWithReturn(location.pathname), { replace: true });
+      openLogin();
       return;
     }
     setOpen(true);
