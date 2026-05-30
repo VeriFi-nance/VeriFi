@@ -68,7 +68,7 @@ export function MobileMenuButton({
         </Button>
       </DialogPrimitive.Trigger>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-background/10 backdrop-blur-md supports-[backdrop-filter]:bg-background/5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0" />
         <DialogPrimitive.Content
           className={cn(
             'fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] bg-background border-r border-border outline-none',
