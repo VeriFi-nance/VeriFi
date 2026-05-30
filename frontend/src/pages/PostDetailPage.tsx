@@ -103,7 +103,7 @@ export default function PostDetailPage() {
       </Card>
 
       {post.hard_claims.length > 0 && (
-        <section className="space-y-6">
+        <section className="mt-4 space-y-6">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Claims
           </h2>
