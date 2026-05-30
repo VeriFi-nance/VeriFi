@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -27,6 +28,10 @@ export function ClaimForm({
   submitLabel = 'Add Claim',
   showMarket = true,
 }: ClaimFormProps) {
+  const [minDate, setMinDate] = useState('');
+  useEffect(() => {
+    setMinDate(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
+  }, []);
   return (
     <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-3">
       <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
@@ -104,7 +109,7 @@ export function ClaimForm({
           <Label className="text-xs">Target date</Label>
           <Input
             type="date"
-            min={new Date(Date.now() + 86400000).toISOString().split('T')[0]}
+            min={minDate}
             value={value.until}
             onChange={(e) => onChange({ until: e.target.value })}
             className="h-8 text-sm num"
