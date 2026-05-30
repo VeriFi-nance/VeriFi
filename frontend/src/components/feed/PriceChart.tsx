@@ -209,7 +209,7 @@ export function PriceChart({ data }: PriceChartProps) {
         },
       ],
     };
-  }, [labels, highPrices, lowPrices, data.ohlc, hitDaySet, isBullish]);
+  }, [labels, highPrices, lowPrices, closePrices, data.ohlc, hitDaySet, isBullish]);
 
   const options: ChartOptions<'line'> = useMemo(
     () => ({

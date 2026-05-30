@@ -4,7 +4,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { PenSquare, Plus, X } from 'lucide-react';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 import { useAuthState, useOpenLogin } from '@/lib/auth';
-import { createPost, createHardClaim, getAssets } from '@/lib/api';
+import { createPost, getAssets } from '@/lib/api';
 import type { AssetItem, ReviewClaim } from '@/lib/types';
 import { PostComposer, MAX_CHARS } from './PostComposer';
 import { ClaimForm } from './ClaimForm';
@@ -93,25 +93,23 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
     setError('');
     setSubmitting(true);
     try {
-      const newPost = await createPost(content.trim(), [], communityId);
-      await Promise.all(
-        attached.map((c) => {
-          const stakeNum = parseFloat(c.stakeRep);
-          const market =
-            !isNaN(stakeNum) && stakeNum >= 10 && stakeNum <= 100
-              ? { side: 'YES' as const, stake_rep: stakeNum }
-              : undefined;
-          return createHardClaim({
-            asset_id: parseInt(c.asset_id, 10),
-            post_id: newPost.id,
-            community_id: communityId,
-            direction: c.direction,
-            percentage: parseFloat(c.percentage),
-            until: c.until,
-            ...(market ? { market } : {}),
-          });
-        }),
-      );
+      const hardClaimsPayload = attached.map((c) => {
+        const stakeNum = parseFloat(c.stakeRep);
+        const market =
+          !isNaN(stakeNum) && stakeNum >= 10 && stakeNum <= 100
+            ? { side: 'YES' as const, stake_rep: stakeNum }
+            : undefined;
+        return {
+          asset_id: parseInt(c.asset_id, 10),
+          community_id: communityId,
+          direction: c.direction,
+          percentage: parseFloat(c.percentage),
+          until: c.until,
+          ...(market ? { market } : {}),
+        };
+      });
+
+      await createPost(content.trim(), [], communityId, hardClaimsPayload);
       reset();
       onOpenChange(false);
       onPosted();
