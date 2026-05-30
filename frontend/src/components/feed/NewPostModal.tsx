@@ -203,28 +203,24 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
     setError('');
     setSubmitting(true);
     try {
-      // 1. Create the post (no attached claims on the post itself)
-      const newPost = await createPost(content.trim(), [], communityId);
+      const hardClaimsPayload = claims.map((c) => {
+        const stakeRepNum = parseFloat(c.stakeRep);
+        const market =
+          !isNaN(stakeRepNum) && stakeRepNum >= 10 && stakeRepNum <= 100
+            ? { side: 'YES' as const, stake_rep: stakeRepNum }
+            : undefined;
+        return {
+          asset_id: parseInt(c.asset_id, 10),
+          community_id: communityId,
+          direction: c.direction,
+          percentage: parseFloat(c.percentage),
+          until: c.until,
+          ...(market ? { market } : {}),
+        };
+      });
 
-      // 2. Create each HardClaim, linked to the new post
-      await Promise.all(
-        claims.map((c) => {
-          const stakeRepNum = parseFloat(c.stakeRep);
-          const market =
-            !isNaN(stakeRepNum) && stakeRepNum >= 10 && stakeRepNum <= 100
-              ? { side: 'YES' as const, stake_rep: stakeRepNum }
-              : undefined;
-          return createHardClaim({
-            asset_id: parseInt(c.asset_id, 10),
-            post_id: newPost.id,
-            community_id: communityId,
-            direction: c.direction,
-            percentage: parseFloat(c.percentage),
-            until: c.until,
-            ...(market ? { market } : {}),
-          });
-        })
-      );
+      // Create the post and all attached claims atomically
+      await createPost(content.trim(), [], communityId, hardClaimsPayload);
 
       resetModal();
       onOpenChange(false);

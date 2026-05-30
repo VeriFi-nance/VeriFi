@@ -87,3 +87,77 @@ class HardClaimChartDataViewTests(TestCase):
         # Crucial assertion: the date property maps to row.timestamp.isoformat()
         self.assertEqual(candle["date"], self.candle_timestamp.isoformat())
         self.assertEqual(float(candle["open"]), 1000.0)
+
+class PostCreationAtomicTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.author = WalletUser.objects.create(address="0xatomic", energy=4, rep=100)
+        self.asset = Asset.objects.create(
+            symbol="ETH",
+            name="Ethereum",
+            market_type=Asset.MarketType.CRYPTO,
+            provider=Asset.Provider.BINANCE,
+            provider_symbol="ethereum",
+            quote_currency="USD",
+            binance_symbol="ETHUSDT"
+        )
+        from rest_framework_simplejwt.tokens import RefreshToken
+        refresh = RefreshToken()
+        refresh["address"] = self.author.address
+        self.token = str(refresh.access_token)
+
+    def test_post_with_hard_claims_insufficient_energy_rolls_back(self):
+        """
+        If a user has 4 energy, creating 3 market-backed claims (costing 6 energy total)
+        should fail entirely. The Post should NOT be created, no HardClaims should be created,
+        and energy should remain at 4.
+        """
+        initial_post_count = Post.objects.count()
+        initial_claim_count = HardClaim.objects.count()
+
+        payload = {
+            "content": "Ethereum going to 10k!",
+            "claims": [],
+            "hard_claims": [
+                {
+                    "asset_id": self.asset.id,
+                    "direction": "Bullish",
+                    "percentage": 10.0,
+                    "until": (timezone.now() + timedelta(days=2)).date().isoformat(),
+                    "market": {"side": "YES", "stake_rep": 10}
+                },
+                {
+                    "asset_id": self.asset.id,
+                    "direction": "Bullish",
+                    "percentage": 20.0,
+                    "until": (timezone.now() + timedelta(days=3)).date().isoformat(),
+                    "market": {"side": "YES", "stake_rep": 10}
+                },
+                {
+                    "asset_id": self.asset.id,
+                    "direction": "Bullish",
+                    "percentage": 30.0,
+                    "until": (timezone.now() + timedelta(days=4)).date().isoformat(),
+                    "market": {"side": "YES", "stake_rep": 10}
+                }
+            ]
+        }
+        
+        response = self.client.post(
+            reverse("post-list-create"),
+            data=json.dumps(payload),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.token}"
+        )
+        
+        # Should fail with 400
+        self.assertEqual(response.status_code, 400)
+        
+        # Verify rollbacks
+        self.assertEqual(Post.objects.count(), initial_post_count)
+        self.assertEqual(HardClaim.objects.count(), initial_claim_count)
+        
+        # Energy should be unmodified
+        self.author.refresh_from_db()
+        self.assertEqual(self.author.energy, 4)
+

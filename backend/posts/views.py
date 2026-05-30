@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.db import transaction
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -96,16 +97,85 @@ class PostListCreateView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        post = Post.objects.create(author=user, content=content, community=community_obj)
-        for claim in serializer.validated_data:
-            if claim.get("status") != "rejected":
-                Claim.objects.create(
-                    post=post,
-                    text=claim["text"],
-                    asset=claim.get("asset", ""),
-                    direction=claim.get("direction", ""),
-                    status=Claim.Status.CONFIRMED,
-                )
+        hard_claims_data = request.data.get("hard_claims", [])
+
+        with transaction.atomic():
+            post = Post.objects.create(author=user, content=content, community=community_obj)
+            for claim in serializer.validated_data:
+                if claim.get("status") != "rejected":
+                    Claim.objects.create(
+                        post=post,
+                        text=claim["text"],
+                        asset=claim.get("asset", ""),
+                        direction=claim.get("direction", ""),
+                        status=Claim.Status.CONFIRMED,
+                    )
+            
+            for hc_data in hard_claims_data:
+                hc_serializer = HardClaimInputSerializer(data=hc_data)
+                if not hc_serializer.is_valid():
+                    transaction.set_rollback(True)
+                    return Response(hc_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                valid_hc = hc_serializer.validated_data
+
+                try:
+                    asset = Asset.objects.get(id=valid_hc["asset_id"])
+                except Asset.DoesNotExist as e:
+                    transaction.set_rollback(True)
+                    return Response({"detail": f"Invalid reference: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+                
+                market_block = hc_data.get("market") if isinstance(hc_data, dict) else None
+                if market_block is not None:
+                    try:
+                        m_side = str(market_block.get("side", "")).upper()
+                        m_stake = float(market_block.get("stake_rep", 0))
+                    except (TypeError, ValueError):
+                        transaction.set_rollback(True)
+                        return Response({"detail": "Invalid market block."}, status=status.HTTP_400_BAD_REQUEST)
+                    if m_side not in ("YES", "NO"):
+                        transaction.set_rollback(True)
+                        return Response({"detail": "market.side must be YES or NO."}, status=status.HTTP_400_BAD_REQUEST)
+                    if not (rep_market.CREATOR_MIN_STAKE <= m_stake <= rep_market.CREATOR_MAX_STAKE):
+                        transaction.set_rollback(True)
+                        return Response(
+                            {"detail": f"market.stake_rep must be in [{rep_market.CREATOR_MIN_STAKE}, {rep_market.CREATOR_MAX_STAKE}]."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    if user.rep < rep_market.LISTING_FEE + m_stake:
+                        transaction.set_rollback(True)
+                        return Response({"detail": "Insufficient rep for listing fee + stake."}, status=status.HTTP_400_BAD_REQUEST)
+                    if not spend(user, CLAIM_ENERGY_COST):
+                        transaction.set_rollback(True)
+                        return Response({"detail": "Insufficient energy to create market."}, status=status.HTTP_400_BAD_REQUEST)
+                else:
+                    m_side = None
+                    m_stake = None
+                
+                try:
+                    hard_claim = HardClaim.objects.create(
+                        author=user,
+                        post=post,
+                        community=community_obj,
+                        asset=asset,
+                        direction=valid_hc.get("direction", ""),
+                        percentage=valid_hc["percentage"],
+                        until=valid_hc["until"],
+                        status=valid_hc.get("status", "undetermined"),
+                    )
+                    from .models import HardClaimEvent
+                    HardClaimEvent.objects.create(
+                        hard_claim=hard_claim,
+                        event_type=HardClaimEvent.EventType.CREATION,
+                        details={}
+                    )
+                    if market_block is not None:
+                        rep_market.init_market(hard_claim, user, m_side, m_stake)
+                except rep_market.MarketError as e:
+                    transaction.set_rollback(True)
+                    return Response({"detail": f"market: {e}"}, status=status.HTTP_400_BAD_REQUEST)
+                except Exception as e:
+                    transaction.set_rollback(True)
+                    return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(PostSerializer(post).data, status=status.HTTP_201_CREATED)
 

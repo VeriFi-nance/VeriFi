@@ -68,12 +68,13 @@ export async function extractClaims(content: string): Promise<ExtractClaimsRespo
 export async function createPost(
   content: string,
   claims: ReviewClaim[],
-  community_id?: number
+  community_id?: number,
+  hard_claims?: any[]
 ): Promise<PostItem> {
   return request('/api/posts/', {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ content, claims, community_id }),
+    body: JSON.stringify({ content, claims, community_id, hard_claims }),
   });
 }
 
