@@ -1,18 +1,31 @@
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
+import type { ReactNode } from 'react';
+import {
+  BrowserRouter,
+  Navigate,
+  Route,
+  Routes,
+  useNavigate,
+  useParams,
+} from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 import AppLayout from './pages/AppLayout';
 import FeedPage from './pages/FeedPage';
-import ClaimReviewPage from './pages/ClaimReviewPage';
 import PostDetailPage from './pages/PostDetailPage';
-import UserPostsPage from './pages/UserPostsPage';
-import ProfilePage from './pages/ProfilePage';
-import { clearAuth, loadAddress } from './lib/auth';
+import UserPage from './pages/UserPage';
+import SettingsPage from './pages/SettingsPage';
+import CommunitiesPage from './pages/CommunitiesPage';
+import CommunityDetailPage from './pages/CommunityDetailPage';
+import { clearAuth, isAuthenticated, loadAddress } from './lib/auth';
 import { clearPrivateKey } from './lib/crypto';
 import { authenticateMetaMaskAddress } from './lib/walletAuth';
 
-import CommunitiesPage from './pages/CommunitiesPage';
-import CommunityDetailPage from './pages/CommunityDetailPage';
+function ProtectedRoute({ children }: { children: ReactNode }) {
+  if (!isAuthenticated()) {
+    return <Navigate to="/login" replace />;
+  }
+  return <>{children}</>;
+}
 
 function WalletAccountSync() {
   const navigate = useNavigate();
@@ -50,22 +63,58 @@ function WalletAccountSync() {
   return null;
 }
 
+function RootRedirect() {
+  return <Navigate to={isAuthenticated() ? '/feed' : '/login'} replace />;
+}
+
+function UserLegacyRedirect() {
+  const { address } = useParams();
+  const fallback = loadAddress() ?? '';
+  const target = address ?? fallback;
+  return <Navigate to={target ? `/u/${target}` : '/feed'} replace />;
+}
+
+function CommunityLegacyRedirect() {
+  const { id } = useParams();
+  return <Navigate to={id ? `/c/${id}` : '/c'} replace />;
+}
+
+function PostLegacyRedirect() {
+  const { id } = useParams();
+  return <Navigate to={id ? `/post/${id}` : '/feed'} replace />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <WalletAccountSync />
       <Routes>
-        <Route path="/" element={<Navigate to="/app" replace />} />
+        <Route path="/" element={<RootRedirect />} />
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/app" element={<AppLayout />}>
-          <Route index element={<FeedPage />} />
-          <Route path="post/review" element={<ClaimReviewPage />} />
-          <Route path="post/:id" element={<PostDetailPage />} />
-          <Route path="user/:address" element={<UserPostsPage />} />
-          <Route path="profile" element={<ProfilePage />} />
-          <Route path="communities" element={<CommunitiesPage />} />
-          <Route path="communities/:id" element={<CommunityDetailPage />} />
+        <Route
+          element={
+            <ProtectedRoute>
+              <AppLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/feed" element={<FeedPage />} />
+          <Route path="/post/:id" element={<PostDetailPage />} />
+          <Route path="/u/:address" element={<UserPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/c" element={<CommunitiesPage />} />
+          <Route path="/c/:id" element={<CommunityDetailPage />} />
         </Route>
+
+        {/* Legacy redirects */}
+        <Route path="/app" element={<Navigate to="/feed" replace />} />
+        <Route path="/app/profile" element={<UserLegacyRedirect />} />
+        <Route path="/app/communities" element={<Navigate to="/c" replace />} />
+        <Route path="/app/communities/:id" element={<CommunityLegacyRedirect />} />
+        <Route path="/app/post/:id" element={<PostLegacyRedirect />} />
+        <Route path="/app/user/:address" element={<UserLegacyRedirect />} />
+
+        <Route path="*" element={<Navigate to="/feed" replace />} />
       </Routes>
     </BrowserRouter>
   );

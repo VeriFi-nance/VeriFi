@@ -53,7 +53,7 @@ export default function LoginPage() {
   const [metamaskLoading, setMetamaskLoading] = useState(false);
 
   function navigateAfterAuth() {
-    navigate(returnTo || '/app');
+    navigate(returnTo || '/feed');
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────
