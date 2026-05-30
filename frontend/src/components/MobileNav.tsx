@@ -82,7 +82,7 @@ export function MobileMenuButton({
             Primary navigation menu
           </DialogPrimitive.Description>
           <div className="px-5 pt-5 pb-3 flex items-center gap-3">
-            <img src="/logo.png" alt="VeriFi" className="h-7 w-auto" />
+            <img src="/logo.png" alt="VeriFi" className="h-7 w-auto dark:invert" />
           </div>
           <div className="mx-4 h-px bg-border mb-3" />
           <nav className="flex-1 px-3 space-y-1">
