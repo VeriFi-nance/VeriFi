@@ -115,10 +115,9 @@ class ExtractClaimsView(APIView):
     permission_classes = []
 
     def post(self, request):
-        user = _get_wallet_user(request)
-        if user is None:
-            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
-
+        # Rule-based extraction is stateless and read-only, so it does not require
+        # authentication. Gating it caused the live preview to silently show no
+        # claims whenever a token was missing or expired.
         content = request.data.get("content", "").strip()
         if not content:
             return Response({"detail": "content is required."}, status=status.HTTP_400_BAD_REQUEST)
@@ -242,6 +241,8 @@ class HardClaimView(APIView):
                 community=community_obj,
                 asset=asset,
                 direction=data.get("direction", ""),
+                value_type=data.get("value_type", "PERCENTAGE_UP"),
+                payda=data.get("payda", ""),
                 percentage=data["percentage"],
                 until=data["until"],
                 status=data.get("status", "undetermined"),

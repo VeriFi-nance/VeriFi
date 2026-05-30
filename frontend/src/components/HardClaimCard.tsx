@@ -21,6 +21,7 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
   const [logOpen, setLogOpen] = useState(false);
   const asset = assets.find((a) => a.id === claim.asset);
   const assetSymbol = asset?.symbol ?? `#${claim.asset}`;
+  const isPrice = claim.value_type === 'PRICE';
   const isBullish = claim.direction.toLowerCase() === 'bullish';
   const isConfirmed = claim.status === 'confirmed';
   const isRejected = claim.status === 'rejected';
@@ -42,23 +43,28 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
         )}
         aria-label="View claim event log"
       >
-        {/* Direction dot */}
+        {/* Direction dot — neutral for absolute price targets */}
         <span
           className={cn(
             'size-2 rounded-full shrink-0',
-            isBullish ? 'bg-emerald-500' : 'bg-red-500'
+            isPrice ? 'bg-foreground/50' : isBullish ? 'bg-emerald-500' : 'bg-red-500'
           )}
         />
 
-        {/* Asset symbol */}
-        <span className="font-mono font-semibold text-xs text-foreground shrink-0">{assetSymbol}</span>
+        {/* Asset symbol (with denominator when present) */}
+        <span className="font-mono font-semibold text-xs text-foreground shrink-0">
+          {assetSymbol}
+          {claim.payda ? <span className="text-muted-foreground">/{claim.payda}</span> : null}
+        </span>
 
-        {/* Direction + percentage badge */}
+        {/* Value badge — absolute price or percentage move */}
         <Badge
-          variant={isBullish ? 'success' : 'destructive'}
+          variant={isPrice ? 'secondary' : isBullish ? 'success' : 'destructive'}
           className="text-[10px] px-1.5 py-0 shrink-0"
         >
-          {isBullish ? '▲' : '▼'} {targetChange.toFixed(1)}%
+          {isPrice
+            ? `◎ ${targetChange.toLocaleString()}`
+            : `${isBullish ? '▲' : '▼'} ${targetChange.toFixed(1)}%`}
         </Badge>
 
         {/* Separator */}

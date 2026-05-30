@@ -8,33 +8,24 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { PenSquare, Plus, X, TrendingUp, TrendingDown, CalendarDays } from 'lucide-react';
+import { PenSquare, Plus, X, TrendingUp, TrendingDown, CalendarDays, AlertTriangle, ListChecks, DollarSign, Pencil, RotateCcw, ArrowLeftRight } from 'lucide-react';
 import { createPost, createHardClaim, getAssets, extractClaims } from '@/lib/api';
 import { loginPathWithReturn, useAuthState } from '@/lib/auth';
-import type { AssetItem, ReviewClaim, ExtractedClaimContract } from '@/lib/types';
+import type { AssetItem, ReviewClaim, ClaimValueType } from '@/lib/types';
+import { toReviewClaim, isClaimIncomplete, isClaimComplete, missingFields } from '@/lib/claims';
 
-const DEBOUNCE_MS = 700;
-
-function toReviewClaim(c: ExtractedClaimContract): ReviewClaim {
-  return {
-    text: c.text,
-    asset: c.pay || '',
-    direction: c.value_type === 'PERCENTAGE_DOWN' ? 'bearish' : 'bullish',
-    status: 'confirmed',
-    percentage: c.value !== null ? c.value.toString() : '',
-    until: c.deadline || '',
-  };
-}
+const DEBOUNCE_MS = 250;
 
 const MAX_CHARS = 500;
 
-type ClaimDirection = 'Bullish' | 'Bearish';
+const NO_DENOMINATOR = '__none__';
 
 interface ClaimDraft {
-  asset_id: string;       // asset id (for HardClaim)
-  assetSymbol: string;    // display
-  direction: ClaimDirection | '';
-  percentage: string;
+  asset_id: string;            // asset id (for HardClaim)
+  assetSymbol: string;         // numerator display (pay)
+  payda: string;               // denominator ticker ('' = none)
+  valueType: ClaimValueType;   // PRICE | PERCENTAGE_UP | PERCENTAGE_DOWN
+  value: string;               // magnitude (price or percentage move)
   until: string;
   stakeRep: string;
 }
@@ -42,24 +33,63 @@ interface ClaimDraft {
 interface AttachedClaim {
   asset_id: string;
   assetSymbol: string;
-  direction: ClaimDirection;
-  percentage: string;
+  payda: string;
+  valueType: ClaimValueType;
+  value: string;
   until: string;
   stakeRep: string;
 }
 
 function emptyDraft(): ClaimDraft {
   return {
-    asset_id: '', assetSymbol: '', direction: '', percentage: '', until: '',
-    stakeRep: '10',
+    asset_id: '', assetSymbol: '', payda: '', valueType: 'PERCENTAGE_UP',
+    value: '', until: '', stakeRep: '10',
   };
 }
+
+/** HardClaim.direction is still a bullish/bearish string; derive it from value type. */
+function directionForValueType(vt: ClaimValueType): 'Bullish' | 'Bearish' {
+  return vt === 'PERCENTAGE_DOWN' ? 'Bearish' : 'Bullish';
+}
+
+/**
+ * Identity used for dismiss / restore and the "smart cleanup" pass: asset +
+ * direction + magnitude. The deadline is intentionally excluded so editing only
+ * the date does not strand a dismissed claim, while changing the value or asset
+ * makes it disappear from the detections (and so gets cleaned up).
+ */
+function dismissKey(c: { asset?: string; direction?: string; percentage?: string }): string {
+  return `${(c.asset || '').toLowerCase()}|${(c.direction || '').toLowerCase()}|${(c.percentage || '').toString().trim()}`;
+}
+
+/** Convert an attached claim back into a review claim (for the dismissed pool). */
+function reviewFromAttached(c: AttachedClaim): ReviewClaim {
+  return {
+    text: '',
+    asset: c.assetSymbol,
+    direction: directionForValueType(c.valueType).toLowerCase(),
+    status: 'confirmed',
+    percentage: c.value,
+    until: c.until,
+    payda: c.payda,
+    valueType: c.valueType,
+  };
+}
+
+const VALUE_TYPE_CHOICES: { value: ClaimValueType; label: string }[] = [
+  { value: 'PRICE', label: 'Price' },
+  { value: 'PERCENTAGE_UP', label: '% Up' },
+  { value: 'PERCENTAGE_DOWN', label: '% Down' },
+];
 
 interface ClaimViewerProps {
   assetSymbol: string;
   direction: 'Bullish' | 'Bearish' | 'bullish' | 'bearish';
   percentage: string;
   until: string;
+  payda?: string;
+  valueType?: ClaimValueType;
+  incomplete?: boolean;
 }
 
 function ClaimViewer({
@@ -67,27 +97,49 @@ function ClaimViewer({
   direction,
   percentage,
   until,
+  payda,
+  valueType,
+  incomplete,
 }: ClaimViewerProps) {
-  const isDirectionBullish = direction === 'Bullish' || direction === 'bullish';
+  const isPrice = valueType === 'PRICE';
+  const isDirectionBullish = valueType
+    ? valueType !== 'PERCENTAGE_DOWN'
+    : direction === 'Bullish' || direction === 'bullish';
+  const valueLabel = percentage
+    ? isPrice
+      ? parseFloat(percentage).toLocaleString()
+      : `${parseFloat(percentage).toFixed(1)}%`
+    : isPrice
+    ? '? '
+    : '? %';
   return (
-    <div className="flex items-center gap-2 rounded-lg border px-3 py-2 bg-muted/40">
+    <div
+      className={[
+        'flex items-center gap-2 rounded-lg border px-3 py-2',
+        incomplete ? 'border-amber-500/50 bg-amber-500/5' : 'bg-muted/40',
+      ].join(' ')}
+    >
       {/* Direction dot */}
       <span
         className={`size-2 rounded-full shrink-0 ${
           isDirectionBullish ? 'bg-emerald-500' : 'bg-red-500'
         }`}
       />
-      <span className="font-mono font-semibold text-xs">{assetSymbol || 'Unknown Asset'}</span>
+      <span className="font-mono font-semibold text-xs">
+        {assetSymbol || 'Unknown Asset'}
+        {payda ? <span className="text-muted-foreground">/{payda}</span> : null}
+      </span>
       <Badge
         variant={isDirectionBullish ? 'success' : 'destructive'}
         className="text-[10px] px-1.5 py-0"
       >
-        {isDirectionBullish ? '▲' : '▼'} {percentage ? `${parseFloat(percentage).toFixed(1)}%` : '? %'}
+        {isPrice ? '◎' : isDirectionBullish ? '▲' : '▼'} {valueLabel}
       </Badge>
       <span className="flex items-center gap-1 text-xs text-muted-foreground flex-1">
         <CalendarDays className="size-3" />
         {until ? new Date(until).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'Unknown Date'}
       </span>
+      {incomplete && <AlertTriangle className="size-3.5 text-amber-500 shrink-0" />}
     </div>
   );
 }
@@ -112,8 +164,13 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
   const [error, setError] = useState('');
 
   const [extractedClaims, setExtractedClaims] = useState<ReviewClaim[]>([]);
-  const [ignoredClaimKeys, setIgnoredClaimKeys] = useState<Set<string>>(new Set());
+  // Claims the user explicitly set aside. Kept in memory so they can be reverted
+  // and so the auto-scan never re-surfaces them — but pruned by smart cleanup
+  // once they no longer appear in a fresh detection.
+  const [dismissedClaims, setDismissedClaims] = useState<ReviewClaim[]>([]);
+  const [showDismissed, setShowDismissed] = useState(false);
   const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -126,15 +183,24 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!content.trim()) {
       setExtractedClaims([]);
+      setDismissedClaims([]);  // nothing detected -> no ghosts to remember
+      setExtractError('');
       return;
     }
     debounceRef.current = setTimeout(async () => {
       setExtracting(true);
       try {
         const response = await extractClaims(content);
-        setExtractedClaims(response.claims.map(toReviewClaim));
-      } catch {
+        const fresh = response.claims.map(toReviewClaim);
+        setExtractedClaims(fresh);
+        // Smart cleanup: keep a dismissed claim only while it still has a
+        // matching (asset + direction + value) detection in the fresh scan.
+        const freshKeys = new Set(fresh.map(dismissKey));
+        setDismissedClaims((prev) => prev.filter((d) => freshKeys.has(dismissKey(d))));
+        setExtractError('');
+      } catch (e) {
         setExtractedClaims([]);
+        setExtractError(e instanceof Error ? e.message : 'Could not analyse claims.');
       } finally {
         setExtracting(false);
       }
@@ -146,10 +212,28 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
     setContent('');
     setClaims([]);
     setExtractedClaims([]);
-    setIgnoredClaimKeys(new Set());
+    setDismissedClaims([]);
+    setShowDismissed(false);
+    setExtractError('');
     setShowClaimForm(false);
     setDraft(emptyDraft());
     setError('');
+  }
+
+  // ── Dismiss / restore helpers ──────────────────────────────
+  function dismissClaim(c: ReviewClaim) {
+    setDismissedClaims((prev) =>
+      prev.some((d) => dismissKey(d) === dismissKey(c)) ? prev : [...prev, c]
+    );
+  }
+  function undismiss(key: string) {
+    setDismissedClaims((prev) => prev.filter((d) => dismissKey(d) !== key));
+  }
+  function revertLastDismissed() {
+    setDismissedClaims((prev) => prev.slice(0, -1));
+  }
+  function restoreDismissed(idx: number) {
+    setDismissedClaims((prev) => prev.filter((_, i) => i !== idx));
   }
 
   function handleClose(val: boolean) {
@@ -158,16 +242,21 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
   }
 
   function addClaim() {
-    if (!draft.asset_id || !draft.direction || !draft.percentage || !draft.until) {
-      setError('Fill all claim fields before adding.');
+    if (!draft.asset_id || !draft.value || !draft.until) {
+      setError('Fill in the asset, value and target date before adding.');
       return;
     }
-    const pct = parseFloat(draft.percentage);
-    if (isNaN(pct) || pct < 0.1 || pct > 1000) {
+    const val = parseFloat(draft.value);
+    if (draft.valueType === 'PRICE') {
+      if (isNaN(val) || val <= 0) {
+        setError('Target price must be greater than 0.');
+        return;
+      }
+    } else if (isNaN(val) || val < 0.1 || val > 1000) {
       setError('Percentage must be between 0.1 and 1000.');
       return;
     }
-    
+
     // Ensure the date is strictly in the future (tomorrow or later) to match backend constraints
     const todayStr = new Date().toISOString().split('T')[0];
     if (draft.until <= todayStr) {
@@ -180,17 +269,62 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
       return;
     }
     setError('');
-    setClaims((prev) => [...prev, { ...draft, direction: draft.direction as ClaimDirection }]);
+    // A claim that is now attached should no longer count as dismissed.
+    undismiss(dismissKey({
+      asset: draft.assetSymbol,
+      direction: directionForValueType(draft.valueType).toLowerCase(),
+      percentage: draft.value,
+    }));
+    setClaims((prev) => [...prev, { ...draft }]);
     setDraft(emptyDraft());
     setShowClaimForm(false);
+  }
+
+  function attachedKey(c: AttachedClaim): string {
+    const dir = directionForValueType(c.valueType).toLowerCase();
+    return `${c.assetSymbol || 'null'}-${dir}-${c.value || 'null'}-${c.until || 'null'}`;
   }
 
   function removeClaim(idx: number) {
     setClaims((prev) => {
       const target = prev[idx];
-      const key = `${target.assetSymbol || 'null'}-${target.direction.toLowerCase()}-${target.percentage || 'null'}-${target.until || 'null'}`;
-      setIgnoredClaimKeys(keys => new Set(keys).add(key));
+      // Removing an attached claim dismisses it so the auto-scan won't re-suggest it.
+      if (target) dismissClaim(reviewFromAttached(target));
       return prev.filter((_, i) => i !== idx);
+    });
+  }
+
+  // Pull an attached claim back into the editor so it can be modified, then re-added.
+  function editClaim(idx: number) {
+    const c = claims[idx];
+    if (!c) return;
+    setDraft({
+      asset_id: c.asset_id,
+      assetSymbol: c.assetSymbol,
+      payda: c.payda,
+      valueType: c.valueType,
+      value: c.value,
+      until: c.until,
+      stakeRep: c.stakeRep,
+    });
+    // Hide it from the detected list while it sits in the editor.
+    dismissClaim(reviewFromAttached(c));
+    setClaims((prev) => prev.filter((_, i) => i !== idx));
+    setShowClaimForm(true);
+    setError('');
+  }
+
+  function swapDraftAssets() {
+    setDraft((d) => {
+      const newSymbol = d.payda || '';
+      const newPayda = d.assetSymbol || '';
+      const newAsset = assets.find((a) => a.symbol === newSymbol);
+      return {
+        ...d,
+        asset_id: newAsset ? newAsset.id.toString() : '',
+        assetSymbol: newSymbol,
+        payda: newPayda,
+      };
     });
   }
 
@@ -218,8 +352,10 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
             asset_id: parseInt(c.asset_id, 10),
             post_id: newPost.id,
             community_id: communityId,
-            direction: c.direction,
-            percentage: parseFloat(c.percentage),
+            direction: directionForValueType(c.valueType),
+            value_type: c.valueType,
+            payda: c.payda || undefined,
+            percentage: parseFloat(c.value),
             until: c.until,
             ...(market ? { market } : {}),
           });
@@ -234,6 +370,26 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
     } finally {
       setSubmitting(false);
     }
+  }
+
+  // Detected claims that are neither dismissed nor already attached.
+  const dismissedKeySet = new Set(dismissedClaims.map(dismissKey));
+  const visibleExtractedClaims = extractedClaims.filter((c) => {
+    if (dismissedKeySet.has(dismissKey(c))) return false;
+    const fullKey = `${c.asset || 'null'}-${c.direction}-${c.percentage || 'null'}-${c.until || 'null'}`;
+    return !claims.some((ac) => attachedKey(ac) === fullKey);
+  });
+
+  function openReviewer() {
+    if (!auth.authenticated) {
+      navigate(loginPathWithReturn(location.pathname), { replace: true });
+      return;
+    }
+    navigate('/app/post/review', {
+      state: { content: content.trim(), claims: visibleExtractedClaims },
+    });
+    resetModal();
+    onOpenChange(false);
   }
 
   const remaining = MAX_CHARS - content.length;
@@ -276,37 +432,54 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
             >
               {remaining} / {MAX_CHARS}
             </p>
+            {extractError && (
+              <p className="flex items-center gap-1.5 text-[11px] text-destructive">
+                <AlertTriangle className="size-3 shrink-0" />
+                Couldn't analyse claims: {extractError}
+              </p>
+            )}
           </div>
 
           {/* ── Auto-extracted claims ───────────────────────── */}
           {(extracting || extractedClaims.length > 0) && (
             <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                {extracting ? 'Analysing…' : 'Detected Claims'}
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  {extracting
+                    ? 'Analysing…'
+                    : `Detected Claims${visibleExtractedClaims.length > 1 ? ` (${visibleExtractedClaims.length})` : ''}`}
+                </p>
+                {!extracting && visibleExtractedClaims.length > 0 && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-xs gap-1.5"
+                    onClick={openReviewer}
+                  >
+                    <ListChecks className="size-3.5" />
+                    Review {visibleExtractedClaims.length}
+                  </Button>
+                )}
+              </div>
 
               {/* Waiting to be added */}
               <div className="space-y-1.5">
-                {extractedClaims
-                  .filter((c) => {
-                    const key = `${c.asset || 'null'}-${c.direction}-${c.percentage || 'null'}-${c.until || 'null'}`;
-                    if (ignoredClaimKeys.has(key)) return false;
-                    const isAttached = claims.some((ac) => {
-                      const dir = ac.direction.toLowerCase();
-                      return `${ac.assetSymbol || 'null'}-${dir}-${ac.percentage || 'null'}-${ac.until || 'null'}` === key;
-                    });
-                    return !isAttached;
-                  })
-                  .map((c, i) => {
-                    const hasMissingFields = !c.asset || !c.percentage || !c.until;
-                    return (
-                      <div key={i} className="flex items-center gap-2">
+                {visibleExtractedClaims.map((c, i) => {
+                  const marketReady = isClaimComplete(c);
+                  const incomplete = isClaimIncomplete(c);
+                  return (
+                    <div key={i} className="space-y-1">
+                      <div className="flex items-center gap-2">
                         <div className="flex-1">
                           <ClaimViewer
                             assetSymbol={c.asset}
                             direction={c.direction as any}
                             percentage={c.percentage!}
                             until={c.until!}
+                            payda={c.payda}
+                            valueType={c.valueType}
+                            incomplete={incomplete}
                           />
                         </div>
                         <div className="flex items-center">
@@ -314,19 +487,21 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
                             size="sm"
                             variant="ghost"
                             className="h-7 px-2 text-xs"
-                            disabled={hasMissingFields}
+                            disabled={!marketReady}
                             onClick={() => {
                               const asset = assets.find((a) => a.symbol === c.asset);
                               if (asset) {
                                 const newClaim: AttachedClaim = {
                                   asset_id: asset.id.toString(),
                                   assetSymbol: asset.symbol,
-                                  direction: c.direction === 'bullish' ? 'Bullish' : 'Bearish',
-                                  percentage: c.percentage!,
+                                  payda: c.payda || '',
+                                  valueType: c.valueType || 'PERCENTAGE_UP',
+                                  value: c.percentage!,
                                   until: c.until!,
                                   stakeRep: '10',
                                 };
                                 setClaims((prev) => [...prev, newClaim]);
+                                undismiss(dismissKey(c));
                               }
                             }}
                           >
@@ -341,14 +516,14 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
                               setDraft({
                                 asset_id: asset ? asset.id.toString() : '',
                                 assetSymbol: asset ? asset.symbol : '',
-                                direction: c.direction === 'bullish' ? 'Bullish' : 'Bearish',
-                                percentage: c.percentage || '',
+                                payda: c.payda || '',
+                                valueType: c.valueType || 'PERCENTAGE_UP',
+                                value: c.percentage || '',
                                 until: c.until || '',
                                 stakeRep: '10',
                               });
                               setShowClaimForm(true);
-                              const key = `${c.asset || 'null'}-${c.direction}-${c.percentage || 'null'}-${c.until || 'null'}`;
-                              setIgnoredClaimKeys((keys) => new Set(keys).add(key));
+                              dismissClaim(c);
                             }}
                           >
                             Edit
@@ -357,18 +532,74 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
                             size="sm"
                             variant="ghost"
                             className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                            onClick={() => {
-                              const key = `${c.asset || 'null'}-${c.direction}-${c.percentage || 'null'}-${c.until || 'null'}`;
-                              setIgnoredClaimKeys((keys) => new Set(keys).add(key));
-                            }}
+                            onClick={() => dismissClaim(c)}
                           >
                             Dismiss
                           </Button>
                         </div>
                       </div>
-                    );
-                  })}
+                      {incomplete && (
+                        <p className="flex items-center gap-1 text-[11px] text-amber-600 pl-1">
+                          <AlertTriangle className="size-3 shrink-0" />
+                          Missing {missingFields(c).join(', ')} — open Review to complete it.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
+
+              {/* ── Dismissed claims (revert / see all) ──────── */}
+              {dismissedClaims.length > 0 && (
+                <div className="space-y-2 pt-1">
+                  <div className="flex items-center gap-4">
+                    <button
+                      type="button"
+                      onClick={revertLastDismissed}
+                      className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+                    >
+                      <RotateCcw className="size-3" />
+                      Revert last dismissed claim
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowDismissed((s) => !s)}
+                      className="text-[11px] font-medium text-muted-foreground hover:text-foreground"
+                    >
+                      {showDismissed
+                        ? 'Hide dismissed claims'
+                        : `See all dismissed claims (${dismissedClaims.length})`}
+                    </button>
+                  </div>
+                  {showDismissed && (
+                    <div className="space-y-1.5 rounded-lg border border-dashed bg-muted/20 p-2">
+                      {dismissedClaims.map((c, i) => (
+                        <div key={i} className="flex items-center gap-2 opacity-75">
+                          <div className="flex-1">
+                            <ClaimViewer
+                              assetSymbol={c.asset}
+                              direction={c.direction as any}
+                              percentage={c.percentage!}
+                              until={c.until!}
+                              payda={c.payda}
+                              valueType={c.valueType}
+                              incomplete={isClaimIncomplete(c)}
+                            />
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => restoreDismissed(i)}
+                          >
+                            Restore
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -384,13 +615,23 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
                     <div className="flex-1">
                       <ClaimViewer
                         assetSymbol={c.assetSymbol}
-                        direction={c.direction}
-                        percentage={c.percentage}
+                        direction={directionForValueType(c.valueType)}
+                        percentage={c.value}
                         until={c.until}
+                        payda={c.payda}
+                        valueType={c.valueType}
                       />
                     </div>
                     <button
+                      onClick={() => editClaim(i)}
+                      title="Edit claim"
+                      className="size-5 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    >
+                      <Pencil className="size-3.5" />
+                    </button>
+                    <button
                       onClick={() => removeClaim(i)}
+                      title="Remove claim"
                       className="size-5 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                     >
                       <X className="size-3.5" />
@@ -408,69 +649,109 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
                 Add Claim
               </p>
 
-              {/* Asset */}
-              <div className="space-y-1">
-                <Label className="text-xs">Asset</Label>
-                <Select
-                  value={draft.asset_id}
-                  onValueChange={(v) => {
-                    const a = assets.find((a) => a.id.toString() === v);
-                    setDraft((d) => ({ ...d, asset_id: v, assetSymbol: a?.symbol ?? '' }));
-                  }}
+              {/* Asset (pay) + Denominator (payda) */}
+              <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-end">
+                <div className="space-y-1">
+                  <Label className="text-xs">Asset (numerator)</Label>
+                  <Select
+                    value={draft.asset_id}
+                    onValueChange={(v) => {
+                      const a = assets.find((a) => a.id.toString() === v);
+                      setDraft((d) => ({ ...d, asset_id: v, assetSymbol: a?.symbol ?? '' }));
+                    }}
+                  >
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue placeholder="Select asset" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {assets.map((a) => (
+                        <SelectItem key={a.id} value={a.id.toString()}>
+                          {a.symbol} — {a.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  title="Swap asset and denominator"
+                  disabled={!draft.assetSymbol && !draft.payda}
+                  onClick={swapDraftAssets}
                 >
-                  <SelectTrigger className="h-8 text-sm">
-                    <SelectValue placeholder="Select asset" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {assets.map((a) => (
-                      <SelectItem key={a.id} value={a.id.toString()}>
-                        {a.symbol} — {a.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Direction */}
-              <div className="space-y-1">
-                <Label className="text-xs">Direction</Label>
-                <div className="flex gap-2">
-                  {(['Bullish', 'Bearish'] as const).map((dir) => (
-                    <button
-                      key={dir}
-                      onClick={() => setDraft((d) => ({ ...d, direction: dir }))}
-                      className={[
-                        'flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg border text-xs font-semibold transition-all duration-150',
-                        draft.direction === dir
-                          ? dir === 'Bullish'
-                            ? 'bg-emerald-500 text-white border-emerald-500'
-                            : 'bg-red-500 text-white border-red-500'
-                          : 'border-border text-muted-foreground hover:text-foreground',
-                      ].join(' ')}
-                    >
-                      {dir === 'Bullish' ? (
-                        <TrendingUp className="size-3.5" />
-                      ) : (
-                        <TrendingDown className="size-3.5" />
-                      )}
-                      {dir}
-                    </button>
-                  ))}
+                  <ArrowLeftRight className="size-3.5" />
+                </Button>
+                <div className="space-y-1">
+                  <Label className="text-xs">Denominator (payda)</Label>
+                  <Select
+                    value={draft.payda || NO_DENOMINATOR}
+                    onValueChange={(v) =>
+                      setDraft((d) => ({ ...d, payda: v === NO_DENOMINATOR ? '' : v }))
+                    }
+                  >
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue placeholder="Select denominator" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_DENOMINATOR}>— None —</SelectItem>
+                      {assets.map((a) => (
+                        <SelectItem key={a.id} value={a.symbol}>
+                          {a.symbol} — {a.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
-              {/* Percentage + Date — side by side */}
+              {/* Claim type (value_type) */}
+              <div className="space-y-1">
+                <Label className="text-xs">Claim type</Label>
+                <div className="flex gap-2">
+                  {VALUE_TYPE_CHOICES.map((opt) => {
+                    const active = draft.valueType === opt.value;
+                    const tone =
+                      opt.value === 'PERCENTAGE_DOWN'
+                        ? 'bg-red-500 text-white border-red-500'
+                        : opt.value === 'PERCENTAGE_UP'
+                        ? 'bg-emerald-500 text-white border-emerald-500'
+                        : 'bg-foreground text-background border-foreground';
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setDraft((d) => ({ ...d, valueType: opt.value }))}
+                        className={[
+                          'flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg border text-xs font-semibold transition-all duration-150',
+                          active ? tone : 'border-border text-muted-foreground hover:text-foreground',
+                        ].join(' ')}
+                      >
+                        {opt.value === 'PERCENTAGE_UP' && <TrendingUp className="size-3.5" />}
+                        {opt.value === 'PERCENTAGE_DOWN' && <TrendingDown className="size-3.5" />}
+                        {opt.value === 'PRICE' && <DollarSign className="size-3.5" />}
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Value + Date — side by side */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label className="text-xs">Target move (%)</Label>
+                  <Label className="text-xs">
+                    {draft.valueType === 'PRICE' ? 'Target price' : 'Target move (%)'}
+                  </Label>
                   <Input
                     type="number"
-                    min="0.1"
-                    max="1000"
-                    step="0.1"
-                    placeholder="e.g. 25"
-                    value={draft.percentage}
-                    onChange={(e) => setDraft((d) => ({ ...d, percentage: e.target.value }))}
+                    min={draft.valueType === 'PRICE' ? '0' : '0.1'}
+                    {...(draft.valueType === 'PRICE' ? {} : { max: '1000' })}
+                    step={draft.valueType === 'PRICE' ? '0.01' : '0.1'}
+                    placeholder={draft.valueType === 'PRICE' ? 'e.g. 103000' : 'e.g. 25'}
+                    value={draft.value}
+                    onChange={(e) => setDraft((d) => ({ ...d, value: e.target.value }))}
                     className="h-8 text-sm"
                   />
                 </div>

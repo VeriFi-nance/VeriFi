@@ -102,6 +102,8 @@ export async function createHardClaim(data: {
   post_id?: number;
   community_id?: number;
   direction: string;
+  value_type?: 'PRICE' | 'PERCENTAGE_UP' | 'PERCENTAGE_DOWN';
+  payda?: string;
   percentage: number;
   until: string;
   market?: { side: 'YES' | 'NO'; stake_rep: number };
