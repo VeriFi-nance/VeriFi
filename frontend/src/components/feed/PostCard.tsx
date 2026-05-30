@@ -1,11 +1,14 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ChevronDown } from 'lucide-react';
+import { HardClaimCard } from '@/components/HardClaimCard';
 import { UserAvatar } from '@/components/UserAvatar';
 import ProfitabilityBadge from '@/components/ProfitabilityBadge';
 import { truncateAddress } from '@/lib/wallet';
+import { cn } from '@/lib/utils';
 import type { PostItem, HardClaimItem, AssetItem } from '@/lib/types';
 
 interface PostCardProps {
@@ -15,6 +18,7 @@ interface PostCardProps {
 }
 
 export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) {
+  const [claimsOpen, setClaimsOpen] = useState(false);
   const confirmedClaims = post.claims.filter((c) => c.status === 'confirmed');
   const claimHints = post.hard_claims.length > 0 ? post.hard_claims : hardClaims;
   const hasClaims = claimHints.length > 0;
@@ -25,6 +29,8 @@ export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) 
         to={`/post/${post.id}`}
         className="absolute inset-0 z-0"
         aria-label={`View post by ${truncateAddress(post.author_address)}`}
+        aria-hidden={claimsOpen}
+        tabIndex={claimsOpen ? -1 : undefined}
       />
 
       <div className="relative z-10 pointer-events-none">
@@ -92,32 +98,67 @@ export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) 
         </CardContent>
 
         {hasClaims && (
-          <div className="border-t border-border px-4 sm:px-5 py-2 text-muted-foreground/60">
-            <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1.5">
-              {claimHints.map((hc, index) => {
-                const asset = assets.find((a) => a.id === hc.asset);
-                const symbol = asset?.symbol ?? `#${hc.asset}`;
-                const isBullish = hc.direction.toLowerCase() === 'bullish';
-                return (
-                  <span key={hc.id} className="inline-flex items-center gap-1.5">
-                    {index > 0 && (
-                      <span aria-hidden className="text-muted-foreground/30 text-xs select-none">
-                        ·
+          <>
+            {!claimsOpen && (
+              <button
+                type="button"
+                onClick={() => setClaimsOpen(true)}
+                className={cn(
+                  'pointer-events-auto w-full border-t border-border px-4 sm:px-5 py-2',
+                  'text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-colors',
+                )}
+                aria-expanded={false}
+                aria-label={`Show ${claimHints.length} claim${claimHints.length !== 1 ? 's' : ''}`}
+              >
+                <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1.5">
+                  {claimHints.map((hc, index) => {
+                    const asset = assets.find((a) => a.id === hc.asset);
+                    const symbol = asset?.symbol ?? `#${hc.asset}`;
+                    const isBullish = hc.direction.toLowerCase() === 'bullish';
+                    return (
+                      <span key={hc.id} className="inline-flex items-center gap-1.5">
+                        {index > 0 && (
+                          <span aria-hidden className="text-muted-foreground/30 text-xs select-none">
+                            ·
+                          </span>
+                        )}
+                        <span className="font-mono text-xs font-semibold text-foreground">{symbol}</span>
+                        <Badge
+                          variant={isBullish ? 'success' : 'destructive'}
+                          className="text-[10px] px-1.5 py-0 num"
+                        >
+                          {isBullish ? '▲' : '▼'} {hc.percentage.toFixed(1)}%
+                        </Badge>
                       </span>
-                    )}
-                    <span className="font-mono text-xs font-semibold text-foreground">{symbol}</span>
-                    <Badge
-                      variant={isBullish ? 'success' : 'destructive'}
-                      className="text-[10px] px-1.5 py-0 num"
-                    >
-                      {isBullish ? '▲' : '▼'} {hc.percentage.toFixed(1)}%
-                    </Badge>
-                  </span>
-                );
-              })}
-              <ChevronDown className="size-4 shrink-0 opacity-70" />
-            </div>
-          </div>
+                    );
+                  })}
+                  <ChevronDown className="size-4 shrink-0 opacity-70" />
+                </div>
+              </button>
+            )}
+
+            {claimsOpen && (
+              <div className="pointer-events-auto border-t border-border">
+                <div className="px-4 sm:px-5 py-4 space-y-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Claims
+                  </p>
+                  {claimHints.map((hc) => (
+                    <HardClaimCard key={hc.id} claim={hc} assets={assets} />
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setClaimsOpen(false)}
+                  className="w-full flex items-center justify-center border-t border-border py-2 text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-colors"
+                  aria-expanded={true}
+                  aria-label="Hide claims"
+                >
+                  <ChevronDown className="size-4 rotate-180" />
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </Card>
