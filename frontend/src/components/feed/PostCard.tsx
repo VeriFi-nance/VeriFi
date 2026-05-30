@@ -114,7 +114,7 @@ export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) 
               <ChevronDown
                 className={cn('size-4 transition-transform duration-200', claimsOpen && 'rotate-180')}
               />
-              <span className="absolute -top-1.5 -right-2.5 flex min-w-4 h-4 items-center justify-center rounded-full bg-foreground px-1 text-[9px] font-semibold leading-none text-background num">
+              <span className="absolute -top-1.5 -right-2.5 flex min-w-4 h-4 items-center justify-center rounded-full bg-danger/50 px-1 text-[9px] font-semibold leading-none text-danger-foreground num">
                 {hardClaims.length}
               </span>
             </span>
