@@ -13,16 +13,7 @@ export default function ProfitabilityBadge({ data, className }: Props) {
   const [timeframe, setTimeframe] = useState<Timeframe>('30D');
 
   if (!data || data.updated_at == null) {
-    return (
-      <span
-        className={cn(
-          'inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground',
-          className,
-        )}
-      >
-        No PnL
-      </span>
-    );
+    return null;
   }
 
   const pnl =
