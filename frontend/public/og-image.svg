@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none">
+  <rect width="1200" height="630" fill="#fafafa"/>
+  <text
+    x="600"
+    y="320"
+    text-anchor="middle"
+    font-family="'PT Serif', Georgia, serif"
+    font-size="128"
+  >
+    <tspan fill="#737373" font-weight="700">Veri</tspan><tspan fill="#0a0a0a" font-weight="700">Fi</tspan>
+  </text>
+  <text
+    x="600"
+    y="390"
+    text-anchor="middle"
+    fill="#525252"
+    font-family="ui-sans-serif, system-ui, sans-serif"
+    font-size="30"
+  >
+    Verifiable finance predictions
+  </text>
+</svg>

@@ -7,7 +7,7 @@ import type { PositionItem, AssetItem } from '@/lib/types';
 import { useAuthState } from '@/lib/auth';
 import ProfitabilityBadge from './ProfitabilityBadge';
 import { Link } from 'react-router-dom';
-import { truncateAddress } from './HardClaimCard';
+import { truncateAddress } from '@/lib/wallet';
 import { RefreshCw } from 'lucide-react';
 
 interface PositionCardProps {
@@ -90,18 +90,18 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'confirmed': return 'bg-green-100 text-green-800';
-      case 'rejected': return 'bg-red-100 text-red-800';
-      case 'active': return 'bg-blue-100 text-blue-800 animate-pulse';
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'confirmed': return 'bg-success/10 text-success border border-success/30';
+      case 'rejected': return 'bg-danger/10 text-danger border border-danger/30';
+      case 'active': return 'bg-primary/10 text-primary border border-primary/30 animate-pulse';
+      case 'pending': return 'bg-muted text-muted-foreground border border-border';
+      default: return 'bg-muted text-muted-foreground border border-border';
     }
   };
 
   const isLong = position.direction.toLowerCase() === 'long';
 
   return (
-    <Card className={`relative overflow-hidden ${position.status === 'active' ? 'border-blue-200 shadow-sm shadow-blue-100' : ''}`}>
+    <Card className={`relative overflow-hidden ${position.status === 'active' ? 'border-primary/30' : ''}`}>
       <CardContent className="p-4">
         <div className="flex justify-between items-start mb-3">
           <div className="flex items-center gap-2">
@@ -117,7 +117,7 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
           </div>
 
           <div className="flex flex-col items-end gap-1">
-            <Link to={`/app/user/${position.author_address}`} className="text-xs font-mono hover:underline">
+            <Link to={`/u/${position.author_address}`} className="text-xs font-mono hover:underline">
               {truncateAddress(position.author_address)}
             </Link>
             <ProfitabilityBadge data={position.profitability} />
@@ -127,15 +127,15 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
         <div className="grid grid-cols-3 gap-2 text-sm bg-muted/30 rounded-lg p-3">
           <div>
             <div className="text-muted-foreground text-xs uppercase tracking-wider">Entry Price</div>
-            <div className="font-mono font-medium">${position.entry_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</div>
+            <div className="font-mono font-medium num">${position.entry_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</div>
           </div>
           <div>
             <div className="text-muted-foreground text-xs uppercase tracking-wider">Stop Loss</div>
-            <div className="font-mono text-destructive font-medium">${position.stop_loss.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</div>
+            <div className="font-mono text-danger font-medium num">${position.stop_loss.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</div>
           </div>
           <div>
             <div className="text-muted-foreground text-xs uppercase tracking-wider">Take Profit</div>
-            <div className="font-mono text-green-600 font-medium">${position.take_profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</div>
+            <div className="font-mono text-success font-medium num">${position.take_profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</div>
           </div>
         </div>
 
@@ -148,7 +148,7 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
               <span>Expires: {new Date(position.lifetime).toLocaleString()}</span>
             )}
             {(['confirmed', 'rejected', 'closed_early', 'expired'] as const).includes(position.status as any) && position.pnl_percentage !== null && (
-              <span className={`font-bold ${position.pnl_percentage > 0 ? 'text-green-600' : 'text-red-600'}`}>
+              <span className={`font-bold num ${position.pnl_percentage > 0 ? 'text-success' : 'text-danger'}`}>
                 PnL: {position.pnl_percentage > 0 ? '+' : ''}{position.pnl_percentage.toFixed(2)}%
                 {position.exit_price && ` (Exit: $${position.exit_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })})`}
               </span>
@@ -185,7 +185,7 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
                 )}
               </div>
               {resolveMsg && (
-                <p className={`text-[10px] ${resolveMsg.startsWith('Failed') ? 'text-destructive' : 'text-green-600'}`}>
+                <p className={`text-[10px] ${resolveMsg.startsWith('Failed') ? 'text-destructive' : 'text-success'}`}>
                   {resolveMsg}
                 </p>
               )}
