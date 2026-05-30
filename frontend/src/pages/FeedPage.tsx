@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Info } from 'lucide-react';
 import { FeedList } from '@/components/feed/FeedList';
 import { NewPostButton } from '@/components/feed/NewPostModal';
+import { PageContent } from '@/components/PageContent';
 import { useAuthState } from '@/lib/auth';
 
 export default function FeedPage() {
@@ -11,7 +12,7 @@ export default function FeedPage() {
   const [feedType, setFeedType] = useState('global');
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-5">
+    <PageContent className="space-y-5">
       {!authed && (
         <Alert className="border-dashed">
           <Info className="size-4" />
@@ -40,6 +41,6 @@ export default function FeedPage() {
           {authed ? <FeedList feed="following" /> : null}
         </TabsContent>
       </Tabs>
-    </div>
+    </PageContent>
   );
 }

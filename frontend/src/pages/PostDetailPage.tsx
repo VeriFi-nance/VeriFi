@@ -8,6 +8,7 @@ import { ChevronLeft } from 'lucide-react';
 import { UserAvatar } from '@/components/UserAvatar';
 import { HardClaimCard } from '@/components/HardClaimCard';
 import { SkeletonPostCard } from '@/components/Skeleton';
+import { PageContent } from '@/components/PageContent';
 import { getFeed, getAssets } from '@/lib/api';
 import { truncateAddress } from '@/lib/wallet';
 import type { PostItem, AssetItem } from '@/lib/types';
@@ -34,15 +35,15 @@ export default function PostDetailPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto w-full max-w-2xl">
+      <PageContent>
         <SkeletonPostCard />
-      </div>
+      </PageContent>
     );
   }
 
   if (error || !post) {
     return (
-      <div className="mx-auto w-full max-w-2xl space-y-4">
+      <PageContent className="space-y-4">
         <Alert variant="destructive">
           <AlertDescription>{error || 'Post not found'}</AlertDescription>
         </Alert>
@@ -50,14 +51,14 @@ export default function PostDetailPage() {
           <ChevronLeft className="size-4 mr-1" />
           Back to feed
         </Button>
-      </div>
+      </PageContent>
     );
   }
 
   const confirmedClaims = post.claims.filter((c) => c.status === 'confirmed');
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-4">
+    <PageContent className="space-y-4">
       <Button variant="ghost" size="sm" onClick={() => navigate('/feed')} className="-ml-2">
         <ChevronLeft className="size-4 mr-1" />
         Back
@@ -113,6 +114,6 @@ export default function PostDetailPage() {
           </div>
         </section>
       )}
-    </div>
+    </PageContent>
   );
 }

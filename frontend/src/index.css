@@ -182,16 +182,17 @@
 
 .main-grid-bg {
   background-image:
-    radial-gradient(
-      ellipse 90% 80% at 50% 50%,
-      var(--background) 0%,
-      color-mix(in oklch, var(--background) 88%, transparent) 28%,
-      color-mix(in oklch, var(--background) 55%, transparent) 48%,
-      color-mix(in oklch, var(--background) 20%, transparent) 65%,
-      transparent 80%
-    ),
     linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
     linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
-  background-size: 100% 100%, 32px 32px, 32px 32px;
-  background-repeat: no-repeat, repeat, repeat;
+  background-size: 32px 32px;
+}
+
+/* Light fade sized to the active page content column (see PageContent). */
+.content-grid-fade {
+  background: radial-gradient(
+    ellipse 100% 95% at 50% 50%,
+    color-mix(in oklch, var(--background) 30%, transparent) 0%,
+    color-mix(in oklch, var(--background) 10%, transparent) 50%,
+    transparent 78%
+  );
 }

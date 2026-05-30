@@ -10,6 +10,7 @@ import { clearAuth, loadAddress } from '@/lib/auth';
 import { clearPrivateKey } from '@/lib/crypto';
 import { loadTheme, toggleTheme, type Theme } from '@/lib/theme';
 import { useWalletReveal } from '@/lib/useWalletReveal';
+import { PageContent } from '@/components/PageContent';
 
 function CopyButton({ text, label = 'Copy' }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
@@ -57,7 +58,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-6">
+    <PageContent className="space-y-6">
       {/* Wallet address */}
       <Card className="p-5 space-y-4">
         <div className="space-y-1">
@@ -166,6 +167,6 @@ export default function SettingsPage() {
           Disconnect
         </Button>
       </Card>
-    </div>
+    </PageContent>
   );
 }

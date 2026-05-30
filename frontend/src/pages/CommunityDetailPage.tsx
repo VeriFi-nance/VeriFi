@@ -14,6 +14,7 @@ import ProfitabilityBadge from '@/components/ProfitabilityBadge';
 import { PositionCard } from '@/components/PositionCard';
 import { NewPositionModal } from '@/components/NewPositionModal';
 import { Settings } from 'lucide-react';
+import { PageContent } from '@/components/PageContent';
 
 export default function CommunityDetailPage() {
   const { id } = useParams();
@@ -135,7 +136,7 @@ export default function CommunityDetailPage() {
   const canPost = isCreator || (community.my_membership_status === 'approved' && community.post_permission === 'all');
 
   return (
-    <div className="space-y-6 max-w-2xl mx-auto">
+    <PageContent className="space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate('/c')}>
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
@@ -293,6 +294,6 @@ export default function CommunityDetailPage() {
           </AlertDescription>
         </Alert>
       )}
-    </div>
+    </PageContent>
   );
 }

@@ -7,6 +7,7 @@ import { Settings as SettingsIcon, Copy, Check } from 'lucide-react';
 import { HardClaimCard } from '@/components/HardClaimCard';
 import { UserAvatar } from '@/components/UserAvatar';
 import { EmptyState } from '@/components/EmptyState';
+import { PageContent } from '@/components/PageContent';
 import { SkeletonRow } from '@/components/Skeleton';
 import ProfitabilityBadge from '@/components/ProfitabilityBadge';
 import { getHardClaimsByAddress, getAssets, getProfileStats, toggleFollow } from '@/lib/api';
@@ -96,7 +97,7 @@ export default function UserPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-6">
+    <PageContent className="space-y-6">
       <div className="flex items-center justify-end">
         {isSelf ? (
           <Button asChild variant="outline" size="sm" className="gap-2">
@@ -176,6 +177,6 @@ export default function UserPage() {
           </div>
         )}
       </section>
-    </div>
+    </PageContent>
   );
 }

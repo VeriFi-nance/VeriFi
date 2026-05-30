@@ -15,6 +15,7 @@ import {
 import { Users, Plus } from 'lucide-react';
 import { EmptyState } from '@/components/EmptyState';
 import { Skeleton } from '@/components/Skeleton';
+import { PageContent } from '@/components/PageContent';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 import { getCommunities, createCommunity } from '@/lib/api';
 import { loginPathWithReturn, useAuthState } from '@/lib/auth';
@@ -62,7 +63,7 @@ export default function CommunitiesPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6">
+    <PageContent width="wide" className="space-y-6">
       <div className="flex items-center justify-end">
         <Button size="sm" className="gap-1.5" onClick={newCommunity}>
           <Plus className="size-4" />
@@ -178,6 +179,6 @@ export default function CommunitiesPage() {
           ))}
         </div>
       )}
-    </div>
+    </PageContent>
   );
 }
