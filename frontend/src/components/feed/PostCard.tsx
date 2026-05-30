@@ -100,8 +100,8 @@ export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) 
             type="button"
             onClick={() => setClaimsOpen((o) => !o)}
             className={cn(
-              'w-full flex items-center justify-center border-t border-border py-2',
-              'text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/30 transition-colors',
+              'w-full flex items-center justify-center gap-2 border-t border-border py-2',
+              'text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-colors',
             )}
             aria-expanded={claimsOpen}
             aria-label={
@@ -110,14 +110,27 @@ export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) 
                 : `Show ${hardClaims.length} claim${hardClaims.length !== 1 ? 's' : ''}`
             }
           >
-            <span className="relative inline-flex">
-              <ChevronDown
-                className={cn('size-4 transition-transform duration-200', claimsOpen && 'rotate-180')}
-              />
-              <span className="absolute -top-1.5 -right-2.5 flex min-w-4 h-4 items-center justify-center rounded-full bg-danger/50 px-1 text-[9px] font-semibold leading-none text-danger-foreground num">
-                {hardClaims.length}
-              </span>
-            </span>
+            <div className="flex items-center gap-2 flex-wrap justify-center">
+              {hardClaims.map((hc) => {
+                const asset = assets.find((a) => a.id === hc.asset);
+                const symbol = asset?.symbol ?? `#${hc.asset}`;
+                const isBullish = hc.direction.toLowerCase() === 'bullish';
+                return (
+                  <span key={hc.id} className="inline-flex items-center gap-1">
+                    <span className="font-mono text-xs font-semibold text-foreground">{symbol}</span>
+                    <Badge
+                      variant={isBullish ? 'success' : 'destructive'}
+                      className="text-[10px] px-1.5 py-0 num"
+                    >
+                      {isBullish ? '▲' : '▼'} {hc.percentage.toFixed(1)}%
+                    </Badge>
+                  </span>
+                );
+              })}
+            </div>
+            <ChevronDown
+              className={cn('size-4 shrink-0 transition-transform duration-200', claimsOpen && 'rotate-180')}
+            />
           </button>
 
           {claimsOpen && (
