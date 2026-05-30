@@ -10,7 +10,6 @@ interface Props {
 
 export function EnergyMeter({ refreshKey }: Props) {
   const [energy, setEnergy] = useState<number | null>(null);
-  const [cap, setCap] = useState<number | null>(null);
   const [rep, setRep] = useState<number | null>(null);
   const { address } = useAuthState();
 
@@ -21,7 +20,6 @@ export function EnergyMeter({ refreshKey }: Props) {
       .then((p) => {
         if (cancelled) return;
         setEnergy(p.energy ?? null);
-        setCap(p.energy_cap ?? null);
         setRep(p.rep ?? null);
       })
       .catch(() => {});
@@ -41,7 +39,7 @@ export function EnergyMeter({ refreshKey }: Props) {
       )}
       <span className="flex items-center gap-1 font-mono">
         <Zap className="size-3.5 text-amber-500" />
-        {Math.floor(energy)}{cap != null ? `/${cap}` : ''}
+        {Math.floor(energy)}
       </span>
     </div>
   );

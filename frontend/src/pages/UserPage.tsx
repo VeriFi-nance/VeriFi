@@ -136,10 +136,7 @@ export default function UserPage() {
             <StatBlock label="Following" value={String(stats.following_count)} />
             {stats.rep != null && <StatBlock label="Rep" value={stats.rep.toFixed(0)} />}
             {stats.energy != null && (
-              <StatBlock
-                label="Energy"
-                value={`${Math.floor(stats.energy)}/${stats.energy_cap ?? 4}`}
-              />
+              <StatBlock label="Energy" value={String(Math.floor(stats.energy))} />
             )}
           </div>
         )}
