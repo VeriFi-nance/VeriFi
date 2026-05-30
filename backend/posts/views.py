@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.db.models import Prefetch
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -11,6 +12,104 @@ from django.shortcuts import get_object_or_404
 from .resolution import CONTRACT_VERSION, ResolutionError, preview_resolution, resolve_hard_claim
 from . import rep_market
 from accounts.energy import grant_energy, spend, CLAIM_ENERGY_COST
+
+DEFAULT_PAGE_SIZE = 20
+MAX_PAGE_SIZE = 100
+
+
+def _posts_queryset():
+    return (
+        Post.objects.select_related("author", "author__profitability")
+        .prefetch_related(
+            "claims",
+            Prefetch(
+                "hard_claims",
+                HardClaim.objects.select_related("author", "author__profitability").prefetch_related(
+                    "events"
+                ),
+            ),
+        )
+        .order_by("-created_at")
+    )
+
+
+def _filter_posts_queryset(qs, request):
+    community_id = request.query_params.get("community")
+    if community_id:
+        qs = qs.filter(community_id=community_id)
+        community = get_object_or_404(Community, id=community_id)
+        if community.privacy_type == Community.PrivacyType.PRIVATE:
+            user = _get_wallet_user(request)
+            if not user or not CommunityMembership.objects.filter(
+                community=community, user=user, status=CommunityMembership.Status.APPROVED
+            ).exists():
+                return None, Response(
+                    {"detail": "You must be an approved member to view this community's posts."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+    else:
+        qs = qs.filter(community__isnull=True)
+
+    feed_type = request.query_params.get("feed")
+    if feed_type == "following":
+        user = _get_wallet_user(request)
+        if user:
+            following_ids = user.following_set.values_list("following_id", flat=True)
+            qs = qs.filter(author_id__in=following_ids)
+        else:
+            return None, Response(
+                {"detail": "Authentication required for following feed."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+    return qs, None
+
+
+def _paginate_queryset(qs, request):
+    try:
+        page = max(1, int(request.query_params.get("page", 1)))
+    except (TypeError, ValueError):
+        page = 1
+
+    try:
+        page_size = min(
+            MAX_PAGE_SIZE,
+            max(1, int(request.query_params.get("page_size", DEFAULT_PAGE_SIZE))),
+        )
+    except (TypeError, ValueError):
+        page_size = DEFAULT_PAGE_SIZE
+
+    count = qs.count()
+    offset = (page - 1) * page_size
+    results = qs[offset : offset + page_size]
+    has_next = offset + page_size < count
+    return {
+        "count": count,
+        "page": page,
+        "page_size": page_size,
+        "has_next": has_next,
+        "results": results,
+    }
+
+
+def _can_view_post(post, request) -> bool | Response:
+    if not post.community_id:
+        return True
+
+    community = post.community
+    if community.privacy_type != Community.PrivacyType.PRIVATE:
+        return True
+
+    user = _get_wallet_user(request)
+    if user and CommunityMembership.objects.filter(
+        community=community, user=user, status=CommunityMembership.Status.APPROVED
+    ).exists():
+        return True
+
+    return Response(
+        {"detail": "You must be an approved member to view this post."},
+        status=status.HTTP_403_FORBIDDEN,
+    )
 
 
 def _get_wallet_user(request) -> WalletUser | None:
@@ -38,29 +137,20 @@ class PostListCreateView(APIView):
     permission_classes = []
 
     def get(self, request):
-        qs = Post.objects.prefetch_related("claims", "hard_claims").order_by("-created_at")
-        
-        community_id = request.query_params.get("community")
-        if community_id:
-            qs = qs.filter(community_id=community_id)
-            community = get_object_or_404(Community, id=community_id)
-            if community.privacy_type == Community.PrivacyType.PRIVATE:
-                user = _get_wallet_user(request)
-                if not user or not CommunityMembership.objects.filter(community=community, user=user, status=CommunityMembership.Status.APPROVED).exists():
-                    return Response({"detail": "You must be an approved member to view this community's posts."}, status=status.HTTP_403_FORBIDDEN)
-        else:
-            qs = qs.filter(community__isnull=True)
-            
-        feed_type = request.query_params.get("feed")
-        if feed_type == "following":
-            user = _get_wallet_user(request)
-            if user:
-                following_addresses = user.following_set.values_list("following__address", flat=True)
-                qs = qs.filter(author__address__in=following_addresses)
-            else:
-                return Response({"detail": "Authentication required for following feed."}, status=status.HTTP_401_UNAUTHORIZED)
-                
-        return Response(PostSerializer(qs, many=True).data)
+        qs, error_response = _filter_posts_queryset(_posts_queryset(), request)
+        if error_response is not None:
+            return error_response
+
+        page = _paginate_queryset(qs, request)
+        return Response(
+            {
+                "count": page["count"],
+                "page": page["page"],
+                "page_size": page["page_size"],
+                "has_next": page["has_next"],
+                "results": PostSerializer(page["results"], many=True).data,
+            }
+        )
 
     def post(self, request):
         user = _get_wallet_user(request)
@@ -108,6 +198,23 @@ class PostListCreateView(APIView):
                 )
 
         return Response(PostSerializer(post).data, status=status.HTTP_201_CREATED)
+
+
+class PostDetailView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        try:
+            post = _posts_queryset().get(pk=pk)
+        except Post.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        permission = _can_view_post(post, request)
+        if isinstance(permission, Response):
+            return permission
+
+        return Response(PostSerializer(post).data)
 
 
 class ExtractClaimsView(APIView):

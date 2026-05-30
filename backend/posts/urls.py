@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import (
     HardClaimView, HardClaimDetailView, HardClaimResolveView, HardClaimChartDataView,
-    PostListCreateView, ExtractClaimsView, AssetListView,
+    PostListCreateView, PostDetailView, ExtractClaimsView, AssetListView,
     CommunityListView, CommunityDetailView, CommunityJoinView, CommunityApproveView, CommunityBanView,
     CommunityMemberListView, PositionListCreateView, PositionCloseView, PositionResolveView,
     HardClaimMarketView, HardClaimMarketCreateView, HardClaimMarketBuyView, HardClaimMarketPreviewView,
@@ -9,6 +9,7 @@ from .views import (
 
 urlpatterns = [
     path("", PostListCreateView.as_view(), name="post-list-create"),
+    path("<int:pk>/", PostDetailView.as_view(), name="post-detail"),
     path("extract-claims/", ExtractClaimsView.as_view(), name="extract-claims"),
     path("hard-claims/", HardClaimView.as_view(), name="hard-claims"),
     path("hard-claims/<int:pk>/", HardClaimDetailView.as_view(), name="hard-claim-detail"),

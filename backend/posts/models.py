@@ -34,6 +34,12 @@ class CommunityMembership(models.Model):
 
     class Meta:
         unique_together = ("community", "user")
+        indexes = [
+            models.Index(
+                fields=["community", "status"],
+                name="comm_member_status_idx",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.user.address[:10]} in {self.community.name} ({self.status})"
@@ -47,6 +53,21 @@ class Post(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["-created_at"],
+                name="post_global_feed_idx",
+                condition=models.Q(community__isnull=True),
+            ),
+            models.Index(
+                fields=["community", "-created_at"],
+                name="post_community_feed_idx",
+            ),
+            models.Index(
+                fields=["author", "-created_at"],
+                name="post_author_feed_idx",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.author.address[:10]}… — {self.content[:40]}"
@@ -129,6 +150,17 @@ class HardClaim(models.Model):
                 name="hardclaim_until_after_created_at",
             )
         ]
+        indexes = [
+            models.Index(
+                fields=["status", "until"],
+                name="hardclaim_resolve_idx",
+                condition=models.Q(status="undetermined"),
+            ),
+            models.Index(
+                fields=["author", "-id"],
+                name="hardclaim_author_idx",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.asset} {self.direction}: {self.percentage}%"
@@ -147,6 +179,12 @@ class HardClaimEvent(models.Model):
 
     class Meta:
         ordering = ["timestamp"]
+        indexes = [
+            models.Index(
+                fields=["hard_claim", "event_type"],
+                name="hardclaim_event_lookup_idx",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.event_type} at {self.timestamp} for claim {self.hard_claim.id}"

@@ -9,7 +9,7 @@ import { UserAvatar } from '@/components/UserAvatar';
 import { ClaimDetailView } from '@/components/feed/ClaimDetailView';
 import { SkeletonPostCard } from '@/components/Skeleton';
 import { PageContent } from '@/components/PageContent';
-import { getFeed, getAssets } from '@/lib/api';
+import { getPost, getAssets } from '@/lib/api';
 import { truncateAddress } from '@/lib/wallet';
 import type { PostItem, AssetItem } from '@/lib/types';
 
@@ -22,12 +22,11 @@ export default function PostDetailPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    Promise.all([getFeed(), getAssets()])
-      .then(([posts, a]) => {
-        const found = posts.find((p) => p.id === Number(id));
-        setPost(found ?? null);
+    if (!id) return;
+    Promise.all([getPost(Number(id)), getAssets()])
+      .then(([found, a]) => {
+        setPost(found);
         setAssets(a);
-        if (!found) setError('Post not found');
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
