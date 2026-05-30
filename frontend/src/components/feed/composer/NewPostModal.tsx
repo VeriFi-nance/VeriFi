@@ -4,7 +4,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { PenSquare, Plus, X } from 'lucide-react';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 import { useAuthState, useOpenLogin } from '@/lib/auth';
-import { createPost, createHardClaim, getAssets } from '@/lib/api';
+import { createPost, getAssets } from '@/lib/api';
 import type { AssetItem, ReviewClaim } from '@/lib/types';
 import { PostComposer, MAX_CHARS } from './PostComposer';
 import { ClaimForm } from './ClaimForm';
