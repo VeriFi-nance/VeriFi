@@ -13,7 +13,7 @@ export function Skeleton({ className, ...props }: SkeletonProps) {
 
 export function SkeletonPostCard() {
   return (
-    <div className="rounded-lg border border-border p-5 space-y-3">
+    <div className="relative z-10 rounded-lg border border-border bg-card p-5 space-y-3">
       <div className="flex items-center gap-3">
         <Skeleton className="size-9 rounded-full" />
         <Skeleton className="h-3 w-32" />
@@ -28,7 +28,7 @@ export function SkeletonPostCard() {
 
 export function SkeletonRow() {
   return (
-    <div className="flex items-center gap-3 px-3 py-2 rounded-lg border border-border">
+    <div className="relative z-10 flex items-center gap-3 px-3 py-2 rounded-lg border border-border bg-card">
       <Skeleton className="size-2 rounded-full" />
       <Skeleton className="h-3 w-10" />
       <Skeleton className="h-3 w-16" />

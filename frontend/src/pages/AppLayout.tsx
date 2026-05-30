@@ -228,7 +228,7 @@ export default function AppLayout() {
               style={{
                 backgroundImage:
                   'linear-gradient(to right, var(--border) 1px, transparent 1px), linear-gradient(to bottom, var(--border) 1px, transparent 1px)',
-                backgroundSize: '44px 44px',
+                backgroundSize: '32px 32px',
                 WebkitMaskImage:
                   'radial-gradient(ellipse 75% 75% at 50% 50%, transparent 20%, black 95%)',
                 maskImage:
