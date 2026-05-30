@@ -12,12 +12,6 @@ export default function FeedPage() {
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-5">
-      <div className="flex items-center justify-end">
-        <NewPostButton
-          onPosted={() => window.dispatchEvent(new Event('post-created'))}
-        />
-      </div>
-
       {!authed && (
         <Alert className="border-dashed">
           <Info className="size-4" />
@@ -28,12 +22,17 @@ export default function FeedPage() {
       )}
 
       <Tabs value={feedType} onValueChange={setFeedType}>
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="global">Global</TabsTrigger>
-          <TabsTrigger value="following" disabled={!authed}>
-            Following
-          </TabsTrigger>
-        </TabsList>
+        <div className="flex items-center gap-3">
+          <TabsList className="grid flex-1 grid-cols-2">
+            <TabsTrigger value="global">Global</TabsTrigger>
+            <TabsTrigger value="following" disabled={!authed}>
+              Following
+            </TabsTrigger>
+          </TabsList>
+          <NewPostButton
+            onPosted={() => window.dispatchEvent(new Event('post-created'))}
+          />
+        </div>
         <TabsContent value="global" className="mt-4">
           <FeedList feed="global" />
         </TabsContent>
