@@ -1,12 +1,8 @@
 import { CalendarDays } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { HardClaimItem, AssetItem } from '@/lib/types';
-import { useState } from 'react';
-import { ClaimLogModal } from './feed/ClaimLogModal';
-import { truncateAddress as truncateWalletAddress } from '@/lib/wallet';
-
-export const truncateAddress = truncateWalletAddress;
 
 function daysUntil(dateStr: string): number {
   const diff = new Date(dateStr).getTime() - Date.now();
@@ -15,7 +11,6 @@ function daysUntil(dateStr: string): number {
 
 /** Compact single-row claim card — no text body */
 export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets: AssetItem[] }) {
-  const [logOpen, setLogOpen] = useState(false);
   const asset = assets.find((a) => a.id === claim.asset);
   const assetSymbol = asset?.symbol ?? `#${claim.asset}`;
   const isBullish = claim.direction.toLowerCase() === 'bullish';
@@ -27,69 +22,54 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
   // Community confidence: mock until a real vote API exists
   const communityConfidence = 62.5;
 
+  const href = claim.post_id != null ? `/post/${claim.post_id}` : `/claim/${claim.id}`;
+
   return (
-    <>
-      <button
-        onClick={() => setLogOpen(true)}
+    <Link
+      to={href}
+      className={cn(
+        'w-full text-left flex items-center gap-2.5 rounded-md border px-3 py-2 bg-card text-card-foreground transition-colors hover:bg-muted/40 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        isConfirmed && 'border-success/50',
+        isRejected && 'border-danger/50 opacity-80',
+        !isConfirmed && !isRejected && 'border-border',
+      )}
+      aria-label="View claim details"
+    >
+      <span
         className={cn(
-          'w-full text-left flex items-center gap-2.5 rounded-md border px-3 py-2 bg-card text-card-foreground transition-colors hover:bg-muted/40 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-          isConfirmed && 'border-success/50',
-          isRejected && 'border-danger/50 opacity-80',
-          !isConfirmed && !isRejected && 'border-border'
+          'size-2 rounded-full shrink-0',
+          isBullish ? 'bg-success' : 'bg-danger',
         )}
-        aria-label="View claim event log"
-      >
-        {/* Direction dot */}
-        <span
-          className={cn(
-            'size-2 rounded-full shrink-0',
-            isBullish ? 'bg-success' : 'bg-danger'
-          )}
-        />
-
-        {/* Asset symbol */}
-        <span className="font-mono font-semibold text-xs text-foreground shrink-0">{assetSymbol}</span>
-
-        {/* Direction + percentage badge */}
-        <Badge
-          variant={isBullish ? 'success' : 'destructive'}
-          className="text-[10px] px-1.5 py-0 shrink-0 num"
-        >
-          {isBullish ? '▲' : '▼'} {targetChange.toFixed(1)}%
-        </Badge>
-
-        {/* Separator */}
-        <span className="text-muted-foreground/40 text-xs">·</span>
-
-        {/* Date */}
-        <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0 num">
-          <CalendarDays className="size-3" />
-          {new Date(claim.until).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-          {days > 0 && <span className="text-[10px] opacity-60">({days}d)</span>}
-        </span>
-
-        {/* Community confidence — inline mini bar */}
-        <div className="flex items-center gap-1.5 flex-1 min-w-0">
-          <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0 num">
-            {communityConfidence.toFixed(0)}%
-          </span>
-          <div className="h-1 flex-1 rounded-full bg-muted overflow-hidden min-w-[32px]">
-            <div
-              className="h-full bg-foreground/70 rounded-full transition-all"
-              style={{ width: `${communityConfidence}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Info button */}
-      </button>
-
-      <ClaimLogModal
-        isOpen={logOpen}
-        onClose={() => setLogOpen(false)}
-        claim={claim}
-        assets={assets}
       />
-    </>
+
+      <span className="font-mono font-semibold text-xs text-foreground shrink-0">{assetSymbol}</span>
+
+      <Badge
+        variant={isBullish ? 'success' : 'destructive'}
+        className="text-[10px] px-1.5 py-0 shrink-0 num"
+      >
+        {isBullish ? '▲' : '▼'} {targetChange.toFixed(1)}%
+      </Badge>
+
+      <span className="text-muted-foreground/40 text-xs">·</span>
+
+      <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0 num">
+        <CalendarDays className="size-3" />
+        {new Date(claim.until).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+        {days > 0 && <span className="text-[10px] opacity-60">({days}d)</span>}
+      </span>
+
+      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+        <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0 num">
+          {communityConfidence.toFixed(0)}%
+        </span>
+        <div className="h-1 flex-1 rounded-full bg-muted overflow-hidden min-w-[32px]">
+          <div
+            className="h-full bg-foreground/70 rounded-full transition-all"
+            style={{ width: `${communityConfidence}%` }}
+          />
+        </div>
+      </div>
+    </Link>
   );
 }

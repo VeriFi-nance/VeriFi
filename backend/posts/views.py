@@ -283,6 +283,33 @@ class HardClaimView(APIView):
         return Response(HardClaimSerializer(hard_claim).data)
 
 
+class HardClaimDetailView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        try:
+            hard_claim = HardClaim.objects.get(pk=pk)
+        except HardClaim.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if hard_claim.community_id:
+            community = hard_claim.community
+            if community.privacy_type == Community.PrivacyType.PRIVATE:
+                user = _get_wallet_user(request)
+                if not user or not CommunityMembership.objects.filter(
+                    community=community,
+                    user=user,
+                    status=CommunityMembership.Status.APPROVED,
+                ).exists():
+                    return Response(
+                        {"detail": "You must be an approved member to view this claim."},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+
+        return Response(HardClaimSerializer(hard_claim).data)
+
+
 class HardClaimResolveView(APIView):
     authentication_classes = []
     permission_classes = []

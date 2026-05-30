@@ -97,6 +97,10 @@ export async function getHardClaimsByAddress(address: string): Promise<HardClaim
   return request(`/api/posts/hard-claims/?address=${encodeURIComponent(address)}`);
 }
 
+export async function getHardClaim(id: number): Promise<HardClaimItem> {
+  return request(`/api/posts/hard-claims/${id}/`, { headers: authHeaders() });
+}
+
 export async function createHardClaim(data: {
   asset_id: number;
   post_id?: number;

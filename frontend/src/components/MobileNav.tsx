@@ -19,7 +19,7 @@ function buildNavItems(): NavItem[] {
       to: '/feed',
       icon: <Home className="size-5" />,
       label: 'Feed',
-      matches: (p) => p === '/feed' || p === '/' || p.startsWith('/post/'),
+      matches: (p) => p === '/feed' || p === '/' || p.startsWith('/post/') || p.startsWith('/claim/'),
     },
     {
       to: '/c',

@@ -14,6 +14,7 @@ import FeedPage from './pages/FeedPage';
 import PostDetailPage from './pages/PostDetailPage';
 import UserPage from './pages/UserPage';
 import SettingsPage from './pages/SettingsPage';
+import ClaimDetailPage from './pages/ClaimDetailPage';
 import CommunitiesPage from './pages/CommunitiesPage';
 import CommunityDetailPage from './pages/CommunityDetailPage';
 import { clearAuth, isAuthenticated, loadAddress } from './lib/auth';
@@ -100,6 +101,7 @@ export default function App() {
         >
           <Route path="/feed" element={<FeedPage />} />
           <Route path="/post/:id" element={<PostDetailPage />} />
+          <Route path="/claim/:id" element={<ClaimDetailPage />} />
           <Route path="/u/:address" element={<UserPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/c" element={<CommunitiesPage />} />

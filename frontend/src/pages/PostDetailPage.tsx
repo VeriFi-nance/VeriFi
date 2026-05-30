@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ChevronLeft } from 'lucide-react';
 import { UserAvatar } from '@/components/UserAvatar';
-import { HardClaimCard } from '@/components/HardClaimCard';
+import { ClaimDetailView } from '@/components/feed/ClaimDetailView';
 import { SkeletonPostCard } from '@/components/Skeleton';
 import { PageContent } from '@/components/PageContent';
 import { getFeed, getAssets } from '@/lib/api';
@@ -103,15 +103,15 @@ export default function PostDetailPage() {
       </Card>
 
       {post.hard_claims.length > 0 && (
-        <section className="space-y-2">
+        <section className="space-y-6">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Hard Claims
+            Claims
           </h2>
-          <div className="space-y-2">
-            {post.hard_claims.map((hc) => (
-              <HardClaimCard key={hc.id} claim={hc} assets={assets} />
-            ))}
-          </div>
+          {post.hard_claims.map((hc) => (
+            <div key={hc.id} className="rounded-lg border border-border bg-card p-4 sm:p-5">
+              <ClaimDetailView claim={hc} assets={assets} />
+            </div>
+          ))}
         </section>
       )}
     </PageContent>
