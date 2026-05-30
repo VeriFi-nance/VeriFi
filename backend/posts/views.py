@@ -1,3 +1,4 @@
+import logging
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Prefetch
@@ -13,6 +14,8 @@ from django.shortcuts import get_object_or_404
 from .resolution import CONTRACT_VERSION, ResolutionError, preview_resolution, resolve_hard_claim
 from . import rep_market
 from accounts.energy import grant_energy, spend, CLAIM_ENERGY_COST
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
@@ -260,12 +263,14 @@ class PostListCreateView(APIView):
                     )
                     if market_block is not None:
                         rep_market.init_market(hard_claim, user, m_side, m_stake)
-                except rep_market.MarketError as e:
+                except rep_market.MarketError:
                     transaction.set_rollback(True)
-                    return Response({"detail": f"market: {e}"}, status=status.HTTP_400_BAD_REQUEST)
-                except Exception as e:
+                    logger.exception("Market initialization failed during post creation.")
+                    return Response({"detail": "Unable to initialize market."}, status=status.HTTP_400_BAD_REQUEST)
+                except Exception:
                     transaction.set_rollback(True)
-                    return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+                    logger.exception("Unexpected error while creating hard claim.")
+                    return Response({"detail": "An internal error has occurred."}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(PostSerializer(post).data, status=status.HTTP_201_CREATED)
 
