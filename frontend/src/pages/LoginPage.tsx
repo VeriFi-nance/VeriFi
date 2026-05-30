@@ -6,6 +6,7 @@ import {
   CardDescription,
   CardHeader,
 } from '@/components/ui/card';
+import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -153,7 +154,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <img src="/logo.png" alt="VeriFi" className="mx-auto h-28 w-auto mb-2 dark:invert" />
+          <BrandLogo size="lg" link={false} className="mx-auto justify-center mb-2" />
           <CardDescription>
             Your 12-word passphrase is your key. Set a password to encrypt it
             locally on this device.

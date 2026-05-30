@@ -4,6 +4,7 @@ import { Dialog as DialogPrimitive } from 'radix-ui';
 import { Home, Users, Settings, Menu, LogOut, Sun, Moon, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { BrandLogo } from '@/components/BrandLogo';
 import type { Theme } from '@/lib/theme';
 
 interface NavItem {
@@ -82,7 +83,7 @@ export function MobileMenuButton({
             Primary navigation menu
           </DialogPrimitive.Description>
           <div className="px-5 pt-5 pb-3 flex items-center gap-3">
-            <img src="/logo.png" alt="VeriFi" className="h-7 w-auto dark:invert" />
+            <BrandLogo showText link={false} />
           </div>
           <div className="mx-4 h-px bg-border mb-3" />
           <nav className="flex-1 px-3 space-y-1">

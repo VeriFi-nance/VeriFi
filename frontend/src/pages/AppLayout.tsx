@@ -9,6 +9,7 @@ import { EnergyMeter } from '@/components/EnergyMeter';
 import { UserAvatar } from '@/components/UserAvatar';
 import { truncateAddress } from '@/lib/wallet';
 import { MobileMenuButton, BottomTabBar } from '@/components/MobileNav';
+import { BrandLogo } from '@/components/BrandLogo';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -40,6 +41,8 @@ export function buildNavItems(): NavItem[] {
     },
   ];
 }
+
+const SITE_TITLE = 'VeriFi — Verifiable finance predictions';
 
 function pageTitle(pathname: string): string {
   if (pathname === '/feed' || pathname === '/' || pathname === '') return 'Feed';
@@ -101,6 +104,10 @@ export default function AppLayout() {
   const items = buildNavItems();
   const title = pageTitle(location.pathname);
 
+  useEffect(() => {
+    document.title = title === 'VeriFi' ? SITE_TITLE : `${title} · VeriFi`;
+  }, [title]);
+
   function handleThemeToggle() {
     const next = toggleTheme();
     setTheme(next);
@@ -127,13 +134,7 @@ export default function AppLayout() {
           aria-label="Primary navigation"
         >
           <div className="px-3 lg:px-5 pt-5 pb-4 flex items-center justify-center lg:justify-start">
-            <Link to="/feed" className="flex items-center group">
-              <img
-                src="/logo.png"
-                alt="VeriFi"
-                className="h-7 w-7 lg:w-auto object-cover object-left shrink-0 group-hover:scale-105 transition-transform dark:invert"
-              />
-            </Link>
+            <BrandLogo responsiveText showText />
           </div>
 
           <div className="mx-3 lg:mx-4 h-px bg-border mb-3" />
