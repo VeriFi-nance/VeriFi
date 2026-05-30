@@ -143,7 +143,7 @@ export default function UserPage() {
         )}
       </Card>
 
-      <section className="space-y-2">
+      <section className="mt-4 space-y-2">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Hard Claims
         </h2>
