@@ -850,3 +850,47 @@ class PositionTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
+class PostFeedPaginationTestCase(APITestCase):
+    def setUp(self):
+        self.author = WalletUser.objects.create(address="0xauthor000000000000000000000000000000")
+        for i in range(25):
+            Post.objects.create(author=self.author, content=f"Post {i}")
+
+    def test_feed_returns_paginated_response(self):
+        url = reverse("post-list-create")
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 25)
+        self.assertEqual(response.data["page"], 1)
+        self.assertEqual(response.data["page_size"], 20)
+        self.assertTrue(response.data["has_next"])
+        self.assertEqual(len(response.data["results"]), 20)
+
+    def test_feed_page_two(self):
+        url = reverse("post-list-create")
+        response = self.client.get(url, {"page": 2})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["results"]), 5)
+        self.assertFalse(response.data["has_next"])
+
+
+class PostDetailTestCase(APITestCase):
+    def setUp(self):
+        self.author = WalletUser.objects.create(address="0xauthor000000000000000000000000000000")
+        self.post = Post.objects.create(author=self.author, content="Detail me")
+
+    def test_get_post_by_id(self):
+        url = reverse("post-detail", kwargs={"pk": self.post.id})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["id"], self.post.id)
+        self.assertEqual(response.data["content"], "Detail me")
+
+    def test_get_post_not_found(self):
+        url = reverse("post-detail", kwargs={"pk": 99999})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
