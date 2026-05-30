@@ -16,7 +16,8 @@ interface PostCardProps {
 
 export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) {
   const confirmedClaims = post.claims.filter((c) => c.status === 'confirmed');
-  const hasClaims = hardClaims.length > 0;
+  const claimHints = post.hard_claims.length > 0 ? post.hard_claims : hardClaims;
+  const hasClaims = claimHints.length > 0;
 
   return (
     <Card className="relative max-w-2xl gap-0 py-0 overflow-hidden rounded-lg transition-colors hover:bg-muted">
@@ -91,14 +92,19 @@ export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) 
         </CardContent>
 
         {hasClaims && (
-          <div className="flex items-center justify-center gap-2 border-t border-border py-2 text-muted-foreground/60">
-            <div className="flex items-center gap-2 flex-wrap justify-center">
-              {hardClaims.map((hc) => {
+          <div className="border-t border-border px-4 sm:px-5 py-2 text-muted-foreground/60">
+            <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1.5">
+              {claimHints.map((hc, index) => {
                 const asset = assets.find((a) => a.id === hc.asset);
                 const symbol = asset?.symbol ?? `#${hc.asset}`;
                 const isBullish = hc.direction.toLowerCase() === 'bullish';
                 return (
-                  <span key={hc.id} className="inline-flex items-center gap-1">
+                  <span key={hc.id} className="inline-flex items-center gap-1.5">
+                    {index > 0 && (
+                      <span aria-hidden className="text-muted-foreground/30 text-xs select-none">
+                        ·
+                      </span>
+                    )}
                     <span className="font-mono text-xs font-semibold text-foreground">{symbol}</span>
                     <Badge
                       variant={isBullish ? 'success' : 'destructive'}
@@ -109,8 +115,8 @@ export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) 
                   </span>
                 );
               })}
+              <ChevronDown className="size-4 shrink-0 opacity-70" />
             </div>
-            <ChevronDown className="size-4 shrink-0" />
           </div>
         )}
       </div>
