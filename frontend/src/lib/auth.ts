@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
-import { useNavigate, useLocation, type NavigateFunction, type Location } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import type { Location, NavigateFunction } from 'react-router-dom';
 
 const TOKEN_KEY = 'verifi_jwt';
 const ADDRESS_STORAGE = 'verifi_address';
@@ -107,7 +108,7 @@ export function loginPathWithReturn(returnTo: string): string {
 }
 
 export function loginReturnTo(searchParams: URLSearchParams): string {
-  return searchParams.get('returnTo') || '/app';
+  return searchParams.get('returnTo') || '/feed';
 }
 
 export function openLogin(
@@ -126,17 +127,19 @@ export function openLogin(
 export function closeLogin(navigate: NavigateFunction, location: Location) {
   const background = (location.state as { background?: Location } | null)?.background;
   const params = new URLSearchParams(location.search);
-  const returnTo = params.get('returnTo') || '/app';
+  const returnTo = params.get('returnTo') || '/feed';
 
   if (background) {
+    const pathname = background.pathname === '/settings' ? '/feed' : background.pathname;
     navigate(
-      { pathname: background.pathname, search: background.search, hash: background.hash },
+      { pathname, search: background.search, hash: background.hash },
       { replace: true },
     );
     return;
   }
 
-  navigate(returnTo, { replace: true });
+  const destination = returnTo === '/settings' ? '/feed' : returnTo;
+  navigate(destination, { replace: true });
 }
 
 export function useOpenLogin() {

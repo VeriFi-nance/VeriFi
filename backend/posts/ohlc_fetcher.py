@@ -1,8 +1,11 @@
 """
 OHLC data fetcher with cascading API fallback and DB caching.
 
-Crypto assets:      Binance → Kucoin → Kraken  (no API keys needed)
+Crypto assets:      Kraken → CoinGecko → Twelve Data → Kucoin → Binance
 Traditional assets:  Yahoo Finance v8 → Twelve Data  (Twelve Data needs free API key)
+
+Kraken and CoinGecko are tried first because Binance/Kucoin geo-block many
+cloud regions (HTTP 451 from US datacenters such as Render).
 """
 
 from __future__ import annotations
@@ -224,6 +227,61 @@ def _fetch_kraken_ohlc(pair: str, start: datetime, end: datetime, interval: Inte
     return rows
 
 
+def _fetch_coingecko_ohlc(
+    provider_symbol: str,
+    quote_currency: str,
+    start: datetime,
+    end: datetime,
+    interval: Interval = Interval.ONE_DAY,
+) -> list[OHLCRow]:
+    """
+    CoinGecko market_chart/range aggregated to daily OHLC candles.
+    provider_symbol e.g. 'bitcoin', 'ethereum'.
+    """
+    if interval != Interval.ONE_DAY:
+        raise OHLCFetchError("CoinGecko fallback only supports daily aggregation.")
+
+    start_sec = int(start.timestamp())
+    end_sec = int(end.timestamp())
+    params = urlencode({
+        "vs_currency": quote_currency.lower(),
+        "from": start_sec,
+        "to": end_sec,
+    })
+    url = f"https://api.coingecko.com/api/v3/coins/{provider_symbol}/market_chart/range?{params}"
+    payload = _http_get_json(url)
+    prices = payload.get("prices") or []
+    if not prices:
+        raise OHLCFetchError("CoinGecko returned no price data.")
+
+    from collections import defaultdict
+
+    buckets: dict[date, list[float]] = defaultdict(list)
+    for ts_ms, price in prices:
+        day = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc).date()
+        buckets[day].append(float(price))
+
+    start_day = start.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_day = end.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    rows: list[OHLCRow] = []
+    for day, pts in sorted(buckets.items()):
+        day_start = datetime.combine(day, time.min, tzinfo=timezone.utc)
+        if day_start < start_day or day_start > end_day:
+            continue
+        rows.append({
+            "timestamp": day_start,
+            "open": pts[0],
+            "high": max(pts),
+            "low": min(pts),
+            "close": pts[-1],
+        })
+
+    if not rows:
+        raise OHLCFetchError("CoinGecko returned no OHLC rows in requested range.")
+    return rows
+
+
 # ---------------------------------------------------------------------------
 # Traditional fetchers (stocks, forex, commodity, index)
 # ---------------------------------------------------------------------------
@@ -340,16 +398,38 @@ def _fetch_twelvedata_ohlc(symbol: str, start: datetime, end: datetime, interval
 # ---------------------------------------------------------------------------
 
 def _try_crypto_chain(asset: Asset, start: datetime, end: datetime, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
-    """Try Binance → Kucoin → Kraken for crypto assets."""
+    """Try Kraken → CoinGecko → Twelve Data → Kucoin → Binance for crypto assets."""
     errors: list[str] = []
 
-    if asset.binance_symbol:
+    if asset.kraken_pair:
         try:
-            logger.info("Trying Binance for %s (%s) [%s]", asset.symbol, asset.binance_symbol, interval.name)
-            return _fetch_binance_ohlc(asset.binance_symbol, start, end, interval)
+            logger.info("Trying Kraken for %s (%s) [%s]", asset.symbol, asset.kraken_pair, interval.name)
+            return _fetch_kraken_ohlc(asset.kraken_pair, start, end, interval)
         except OHLCFetchError as e:
-            errors.append(f"Binance: {e}")
-            logger.warning("Binance failed for %s: %s", asset.symbol, e)
+            errors.append(f"Kraken: {e}")
+            logger.warning("Kraken failed for %s: %s", asset.symbol, e)
+
+    if asset.provider_symbol:
+        try:
+            logger.info("Trying CoinGecko for %s (%s) [%s]", asset.symbol, asset.provider_symbol, interval.name)
+            return _fetch_coingecko_ohlc(
+                asset.provider_symbol,
+                asset.quote_currency or "USD",
+                start,
+                end,
+                interval,
+            )
+        except OHLCFetchError as e:
+            errors.append(f"CoinGecko: {e}")
+            logger.warning("CoinGecko failed for %s: %s", asset.symbol, e)
+
+    if asset.twelvedata_symbol:
+        try:
+            logger.info("Trying Twelve Data for %s (%s) [%s]", asset.symbol, asset.twelvedata_symbol, interval.name)
+            return _fetch_twelvedata_ohlc(asset.twelvedata_symbol, start, end, interval)
+        except OHLCFetchError as e:
+            errors.append(f"Twelve Data: {e}")
+            logger.warning("Twelve Data failed for %s: %s", asset.symbol, e)
 
     if asset.kucoin_symbol:
         try:
@@ -359,13 +439,13 @@ def _try_crypto_chain(asset: Asset, start: datetime, end: datetime, interval: In
             errors.append(f"Kucoin: {e}")
             logger.warning("Kucoin failed for %s: %s", asset.symbol, e)
 
-    if asset.kraken_pair:
+    if asset.binance_symbol:
         try:
-            logger.info("Trying Kraken for %s (%s) [%s]", asset.symbol, asset.kraken_pair, interval.name)
-            return _fetch_kraken_ohlc(asset.kraken_pair, start, end, interval)
+            logger.info("Trying Binance for %s (%s) [%s]", asset.symbol, asset.binance_symbol, interval.name)
+            return _fetch_binance_ohlc(asset.binance_symbol, start, end, interval)
         except OHLCFetchError as e:
-            errors.append(f"Kraken: {e}")
-            logger.warning("Kraken failed for %s: %s", asset.symbol, e)
+            errors.append(f"Binance: {e}")
+            logger.warning("Binance failed for %s: %s", asset.symbol, e)
 
     raise OHLCFetchError(f"All crypto OHLC sources failed for {asset.symbol}: {'; '.join(errors)}")
 
@@ -425,38 +505,44 @@ def _assert_aligned(dt: datetime, interval: Interval):
             raise AssertionError(f"datetime {dt} is not aligned with ONE_MIN boundary")
 
 
-def _ensure_daily_cached(asset: Asset, start_date: date, end_date: date):
+def _ensure_daily_cached(asset: Asset, start_time: datetime, end_time: datetime):
     """
-    Ensures that the 1d (daily) candles for all dates in the range [start_date, end_date]
+    Ensures that the 1d (daily) candles for all dates covering the range [start_time, end_time]
     are present in the database. When mixed_resolution=True, this pass is executed first
     to establish basic daily cache coverage for the entire query period.
+    
+    IMPORTANT: This function should only be called with start_time and end_time that are 
+    strictly aligned with daily boundaries (00:00:00 UTC).
     """
+    _assert_aligned(start_time, Interval.ONE_DAY)
+    _assert_aligned(end_time, Interval.ONE_DAY)
+    
     existing = list(OHLCData.objects.filter(
         asset=asset,
-        timestamp__date__gte=start_date,
-        timestamp__date__lte=end_date,
+        timestamp__gte=start_time,
+        timestamp__lte=end_time + timedelta(days=1) - timedelta(microseconds=1),
         interval=Interval.ONE_DAY.value
     ))
     from collections import Counter
-    date_counts = Counter(row.timestamp.date() for row in existing)
+    date_counts = Counter(row.timestamp for row in existing)
     
-    all_dates = set()
-    current = start_date
-    while current <= end_date:
-        all_dates.add(current)
+    all_dts = set()
+    current = start_time
+    while current <= end_time:
+        all_dts.add(current)
         current += timedelta(days=1)
         
-    today = datetime.now(timezone.utc).date()
-    missing_dates = set()
-    for d in all_dates:
-        if d == today or date_counts[d] == 0:
-            missing_dates.add(d)
+    today_dt = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    missing_dts = set()
+    for dt in all_dts:
+        if dt == today_dt or date_counts[dt] == 0:
+            missing_dts.add(dt)
             
-    if missing_dates:
-        min_missing = min(missing_dates)
-        max_missing = max(missing_dates)
+    if missing_dts:
+        min_dt = min(missing_dts)
+        max_dt = max(missing_dts) + timedelta(days=1) - timedelta(microseconds=1)
         try:
-            fetched = fetch_ohlc_for_asset(asset, min_missing, max_missing, Interval.ONE_DAY)
+            fetched = fetch_ohlc_for_asset(asset, min_dt, max_dt, Interval.ONE_DAY)
             new_rows = [
                 OHLCData(
                     asset=asset,
@@ -468,12 +554,12 @@ def _ensure_daily_cached(asset: Asset, start_date: date, end_date: date):
                     close=row["close"]
                 )
                 for row in fetched
-                if row["timestamp"].date() in missing_dates
+                if row["timestamp"] in missing_dts
             ]
             if new_rows:
                 OHLCData.objects.bulk_create(new_rows, ignore_conflicts=True)
         except OHLCFetchError:
-            logger.warning("Could not fetch missing daily OHLC data for %s (%s -> %s)", asset.symbol, min_missing, max_missing)
+            logger.warning("Could not fetch missing daily OHLC data for %s (%s -> %s)", asset.symbol, min_dt, max_dt)
             raise
 
 
@@ -484,25 +570,25 @@ def _ensure_interval_cached(asset: Asset, start_time: datetime, end_time: dateti
     cached candles and compares against the expected count (e.g. 24 hourly candles per day).
     If any day has missing candles, it fetches the entire day from the API.
     """
-    start_date = start_time.date()
-    end_date = end_time.date()
+    start_day = start_time.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_day = end_time.replace(hour=0, minute=0, second=0, microsecond=0)
     existing = list(OHLCData.objects.filter(
         asset=asset,
-        timestamp__date__gte=start_date,
-        timestamp__date__lte=end_date,
+        timestamp__gte=start_day,
+        timestamp__lte=end_day + timedelta(days=1) - timedelta(microseconds=1),
         interval=interval.value
     ))
     from collections import Counter
-    date_counts = Counter(row.timestamp.date() for row in existing)
+    date_counts = Counter(row.timestamp.replace(hour=0, minute=0, second=0, microsecond=0) for row in existing)
     
-    all_dates = set()
-    current = start_date
-    while current <= end_date:
-        all_dates.add(current)
+    all_dts = set()
+    current = start_day
+    while current <= end_day:
+        all_dts.add(current)
         current += timedelta(days=1)
         
-    today = datetime.now(timezone.utc).date()
-    missing_dates = set()
+    today_dt = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    missing_dts = set()
     expected_crypto_counts = {
         Interval.ONE_DAY.value: 1,
         Interval.ONE_HOUR.value: 24,
@@ -510,20 +596,20 @@ def _ensure_interval_cached(asset: Asset, start_time: datetime, end_time: dateti
         Interval.ONE_MIN.value: 1440
     }
     
-    for d in all_dates:
-        if d == today:
-            missing_dates.add(d)
+    for dt in all_dts:
+        if dt == today_dt:
+            missing_dts.add(dt)
         elif asset.market_type == Asset.MarketType.CRYPTO and interval.value != Interval.ONE_DAY.value:
-            if date_counts[d] < expected_crypto_counts.get(interval.value, 1):
-                missing_dates.add(d)
-        elif date_counts[d] == 0:
-            missing_dates.add(d)
+            if date_counts[dt] < expected_crypto_counts.get(interval.value, 1):
+                missing_dts.add(dt)
+        elif date_counts[dt] == 0:
+            missing_dts.add(dt)
             
-    if missing_dates:
-        min_missing = min(missing_dates)
-        max_missing = max(missing_dates)
+    if missing_dts:
+        min_dt = min(missing_dts)
+        max_dt = max(missing_dts) + timedelta(days=1) - timedelta(microseconds=1)
         try:
-            fetched = fetch_ohlc_for_asset(asset, min_missing, max_missing, interval)
+            fetched = fetch_ohlc_for_asset(asset, min_dt, max_dt, interval)
             new_rows = [
                 OHLCData(
                     asset=asset,
@@ -535,12 +621,12 @@ def _ensure_interval_cached(asset: Asset, start_time: datetime, end_time: dateti
                     close=row["close"]
                 )
                 for row in fetched
-                if row["timestamp"].date() in missing_dates
+                if row["timestamp"].replace(hour=0, minute=0, second=0, microsecond=0) in missing_dts
             ]
             if new_rows:
                 OHLCData.objects.bulk_create(new_rows, ignore_conflicts=True)
         except OHLCFetchError:
-            logger.warning("Could not fetch missing OHLC data for %s (%s -> %s) at interval %s", asset.symbol, min_missing, max_missing, interval.name)
+            logger.warning("Could not fetch missing OHLC data for %s (%s -> %s) at interval %s", asset.symbol, min_dt, max_dt, interval.name)
             raise
 
 
@@ -700,10 +786,10 @@ def get_ohlc_data(
         _assert_aligned(start_time, interval)
         _assert_aligned(end_time, interval)
 
-    start_date = start_time.date()
-    end_date = end_time.date()
+    start_day = start_time.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_day = end_time.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    _ensure_daily_cached(asset, start_date, end_date)
+    _ensure_daily_cached(asset, start_day, end_day)
 
     if not mixed_resolution:
         _ensure_interval_cached(asset, start_time, end_time, interval)

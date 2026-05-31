@@ -91,12 +91,31 @@ export async function createPost(
   });
 }
 
-export async function getFeed(params?: { feed?: string, community?: number }): Promise<PostItem[]> {
+export interface PaginatedResponse<T> {
+  count: number;
+  page: number;
+  page_size: number;
+  has_next: boolean;
+  results: T[];
+}
+
+export async function getFeed(params?: {
+  feed?: string;
+  community?: number;
+  page?: number;
+  page_size?: number;
+}): Promise<PaginatedResponse<PostItem>> {
   const query = new URLSearchParams();
   if (params?.feed) query.append('feed', params.feed);
   if (params?.community) query.append('community', params.community.toString());
+  if (params?.page) query.append('page', params.page.toString());
+  if (params?.page_size) query.append('page_size', params.page_size.toString());
   const qs = query.toString() ? `?${query.toString()}` : '';
   return request(`/api/posts/${qs}`, { headers: authHeaders() });
+}
+
+export async function getPost(id: number): Promise<PostItem> {
+  return request(`/api/posts/${id}/`, { headers: authHeaders() });
 }
 
 export async function getHardClaims(params?: { feed?: string, community?: number }): Promise<HardClaimItem[]> {
@@ -111,12 +130,16 @@ export async function getHardClaimsByAddress(address: string): Promise<HardClaim
   return request(`/api/posts/hard-claims/?address=${encodeURIComponent(address)}`);
 }
 
+export async function getHardClaim(id: number): Promise<HardClaimItem> {
+  return request(`/api/posts/hard-claims/${id}/`, { headers: authHeaders() });
+}
+
 export async function createHardClaim(data: {
   asset_id: number;
   post_id?: number;
   community_id?: number;
   direction: string;
-  value_type?: 'PRICE' | 'PERCENTAGE_UP' | 'PERCENTAGE_DOWN';
+  value_type?: ClaimType;
   payda?: string;
   percentage: number;
   until: string;

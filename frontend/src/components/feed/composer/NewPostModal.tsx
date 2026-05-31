@@ -273,6 +273,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
   );
 }
 
+/** Trigger button — opens the modal or redirects to login if unauthenticated. */
 export function NewPostButton({
   onPosted,
   communityId,

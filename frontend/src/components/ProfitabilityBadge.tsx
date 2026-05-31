@@ -1,54 +1,54 @@
-import { useState } from "react";
-import type { ProfitabilityData } from "@/lib/types";
+import { useState } from 'react';
+import { cn } from '@/lib/utils';
+import type { ProfitabilityData } from '@/lib/types';
 
 interface Props {
   data?: ProfitabilityData | null;
   className?: string;
 }
 
-type Timeframe = "7D" | "30D" | "ALL";
+type Timeframe = '7D' | '30D' | 'ALL';
 
-export default function ProfitabilityBadge({ data, className = "" }: Props) {
-  const [timeframe, setTimeframe] = useState<Timeframe>("30D");
+export default function ProfitabilityBadge({ data, className }: Props) {
+  const [timeframe, setTimeframe] = useState<Timeframe>('30D');
 
   if (!data || data.updated_at == null) {
-    return (
-      <span className={`inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800 ${className}`}>
-        No PnL Data
-      </span>
-    );
+    return null;
   }
 
-  let pnl = 0;
-  if (timeframe === "7D") pnl = data.pnl_7d;
-  else if (timeframe === "30D") pnl = data.pnl_30d;
-  else pnl = data.pnl_all;
+  const pnl =
+    timeframe === '7D'
+      ? data.pnl_7d
+      : timeframe === '30D'
+      ? data.pnl_30d
+      : data.pnl_all;
 
-  const cycleTimeframe = (e: React.MouseEvent) => {
+  const cycle = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (timeframe === "7D") setTimeframe("30D");
-    else if (timeframe === "30D") setTimeframe("ALL");
-    else setTimeframe("7D");
+    setTimeframe((t) => (t === '7D' ? '30D' : t === '30D' ? 'ALL' : '7D'));
   };
 
-  const isPositive = pnl > 0;
-  const isNegative = pnl < 0;
-  const sign = isPositive ? "+" : "";
-  const colorClass = isPositive
-    ? "bg-green-100 text-green-800"
-    : isNegative
-    ? "bg-red-100 text-red-800"
-    : "bg-gray-100 text-gray-800";
+  const tone =
+    pnl > 0
+      ? 'bg-success/10 text-success border-success/30'
+      : pnl < 0
+      ? 'bg-danger/10 text-danger border-danger/30'
+      : 'bg-muted text-muted-foreground border-border';
 
   return (
     <button
-      onClick={cycleTimeframe}
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors hover:opacity-80 focus:outline-none ${colorClass} ${className}`}
-      title={`Profitability over ${timeframe === "ALL" ? "All Time" : timeframe}. Click to toggle.`}
+      onClick={cycle}
+      className={cn(
+        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors hover:opacity-80 focus:outline-none num',
+        tone,
+        className,
+      )}
+      title={`PnL over ${timeframe === 'ALL' ? 'all time' : timeframe}. Click to toggle.`}
     >
-      <span className="mr-1 font-bold">{timeframe}</span>
-      {sign}{pnl.toFixed(2)}%
+      <span className="font-bold opacity-70">{timeframe}</span>
+      {pnl > 0 ? '+' : ''}
+      {pnl.toFixed(2)}%
     </button>
   );
 }

@@ -26,6 +26,11 @@ interface PostComposerProps {
   onEditExtracted: (claim: ReviewClaim) => void;
 }
 
+/**
+ * Textarea + auto-extracted claim preview. Doesn't own the attached-claim
+ * list; the orchestrator does. The "Add" button on a row forwards to the
+ * orchestrator via `onAddExtracted`.
+ */
 export function PostComposer({
   content,
   onContentChange,

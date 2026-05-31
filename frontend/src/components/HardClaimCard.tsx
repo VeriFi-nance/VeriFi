@@ -5,12 +5,6 @@ import { cn } from '@/lib/utils';
 import type { HardClaimItem, AssetItem } from '@/lib/types';
 import { getHardClaimParity, getHardClaimType } from '@/lib/claims';
 
-export function truncateAddress(addr: string | null) {
-  if (!addr) return 'Unknown';
-  if (addr.length <= 12) return addr;
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
-}
-
 function daysUntil(dateStr: string): number {
   const diff = new Date(dateStr).getTime() - Date.now();
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
@@ -31,7 +25,7 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
 
   const communityConfidence = 62.5;
   const href =
-    claim.post_id != null ? `/app/post/${claim.post_id}` : `/app/post/${claim.id}`;
+    claim.post_id != null ? `/post/${claim.post_id}` : `/claim/${claim.id}`;
 
   return (
     <Link

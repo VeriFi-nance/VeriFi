@@ -43,10 +43,14 @@
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-ring: var(--sidebar-ring);
+    --color-success: var(--success);
+    --color-success-foreground: var(--success-foreground);
+    --color-danger: var(--danger);
+    --color-danger-foreground: var(--danger-foreground);
 }
 
 :root {
-    --radius: 0.625rem;
+    --radius: 0.5rem;
     --background: oklch(1 0 0);
     --foreground: oklch(0.145 0 0);
     --card: oklch(1 0 0);
@@ -78,6 +82,11 @@
     --sidebar-accent-foreground: oklch(0.205 0 0);
     --sidebar-border: oklch(0.922 0 0);
     --sidebar-ring: oklch(0.708 0 0);
+    --success: oklch(0.62 0.18 145);
+    --success-foreground: oklch(0.985 0 0);
+    --danger: oklch(0.60 0.22 25);
+    --danger-foreground: oklch(0.985 0 0);
+    --grid-line: oklch(0.145 0 0 / 3.5%);
 }
 
 .dark {
@@ -113,6 +122,11 @@
     --sidebar-accent-foreground: oklch(0.985 0 0);
     --sidebar-border: oklch(1 0 0 / 8%);
     --sidebar-ring: oklch(0.556 0 0);
+    --success: oklch(0.72 0.17 145);
+    --success-foreground: oklch(0.145 0 0);
+    --danger: oklch(0.70 0.20 25);
+    --danger-foreground: oklch(0.145 0 0);
+    --grid-line: oklch(1 0 0 / 3%);
 }
 
 @layer base {
@@ -138,6 +152,37 @@
     overflow-y: scroll;
     scrollbar-gutter: stable;
   }
+
+  button:not(:disabled),
+  [type="button"]:not(:disabled),
+  [type="submit"]:not(:disabled),
+  [type="reset"]:not(:disabled),
+  a[href],
+  label[for],
+  summary,
+  select:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"]:not([data-disabled]),
+  [role="menuitem"],
+  [role="option"],
+  [role="checkbox"]:not([data-disabled]),
+  [data-slot="select-trigger"]:not([data-disabled]),
+  [data-slot="tabs-trigger"]:not([data-disabled]) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  input:disabled,
+  select:disabled,
+  textarea:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
+  .font-serif-logo {
+    font-family: "PT Serif", Georgia, "Times New Roman", serif;
+    font-weight: 700;
+  }
 }
 
 /* Custom Minimal Scrollbar */
@@ -159,4 +204,26 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background-color: var(--muted-foreground);
+}
+
+/* Tabular numerals — use on price/percentage/PnL displays for column alignment */
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.main-grid-bg {
+  background-image:
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* Light fade sized to the active page content column (see PageContent). */
+.content-grid-fade {
+  background: radial-gradient(
+    ellipse 100% 95% at 50% 50%,
+    color-mix(in oklch, var(--background) 30%, transparent) 0%,
+    color-mix(in oklch, var(--background) 10%, transparent) 50%,
+    transparent 78%
+  );
 }
