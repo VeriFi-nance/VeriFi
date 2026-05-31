@@ -67,7 +67,7 @@ class UsernameTests(TestCase):
         WalletUser.objects.create(address="0x123", username="taken")
         
         address = "0x" + "e" * 40
-        user = WalletUser.objects.create(address=address, username="my_name")
+        WalletUser.objects.create(address=address, username="my_name")
         from rest_framework_simplejwt.tokens import AccessToken
         token = AccessToken()
         token["address"] = address
