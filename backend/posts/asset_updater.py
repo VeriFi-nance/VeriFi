@@ -29,7 +29,7 @@ def update_asset_price(asset: Asset) -> list[OHLCData]:
     Fetch fresh OHLC data from external APIs, save to DB, update timestamp.
 
     Uses the cascading fallback chain defined in ohlc_fetcher.py:
-      - Crypto:       Binance → Kucoin → Kraken
+      - Crypto:       Kraken → CoinGecko → Twelve Data → Kucoin → Binance
       - Traditional:  Yahoo Finance → Twelve Data
 
     Raises OHLCFetchError if all providers fail for this asset.

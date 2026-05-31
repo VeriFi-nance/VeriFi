@@ -1,8 +1,11 @@
 """
 OHLC data fetcher with cascading API fallback and DB caching.
 
-Crypto assets:      Binance → Kucoin → Kraken  (no API keys needed)
+Crypto assets:      Kraken → CoinGecko → Twelve Data → Kucoin → Binance
 Traditional assets:  Yahoo Finance v8 → Twelve Data  (Twelve Data needs free API key)
+
+Kraken and CoinGecko are tried first because Binance/Kucoin geo-block many
+cloud regions (HTTP 451 from US datacenters such as Render).
 """
 
 from __future__ import annotations
@@ -224,6 +227,61 @@ def _fetch_kraken_ohlc(pair: str, start: datetime, end: datetime, interval: Inte
     return rows
 
 
+def _fetch_coingecko_ohlc(
+    provider_symbol: str,
+    quote_currency: str,
+    start: datetime,
+    end: datetime,
+    interval: Interval = Interval.ONE_DAY,
+) -> list[OHLCRow]:
+    """
+    CoinGecko market_chart/range aggregated to daily OHLC candles.
+    provider_symbol e.g. 'bitcoin', 'ethereum'.
+    """
+    if interval != Interval.ONE_DAY:
+        raise OHLCFetchError("CoinGecko fallback only supports daily aggregation.")
+
+    start_sec = int(start.timestamp())
+    end_sec = int(end.timestamp())
+    params = urlencode({
+        "vs_currency": quote_currency.lower(),
+        "from": start_sec,
+        "to": end_sec,
+    })
+    url = f"https://api.coingecko.com/api/v3/coins/{provider_symbol}/market_chart/range?{params}"
+    payload = _http_get_json(url)
+    prices = payload.get("prices") or []
+    if not prices:
+        raise OHLCFetchError("CoinGecko returned no price data.")
+
+    from collections import defaultdict
+
+    buckets: dict[date, list[float]] = defaultdict(list)
+    for ts_ms, price in prices:
+        day = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc).date()
+        buckets[day].append(float(price))
+
+    start_day = start.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_day = end.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    rows: list[OHLCRow] = []
+    for day, pts in sorted(buckets.items()):
+        day_start = datetime.combine(day, time.min, tzinfo=timezone.utc)
+        if day_start < start_day or day_start > end_day:
+            continue
+        rows.append({
+            "timestamp": day_start,
+            "open": pts[0],
+            "high": max(pts),
+            "low": min(pts),
+            "close": pts[-1],
+        })
+
+    if not rows:
+        raise OHLCFetchError("CoinGecko returned no OHLC rows in requested range.")
+    return rows
+
+
 # ---------------------------------------------------------------------------
 # Traditional fetchers (stocks, forex, commodity, index)
 # ---------------------------------------------------------------------------
@@ -340,16 +398,38 @@ def _fetch_twelvedata_ohlc(symbol: str, start: datetime, end: datetime, interval
 # ---------------------------------------------------------------------------
 
 def _try_crypto_chain(asset: Asset, start: datetime, end: datetime, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
-    """Try Binance → Kucoin → Kraken for crypto assets."""
+    """Try Kraken → CoinGecko → Twelve Data → Kucoin → Binance for crypto assets."""
     errors: list[str] = []
 
-    if asset.binance_symbol:
+    if asset.kraken_pair:
         try:
-            logger.info("Trying Binance for %s (%s) [%s]", asset.symbol, asset.binance_symbol, interval.name)
-            return _fetch_binance_ohlc(asset.binance_symbol, start, end, interval)
+            logger.info("Trying Kraken for %s (%s) [%s]", asset.symbol, asset.kraken_pair, interval.name)
+            return _fetch_kraken_ohlc(asset.kraken_pair, start, end, interval)
         except OHLCFetchError as e:
-            errors.append(f"Binance: {e}")
-            logger.warning("Binance failed for %s: %s", asset.symbol, e)
+            errors.append(f"Kraken: {e}")
+            logger.warning("Kraken failed for %s: %s", asset.symbol, e)
+
+    if asset.provider_symbol:
+        try:
+            logger.info("Trying CoinGecko for %s (%s) [%s]", asset.symbol, asset.provider_symbol, interval.name)
+            return _fetch_coingecko_ohlc(
+                asset.provider_symbol,
+                asset.quote_currency or "USD",
+                start,
+                end,
+                interval,
+            )
+        except OHLCFetchError as e:
+            errors.append(f"CoinGecko: {e}")
+            logger.warning("CoinGecko failed for %s: %s", asset.symbol, e)
+
+    if asset.twelvedata_symbol:
+        try:
+            logger.info("Trying Twelve Data for %s (%s) [%s]", asset.symbol, asset.twelvedata_symbol, interval.name)
+            return _fetch_twelvedata_ohlc(asset.twelvedata_symbol, start, end, interval)
+        except OHLCFetchError as e:
+            errors.append(f"Twelve Data: {e}")
+            logger.warning("Twelve Data failed for %s: %s", asset.symbol, e)
 
     if asset.kucoin_symbol:
         try:
@@ -359,13 +439,13 @@ def _try_crypto_chain(asset: Asset, start: datetime, end: datetime, interval: In
             errors.append(f"Kucoin: {e}")
             logger.warning("Kucoin failed for %s: %s", asset.symbol, e)
 
-    if asset.kraken_pair:
+    if asset.binance_symbol:
         try:
-            logger.info("Trying Kraken for %s (%s) [%s]", asset.symbol, asset.kraken_pair, interval.name)
-            return _fetch_kraken_ohlc(asset.kraken_pair, start, end, interval)
+            logger.info("Trying Binance for %s (%s) [%s]", asset.symbol, asset.binance_symbol, interval.name)
+            return _fetch_binance_ohlc(asset.binance_symbol, start, end, interval)
         except OHLCFetchError as e:
-            errors.append(f"Kraken: {e}")
-            logger.warning("Kraken failed for %s: %s", asset.symbol, e)
+            errors.append(f"Binance: {e}")
+            logger.warning("Binance failed for %s: %s", asset.symbol, e)
 
     raise OHLCFetchError(f"All crypto OHLC sources failed for {asset.symbol}: {'; '.join(errors)}")
 
