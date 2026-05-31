@@ -9,6 +9,16 @@ class WalletUser(models.Model):
     energy = models.FloatField(default=4.0)
     last_energy_grant = models.DateTimeField(null=True, blank=True)
 
+    def save(self, *args, **kwargs):
+        if not self.username:
+            base = self.address[:6]
+            self.username = base
+            counter = 1
+            while WalletUser.objects.filter(username__iexact=self.username).exclude(pk=self.pk).exists():
+                self.username = f"{base}_{counter}"
+                counter += 1
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return self.username
 
