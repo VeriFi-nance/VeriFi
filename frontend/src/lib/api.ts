@@ -1,5 +1,5 @@
 import { getToken } from './auth';
-import type { ReviewClaim, PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, ProfileStats, CommunityItem, CommunityMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult } from './types';
+import type { ReviewClaim, PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, ProfileStats, CommunityItem, CommunityMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType } from './types';
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
@@ -65,15 +65,29 @@ export async function extractClaims(content: string): Promise<ExtractClaimsRespo
   });
 }
 
+export interface HardClaimPayload {
+  asset_id: number;
+  community_id?: number;
+  direction: string;
+  /** Backend field — mapped from frontend `claim_type`. */
+  value_type?: ClaimType;
+  /** Backend field — mapped from frontend `parity`. */
+  payda?: string;
+  percentage: number;
+  until: string;
+  market?: { side: 'YES' | 'NO'; stake_rep: number };
+}
+
 export async function createPost(
   content: string,
   claims: ReviewClaim[],
-  community_id?: number
+  community_id?: number,
+  hard_claims?: HardClaimPayload[],
 ): Promise<PostItem> {
   return request('/api/posts/', {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ content, claims, community_id }),
+    body: JSON.stringify({ content, claims, community_id, hard_claims }),
   });
 }
 

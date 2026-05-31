@@ -1,4 +1,7 @@
-export type ClaimValueType = 'PRICE' | 'PERCENTAGE_UP' | 'PERCENTAGE_DOWN';
+export type ClaimType = 'PRICE' | 'PERCENTAGE_UP' | 'PERCENTAGE_DOWN';
+
+/** @deprecated Use ClaimType — kept for backend API field names. */
+export type ClaimValueType = ClaimType;
 
 /** Extraction completeness, mirroring the backend ensemble data model. */
 export type ClaimExtractionStatus = 'HARD_CLAIM' | 'INCOMPLETE_CLAIM';
@@ -14,11 +17,12 @@ export interface ReviewClaim {
   percentage?: string;
   /** Deadline (ISO date). */
   until?: string;
-  // ── Ensemble data model fields ─────────────────────────────
-  /** Denominator asset (ticker symbol, e.g. USD). */
-  payda?: string;
+  /** Quote/denominator ticker of the X/Y parity (e.g. USD in BTC/USD). */
+  parity?: string;
   /** Whether `percentage` is an absolute price or a percentage move. */
-  valueType?: ClaimValueType;
+  claim_type?: ClaimType;
+  /** @deprecated Use claim_type */
+  valueType?: ClaimType;
   /** Backend-reported completeness; recomputed locally as the user edits. */
   claimStatus?: ClaimExtractionStatus;
 }
@@ -27,7 +31,7 @@ export interface ExtractedClaimContract {
   pay: string | null;
   payda: string | null;
   value: number | null;
-  value_type: ClaimValueType;
+  value_type: ClaimType;
   deadline: string | null;
   status: ClaimExtractionStatus;
   text: string;
@@ -76,7 +80,13 @@ export interface HardClaimItem {
   post_id: number | null;
   asset: number;
   direction: string;
-  value_type?: ClaimValueType;
+  /** Frontend name; API may send `value_type` instead. */
+  claim_type?: ClaimType;
+  /** API field — mapped to `claim_type` in UI helpers. */
+  value_type?: ClaimType;
+  /** Frontend name; API may send `payda` instead. */
+  parity?: string;
+  /** API field — mapped to `parity` in UI helpers. */
   payda?: string;
   percentage: number;
   until: string;

@@ -1,21 +1,20 @@
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
-import LoginPage from './pages/LoginPage';
 import AppLayout from './pages/AppLayout';
 import FeedPage from './pages/FeedPage';
-import ClaimReviewPage from './pages/ClaimReviewPage';
 import PostDetailPage from './pages/PostDetailPage';
 import UserPostsPage from './pages/UserPostsPage';
 import ProfilePage from './pages/ProfilePage';
-import { clearAuth, loadAddress } from './lib/auth';
+import CommunitiesPage from './pages/CommunitiesPage';
+import CommunityDetailPage from './pages/CommunityDetailPage';
+import { LoginModal } from './components/LoginModal';
+import { clearAuth, loadAddress, openLogin } from './lib/auth';
 import { clearPrivateKey } from './lib/crypto';
 import { authenticateMetaMaskAddress } from './lib/walletAuth';
 
-import CommunitiesPage from './pages/CommunitiesPage';
-import CommunityDetailPage from './pages/CommunityDetailPage';
-
 function WalletAccountSync() {
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     if (!window.ethereum?.on || !window.ethereum?.removeListener) return;
@@ -36,7 +35,7 @@ function WalletAccountSync() {
       } catch {
         clearAuth();
         clearPrivateKey();
-        navigate('/login', { replace: true });
+        openLogin(navigate, location, location.pathname);
       }
     };
 
@@ -45,21 +44,29 @@ function WalletAccountSync() {
       cancelled = true;
       window.ethereum?.removeListener?.('accountsChanged', onAccountsChanged);
     };
-  }, [navigate]);
+  }, [navigate, location]);
 
   return null;
 }
 
-export default function App() {
+function AppRoutes() {
+  const location = useLocation();
+  const loginOpen = location.pathname === '/login';
+  const backgroundState = (location.state as { background?: ReturnType<typeof useLocation> } | null)
+    ?.background;
+  const backgroundLocation =
+    loginOpen && backgroundState
+      ? backgroundState
+      : loginOpen
+        ? { pathname: '/app', search: '', hash: '', key: 'login-default' }
+        : null;
+
   return (
-    <BrowserRouter>
-      <WalletAccountSync />
-      <Routes>
+    <>
+      <Routes location={backgroundLocation ?? location}>
         <Route path="/" element={<Navigate to="/app" replace />} />
-        <Route path="/login" element={<LoginPage />} />
         <Route path="/app" element={<AppLayout />}>
           <Route index element={<FeedPage />} />
-          <Route path="post/review" element={<ClaimReviewPage />} />
           <Route path="post/:id" element={<PostDetailPage />} />
           <Route path="user/:address" element={<UserPostsPage />} />
           <Route path="profile" element={<ProfilePage />} />
@@ -67,6 +74,16 @@ export default function App() {
           <Route path="communities/:id" element={<CommunityDetailPage />} />
         </Route>
       </Routes>
+      {loginOpen && <LoginModal />}
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <WalletAccountSync />
+      <AppRoutes />
     </BrowserRouter>
   );
 }

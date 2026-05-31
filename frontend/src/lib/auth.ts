@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { useNavigate, useLocation, type NavigateFunction, type Location } from 'react-router-dom';
 
 const TOKEN_KEY = 'verifi_jwt';
 const ADDRESS_STORAGE = 'verifi_address';
@@ -103,4 +104,43 @@ export function useAuthState(): AuthState {
 
 export function loginPathWithReturn(returnTo: string): string {
   return `/login?returnTo=${encodeURIComponent(returnTo)}`;
+}
+
+export function loginReturnTo(searchParams: URLSearchParams): string {
+  return searchParams.get('returnTo') || '/app';
+}
+
+export function openLogin(
+  navigate: NavigateFunction,
+  location: Location,
+  returnTo?: string,
+  background?: Location,
+) {
+  const target = returnTo ?? `${location.pathname}${location.search}`;
+  navigate(
+    { pathname: '/login', search: `?returnTo=${encodeURIComponent(target)}` },
+    { state: { background: background ?? location } },
+  );
+}
+
+export function closeLogin(navigate: NavigateFunction, location: Location) {
+  const background = (location.state as { background?: Location } | null)?.background;
+  const params = new URLSearchParams(location.search);
+  const returnTo = params.get('returnTo') || '/app';
+
+  if (background) {
+    navigate(
+      { pathname: background.pathname, search: background.search, hash: background.hash },
+      { replace: true },
+    );
+    return;
+  }
+
+  navigate(returnTo, { replace: true });
+}
+
+export function useOpenLogin() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  return (returnTo?: string) => openLogin(navigate, location, returnTo);
 }

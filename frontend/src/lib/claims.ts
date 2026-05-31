@@ -1,54 +1,72 @@
 import type {
   ClaimExtractionStatus,
-  ClaimValueType,
+  ClaimType,
   ExtractedClaimContract,
+  HardClaimItem,
   ReviewClaim,
 } from './types';
 
-export const VALUE_TYPE_OPTIONS: { value: ClaimValueType; label: string; hint: string }[] = [
+export const CLAIM_TYPE_OPTIONS: { value: ClaimType; label: string; hint: string }[] = [
   { value: 'PRICE', label: 'Price', hint: 'Absolute price target' },
   { value: 'PERCENTAGE_UP', label: '% Up', hint: 'Percentage gain' },
   { value: 'PERCENTAGE_DOWN', label: '% Down', hint: 'Percentage drop' },
 ];
 
-/** Fields required for a HARD_CLAIM under the Anchor Rule (asset + value + deadline). */
-export const REQUIRED_FIELD_LABELS: Record<string, string> = {
-  asset: 'asset',
-  value: 'target value',
-  deadline: 'deadline',
+/** @deprecated Use CLAIM_TYPE_OPTIONS */
+export const VALUE_TYPE_OPTIONS = CLAIM_TYPE_OPTIONS;
+
+const MISSING_LABELS: Record<string, string> = {
+  asset: 'Asset missing',
+  value: 'Target value missing',
+  deadline: 'Deadline missing',
+  parity: 'Parity not selected',
 };
 
-/**
- * Fields still missing before a claim is "complete" — mirrors the backend Anchor Rule:
- * HARD_CLAIM requires asset + value + deadline (denominator is optional).
- */
+export const REQUIRED_FIELD_LABELS: Record<string, string> = MISSING_LABELS;
+
+export function getClaimType(c: ReviewClaim | { claim_type?: ClaimType; valueType?: ClaimType; direction?: string }): ClaimType {
+  if (c.claim_type) return c.claim_type;
+  if (c.valueType) return c.valueType;
+  return c.direction?.toLowerCase() === 'bearish' ? 'PERCENTAGE_DOWN' : 'PERCENTAGE_UP';
+}
+
+/** @deprecated Use getClaimType */
+export const getValueType = getClaimType;
+
+export function getHardClaimType(claim: HardClaimItem): ClaimType {
+  return claim.claim_type ?? claim.value_type ?? 'PERCENTAGE_UP';
+}
+
+export function getHardClaimParity(claim: HardClaimItem): string | undefined {
+  const p = claim.parity ?? claim.payda;
+  return p?.trim() || undefined;
+}
+
+export function directionForClaimType(ct: ClaimType): string {
+  return ct === 'PERCENTAGE_DOWN' ? 'bearish' : 'bullish';
+}
+
+/** @deprecated Use directionForClaimType */
+export const directionForValueType = directionForClaimType;
+
 export function missingFields(c: ReviewClaim): string[] {
   const missing: string[] = [];
   if (!c.asset?.trim()) missing.push('asset');
   if (!c.percentage?.toString().trim()) missing.push('value');
   if (!c.until?.trim()) missing.push('deadline');
+  if (getClaimType(c) === 'PRICE' && !c.parity?.trim()) missing.push('parity');
   return missing;
 }
 
+/** Human-readable list of what's still missing on a claim. */
+export function missingFieldMessages(c: ReviewClaim): string[] {
+  return missingFields(c).map((key) => MISSING_LABELS[key] ?? key);
+}
+
 export function isClaimComplete(c: ReviewClaim): boolean {
-  return (
-    !!c.asset?.trim() &&
-    !!c.percentage?.toString().trim() &&
-    !!c.until?.trim()
-  );
+  return missingFields(c).length === 0;
 }
 
-export function getValueType(c: ReviewClaim): ClaimValueType {
-  if (c.valueType) return c.valueType;
-  return c.direction?.toLowerCase() === 'bearish' ? 'PERCENTAGE_DOWN' : 'PERCENTAGE_UP';
-}
-
-/** Keep `direction` in sync with the chosen value type for the backend contract. */
-export function directionForValueType(vt: ClaimValueType): string {
-  return vt === 'PERCENTAGE_DOWN' ? 'bearish' : 'bullish';
-}
-
-/** Derive the completeness status from the current field values. */
 export function deriveClaimStatus(c: ReviewClaim): ClaimExtractionStatus {
   return isClaimComplete(c) ? 'HARD_CLAIM' : 'INCOMPLETE_CLAIM';
 }
@@ -57,13 +75,12 @@ export function isClaimIncomplete(c: ReviewClaim): boolean {
   return (c.claimStatus ?? deriveClaimStatus(c)) === 'INCOMPLETE_CLAIM';
 }
 
-/** Human-readable magnitude, e.g. "+10%", "-5%" or "103000". */
 export function formatClaimValue(c: ReviewClaim): string {
   const raw = c.percentage?.toString().trim();
   if (!raw) return '?';
-  const vt = getValueType(c);
-  if (vt === 'PERCENTAGE_UP') return `+${raw}%`;
-  if (vt === 'PERCENTAGE_DOWN') return `-${raw}%`;
+  const ct = getClaimType(c);
+  if (ct === 'PERCENTAGE_UP') return `+${raw}%`;
+  if (ct === 'PERCENTAGE_DOWN') return `-${raw}%`;
   return raw;
 }
 
@@ -72,12 +89,21 @@ export function toReviewClaim(c: ExtractedClaimContract): ReviewClaim {
   return {
     text: c.text,
     asset: c.pay || '',
-    direction: directionForValueType(c.value_type),
+    direction: directionForClaimType(c.value_type),
     status: 'confirmed',
     percentage: c.value !== null ? c.value.toString() : '',
     until: c.deadline || '',
-    payda: c.payda || '',
-    valueType: c.value_type,
+    parity: c.payda || '',
+    claim_type: c.value_type,
     claimStatus: c.status,
   };
+}
+
+/** Stable key for dismiss / restore / smart cleanup (asset + direction + magnitude). */
+export function dismissKey(c: {
+  asset?: string;
+  direction?: string;
+  percentage?: string;
+}): string {
+  return `${(c.asset || '').toLowerCase()}|${(c.direction || '').toLowerCase()}|${(c.percentage || '').toString().trim()}`;
 }
