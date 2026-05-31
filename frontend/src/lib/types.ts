@@ -40,6 +40,7 @@ export interface ProfitabilityData {
 export interface PostItem {
   id: number;
   author_address: string;
+  author_username: string;
   content: string;
   created_at: string;
   claims: ClaimItem[];
@@ -57,6 +58,7 @@ export interface HardClaimEvent {
 export interface HardClaimItem {
   id: number;
   author_address: string | null;
+  author_username: string | null;
   post_id: number | null;
   asset: number;
   direction: string;
@@ -102,6 +104,7 @@ export interface ClaimChartData {
 
 export interface ProfileStats {
   address: string;
+  username: string;
   followers_count: number;
   following_count: number;
   followers: string[];
@@ -172,6 +175,7 @@ export interface CommunityItem {
   name: string;
   description: string;
   creator_address: string;
+  creator_username: string;
   privacy_type: 'public' | 'private';
   post_permission: 'all' | 'creator_only';
   created_at: string;
@@ -184,6 +188,7 @@ export interface CommunityMembershipItem {
   id: number;
   community: number;
   user_address: string;
+  user_username: string;
   status: 'pending' | 'approved' | 'banned';
   created_at: string;
   profitability?: ProfitabilityData | null;
@@ -199,6 +204,7 @@ export interface PositionEventItem {
 export interface PositionItem {
   id: number;
   author_address: string;
+  author_username: string;
   community: number;
   asset: number;
   direction: 'long' | 'short';

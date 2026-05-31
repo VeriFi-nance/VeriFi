@@ -25,10 +25,10 @@ function authHeaders(): Record<string, string> {
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
-export async function register(address: string): Promise<{ access: string }> {
+export async function register(address: string, username?: string): Promise<{ access: string, username: string }> {
   return request('/api/auth/register/', {
     method: 'POST',
-    body: JSON.stringify({ address }),
+    body: JSON.stringify({ address, ...(username ? { username } : {}) }),
   });
 }
 
@@ -44,7 +44,7 @@ export async function login(
   address: string,
   signature: string,
   nonce: string
-): Promise<{ access: string }> {
+): Promise<{ access: string, username: string }> {
   return request('/api/auth/login/', {
     method: 'POST',
     body: JSON.stringify({ address, signature, nonce }),
@@ -197,6 +197,14 @@ export async function getClaimChartData(claimId: number): Promise<ClaimChartData
 export async function getProfileStats(address: string): Promise<ProfileStats> {
   return request(`/api/auth/profile/${encodeURIComponent(address)}/`, {
     headers: authHeaders(),
+  });
+}
+
+export async function updateUsername(username: string): Promise<{ username: string }> {
+  return request('/api/auth/profile/update/', {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify({ username }),
   });
 }
 
