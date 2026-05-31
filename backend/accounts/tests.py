@@ -1,7 +1,6 @@
 from django.test import TestCase
 from rest_framework.test import APIClient
 from accounts.models import WalletUser
-from unittest.mock import patch
 
 class UsernameTests(TestCase):
     def setUp(self):
