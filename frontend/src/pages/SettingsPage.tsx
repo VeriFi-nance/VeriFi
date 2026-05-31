@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Copy, Check, Sun, Moon, LogOut, KeyRound } from 'lucide-react';
-import { clearAuth, loadAddress } from '@/lib/auth';
+import { clearAuth, loadAddress, useAuthState, saveUsername } from '@/lib/auth';
+import { updateUsername } from '@/lib/api';
 import { clearPrivateKey } from '@/lib/crypto';
 import { loadTheme, toggleTheme, type Theme } from '@/lib/theme';
 import { useWalletReveal } from '@/lib/useWalletReveal';
@@ -60,11 +61,34 @@ function SettingsRow({
 
 export default function SettingsPage() {
   const navigate = useNavigate();
-  const address = loadAddress() ?? '';
+  const { address, username } = useAuthState();
   const [theme, setTheme] = useState<Theme>(loadTheme);
   const reveal = useWalletReveal();
   const [showReveal, setShowReveal] = useState(false);
   const [password, setPassword] = useState('');
+
+  const [editUsername, setEditUsername] = useState(username ?? '');
+  const [isEditingUsername, setIsEditingUsername] = useState(false);
+  const [savingUsername, setSavingUsername] = useState(false);
+  const [usernameError, setUsernameError] = useState('');
+
+  async function handleSaveUsername() {
+    setUsernameError('');
+    if (!editUsername.trim() || editUsername.trim().length < 3) {
+      setUsernameError('Username must be at least 3 characters.');
+      return;
+    }
+    setSavingUsername(true);
+    try {
+      const res = await updateUsername(editUsername.trim());
+      saveUsername(res.username);
+      setIsEditingUsername(false);
+    } catch (e) {
+      setUsernameError(e instanceof Error ? e.message : 'Failed to update username');
+    } finally {
+      setSavingUsername(false);
+    }
+  }
 
   function handleThemeToggle() {
     const next = toggleTheme();
@@ -104,6 +128,44 @@ export default function SettingsPage() {
             </code>
             {address && <CopyButton text={address} />}
           </div>
+        </SettingsSection>
+
+        <SettingsSection>
+          <div className="space-y-1.5">
+            <h2 className={titleClass}>Username</h2>
+            <p className={descriptionClass}>
+              Your public display name.
+            </p>
+          </div>
+          {isEditingUsername ? (
+            <div className="space-y-3">
+              <Input
+                value={editUsername}
+                onChange={(e) => setEditUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
+                placeholder="New username"
+              />
+              {usernameError && (
+                <p className="text-xs text-destructive">{usernameError}</p>
+              )}
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => { setIsEditingUsername(false); setEditUsername(username ?? ''); }}>
+                  Cancel
+                </Button>
+                <Button size="sm" disabled={savingUsername} onClick={handleSaveUsername}>
+                  {savingUsername ? 'Saving…' : 'Save'}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <code className="flex-1 text-sm font-mono bg-muted px-3 py-2 rounded-md break-all">
+                @{username || '—'}
+              </code>
+              <Button variant="outline" size="sm" onClick={() => setIsEditingUsername(true)}>
+                Edit
+              </Button>
+            </div>
+          )}
         </SettingsSection>
 
         {reveal.hasEncryptedKey && (

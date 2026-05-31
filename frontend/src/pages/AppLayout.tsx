@@ -89,6 +89,7 @@ export default function AppLayout() {
   const openLogin = useOpenLogin();
   const auth = useAuthState();
   const address = auth.address ?? '';
+  const username = auth.username;
   const [theme, setTheme] = useState<Theme>(loadTheme);
 
   useEffect(() => {
@@ -206,13 +207,13 @@ export default function AppLayout() {
 
               {address && (
                 <Link
-                  to={`/u/${address}`}
+                  to={`/u/${username || address}`}
                   className="flex items-center gap-2 hover:opacity-80 transition-opacity"
                   aria-label="Your profile"
                 >
                   <UserAvatar address={address} size="sm" ring />
                   <span className="hidden sm:inline text-sm font-mono text-muted-foreground">
-                    {truncateAddress(address)}
+                    {username ? `@${username}` : truncateAddress(address)}
                   </span>
                 </Link>
               )}

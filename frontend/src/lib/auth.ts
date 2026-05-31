@@ -73,6 +73,11 @@ export function loadAddress(): string | null {
   return localStorage.getItem(ADDRESS_STORAGE);
 }
 
+export function saveUsername(username: string): void {
+  localStorage.setItem(USERNAME_STORAGE, username);
+  notifyAuthChange();
+}
+
 export function clearAuth(): void {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(ADDRESS_STORAGE);

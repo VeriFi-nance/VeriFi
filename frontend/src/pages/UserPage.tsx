@@ -41,7 +41,6 @@ function StatBlock({ label, value }: { label: string; value: string }) {
 export default function UserPage() {
   const { address } = useParams();
   const myAddress = loadAddress();
-  const isSelf = !!(myAddress && address && myAddress.toLowerCase() === address.toLowerCase());
 
   const [claims, setClaims] = useState<HardClaimItem[]>([]);
   const [assets, setAssets] = useState<AssetItem[]>([]);
@@ -50,19 +49,23 @@ export default function UserPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const isSelf = !!(myAddress && stats?.address && myAddress.toLowerCase() === stats.address.toLowerCase());
+
   useEffect(() => {
     if (!address) return;
     setLoading(true);
-    Promise.all([
-      getHardClaimsByAddress(address),
-      getAssets(),
-      getProfileStats(address),
-    ])
-      .then(([c, a, s]) => {
-        setClaims(c);
-        setAssets(a);
+    getProfileStats(address)
+      .then((s) => {
         setStats(s);
         setFollowing(s.is_following ?? false);
+        return Promise.all([
+          getHardClaimsByAddress(s.address),
+          getAssets(),
+        ]);
+      })
+      .then(([c, a]) => {
+        setClaims(c);
+        setAssets(a);
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
@@ -100,11 +103,14 @@ export default function UserPage() {
     <PageContent className="space-y-6">
       <Card className="p-5">
         <div className="flex items-center gap-4">
-          <UserAvatar address={address} size="lg" />
+          <UserAvatar address={stats?.address || address} size="lg" />
           <div className="min-w-0 flex-1 space-y-1">
+            <h1 className="text-xl font-bold truncate">
+              {stats?.username ? `@${stats.username}` : truncateAddress(stats?.address || address)}
+            </h1>
             <div className="flex items-center gap-1 min-w-0">
-              <code className="text-sm font-mono truncate">{truncateAddress(address)}</code>
-              <CopyAddressButton text={address} />
+              <code className="text-sm font-mono text-muted-foreground truncate">{truncateAddress(stats?.address || address)}</code>
+              <CopyAddressButton text={stats?.address || address} />
             </div>
             {stats?.profitability && (
               <ProfitabilityBadge data={stats.profitability} className="text-xs" />
