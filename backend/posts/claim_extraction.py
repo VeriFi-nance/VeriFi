@@ -252,10 +252,10 @@ def _detect_quarter(lowered: str) -> Optional[int]:
     Turkish suffixes are tolerated ('çeyrekte', 'çeyreğinde') by not requiring a
     trailing word boundary on the Turkish stem.
     """
-    m = re.search(r"\bq\s*([1-4])\b", lowered) or re.search(r"\bç\s*([1-4])\b", lowered)
+    m = re.search(r"\bq\s{0,500}([1-4])\b", lowered) or re.search(r"\bç\s{0,500}([1-4])\b", lowered)
     if m:
         return int(m.group(1))
-    m = re.search(r"\b([1-4])\s*\.?\s*(?:çeyre|quarter)", lowered)
+    m = re.search(r"\b([1-4])\s{0,500}\.?\s{0,500}(?:çeyre|quarter)", lowered)
     if m:
         return int(m.group(1))
     ordinals = [
@@ -334,7 +334,7 @@ def extract_deadline(text: str, base_date: Optional[datetime] = None) -> Optiona
 
     # 2) Month-name + day ("June 15", "15th of June 2026", "15 Haziran 2026")
     md = re.search(
-        rf"\b({_MONTH_ALT})\.?\s+(\d{{1,2}})(?:st|nd|rd|th)?\b(?!\s*%)(?:,?\s*(20\d{{2}}))?",
+        rf"\b({_MONTH_ALT})\.?\s+(\d{{1,2}})(?:st|nd|rd|th)?\b(?!\s{{0,500}}%)(?:,?\s{{0,500}}(20\d{{2}}))?",
         lowered,
     )
     if md:
@@ -343,7 +343,7 @@ def extract_deadline(text: str, base_date: Optional[datetime] = None) -> Optiona
         if 1 <= day <= _last_day_of_month(year, month):
             return _iso(year, month, day)
     dm = re.search(
-        rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:of\s+)?({_MONTH_ALT})\b(?:,?\s*(20\d{{2}}))?",
+        rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:of\s+)?({_MONTH_ALT})\b(?:,?\s{{0,500}}(20\d{{2}}))?",
         lowered,
     )
     if dm:
@@ -385,41 +385,41 @@ def extract_deadline(text: str, base_date: Optional[datetime] = None) -> Optiona
     # 8) Today / tomorrow --------------------------------------------------
     # Turkish stems take a trailing \w* so inflected forms also match:
     # "bugüne", "yarına", "yarından".
-    if re.search(r"\b(?:bugün|bugun)\w*|\btoday\b", lowered):
+    if re.search(r"\b(?:bugün|bugun)\w{0,500}|\btoday\b", lowered):
         return now.strftime("%Y-%m-%d")
-    if re.search(r"\b(?:yarın|yarin)\w*|\btomorrow\b", lowered):
+    if re.search(r"\b(?:yarın|yarin)\w{0,500}|\btomorrow\b", lowered):
         return (now + timedelta(days=1)).strftime("%Y-%m-%d")
 
     # 9) Numeric durations ("in 2 weeks", "3 gün içinde", "within 5 days") --
     #    Checked BEFORE the bare relative week/month so "2 hafta" stays +14
     #    days instead of collapsing onto the inflection-tolerant "hafta\\w*".
-    wk = re.search(r"(\d+)\s*(?:hafta|week|weeks)\b", lowered)
+    wk = re.search(r"(\d{1,500})\s{0,500}(?:hafta|week|weeks)\b", lowered)
     if wk:
         return (now + timedelta(weeks=int(wk.group(1)))).strftime("%Y-%m-%d")
-    dy = re.search(r"(\d+)\s*(?:gün|gun|day|days)\b", lowered)
+    dy = re.search(r"(\d{1,500})\s{0,500}(?:gün|gun|day|days)\b", lowered)
     if dy:
         return (now + timedelta(days=int(dy.group(1)))).strftime("%Y-%m-%d")
-    mo_ = re.search(r"(\d+)\s*(?:ay|month|months)\b", lowered)
+    mo_ = re.search(r"(\d{1,500})\s{0,500}(?:ay|month|months)\b", lowered)
     if mo_:
         return (now + timedelta(days=int(mo_.group(1)) * 30)).strftime("%Y-%m-%d")
-    yr = re.search(r"(\d+)\s*(?:yıl|yil|year|years)\b", lowered)
+    yr = re.search(r"(\d{1,500})\s{0,500}(?:yıl|yil|year|years)\b", lowered)
     if yr:
         return (now + timedelta(days=int(yr.group(1)) * 365)).strftime("%Y-%m-%d")
 
     # 10) Relative week / month (inflection-tolerant) ----------------------
     # "haftaya", "haftayı", "gelecek hafta", "önümüzdeki ayında" all match.
     if re.search(
-        r"\b(?:hafta\w*|gelecek hafta|önümüzdeki hafta|onumuzdeki hafta)\b|\bnext week\b",
+        r"\b(?:hafta\w{0,500}|gelecek hafta|önümüzdeki hafta|onumuzdeki hafta)\b|\bnext week\b",
         lowered,
     ):
         return (now + timedelta(days=7)).strftime("%Y-%m-%d")
     if re.search(
-        r"\b(?:gelecek|önümüzdeki|onumuzdeki)\s+ay\w*|\bnext month\b",
+        r"\b(?:gelecek|önümüzdeki|onumuzdeki)\s+ay\w{0,500}|\bnext month\b",
         lowered,
     ):
         return (now + timedelta(days=30)).strftime("%Y-%m-%d")
     if re.search(
-        r"\b(?:gelecek|önümüzdeki|onumuzdeki|ertesi)\s+yıl\w*|\bnext year\b",
+        r"\b(?:gelecek|önümüzdeki|onumuzdeki|ertesi)\s+yıl\w{0,500}|\bnext year\b",
         lowered,
     ):
         return (now + timedelta(days=365)).strftime("%Y-%m-%d")
@@ -430,7 +430,7 @@ def extract_deadline(text: str, base_date: Optional[datetime] = None) -> Optiona
         return relative
 
     # 12) Verbal year with period cue ("2027 başında", "2028 sonu") --------
-    verbal = re.search(r"\b(20\d{2})\s*(baş\w*|son\w*|yıl\w*|için\w*|icin\w*)", lowered)
+    verbal = re.search(r"\b(20\d{2})\s{0,500}(baş\w{0,500}|son\w{0,500}|yıl\w{0,500}|için\w{0,500}|icin\w{0,500})", lowered)
     if verbal:
         year = verbal.group(1)
         suffix = (verbal.group(2) or "").lower()
@@ -571,7 +571,7 @@ def map_asset_token(token: str, allow_multi_token: bool = True, allow_fuzzy: boo
 # Value / asset extraction helpers
 # ---------------------------------------------------------------------------
 def _extract_pair_assets(text: str) -> tuple[Optional[str], Optional[str]]:
-    pair = re.search(r"([A-Za-zÇĞİÖŞÜçğıöşü]{2,20})\s*/\s*([A-Za-zÇĞİÖŞÜçğıöşü]{2,20})", text)
+    pair = re.search(r"([A-Za-zÇĞİÖŞÜçğıöşü]{2,20})\s{0,500}/\s{0,500}([A-Za-zÇĞİÖŞÜçğıöşü]{2,20})", text)
     if not pair:
         return None, None
     pay = map_asset_token(pair.group(1))
@@ -596,7 +596,7 @@ _MULT_ALT = "|".join(sorted(_ALL_MULTIPLIERS, key=len, reverse=True))
 # A numeric token starts and ends with a digit; it may carry "." / "," inside
 # and an optional (attached or space-separated) multiplier.
 _NUMBER_TOKEN_RE = re.compile(
-    rf"(?P<num>\d[\d.,]*\d|\d)\s*(?P<mult>{_MULT_ALT})?\b",
+    rf"(?P<num>\d[\d.,]*\d|\d)\s{{0,500}}(?P<mult>{_MULT_ALT})?\b",
     re.IGNORECASE,
 )
 
@@ -705,7 +705,7 @@ def _scan_number_groups(text: str) -> List[tuple]:
                 nxt_val is not None
                 and nxt_factor is not None
                 and nxt_factor < last_factor
-                and re.fullmatch(r"\s*", gap)
+                and re.fullmatch(r"\s{0,500}", gap)
             ):
                 total += nxt_val
                 end = nxt.end()
@@ -727,9 +727,9 @@ def _in_period_context(text: str, start: int, end: int) -> bool:
     """
     before = text[max(0, start - 2):start].lower()
     after = text[end:end + 8].lower()
-    if re.search(r"(?:[qç]\s*|h)$", before):
+    if re.search(r"(?:[qç]\s{0,500}|h)$", before):
         return True
-    if re.match(r"\s*(?:h\b|\.?\s*çeyre|\.?\s*quarter|\.?\s*yar[ıi]|\.?\s*half)", after):
+    if re.match(r"\s{0,500}(?:h\b|\.?\s{0,500}çeyre|\.?\s{0,500}quarter|\.?\s{0,500}yar[ıi]|\.?\s{0,500}half)", after):
         return True
     return False
 
@@ -744,9 +744,9 @@ def _number_is_percentage(text: str, start: int, end: int) -> bool:
     """
     before = text[max(0, start - 10):start].lower()
     after = text[end:end + 10].lower()
-    if re.search(r"%\s*$", before) or re.search(r"(?:y[uü]zde|percent)\w*\s*$", before):
+    if re.search(r"%\s{0,500}$", before) or re.search(r"(?:y[uü]zde|percent)\w{0,500}\s{0,500}$", before):
         return True
-    if re.match(r"\s*%|\s*percent", after):
+    if re.match(r"\s{0,500}%|\s{0,500}percent", after):
         return True
     return False
 
@@ -791,7 +791,7 @@ def _extract_value_with_payda(
             continue
         if _number_is_percentage(text, start, end):
             continue
-        token_match = re.match(r"\s*([A-Za-zÇĞİÖŞÜçğıöşü$€₺]{2,15})", text[end:])
+        token_match = re.match(r"\s{0,500}([A-Za-zÇĞİÖŞÜçğıöşü$€₺]{2,15})", text[end:])
         if not token_match:
             continue
         unit = map_asset_token(token_match.group(1))
@@ -849,10 +849,10 @@ def _extract_best_numeric_value(
 def _extract_percentage_value(text: str) -> tuple[Optional[float], int]:
     """Extract percentage amount from patterns like %10, 10%, yüzde 10."""
     percent_patterns = [
-        r"%\s*(\d+(?:[.,]\d+)?)",
-        r"(\d+(?:[.,]\d+)?)\s*%",
-        r"y[uü]zde\s*(\d+(?:[.,]\d+)?)",
-        r"(\d+(?:[.,]\d+)?)\s*percent",
+        r"%\s{0,500}(\d{1,500}(?:[.,]\d{1,500})?)",
+        r"(\d{1,500}(?:[.,]\d{1,500})?)\s{0,500}%",
+        r"y[uü]zde\s{0,500}(\d{1,500}(?:[.,]\d{1,500})?)",
+        r"(\d{1,500}(?:[.,]\d{1,500})?)\s{0,500}percent",
     ]
     lowered = text.lower()
     for pattern in percent_patterns:
@@ -896,7 +896,7 @@ def _extract_base_payda_from_text(text: str) -> Optional[str]:
         r"([A-Za-zÇĞİÖŞÜçğıöşü]{2,15})\s+kar[sş][ıi]s[ıi]nda",
         r"against\s+([A-Za-zÇĞİÖŞÜçğıöşü]{2,15})",
         r"versus\s+([A-Za-zÇĞİÖŞÜçğıöşü]{2,15})",
-        r"vs\.?\s*([A-Za-zÇĞİÖŞÜçğıöşü]{2,15})",
+        r"vs\.?\s{0,500}([A-Za-zÇĞİÖŞÜçğıöşü]{2,15})",
     ]
     for pattern in base_patterns:
         m = re.search(pattern, lowered, flags=re.IGNORECASE)
@@ -1105,7 +1105,7 @@ def _find_locked_pairs(text: str) -> List[dict]:
         pairs.append({"pay": pay, "payda": payda, "start": start, "end": end})
 
     for m in re.finditer(
-        r"([A-Za-zÇĞİÖŞÜçğıöşü]{2,20})\s*[/\-]\s*([A-Za-zÇĞİÖŞÜçğıöşü]{2,20})",
+        r"([A-Za-zÇĞİÖŞÜçğıöşü]{2,20})\s{0,500}[/\-]\s{0,500}([A-Za-zÇĞİÖŞÜçğıöşü]{2,20})",
         text,
     ):
         _append_pair(map_asset_token(m.group(1)), map_asset_token(m.group(2)), m.start(), m.end())
@@ -1236,7 +1236,7 @@ def _scan_deadline_mentions(text: str, base_date: Optional[datetime] = None) -> 
 
     # 2) Month name + day / day + month name -------------------------------
     for m in re.finditer(
-        rf"\b({_MONTH_ALT})\.?\s+(\d{{1,2}})(?:st|nd|rd|th)?\b(?!\s*%)(?:,?\s*(20\d{{2}}))?",
+        rf"\b({_MONTH_ALT})\.?\s+(\d{{1,2}})(?:st|nd|rd|th)?\b(?!\s{{0,500}}%)(?:,?\s{{0,500}}(20\d{{2}}))?",
         lowered,
     ):
         month, day = _ALL_MONTHS[m.group(1)], int(m.group(2))
@@ -1244,7 +1244,7 @@ def _scan_deadline_mentions(text: str, base_date: Optional[datetime] = None) -> 
         if 1 <= day <= _last_day_of_month(year, month):
             add(m.start(), m.end(), _iso(year, month, day))
     for m in re.finditer(
-        rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:of\s+)?({_MONTH_ALT})\b(?:,?\s*(20\d{{2}}))?",
+        rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:of\s+)?({_MONTH_ALT})\b(?:,?\s{{0,500}}(20\d{{2}}))?",
         lowered,
     ):
         day, month = int(m.group(1)), _ALL_MONTHS[m.group(2)]
@@ -1257,43 +1257,43 @@ def _scan_deadline_mentions(text: str, base_date: Optional[datetime] = None) -> 
     # as a single span ("2 haftaya", "3 güne", "2 ayda"); this keeps the leading
     # digit inside the deadline so it never bleeds into the value buckets.
     def _lead_int(span: str) -> int:
-        return int(re.match(r"\d+", span).group(0))
+        return int(re.match(r"\d{1,500}", span).group(0))
 
-    for m in re.finditer(r"\d+\s*(?:hafta\w*|weeks?)\b", lowered):
+    for m in re.finditer(r"\d{1,500}\s{0,500}(?:hafta\w{0,500}|weeks?)\b", lowered):
         add(m.start(), m.end(), (now + timedelta(weeks=_lead_int(m.group(0)))).strftime("%Y-%m-%d"))
-    for m in re.finditer(r"\d+\s*(?:gün\w*|gun\w*|days?)\b", lowered):
+    for m in re.finditer(r"\d{1,500}\s{0,500}(?:gün\w{0,500}|gun\w{0,500}|days?)\b", lowered):
         add(m.start(), m.end(), (now + timedelta(days=_lead_int(m.group(0)))).strftime("%Y-%m-%d"))
-    for m in re.finditer(r"\d+\s*(?:ay\w*|months?)\b", lowered):
+    for m in re.finditer(r"\d{1,500}\s{0,500}(?:ay\w{0,500}|months?)\b", lowered):
         add(m.start(), m.end(), (now + timedelta(days=_lead_int(m.group(0)) * 30)).strftime("%Y-%m-%d"))
-    for m in re.finditer(r"\d+\s*(?:yıl\w*|yil\w*|years?)\b", lowered):
+    for m in re.finditer(r"\d{1,500}\s{0,500}(?:yıl\w{0,500}|yil\w{0,500}|years?)\b", lowered):
         add(m.start(), m.end(), (now + timedelta(days=_lead_int(m.group(0)) * 365)).strftime("%Y-%m-%d"))
 
     # 4) Relative day expressions (inflection-tolerant) --------------------
-    for m in re.finditer(r"\b(?:bugün|bugun)\w*|\btoday\b", lowered):
+    for m in re.finditer(r"\b(?:bugün|bugun)\w{0,500}|\btoday\b", lowered):
         add(m.start(), m.end(), now.strftime("%Y-%m-%d"))
-    for m in re.finditer(r"\b(?:yarın|yarin)\w*|\btomorrow\b", lowered):
+    for m in re.finditer(r"\b(?:yarın|yarin)\w{0,500}|\btomorrow\b", lowered):
         add(m.start(), m.end(), (now + timedelta(days=1)).strftime("%Y-%m-%d"))
     for m in re.finditer(
-        r"\b(?:hafta\w*|gelecek hafta|önümüzdeki hafta|onumuzdeki hafta)\b|\bnext week\b",
+        r"\b(?:hafta\w{0,500}|gelecek hafta|önümüzdeki hafta|onumuzdeki hafta)\b|\bnext week\b",
         lowered,
     ):
         add(m.start(), m.end(), (now + timedelta(days=7)).strftime("%Y-%m-%d"))
     for m in re.finditer(
-        r"\b(?:gelecek|önümüzdeki|onumuzdeki)\s+ay\w*|\bnext month\b",
+        r"\b(?:gelecek|önümüzdeki|onumuzdeki)\s+ay\w{0,500}|\bnext month\b",
         lowered,
     ):
         add(m.start(), m.end(), (now + timedelta(days=30)).strftime("%Y-%m-%d"))
 
     # 5) Year-end / EOY ----------------------------------------------------
     for m in re.finditer(
-        r"\beoy\b|yıl sonu\w*|yil sonu\w*|sene sonu\w*|yıl sonuna kadar|"
+        r"\beoy\b|yıl sonu\w{0,500}|yil sonu\w{0,500}|sene sonu\w{0,500}|yıl sonuna kadar|"
         r"end of (?:the )?year|year[- ]end|by year[- ]end",
         lowered,
     ):
         add(m.start(), m.end(), f"{_year_in_text(lowered, base_date)}-12-31")
 
     # 6) End of month / EOM ------------------------------------------------
-    for m in re.finditer(r"\beom\b|ay sonu\w*|month[- ]end|end of (?:the )?month", lowered):
+    for m in re.finditer(r"\beom\b|ay sonu\w{0,500}|month[- ]end|end of (?:the )?month", lowered):
         add(m.start(), m.end(), _iso(now.year, now.month, base_date=base_date))
 
     # 7) Short / medium / long term ----------------------------------------
@@ -1306,22 +1306,22 @@ def _scan_deadline_mentions(text: str, base_date: Optional[datetime] = None) -> 
 
     # 8) Upcoming / next year ----------------------------------------------
     for m in re.finditer(
-        r"\b(?:gelecek|önümüzdeki|onumuzdeki|ertesi)\s+yıl\w*|\bnext year\b",
+        r"\b(?:gelecek|önümüzdeki|onumuzdeki|ertesi)\s+yıl\w{0,500}|\bnext year\b",
         lowered,
     ):
         add(m.start(), m.end(), (now + timedelta(days=365)).strftime("%Y-%m-%d"))
 
     # 9) Financial quarters (positional) -------------------------------------
-    for m in re.finditer(r"\bq\s*([1-4])\b|\b([1-4])\s*\.?\s*(?:çeyre\w*|quarter\w*)", lowered):
+    for m in re.finditer(r"\bq\s{0,500}([1-4])\b|\b([1-4])\s{0,500}\.?\s{0,500}(?:çeyre\w{0,500}|quarter\w{0,500})", lowered):
         q = int(m.group(1) or m.group(2))
         year = _year_in_text(lowered, base_date)
         mo, d = _QUARTER_END[q]
         add(m.start(), m.end(), _iso(year, mo, d))
     for pattern, q in (
-        (r"\b(?:ilk çeyre\w*|first quarter|1st quarter)", 1),
-        (r"\b(?:ikinci çeyre\w*|second quarter|2nd quarter)", 2),
-        (r"\b(?:üçüncü çeyre\w*|uçuncu çeyre\w*|third quarter|3rd quarter)", 3),
-        (r"\b(?:dördüncü çeyre\w*|dorduncu çeyre\w*|fourth quarter|4th quarter)", 4),
+        (r"\b(?:ilk çeyre\w{0,500}|first quarter|1st quarter)", 1),
+        (r"\b(?:ikinci çeyre\w{0,500}|second quarter|2nd quarter)", 2),
+        (r"\b(?:üçüncü çeyre\w{0,500}|uçuncu çeyre\w{0,500}|third quarter|3rd quarter)", 3),
+        (r"\b(?:dördüncü çeyre\w{0,500}|dorduncu çeyre\w{0,500}|fourth quarter|4th quarter)", 4),
     ):
         for m in re.finditer(pattern, lowered):
             year = _year_in_text(lowered, base_date)
@@ -1334,16 +1334,16 @@ def _scan_deadline_mentions(text: str, base_date: Optional[datetime] = None) -> 
     for m in re.finditer(r"\b(?:h2|2h)\b", lowered):
         add(m.start(), m.end(), _iso(_year_in_text(lowered, base_date), 12, 31))
     for m in re.finditer(
-        r"\b(?:ilk yar[ıi]\w*|yılın ilk yar[ıi]\w*|first half|1st half)", lowered
+        r"\b(?:ilk yar[ıi]\w{0,500}|yılın ilk yar[ıi]\w{0,500}|first half|1st half)", lowered
     ):
         add(m.start(), m.end(), _iso(_year_in_text(lowered, base_date), 6, 30))
     for m in re.finditer(
-        r"\b(?:ikinci yar[ıi]\w*|yılın ikinci yar[ıi]\w*|second half|2nd half)", lowered
+        r"\b(?:ikinci yar[ıi]\w{0,500}|yılın ikinci yar[ıi]\w{0,500}|second half|2nd half)", lowered
     ):
         add(m.start(), m.end(), _iso(_year_in_text(lowered, base_date), 12, 31))
 
     # 11) Verbal year phrases ("2027 başında", "2028 sonu") ----------------
-    for m in re.finditer(r"\b(20\d{2})\s*(baş\w*|son\w*|yıl\w*|için\w*|icin\w*)?\b", lowered):
+    for m in re.finditer(r"\b(20\d{2})\s{0,500}(baş\w{0,500}|son\w{0,500}|yıl\w{0,500}|için\w{0,500}|icin\w{0,500})?\b", lowered):
         year = int(m.group(1))
         suffix = (m.group(2) or "").lower()
         if suffix.startswith("baş") or suffix.startswith("bas"):
