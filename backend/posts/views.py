@@ -13,6 +13,7 @@ from .claim_extraction import rule_based_claims_from_prompt
 from django.shortcuts import get_object_or_404
 from .resolution import CONTRACT_VERSION, ResolutionError, preview_resolution, resolve_hard_claim
 from . import rep_market
+from .signature_verification import verify_claim_signature, verify_position_signature
 from accounts.energy import grant_energy, spend, CLAIM_ENERGY_COST
 
 logger = logging.getLogger(__name__)
@@ -245,6 +246,23 @@ class PostListCreateView(APIView):
                     m_stake = None
                 
                 try:
+                    # Verify claim signature before persisting
+                    hc_sig = valid_hc.get("signature", "")
+                    hc_claim_payload = valid_hc.get("claim_payload", {})
+                    try:
+                        verify_claim_signature(
+                            user_address=user.address,
+                            signature=hc_sig,
+                            claim_payload=hc_claim_payload,
+                            asset_symbol=asset.symbol,
+                        )
+                    except Exception as sig_exc:
+                        transaction.set_rollback(True)
+                        from rest_framework.exceptions import ValidationError as DRFValidationError
+                        if isinstance(sig_exc, DRFValidationError):
+                            return Response(sig_exc.detail, status=status.HTTP_400_BAD_REQUEST)
+                        return Response({"detail": str(sig_exc)}, status=status.HTTP_400_BAD_REQUEST)
+
                     hard_claim = HardClaim.objects.create(
                         author=user,
                         post=post,
@@ -254,6 +272,8 @@ class PostListCreateView(APIView):
                         percentage=valid_hc["percentage"],
                         until=valid_hc["until"],
                         status=valid_hc.get("status", "undetermined"),
+                        signature=hc_sig,
+                        claim_payload=hc_claim_payload,
                     )
                     from .models import HardClaimEvent
                     HardClaimEvent.objects.create(
@@ -420,6 +440,22 @@ class HardClaimView(APIView):
             m_side = None
             m_stake = None
 
+        # Validate signature before persisting
+        sig = request.data.get("signature", "")
+        claim_payload = request.data.get("claim_payload", {})
+        try:
+            verify_claim_signature(
+                user_address=user.address,
+                signature=sig,
+                claim_payload=claim_payload,
+                asset_symbol=asset.symbol,
+            )
+        except Exception as e:
+            from rest_framework.exceptions import ValidationError as DRFValidationError
+            if isinstance(e, DRFValidationError):
+                return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
         # Create HardClaim object in the database with the given data
         try:
             hard_claim = HardClaim.objects.create(
@@ -431,6 +467,8 @@ class HardClaimView(APIView):
                 percentage=data["percentage"],
                 until=data["until"],
                 status=data.get("status", "undetermined"),
+                signature=sig,
+                claim_payload=claim_payload,
             )
             from .models import HardClaimEvent
             HardClaimEvent.objects.create(
@@ -927,7 +965,22 @@ class PositionListCreateView(APIView):
             return Response({"detail": "Only the creator can post in this community."}, status=status.HTTP_403_FORBIDDEN)
 
         asset = get_object_or_404(Asset, pk=data["asset_id"])
-        
+
+        sig = data.get("signature", "")
+        position_payload = data.get("position_payload", {})
+        try:
+            verify_position_signature(
+                user_address=user.address,
+                signature=sig,
+                position_payload=position_payload,
+                asset_symbol=asset.symbol,
+            )
+        except Exception as e:
+            from rest_framework.exceptions import ValidationError as DRFValidationError
+            if isinstance(e, DRFValidationError):
+                return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
         position = Position.objects.create(
             author=user,
             community=community,
@@ -938,6 +991,8 @@ class PositionListCreateView(APIView):
             stop_loss=data["stop_loss"],
             take_profit=data["take_profit"],
             lifetime=data["lifetime"],
+            signature=sig,
+            position_payload=position_payload,
             status=Position.Status.PENDING
         )
         
@@ -1181,3 +1236,37 @@ class HardClaimMarketPreviewView(APIView):
         )
 
 
+class HardClaimProofView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        claim = get_object_or_404(HardClaim, pk=pk)
+        if not claim.signature:
+            return Response({"detail": "This claim does not have a signature."}, status=status.HTTP_404_NOT_FOUND)
+        
+        return Response({
+            "type": "claim",
+            "wallet_address": claim.author.address,
+            "signature": claim.signature,
+            "payload": claim.claim_payload,
+            "server_timestamp": claim.created_at.isoformat()
+        })
+
+
+class PositionProofView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        position = get_object_or_404(Position, pk=pk)
+        if not position.signature:
+            return Response({"detail": "This position does not have a signature."}, status=status.HTTP_404_NOT_FOUND)
+        
+        return Response({
+            "type": "position",
+            "wallet_address": position.author.address,
+            "signature": position.signature,
+            "payload": position.position_payload,
+            "server_timestamp": position.created_at.isoformat()
+        })

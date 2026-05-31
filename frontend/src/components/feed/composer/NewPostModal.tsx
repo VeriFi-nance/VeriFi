@@ -10,6 +10,8 @@ import { PostComposer, MAX_CHARS } from './PostComposer';
 import { ClaimForm } from './ClaimForm';
 import { ClaimRow } from './ClaimRow';
 import { emptyDraft, validateDraft, type AttachedClaim, type ClaimDraft } from './types';
+import { buildClaimPayload } from '@/lib/crypto';
+import { signPayload } from '@/lib/signing';
 
 interface NewPostModalProps {
   open: boolean;
@@ -93,21 +95,35 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
     setError('');
     setSubmitting(true);
     try {
-      const hardClaimsPayload = attached.map((c) => {
+      const hardClaimsPayload = [];
+      for (const c of attached) {
+        const payloadObj = {
+          asset_symbol: c.assetSymbol,
+          direction: c.direction,
+          percentage: parseFloat(c.percentage),
+          until: c.until,
+          created_at: new Date().toISOString(),
+        };
+        const payloadStr = buildClaimPayload(payloadObj);
+        const signature = await signPayload(payloadStr);
+
         const stakeNum = parseFloat(c.stakeRep);
         const market =
           !isNaN(stakeNum) && stakeNum >= 10 && stakeNum <= 100
             ? { side: 'YES' as const, stake_rep: stakeNum }
             : undefined;
-        return {
+
+        hardClaimsPayload.push({
           asset_id: parseInt(c.asset_id, 10),
           community_id: communityId,
           direction: c.direction,
           percentage: parseFloat(c.percentage),
           until: c.until,
+          signature,
+          claim_payload: payloadObj,
           ...(market ? { market } : {}),
-        };
-      });
+        });
+      }
 
       await createPost(content.trim(), [], communityId, hardClaimsPayload);
       reset();

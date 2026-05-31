@@ -42,6 +42,8 @@ class HardClaimInputSerializer(serializers.Serializer):
     percentage = serializers.FloatField(min_value=0)
     until = serializers.DateField()
     status = serializers.ChoiceField(choices=["confirmed", "undetermined", "rejected"], default="undetermined")
+    signature = serializers.CharField(required=True)
+    claim_payload = serializers.JSONField(required=True)
 
 
     def validate_until(self, value):
@@ -62,7 +64,7 @@ class HardClaimSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = HardClaim
-        fields = ["id", "author_address", "author_username", "post_id", "community", "asset", "direction", "percentage", "until", "created_at", "status", "events", "profitability"]
+        fields = ["id", "author_address", "author_username", "post_id", "community", "asset", "direction", "percentage", "until", "created_at", "status", "events", "profitability", "signature", "claim_payload"]
 
     def get_profitability(self, obj):
         try:
@@ -153,7 +155,8 @@ class PositionSerializer(serializers.ModelSerializer):
         fields = [
             "id", "author_address", "author_username", "community", "asset", "direction",
             "entry_price", "entry_interval", "stop_loss", "take_profit",
-            "lifetime", "exit_price", "pnl_percentage", "status", "created_at", "events", "profitability"
+            "lifetime", "exit_price", "pnl_percentage", "status", "created_at", "events", "profitability",
+            "signature", "position_payload"
         ]
 
     def get_profitability(self, obj):
@@ -178,6 +181,8 @@ class PositionInputSerializer(serializers.Serializer):
     stop_loss = serializers.FloatField(required=True)
     take_profit = serializers.FloatField(required=True)
     lifetime = serializers.DateTimeField(required=True)
+    signature = serializers.CharField(required=True)
+    position_payload = serializers.JSONField(required=True)
 
     def validate(self, data):
         now = timezone.now()

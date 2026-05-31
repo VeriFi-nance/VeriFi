@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { createPosition } from '@/lib/api';
 import type { AssetItem } from '@/lib/types';
 import { PlusCircle } from 'lucide-react';
+import { buildPositionPayload } from '@/lib/crypto';
+import { signPayload } from '@/lib/signing';
 
 interface NewPositionModalProps {
   communityId: number;
@@ -79,6 +81,21 @@ export function NewPositionModal({ communityId, assets, onCreated }: NewPosition
 
     setLoading(true);
     try {
+      const selectedAsset = assets.find((a) => a.id.toString() === assetId);
+      
+      const payloadObj = {
+        asset_symbol: selectedAsset?.symbol || '',
+        direction,
+        entry_price: entry,
+        stop_loss: sl,
+        take_profit: tp,
+        lifetime: lifeDate.toISOString(),
+        created_at: new Date().toISOString(),
+      };
+      
+      const payloadStr = buildPositionPayload(payloadObj);
+      const signature = await signPayload(payloadStr);
+
       await createPosition({
         community_id: communityId,
         asset_id: parseInt(assetId),
@@ -88,6 +105,8 @@ export function NewPositionModal({ communityId, assets, onCreated }: NewPosition
         stop_loss: sl,
         take_profit: tp,
         lifetime: lifeDate.toISOString(),
+        signature,
+        position_payload: payloadObj,
       });
       setOpen(false);
       onCreated();

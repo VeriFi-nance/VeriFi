@@ -66,6 +66,8 @@ export interface HardClaimItem {
   until: string;
   created_at: string;
   status: string;
+  signature?: string;
+  claim_payload?: Record<string, unknown>;
   events?: HardClaimEvent[];
   profitability?: ProfitabilityData | null;
 }
@@ -217,6 +219,16 @@ export interface PositionItem {
   pnl_percentage: number | null;
   status: 'pending' | 'active' | 'confirmed' | 'rejected' | 'missed' | 'closed_early' | 'expired';
   created_at: string;
+  signature?: string;
+  position_payload?: Record<string, unknown>;
   events?: PositionEventItem[];
   profitability?: ProfitabilityData | null;
+}
+
+export interface ProofBundle {
+  type: 'claim' | 'position';
+  payload: Record<string, unknown>;
+  signature: string;
+  wallet_address: string;
+  server_timestamp: string;
 }

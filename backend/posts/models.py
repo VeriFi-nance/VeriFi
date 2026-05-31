@@ -142,6 +142,8 @@ class HardClaim(models.Model):
     until = models.DateField(blank=False, null=False)
     created_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=12, choices=Status.choices, default="undetermined")
+    signature = models.TextField(blank=True, default="")
+    claim_payload = models.JSONField(blank=True, default=dict)
 
     class Meta:
         constraints = [
@@ -233,6 +235,8 @@ class Position(models.Model):
     pnl_percentage = models.FloatField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     created_at = models.DateTimeField(auto_now_add=True)
+    signature = models.TextField(blank=True, default="")
+    position_payload = models.JSONField(blank=True, default=dict)
 
     def __str__(self):
         return f"Position {self.id} ({self.asset.symbol} {self.direction})"

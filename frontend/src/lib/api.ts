@@ -1,5 +1,5 @@
 import { getToken } from './auth';
-import type { ReviewClaim, PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, ProfileStats, CommunityItem, CommunityMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult } from './types';
+import type { ReviewClaim, PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, ProfileStats, CommunityItem, CommunityMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ProofBundle } from './types';
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
@@ -128,6 +128,8 @@ export async function createHardClaim(data: {
   direction: string;
   percentage: number;
   until: string;
+  signature: string;
+  claim_payload: Record<string, unknown>;
   market?: { side: 'YES' | 'NO'; stake_rep: number };
 }): Promise<HardClaimItem> {
   return request('/api/posts/hard-claims/', {
@@ -141,6 +143,10 @@ export async function getMarket(claimId: number): Promise<ClaimMarketItem> {
   return request(`/api/posts/hard-claims/${claimId}/market/`, {
     headers: authHeaders(),
   });
+}
+
+export async function getClaimProof(claimId: number): Promise<ProofBundle> {
+  return request(`/api/posts/hard-claims/${claimId}/proof/`);
 }
 
 export async function createMarket(
@@ -305,6 +311,8 @@ export async function createPosition(data: {
   stop_loss: number;
   take_profit: number;
   lifetime: string;
+  signature: string;
+  position_payload: Record<string, unknown>;
 }): Promise<PositionItem> {
   return request('/api/posts/positions/', {
     method: 'POST',
@@ -318,4 +326,8 @@ export async function closePosition(id: number): Promise<PositionItem> {
     method: 'POST',
     headers: authHeaders(),
   });
+}
+
+export async function getPositionProof(positionId: number): Promise<ProofBundle> {
+  return request(`/api/posts/positions/${positionId}/proof/`);
 }
