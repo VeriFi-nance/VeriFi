@@ -11,7 +11,7 @@ class UsernameTests(TestCase):
         address = "0x" + "a" * 40
         res = self.client.post("/api/auth/register/", {"address": address})
         self.assertEqual(res.status_code, 201)
-        self.assertTrue("username" in res.data)
+        self.assertIn("username", res.data)
         user = WalletUser.objects.get(address=address)
         self.assertTrue(user.username.startswith("0xaaaa"))
 
