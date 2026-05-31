@@ -1,17 +1,20 @@
 import os
 import binascii
+import re
 
 from django.core.cache import cache
+from django.db.models import Q
+from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 from eth_account import Account
 from eth_account.messages import encode_defunct
 
 from .models import WalletUser, Follow
 from .serializers import RegisterSerializer, LoginSerializer, FollowSerializer, ProfileSerializer
-from django.shortcuts import get_object_or_404
+from .energy import grant_energy, ENERGY_CAP
 
 
 def _make_jwt(user: WalletUser) -> str:
@@ -30,15 +33,24 @@ class RegisterView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         address = serializer.validated_data["address"].lower()
-
+        username = serializer.validated_data.get("username")
+        
         if WalletUser.objects.filter(address=address).exists():
             return Response(
                 {"detail": "Address already registered."},
                 status=status.HTTP_409_CONFLICT,
             )
+            
+        if not username:
+            base_username = address[:6]
+            username = base_username
+            counter = 1
+            while WalletUser.objects.filter(username__iexact=username).exists():
+                username = f"{base_username}_{counter}"
+                counter += 1
 
-        user = WalletUser.objects.create(address=address)
-        return Response({"access": _make_jwt(user)}, status=status.HTTP_201_CREATED)
+        user = WalletUser.objects.create(address=address, username=username)
+        return Response({"access": _make_jwt(user), "username": user.username}, status=status.HTTP_201_CREATED)
 
 
 class ChallengeView(APIView):
@@ -110,7 +122,7 @@ class LoginView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        return Response({"access": _make_jwt(user)})
+        return Response({"access": _make_jwt(user), "username": user.username})
 
 
 class ProfileView(APIView):
@@ -118,9 +130,8 @@ class ProfileView(APIView):
     permission_classes = []
 
     def get(self, request, address):
-        from .energy import grant_energy, ENERGY_CAP
-        address = address.lower()
-        target_user = get_object_or_404(WalletUser, address=address)
+        lookup = address.lower()
+        target_user = get_object_or_404(WalletUser, Q(address=lookup) | Q(username__iexact=lookup))
         grant_energy(target_user)
 
         followers = target_user.follower_set.all().select_related("follower")
@@ -133,6 +144,7 @@ class ProfileView(APIView):
 
         data = {
             "address": target_user.address,
+            "username": target_user.username,
             "followers_count": len(followers_list),
             "following_count": len(following_list),
             "followers": followers_list,
@@ -157,7 +169,6 @@ class ProfileView(APIView):
         if auth_header and auth_header.startswith("Bearer "):
             token = auth_header.split(" ")[1]
             try:
-                from rest_framework_simplejwt.tokens import AccessToken
                 access = AccessToken(token)
                 req_address = access.get("address", "").lower()
                 if req_address:
@@ -180,7 +191,6 @@ class FollowToggleView(APIView):
             
         token = auth_header.split(" ")[1]
         try:
-            from rest_framework_simplejwt.tokens import AccessToken
             access = AccessToken(token)
             req_address = access.get("address", "").lower()
             current_user = WalletUser.objects.get(address=req_address)
@@ -229,3 +239,34 @@ class ProfitabilityView(APIView):
                 "pnl_all": 0.0,
                 "updated_at": None
             })
+
+class UpdateProfileView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def patch(self, request):
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return Response({"detail": "Authentication credentials were not provided."}, status=status.HTTP_401_UNAUTHORIZED)
+            
+        token = auth_header.split(" ")[1]
+        try:
+            access = AccessToken(token)
+            req_address = access.get("address", "").lower()
+            current_user = WalletUser.objects.get(address=req_address)
+        except Exception:
+            return Response({"detail": "Invalid token."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        new_username = request.data.get("username")
+        if not new_username:
+            return Response({"detail": "Username is required."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        if not re.match(r"^[a-zA-Z0-9_]+$", new_username):
+            return Response({"detail": "Username can only contain letters, numbers, and underscores."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        if WalletUser.objects.filter(username__iexact=new_username).exclude(pk=current_user.pk).exists():
+            return Response({"detail": "Username is already taken."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        current_user.username = new_username
+        current_user.save()
+        return Response({"username": current_user.username})
