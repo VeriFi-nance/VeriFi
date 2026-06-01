@@ -261,7 +261,8 @@ class PostListCreateView(APIView):
                         from rest_framework.exceptions import ValidationError as DRFValidationError
                         if isinstance(sig_exc, DRFValidationError):
                             return Response(sig_exc.detail, status=status.HTTP_400_BAD_REQUEST)
-                        return Response({"detail": str(sig_exc)}, status=status.HTTP_400_BAD_REQUEST)
+                        logger.exception("Unexpected error during claim signature verification")
+                        return Response({"detail": "Invalid claim signature."}, status=status.HTTP_400_BAD_REQUEST)
 
                     hard_claim = HardClaim.objects.create(
                         author=user,
@@ -456,7 +457,8 @@ class HardClaimView(APIView):
             from rest_framework.exceptions import ValidationError as DRFValidationError
             if isinstance(e, DRFValidationError):
                 return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.exception("Unexpected error during claim signature verification")
+            return Response({"detail": "Invalid claim signature."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Create HardClaim object in the database with the given data
         try:
@@ -985,7 +987,8 @@ class PositionListCreateView(APIView):
             from rest_framework.exceptions import ValidationError as DRFValidationError
             if isinstance(e, DRFValidationError):
                 return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.exception("Unexpected error while verifying position signature")
+            return Response({"detail": "Unable to verify position signature."}, status=status.HTTP_400_BAD_REQUEST)
 
         position = Position.objects.create(
             author=user,
