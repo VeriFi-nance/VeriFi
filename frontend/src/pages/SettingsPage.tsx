@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Copy, Check, Sun, Moon, LogOut, KeyRound } from 'lucide-react';
 import { clearAuth, loadAddress } from '@/lib/auth';
-import { clearPrivateKey } from '@/lib/crypto';
+import { clearPrivateKey } from '@/lib/keystore';
 import { loadTheme, toggleTheme, type Theme } from '@/lib/theme';
 import { useWalletReveal } from '@/lib/useWalletReveal';
 import { PageContent } from '@/components/PageContent';

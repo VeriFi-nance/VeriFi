@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import {
   BrowserRouter,
   Navigate,
@@ -16,10 +16,15 @@ import SettingsPage from './pages/SettingsPage';
 import ClaimDetailPage from './pages/ClaimDetailPage';
 import CommunitiesPage from './pages/CommunitiesPage';
 import CommunityDetailPage from './pages/CommunityDetailPage';
-import { LoginModal } from './components/LoginModal';
 import { clearAuth, loadAddress, openLogin, useAuthState } from './lib/auth';
-import { clearPrivateKey } from './lib/crypto';
+import { clearPrivateKey } from './lib/keystore';
 import { authenticateMetaMaskAddress } from './lib/walletAuth';
+
+// Lazy so the BIP39/BIP32/secp256k1 bundle (only reachable through LoginForm)
+// is fetched on demand when the login modal opens, not in the initial chunk.
+const LoginModal = lazy(() =>
+  import('./components/LoginModal').then((m) => ({ default: m.LoginModal }))
+);
 
 function WalletAccountSync() {
   const navigate = useNavigate();
@@ -117,7 +122,11 @@ function AppRoutes() {
         <Route path="*" element={<Navigate to="/feed" replace />} />
       </Routes>
 
-      {loginOpen && <LoginModal />}
+      {loginOpen && (
+        <Suspense fallback={null}>
+          <LoginModal />
+        </Suspense>
+      )}
     </>
   );
 }

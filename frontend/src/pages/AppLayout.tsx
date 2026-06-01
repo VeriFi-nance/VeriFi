@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Home, LogOut, Moon, Settings, Sun, User, Users } from 'lucide-react';
 import { clearAuth, useAuthState, useOpenLogin } from '@/lib/auth';
-import { clearPrivateKey } from '@/lib/crypto';
+import { clearPrivateKey } from '@/lib/keystore';
 import { loadTheme, toggleTheme, type Theme } from '@/lib/theme';
 import { EnergyMeter } from '@/components/EnergyMeter';
 import { UserAvatar } from '@/components/UserAvatar';

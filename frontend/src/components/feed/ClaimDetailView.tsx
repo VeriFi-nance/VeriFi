@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { CalendarDays, CheckCircle2, XCircle } from 'lucide-react';
@@ -6,8 +6,13 @@ import { UserAvatar } from '@/components/UserAvatar';
 import type { HardClaimItem, AssetItem, ClaimChartData } from '@/lib/types';
 import { truncateAddress } from '@/lib/wallet';
 import { getClaimChartData } from '@/lib/api';
-import { PriceChart } from './PriceChart';
 import { MarketPanel } from '../MarketPanel';
+
+// Lazy so the chart.js/react-chartjs-2 bundle is fetched only when a claim
+// actually has price history to render, not in the initial chunk.
+const PriceChart = lazy(() =>
+  import('./PriceChart').then((m) => ({ default: m.PriceChart }))
+);
 
 interface ClaimDetailViewProps {
   claim: HardClaimItem;
@@ -150,7 +155,9 @@ export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Price history
           </h3>
-          <PriceChart data={chartData} />
+          <Suspense fallback={null}>
+            <PriceChart data={chartData} />
+          </Suspense>
         </div>
       )}
     </div>
