@@ -16,6 +16,7 @@ import SettingsPage from './pages/SettingsPage';
 import ClaimDetailPage from './pages/ClaimDetailPage';
 import CommunitiesPage from './pages/CommunitiesPage';
 import CommunityDetailPage from './pages/CommunityDetailPage';
+import { VerifyPage } from './pages/VerifyPage';
 import { LoginModal } from './components/LoginModal';
 import { clearAuth, loadAddress, openLogin, useAuthState } from './lib/auth';
 import { clearPrivateKey } from './lib/crypto';
@@ -101,6 +102,9 @@ function AppRoutes() {
           <Route path="/settings" element={<SettingsGate />} />
           <Route path="/c" element={<CommunitiesPage />} />
           <Route path="/c/:id" element={<CommunityDetailPage />} />
+          <Route path="/verify" element={<VerifyPage />} />
+          <Route path="/verify/claim/:id" element={<VerifyPage type="claim" />} />
+          <Route path="/verify/position/:id" element={<VerifyPage type="position" />} />
           <Route path="/login" element={null} />
         </Route>
 

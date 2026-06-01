@@ -1023,7 +1023,8 @@ class CommunityRolesTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertTrue(Post.objects.filter(id=post.id).exists())
 
-    def test_only_owner_can_create_position(self):
+    @patch('posts.views.verify_position_signature')
+    def test_only_owner_can_create_position(self, mock_verify):
         """A regular member/moderator gets 403 when trying to create a position."""
         now = timezone.now()
         # Test moderator
@@ -1036,7 +1037,9 @@ class CommunityRolesTestCase(APITestCase):
             "entry_interval": (now + timedelta(days=1)).isoformat(),
             "stop_loss": 40000.0,
             "take_profit": 60000.0,
-            "lifetime": (now + timedelta(days=7)).isoformat()
+            "lifetime": (now + timedelta(days=7)).isoformat(),
+            "signature": "0x123",
+            "position_payload": {"mock": "payload"},
         }
         url = reverse("position-list-create")
         response = self.client.post(url, data, format="json")
@@ -1058,4 +1061,3 @@ class CommunityRolesTestCase(APITestCase):
         self.assertEqual(roles[self.owner_user.address], "owner")
         self.assertEqual(roles[self.moderator_user.address], "moderator")
         self.assertEqual(roles[self.member_user.address], "member")
-
