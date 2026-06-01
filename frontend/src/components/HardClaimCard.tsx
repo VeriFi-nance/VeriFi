@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { HardClaimItem, AssetItem } from '@/lib/types';
+import { getHardClaimParity, getHardClaimType } from '@/lib/claims';
 
 function daysUntil(dateStr: string): number {
   const diff = new Date(dateStr).getTime() - Date.now();
@@ -13,42 +14,49 @@ function daysUntil(dateStr: string): number {
 export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets: AssetItem[] }) {
   const asset = assets.find((a) => a.id === claim.asset);
   const assetSymbol = asset?.symbol ?? `#${claim.asset}`;
+  const claimType = getHardClaimType(claim);
+  const parity = getHardClaimParity(claim);
+  const isPrice = claimType === 'PRICE';
   const isBullish = claim.direction.toLowerCase() === 'bullish';
   const isConfirmed = claim.status === 'confirmed';
   const isRejected = claim.status === 'rejected';
   const days = daysUntil(claim.until);
   const targetChange = claim.percentage;
 
-  // Community confidence: mock until a real vote API exists
   const communityConfidence = 62.5;
-
-  const href = claim.post_id != null ? `/post/${claim.post_id}` : `/claim/${claim.id}`;
+  const href =
+    claim.post_id != null ? `/post/${claim.post_id}` : `/claim/${claim.id}`;
 
   return (
     <Link
       to={href}
       className={cn(
-        'w-full text-left flex items-center gap-2.5 rounded-md border px-3 py-2 bg-card text-card-foreground transition-colors hover:bg-muted/40 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-        isConfirmed && 'border-success/50',
-        isRejected && 'border-danger/50 opacity-80',
-        !isConfirmed && !isRejected && 'border-border',
+        'w-full text-left flex items-center gap-2.5 rounded-lg border px-3.5 py-2.5 bg-card text-card-foreground transition-all hover:bg-muted/30 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        isConfirmed && 'border-emerald-500/60 shadow-sm',
+        isRejected && 'border-red-500/60 opacity-80',
+        !isConfirmed && !isRejected && 'border-border hover:shadow-sm',
       )}
       aria-label="View claim details"
     >
       <span
         className={cn(
           'size-2 rounded-full shrink-0',
-          isBullish ? 'bg-success' : 'bg-danger',
+          isPrice ? 'bg-foreground/50' : isBullish ? 'bg-emerald-500' : 'bg-red-500',
         )}
       />
 
-      <span className="font-mono font-semibold text-xs text-foreground shrink-0">{assetSymbol}</span>
+      <span className="font-mono font-semibold text-xs text-foreground shrink-0">
+        {assetSymbol}
+        {parity ? <span className="text-muted-foreground">/{parity}</span> : null}
+      </span>
 
       <Badge
-        variant={isBullish ? 'success' : 'destructive'}
+        variant={isPrice ? 'secondary' : isBullish ? 'success' : 'destructive'}
         className="text-[10px] px-1.5 py-0 shrink-0 num"
       >
-        {isBullish ? '▲' : '▼'} {targetChange.toFixed(1)}%
+        {isPrice
+          ? `◎ ${targetChange.toLocaleString()}`
+          : `${isBullish ? '▲' : '▼'} ${targetChange.toFixed(1)}%`}
       </Badge>
 
       <span className="text-muted-foreground/40 text-xs">·</span>
