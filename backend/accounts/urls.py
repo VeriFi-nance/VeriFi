@@ -7,6 +7,6 @@ urlpatterns = [
     path("login/", LoginView.as_view()),
     path("follow/", FollowToggleView.as_view()),
     path("profile/update/", UpdateProfileView.as_view()),
-    path("profile/<str:address>/", ProfileView.as_view()),
+    path("profile/<str:lookup>/", ProfileView.as_view()),
     path("profitability/<str:address>/", ProfitabilityView.as_view()),
 ]

@@ -69,7 +69,12 @@ class HardClaimSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = HardClaim
-        fields = ["id", "author_address", "author_username", "post_id", "community", "asset", "direction", "value_type", "payda", "percentage", "until", "created_at", "status", "events", "profitability", "signature", "claim_payload"]
+        fields = [
+            "id", "author_address", "author_username", "post_id", "community",
+            "asset", "direction", "value_type", "payda", "percentage",
+            "until", "created_at", "status", "events", "profitability",
+            "signature", "claim_payload"
+        ]
 
     def get_profitability(self, obj):
         try:
