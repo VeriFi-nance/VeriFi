@@ -143,3 +143,38 @@ class UsernameTests(TestCase):
         res_none = self.client.get("/api/auth/profile/non_existent/")
         self.assertEqual(res_none.status_code, 404)
 
+    def test_profile_communities(self):
+        from posts.models import Community, CommunityMembership
+        address = "0x" + "f" * 40
+        user = WalletUser.objects.create(address=address, username="community_user")
+        
+        # Create community owned by user
+        community_owned = Community.objects.create(name="Owned Comm", creator=user, privacy_type="public")
+        
+        # Create another community and join it
+        other_user = WalletUser.objects.create(address="0x" + "e" * 40, username="other_user")
+        community_joined = Community.objects.create(name="Joined Comm", creator=other_user, privacy_type="public")
+        
+        # User is not approved member yet
+        CommunityMembership.objects.create(community=community_joined, user=user, status="pending")
+        
+        # Verify pending membership doesn't show up
+        res = self.client.get(f"/api/auth/profile/{address}/")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(len(res.data["communities_owned"]), 1)
+        self.assertEqual(res.data["communities_owned"][0]["id"], community_owned.id)
+        self.assertEqual(len(res.data["communities_member_of"]), 0)
+        
+        # Make membership approved
+        membership = CommunityMembership.objects.get(community=community_joined, user=user)
+        membership.status = "approved"
+        membership.save()
+        
+        # Verify approved membership shows up
+        res = self.client.get(f"/api/auth/profile/{address}/")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(len(res.data["communities_owned"]), 1)
+        self.assertEqual(len(res.data["communities_member_of"]), 1)
+        self.assertEqual(res.data["communities_member_of"][0]["id"], community_joined.id)
+
+

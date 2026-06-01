@@ -142,6 +142,8 @@ export interface ProfileStats {
   rep?: number;
   energy?: number;
   energy_cap?: number | null;
+  communities_owned?: CommunityItem[];
+  communities_member_of?: CommunityItem[];
 }
 
 export interface MarketYourStake {
