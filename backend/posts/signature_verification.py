@@ -66,10 +66,11 @@ def _check_timestamp_freshness(payload: dict) -> None:
 # HardClaim verification
 # -------------------------------------------------------------------------
 
-def _build_expected_claim_payload(request_data: dict, asset_symbol: str) -> dict:
+def _build_expected_claim_payload(request_data: dict, asset_symbol: str, user_username: str) -> dict:
     """Build what we *expect* the signed payload to contain, from request data."""
     return {
         "asset_symbol": asset_symbol,
+        "author_username": user_username,
         "created_at": request_data.get("created_at", ""),
         "direction": request_data.get("direction", ""),
         "percentage": float(request_data.get("percentage", 0)),
@@ -79,6 +80,7 @@ def _build_expected_claim_payload(request_data: dict, asset_symbol: str) -> dict
 
 def verify_claim_signature(
     user_address: str,
+    user_username: str,
     signature: str,
     claim_payload: dict,
     asset_symbol: str,
@@ -107,9 +109,10 @@ def verify_claim_signature(
     _check_timestamp_freshness(claim_payload)
 
     # 2. Payload consistency — the payload fields must match request data
-    expected = _build_expected_claim_payload(claim_payload, asset_symbol)
+    expected = _build_expected_claim_payload(claim_payload, asset_symbol, user_username)
     actual = {
         "asset_symbol": claim_payload.get("asset_symbol", ""),
+        "author_username": claim_payload.get("author_username", ""),
         "created_at": claim_payload.get("created_at", ""),
         "direction": claim_payload.get("direction", ""),
         "percentage": float(claim_payload.get("percentage", 0)),
@@ -138,10 +141,11 @@ def verify_claim_signature(
 # Position verification
 # -------------------------------------------------------------------------
 
-def _build_expected_position_payload(request_data: dict, asset_symbol: str) -> dict:
+def _build_expected_position_payload(request_data: dict, asset_symbol: str, user_username: str) -> dict:
     """Build what we *expect* the signed position payload to contain."""
     return {
         "asset_symbol": asset_symbol,
+        "author_username": user_username,
         "created_at": request_data.get("created_at", ""),
         "direction": request_data.get("direction", ""),
         "entry_price": float(request_data.get("entry_price", 0)),
@@ -153,6 +157,7 @@ def _build_expected_position_payload(request_data: dict, asset_symbol: str) -> d
 
 def verify_position_signature(
     user_address: str,
+    user_username: str,
     signature: str,
     position_payload: dict,
     asset_symbol: str,
@@ -169,9 +174,10 @@ def verify_position_signature(
     _check_timestamp_freshness(position_payload)
 
     # 2. Payload consistency
-    expected = _build_expected_position_payload(position_payload, asset_symbol)
+    expected = _build_expected_position_payload(position_payload, asset_symbol, user_username)
     actual = {
         "asset_symbol": position_payload.get("asset_symbol", ""),
+        "author_username": position_payload.get("author_username", ""),
         "created_at": position_payload.get("created_at", ""),
         "direction": position_payload.get("direction", ""),
         "entry_price": float(position_payload.get("entry_price", 0)),

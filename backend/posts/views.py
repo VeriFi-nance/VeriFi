@@ -252,6 +252,7 @@ class PostListCreateView(APIView):
                     try:
                         verify_claim_signature(
                             user_address=user.address,
+                            user_username=user.username,
                             signature=hc_sig,
                             claim_payload=hc_claim_payload,
                             asset_symbol=asset.symbol,
@@ -449,6 +450,7 @@ class HardClaimView(APIView):
         try:
             verify_claim_signature(
                 user_address=user.address,
+                user_username=user.username,
                 signature=sig,
                 claim_payload=claim_payload,
                 asset_symbol=asset.symbol,
@@ -979,6 +981,7 @@ class PositionListCreateView(APIView):
         try:
             verify_position_signature(
                 user_address=user.address,
+                user_username=user.username,
                 signature=sig,
                 position_payload=position_payload,
                 asset_symbol=asset.symbol,
