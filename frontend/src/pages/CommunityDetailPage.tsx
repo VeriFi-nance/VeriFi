@@ -164,7 +164,7 @@ export default function CommunityDetailPage() {
       </div>
 
       <div className="text-sm text-muted-foreground">
-        <strong>{community.member_count}</strong> member{community.member_count !== 1 ? 's' : ''} &middot; Created by {community.creator_address.slice(0,6)}...{community.creator_address.slice(-4)}
+        <strong>{community.member_count}</strong> member{community.member_count !== 1 ? 's' : ''} &middot; Created by {community.creator_username ? `@${community.creator_username}` : `${community.creator_address.slice(0,6)}...${community.creator_address.slice(-4)}`}
       </div>
 
       {isCreator && community.pending_requests && community.pending_requests.length > 0 && (
@@ -175,7 +175,7 @@ export default function CommunityDetailPage() {
           <CardContent className="space-y-3">
             {community.pending_requests.map(req => (
               <div key={req.id} className="flex items-center justify-between">
-                <code className="text-xs">{req.user_address}</code>
+                <code className="text-xs">{req.user_username ? `@${req.user_username}` : req.user_address}</code>
                 <div className="flex gap-2">
                   <Button size="sm" variant="destructive" onClick={() => handleBan(req.user_address)}>Ban</Button>
                   <Button size="sm" variant="outline" onClick={() => handleApprove(req.user_address, 'reject')}>Reject</Button>
@@ -226,7 +226,7 @@ export default function CommunityDetailPage() {
                     <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div>
                         <div className="font-mono font-bold text-sm flex items-center gap-2">
-                          {member.user_address}
+                          {member.user_username ? `@${member.user_username}` : member.user_address}
                           <ProfitabilityBadge data={member.profitability} />
                         </div>
                         <div className="text-xs text-muted-foreground">Joined: {new Date(member.created_at).toLocaleDateString()}</div>

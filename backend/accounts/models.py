@@ -3,13 +3,24 @@ from django.db import models
 
 class WalletUser(models.Model):
     address = models.CharField(max_length=42, unique=True)  # Ethereum address: 0x + 40 hex
+    username = models.CharField(max_length=30, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     rep = models.FloatField(default=200.0)
     energy = models.FloatField(default=4.0)
     last_energy_grant = models.DateTimeField(null=True, blank=True)
 
+    def save(self, *args, **kwargs):
+        if not self.username:
+            base = self.address[:6]
+            self.username = base
+            counter = 1
+            while WalletUser.objects.filter(username__iexact=self.username).exclude(pk=self.pk).exists():
+                self.username = f"{base}_{counter}"
+                counter += 1
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return self.address
+        return self.username
 
 
 class Follow(models.Model):

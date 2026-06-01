@@ -20,8 +20,8 @@ function normalizeAddress(address: string): string {
 export async function authenticateMetaMaskAddress(rawAddress: string): Promise<string> {
   const address = normalizeAddress(rawAddress);
   try {
-    const { access } = await register(address);
-    saveAuthSession(address, access);
+    const { access, username } = await register(address);
+    saveAuthSession(address, username, access);
     return address;
   } catch (regErr) {
     if (!(regErr instanceof Error && regErr.message === 'Address already registered.')) {
@@ -38,8 +38,8 @@ export async function authenticateMetaMaskAddress(rawAddress: string): Promise<s
     params: [nonce, address],
   })) as string;
   const signature = rawSig.startsWith('0x') ? rawSig.slice(2) : rawSig;
-  const { access } = await login(address, signature, nonce);
-  saveAuthSession(address, access);
+  const { access, username } = await login(address, signature, nonce);
+  saveAuthSession(address, username, access);
   return address;
 }
 

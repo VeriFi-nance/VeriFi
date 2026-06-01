@@ -117,8 +117,8 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
           </div>
 
           <div className="flex flex-col items-end gap-1">
-            <Link to={`/u/${position.author_address}`} className="text-xs font-mono hover:underline">
-              {truncateAddress(position.author_address)}
+            <Link to={`/u/${position.author_username || position.author_address}`} className="text-xs font-mono hover:underline">
+              {position.author_username ? `@${position.author_username}` : truncateAddress(position.author_address)}
             </Link>
             <ProfitabilityBadge data={position.profitability} />
           </div>

@@ -68,10 +68,10 @@ export default function PostDetailPage() {
           <div className="flex items-center gap-3">
             <UserAvatar address={post.author_address} size="md" />
             <Link
-              to={`/u/${post.author_address}`}
+              to={`/u/${post.author_username || post.author_address}`}
               className="text-sm font-mono font-medium hover:underline truncate"
             >
-              {truncateAddress(post.author_address)}
+              {post.author_username ? `@${post.author_username}` : truncateAddress(post.author_address)}
             </Link>
             <span className="ml-auto text-xs text-muted-foreground num">
               {new Date(post.created_at).toLocaleString()}
