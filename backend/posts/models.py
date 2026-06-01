@@ -34,6 +34,12 @@ class CommunityMembership(models.Model):
 
     class Meta:
         unique_together = ("community", "user")
+        indexes = [
+            models.Index(
+                fields=["community", "status"],
+                name="comm_member_status_idx",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.user.address[:10]} in {self.community.name} ({self.status})"
@@ -47,6 +53,21 @@ class Post(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["-created_at"],
+                name="post_global_feed_idx",
+                condition=models.Q(community__isnull=True),
+            ),
+            models.Index(
+                fields=["community", "-created_at"],
+                name="post_community_feed_idx",
+            ),
+            models.Index(
+                fields=["author", "-created_at"],
+                name="post_author_feed_idx",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.author.address[:10]}… — {self.content[:40]}"
@@ -117,10 +138,17 @@ class HardClaim(models.Model):
     post = models.ForeignKey(Post, on_delete=models.SET_NULL, null=True, blank=True, related_name="hard_claims")
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE, blank=False, null=False)
     direction = models.CharField(max_length=20, blank=True, default="") # this will be binary, 1 up, 0 down
-    percentage = models.FloatField(blank=False, null=False) # this will be a percentage value between 0 and 100
+    # Numerator/denominator + magnitude semantics from the ensemble extractor.
+    # value_type distinguishes an absolute price target from a percentage move;
+    # `percentage` stores the magnitude (a price when value_type == "PRICE").
+    value_type = models.CharField(max_length=20, default="PERCENTAGE_UP")
+    payda = models.CharField(max_length=10, blank=True, default="")  # denominator ticker
+    percentage = models.FloatField(blank=False, null=False) # magnitude: percentage move, or absolute price when value_type == PRICE
     until = models.DateField(blank=False, null=False)
     created_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=12, choices=Status.choices, default="undetermined")
+    signature = models.TextField(blank=True, default="")
+    claim_payload = models.JSONField(blank=True, default=dict)
 
     class Meta:
         constraints = [
@@ -128,6 +156,17 @@ class HardClaim(models.Model):
                 condition=models.Q(until__gt=models.F("created_at")),
                 name="hardclaim_until_after_created_at",
             )
+        ]
+        indexes = [
+            models.Index(
+                fields=["status", "until"],
+                name="hardclaim_resolve_idx",
+                condition=models.Q(status="undetermined"),
+            ),
+            models.Index(
+                fields=["author", "-id"],
+                name="hardclaim_author_idx",
+            ),
         ]
 
     def __str__(self):
@@ -147,6 +186,12 @@ class HardClaimEvent(models.Model):
 
     class Meta:
         ordering = ["timestamp"]
+        indexes = [
+            models.Index(
+                fields=["hard_claim", "event_type"],
+                name="hardclaim_event_lookup_idx",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.event_type} at {self.timestamp} for claim {self.hard_claim.id}"
@@ -195,6 +240,8 @@ class Position(models.Model):
     pnl_percentage = models.FloatField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     created_at = models.DateTimeField(auto_now_add=True)
+    signature = models.TextField(blank=True, default="")
+    position_payload = models.JSONField(blank=True, default=dict)
 
     def __str__(self):
         return f"Position {self.id} ({self.asset.symbol} {self.direction})"
@@ -236,3 +283,59 @@ class AssetSubscription(models.Model):
 
     def __str__(self):
         return f"Subscription: Position #{self.position.id} → {self.asset.symbol}"
+
+
+class ClaimMarket(models.Model):
+    """Model G — creator-as-trader CPMM market bound to a HardClaim."""
+
+    class Side(models.TextChoices):
+        YES = "YES"
+        NO = "NO"
+
+    hard_claim = models.OneToOneField(
+        HardClaim, on_delete=models.CASCADE, related_name="market", primary_key=True
+    )
+    y_reserve = models.FloatField()
+    n_reserve = models.FloatField()
+    yes_outstanding = models.FloatField(default=0.0)
+    no_outstanding = models.FloatField(default=0.0)
+    escrow = models.FloatField(default=0.0)
+    total_burned = models.FloatField(default=0.0)
+    creator_side = models.CharField(max_length=3, choices=Side.choices)
+    creator_stake_rep = models.FloatField()
+    listing_fee_burned = models.FloatField(default=2.0)
+    resolved = models.BooleanField(default=False)
+    refunded_trivial = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Market<claim={self.hard_claim_id} Y={self.y_reserve:.2f} N={self.n_reserve:.2f}>"
+
+
+class ClaimStake(models.Model):
+    """One row per (market, user). Locked-payout receipt."""
+
+    class Side(models.TextChoices):
+        YES = "YES"
+        NO = "NO"
+
+    market = models.ForeignKey(
+        ClaimMarket, on_delete=models.CASCADE, related_name="stakes"
+    )
+    user = models.ForeignKey(
+        WalletUser, on_delete=models.CASCADE, related_name="claim_stakes"
+    )
+    side = models.CharField(max_length=3, choices=Side.choices)
+    rep_paid_gross = models.FloatField()
+    rep_paid_net = models.FloatField()
+    shares = models.FloatField()
+    entry_price = models.FloatField()
+    is_creator = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("market", "user")
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"Stake<m={self.market_id} u={self.user_id} {self.side} {self.shares:.2f}sh>"

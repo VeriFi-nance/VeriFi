@@ -1,19 +1,39 @@
+export type ClaimType = 'PRICE' | 'PERCENTAGE_UP' | 'PERCENTAGE_DOWN';
+
+/** @deprecated Use ClaimType — kept for backend API field names. */
+export type ClaimValueType = ClaimType;
+
+/** Extraction completeness, mirroring the backend ensemble data model. */
+export type ClaimExtractionStatus = 'HARD_CLAIM' | 'INCOMPLETE_CLAIM';
+
 export interface ReviewClaim {
   text: string;
+  /** Numerator asset (ticker symbol, e.g. BTC). */
   asset: string;
   direction: string;
+  /** The user's review decision for this claim. */
   status: 'confirmed' | 'rejected';
+  /** Numeric magnitude (an absolute price or a percentage). */
   percentage?: string;
+  /** Deadline (ISO date). */
   until?: string;
+  /** Quote/denominator ticker of the X/Y parity (e.g. USD in BTC/USD). */
+  parity?: string;
+  /** Whether `percentage` is an absolute price or a percentage move. */
+  claim_type?: ClaimType;
+  /** @deprecated Use claim_type */
+  valueType?: ClaimType;
+  /** Backend-reported completeness; recomputed locally as the user edits. */
+  claimStatus?: ClaimExtractionStatus;
 }
 
 export interface ExtractedClaimContract {
   pay: string | null;
   payda: string | null;
   value: number | null;
-  value_type: 'PRICE' | 'PERCENTAGE_UP' | 'PERCENTAGE_DOWN';
+  value_type: ClaimType;
   deadline: string | null;
-  status: 'HARD_CLAIM' | 'POSSIBLE_CLAIM';
+  status: ClaimExtractionStatus;
   text: string;
 }
 
@@ -40,6 +60,7 @@ export interface ProfitabilityData {
 export interface PostItem {
   id: number;
   author_address: string;
+  author_username: string;
   content: string;
   created_at: string;
   claims: ClaimItem[];
@@ -57,13 +78,24 @@ export interface HardClaimEvent {
 export interface HardClaimItem {
   id: number;
   author_address: string | null;
+  author_username: string | null;
   post_id: number | null;
   asset: number;
   direction: string;
+  /** Frontend name; API may send `value_type` instead. */
+  claim_type?: ClaimType;
+  /** API field — mapped to `claim_type` in UI helpers. */
+  value_type?: ClaimType;
+  /** Frontend name; API may send `payda` instead. */
+  parity?: string;
+  /** API field — mapped to `parity` in UI helpers. */
+  payda?: string;
   percentage: number;
   until: string;
   created_at: string;
   status: string;
+  signature?: string;
+  claim_payload?: Record<string, unknown>;
   events?: HardClaimEvent[];
   profitability?: ProfitabilityData | null;
 }
@@ -102,12 +134,70 @@ export interface ClaimChartData {
 
 export interface ProfileStats {
   address: string;
+  username: string;
   followers_count: number;
   following_count: number;
   followers: string[];
   following: string[];
   is_following?: boolean;
   profitability?: ProfitabilityData | null;
+  rep?: number;
+  energy?: number;
+  energy_cap?: number | null;
+}
+
+export interface MarketYourStake {
+  side: 'YES' | 'NO';
+  shares: number;
+  rep_paid_gross: number;
+  entry_price: number;
+  is_creator: boolean;
+  locked_payout_if_win: number;
+}
+
+export interface ClaimMarketItem {
+  claim_id: number;
+  yes_price: number;
+  y_reserve: number;
+  n_reserve: number;
+  yes_outstanding: number;
+  no_outstanding: number;
+  escrow: number;
+  total_burned: number;
+  creator_side: 'YES' | 'NO';
+  creator_stake_rep: number;
+  listing_fee_burned: number;
+  resolved: boolean;
+  refunded_trivial: boolean;
+  stake_count: number;
+  your_stake: MarketYourStake | null;
+  trader_stake: number;
+  burn_fee: number;
+  min_loser_voters: number;
+  min_total_voters: number;
+}
+
+export interface BuyPreviewResult {
+  side: 'YES' | 'NO';
+  rep_amount: number;
+  shares: number;
+  entry_price: number;
+  locked_payout_if_win: number;
+  new_yes_price: number;
+}
+
+export interface BuyResult {
+  market: ClaimMarketItem;
+  stake: {
+    side: 'YES' | 'NO';
+    shares: number;
+    rep_paid_gross: number;
+    rep_paid_net: number;
+    entry_price: number;
+    locked_payout_if_win: number;
+  };
+  user_rep: number;
+  user_energy: number;
 }
 
 export interface CommunityItem {
@@ -115,6 +205,7 @@ export interface CommunityItem {
   name: string;
   description: string;
   creator_address: string;
+  creator_username: string;
   privacy_type: 'public' | 'private';
   post_permission: 'all' | 'creator_only';
   created_at: string;
@@ -127,6 +218,7 @@ export interface CommunityMembershipItem {
   id: number;
   community: number;
   user_address: string;
+  user_username: string;
   status: 'pending' | 'approved' | 'banned';
   created_at: string;
   profitability?: ProfitabilityData | null;
@@ -142,6 +234,7 @@ export interface PositionEventItem {
 export interface PositionItem {
   id: number;
   author_address: string;
+  author_username: string;
   community: number;
   asset: number;
   direction: 'long' | 'short';
@@ -154,6 +247,31 @@ export interface PositionItem {
   pnl_percentage: number | null;
   status: 'pending' | 'active' | 'confirmed' | 'rejected' | 'missed' | 'closed_early' | 'expired';
   created_at: string;
+  signature?: string;
+  position_payload?: Record<string, unknown>;
   events?: PositionEventItem[];
   profitability?: ProfitabilityData | null;
+}
+
+export interface ProofBundle {
+  type: 'claim' | 'position';
+  claim_id?: number;
+  position_id?: number;
+  wallet_address: string;
+  signature: string;
+  payload: Record<string, unknown>;
+  server_timestamp: string;
+}
+
+export interface OGMetadata {
+  title: string;
+  description: string;
+  asset_symbol: string;
+  direction: string;
+  percentage?: number;
+  entry_price?: number;
+  take_profit?: number | null;
+  stop_loss?: number | null;
+  status: string;
+  author_username?: string;
 }

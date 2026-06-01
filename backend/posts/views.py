@@ -1,14 +1,120 @@
+import logging
 from django.conf import settings
+from django.db import transaction
+from django.db.models import Prefetch
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from accounts.models import WalletUser
-from .models import Post, Claim, HardClaim, Asset, OHLCData, Community, CommunityMembership, AssetSubscription
+from .models import Post, Claim, HardClaim, Asset, OHLCData, Community, CommunityMembership, AssetSubscription, ClaimMarket, ClaimStake
 from .serializers import PostSerializer, ClaimInputSerializer, HardClaimInputSerializer, HardClaimSerializer, AssetSerializer, CommunitySerializer, CommunityMembershipSerializer
 from .claim_extraction import rule_based_claims_from_prompt
 from django.shortcuts import get_object_or_404
 from .resolution import CONTRACT_VERSION, ResolutionError, preview_resolution, resolve_hard_claim
+from . import rep_market
+from .signature_verification import verify_claim_signature, verify_position_signature
+from accounts.energy import grant_energy, spend, CLAIM_ENERGY_COST
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_PAGE_SIZE = 20
+MAX_PAGE_SIZE = 100
+
+
+def _posts_queryset():
+    return (
+        Post.objects.select_related("author", "author__profitability")
+        .prefetch_related(
+            "claims",
+            Prefetch(
+                "hard_claims",
+                HardClaim.objects.select_related("author", "author__profitability").prefetch_related(
+                    "events"
+                ),
+            ),
+        )
+        .order_by("-created_at")
+    )
+
+
+def _filter_posts_queryset(qs, request):
+    community_id = request.query_params.get("community")
+    if community_id:
+        qs = qs.filter(community_id=community_id)
+        community = get_object_or_404(Community, id=community_id)
+        if community.privacy_type == Community.PrivacyType.PRIVATE:
+            user = _get_wallet_user(request)
+            if not user or not CommunityMembership.objects.filter(
+                community=community, user=user, status=CommunityMembership.Status.APPROVED
+            ).exists():
+                return None, Response(
+                    {"detail": "You must be an approved member to view this community's posts."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+    else:
+        qs = qs.filter(community__isnull=True)
+
+    feed_type = request.query_params.get("feed")
+    if feed_type == "following":
+        user = _get_wallet_user(request)
+        if user:
+            following_ids = user.following_set.values_list("following_id", flat=True)
+            qs = qs.filter(author_id__in=following_ids)
+        else:
+            return None, Response(
+                {"detail": "Authentication required for following feed."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+    return qs, None
+
+
+def _paginate_queryset(qs, request):
+    try:
+        page = max(1, int(request.query_params.get("page", 1)))
+    except (TypeError, ValueError):
+        page = 1
+
+    try:
+        page_size = min(
+            MAX_PAGE_SIZE,
+            max(1, int(request.query_params.get("page_size", DEFAULT_PAGE_SIZE))),
+        )
+    except (TypeError, ValueError):
+        page_size = DEFAULT_PAGE_SIZE
+
+    count = qs.count()
+    offset = (page - 1) * page_size
+    results = qs[offset : offset + page_size]
+    has_next = offset + page_size < count
+    return {
+        "count": count,
+        "page": page,
+        "page_size": page_size,
+        "has_next": has_next,
+        "results": results,
+    }
+
+
+def _can_view_post(post, request) -> bool | Response:
+    if not post.community_id:
+        return True
+
+    community = post.community
+    if community.privacy_type != Community.PrivacyType.PRIVATE:
+        return True
+
+    user = _get_wallet_user(request)
+    if user and CommunityMembership.objects.filter(
+        community=community, user=user, status=CommunityMembership.Status.APPROVED
+    ).exists():
+        return True
+
+    return Response(
+        {"detail": "You must be an approved member to view this post."},
+        status=status.HTTP_403_FORBIDDEN,
+    )
 
 
 def _get_wallet_user(request) -> WalletUser | None:
@@ -36,29 +142,20 @@ class PostListCreateView(APIView):
     permission_classes = []
 
     def get(self, request):
-        qs = Post.objects.prefetch_related("claims", "hard_claims").order_by("-created_at")
-        
-        community_id = request.query_params.get("community")
-        if community_id:
-            qs = qs.filter(community_id=community_id)
-            community = get_object_or_404(Community, id=community_id)
-            if community.privacy_type == Community.PrivacyType.PRIVATE:
-                user = _get_wallet_user(request)
-                if not user or not CommunityMembership.objects.filter(community=community, user=user, status=CommunityMembership.Status.APPROVED).exists():
-                    return Response({"detail": "You must be an approved member to view this community's posts."}, status=status.HTTP_403_FORBIDDEN)
-        else:
-            qs = qs.filter(community__isnull=True)
-            
-        feed_type = request.query_params.get("feed")
-        if feed_type == "following":
-            user = _get_wallet_user(request)
-            if user:
-                following_addresses = user.following_set.values_list("following__address", flat=True)
-                qs = qs.filter(author__address__in=following_addresses)
-            else:
-                return Response({"detail": "Authentication required for following feed."}, status=status.HTTP_401_UNAUTHORIZED)
-                
-        return Response(PostSerializer(qs, many=True).data)
+        qs, error_response = _filter_posts_queryset(_posts_queryset(), request)
+        if error_response is not None:
+            return error_response
+
+        page = _paginate_queryset(qs, request)
+        return Response(
+            {
+                "count": page["count"],
+                "page": page["page"],
+                "page_size": page["page_size"],
+                "has_next": page["has_next"],
+                "results": PostSerializer(page["results"], many=True).data,
+            }
+        )
 
     def post(self, request):
         user = _get_wallet_user(request)
@@ -94,18 +191,129 @@ class PostListCreateView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        post = Post.objects.create(author=user, content=content, community=community_obj)
-        for claim in serializer.validated_data:
-            if claim.get("status") != "rejected":
-                Claim.objects.create(
-                    post=post,
-                    text=claim["text"],
-                    asset=claim.get("asset", ""),
-                    direction=claim.get("direction", ""),
-                    status=Claim.Status.CONFIRMED,
-                )
+        hard_claims_data = request.data.get("hard_claims", [])
+
+        with transaction.atomic():
+            post = Post.objects.create(author=user, content=content, community=community_obj)
+            for claim in serializer.validated_data:
+                if claim.get("status") != "rejected":
+                    Claim.objects.create(
+                        post=post,
+                        text=claim["text"],
+                        asset=claim.get("asset", ""),
+                        direction=claim.get("direction", ""),
+                        status=Claim.Status.CONFIRMED,
+                    )
+            
+            for hc_data in hard_claims_data:
+                hc_serializer = HardClaimInputSerializer(data=hc_data)
+                if not hc_serializer.is_valid():
+                    transaction.set_rollback(True)
+                    return Response(hc_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                valid_hc = hc_serializer.validated_data
+
+                try:
+                    asset = Asset.objects.get(id=valid_hc["asset_id"])
+                except Asset.DoesNotExist:
+                    transaction.set_rollback(True)
+                    return Response({"detail": "Invalid asset reference."}, status=status.HTTP_400_BAD_REQUEST)
+                
+                market_block = hc_data.get("market") if isinstance(hc_data, dict) else None
+                if market_block is not None:
+                    try:
+                        m_side = str(market_block.get("side", "")).upper()
+                        m_stake = float(market_block.get("stake_rep", 0))
+                    except (TypeError, ValueError):
+                        transaction.set_rollback(True)
+                        return Response({"detail": "Invalid market block."}, status=status.HTTP_400_BAD_REQUEST)
+                    if m_side not in ("YES", "NO"):
+                        transaction.set_rollback(True)
+                        return Response({"detail": "market.side must be YES or NO."}, status=status.HTTP_400_BAD_REQUEST)
+                    if not (rep_market.CREATOR_MIN_STAKE <= m_stake <= rep_market.CREATOR_MAX_STAKE):
+                        transaction.set_rollback(True)
+                        return Response(
+                            {"detail": f"market.stake_rep must be in [{rep_market.CREATOR_MIN_STAKE}, {rep_market.CREATOR_MAX_STAKE}]."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    if user.rep < rep_market.LISTING_FEE + m_stake:
+                        transaction.set_rollback(True)
+                        return Response({"detail": "Insufficient rep for listing fee + stake."}, status=status.HTTP_400_BAD_REQUEST)
+                    if not spend(user, CLAIM_ENERGY_COST):
+                        transaction.set_rollback(True)
+                        return Response({"detail": "Insufficient energy to create market."}, status=status.HTTP_400_BAD_REQUEST)
+                else:
+                    m_side = None
+                    m_stake = None
+                
+                try:
+                    # Verify claim signature before persisting
+                    hc_sig = valid_hc.get("signature", "")
+                    hc_claim_payload = valid_hc.get("claim_payload", {})
+                    try:
+                        verify_claim_signature(
+                            user_address=user.address,
+                            user_username=user.username,
+                            signature=hc_sig,
+                            claim_payload=hc_claim_payload,
+                            asset_symbol=asset.symbol,
+                        )
+                    except Exception as sig_exc:
+                        transaction.set_rollback(True)
+                        from rest_framework.exceptions import ValidationError as DRFValidationError
+                        if isinstance(sig_exc, DRFValidationError):
+                            return Response(sig_exc.detail, status=status.HTTP_400_BAD_REQUEST)
+                        logger.exception("Unexpected error during claim signature verification")
+                        return Response({"detail": "Invalid claim signature."}, status=status.HTTP_400_BAD_REQUEST)
+
+                    hard_claim = HardClaim.objects.create(
+                        author=user,
+                        post=post,
+                        community=community_obj,
+                        asset=asset,
+                        direction=valid_hc.get("direction", ""),
+                        value_type=valid_hc.get("value_type", "PERCENTAGE_UP"),
+                        payda=valid_hc.get("payda", ""),
+                        percentage=valid_hc["percentage"],
+                        until=valid_hc["until"],
+                        status=valid_hc.get("status", "undetermined"),
+                        signature=hc_sig,
+                        claim_payload=hc_claim_payload,
+                    )
+                    from .models import HardClaimEvent
+                    HardClaimEvent.objects.create(
+                        hard_claim=hard_claim,
+                        event_type=HardClaimEvent.EventType.CREATION,
+                        details={}
+                    )
+                    if market_block is not None:
+                        rep_market.init_market(hard_claim, user, m_side, m_stake)
+                except rep_market.MarketError:
+                    transaction.set_rollback(True)
+                    logger.exception("Market initialization failed during post creation.")
+                    return Response({"detail": "Unable to initialize market."}, status=status.HTTP_400_BAD_REQUEST)
+                except Exception:
+                    transaction.set_rollback(True)
+                    logger.exception("Unexpected error while creating hard claim.")
+                    return Response({"detail": "An internal error has occurred."}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(PostSerializer(post).data, status=status.HTTP_201_CREATED)
+
+
+class PostDetailView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        try:
+            post = _posts_queryset().get(pk=pk)
+        except Post.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        permission = _can_view_post(post, request)
+        if isinstance(permission, Response):
+            return permission
+
+        return Response(PostSerializer(post).data)
 
 
 class ExtractClaimsView(APIView):
@@ -153,6 +361,10 @@ class HardClaimView(APIView):
         address = request.query_params.get("address", "").strip().lower()
         if address:
             qs = qs.filter(author__address=address)
+            
+        username_q = request.query_params.get("username", "").strip()
+        if username_q:
+            qs = qs.filter(author__username__iexact=username_q)
             
         feed_type = request.query_params.get("feed")
         if feed_type == "following":
@@ -209,6 +421,47 @@ class HardClaimView(APIView):
             except Community.DoesNotExist:
                 return Response({"detail": f"Community {community_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Optional Model G market block.
+        market_block = request.data.get("market") if isinstance(request.data, dict) else None
+        if market_block is not None:
+            try:
+                m_side = str(market_block.get("side", "")).upper()
+                m_stake = float(market_block.get("stake_rep", 0))
+            except (TypeError, ValueError):
+                return Response({"detail": "Invalid market block."}, status=status.HTTP_400_BAD_REQUEST)
+            if m_side not in ("YES", "NO"):
+                return Response({"detail": "market.side must be YES or NO."}, status=status.HTTP_400_BAD_REQUEST)
+            if not (rep_market.CREATOR_MIN_STAKE <= m_stake <= rep_market.CREATOR_MAX_STAKE):
+                return Response(
+                    {"detail": f"market.stake_rep must be in [{rep_market.CREATOR_MIN_STAKE}, {rep_market.CREATOR_MAX_STAKE}]."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if user.rep < rep_market.LISTING_FEE + m_stake:
+                return Response({"detail": "Insufficient rep for listing fee + stake."}, status=status.HTTP_400_BAD_REQUEST)
+            if not spend(user, CLAIM_ENERGY_COST):
+                return Response({"detail": "Insufficient energy to create market."}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            m_side = None
+            m_stake = None
+
+        # Validate signature before persisting
+        sig = request.data.get("signature", "")
+        claim_payload = request.data.get("claim_payload", {})
+        try:
+            verify_claim_signature(
+                user_address=user.address,
+                user_username=user.username,
+                signature=sig,
+                claim_payload=claim_payload,
+                asset_symbol=asset.symbol,
+            )
+        except Exception as e:
+            from rest_framework.exceptions import ValidationError as DRFValidationError
+            if isinstance(e, DRFValidationError):
+                return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+            logger.exception("Unexpected error during claim signature verification")
+            return Response({"detail": "Invalid claim signature."}, status=status.HTTP_400_BAD_REQUEST)
+
         # Create HardClaim object in the database with the given data
         try:
             hard_claim = HardClaim.objects.create(
@@ -217,9 +470,13 @@ class HardClaimView(APIView):
                 community=community_obj,
                 asset=asset,
                 direction=data.get("direction", ""),
+                value_type=data.get("value_type", "PERCENTAGE_UP"),
+                payda=data.get("payda", ""),
                 percentage=data["percentage"],
                 until=data["until"],
                 status=data.get("status", "undetermined"),
+                signature=sig,
+                claim_payload=claim_payload,
             )
             from .models import HardClaimEvent
             HardClaimEvent.objects.create(
@@ -227,9 +484,13 @@ class HardClaimView(APIView):
                 event_type=HardClaimEvent.EventType.CREATION,
                 details={}
             )
+            if market_block is not None:
+                rep_market.init_market(hard_claim, user, m_side, m_stake)
+        except rep_market.MarketError as e:
+            return Response({"detail": f"market: {e}"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         return Response(HardClaimSerializer(hard_claim).data, status=status.HTTP_201_CREATED)
 
     def patch(self, request, pk):
@@ -251,6 +512,33 @@ class HardClaimView(APIView):
 
         hard_claim.status = new_status
         hard_claim.save()
+        return Response(HardClaimSerializer(hard_claim).data)
+
+
+class HardClaimDetailView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        try:
+            hard_claim = HardClaim.objects.get(pk=pk)
+        except HardClaim.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if hard_claim.community_id:
+            community = hard_claim.community
+            if community.privacy_type == Community.PrivacyType.PRIVATE:
+                user = _get_wallet_user(request)
+                if not user or not CommunityMembership.objects.filter(
+                    community=community,
+                    user=user,
+                    status=CommunityMembership.Status.APPROVED,
+                ).exists():
+                    return Response(
+                        {"detail": "You must be an approved member to view this claim."},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+
         return Response(HardClaimSerializer(hard_claim).data)
 
 
@@ -290,13 +578,15 @@ class HardClaimChartDataView(APIView):
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
         asset = hard_claim.asset
-        start_date = hard_claim.created_at.date()
-        end_date = hard_claim.until
+        # get_ohlc_data requires aligned UTC datetime objects
+        from datetime import datetime, timezone
+        start_time = datetime.combine(hard_claim.created_at.date(), datetime.min.time(), tzinfo=timezone.utc)
+        end_time = datetime.combine(hard_claim.until, datetime.min.time(), tzinfo=timezone.utc)
 
         # Get or fetch OHLC data
         from .ohlc_fetcher import get_ohlc_data, OHLCFetchError
         try:
-            ohlc_rows = get_ohlc_data(asset, start_date, end_date)
+            ohlc_rows = get_ohlc_data(asset, start_time, end_time)
         except OHLCFetchError as e:
             return Response({"detail": str(e)}, status=status.HTTP_502_BAD_GATEWAY)
 
@@ -328,14 +618,16 @@ class HardClaimChartDataView(APIView):
 
             direction = hard_claim.direction.lower()
             pct = float(hard_claim.percentage)
-            if direction == "bullish":
+            if hard_claim.value_type == "PRICE":
+                target_price = pct
+            elif direction == "bullish":
                 target_price = _round_decimal(reference_price * (1 + pct / 100))
             else:
                 target_price = _round_decimal(reference_price * (1 - pct / 100))
 
         ohlc_data = [
             {
-                "date": row.date.isoformat(),
+                "date": row.timestamp.isoformat(),
                 "open": row.open,
                 "high": row.high,
                 "low": row.low,
@@ -683,7 +975,24 @@ class PositionListCreateView(APIView):
             return Response({"detail": "Only the creator can post in this community."}, status=status.HTTP_403_FORBIDDEN)
 
         asset = get_object_or_404(Asset, pk=data["asset_id"])
-        
+
+        sig = data.get("signature", "")
+        position_payload = data.get("position_payload", {})
+        try:
+            verify_position_signature(
+                user_address=user.address,
+                user_username=user.username,
+                signature=sig,
+                position_payload=position_payload,
+                asset_symbol=asset.symbol,
+            )
+        except Exception as e:
+            from rest_framework.exceptions import ValidationError as DRFValidationError
+            if isinstance(e, DRFValidationError):
+                return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+            logger.exception("Unexpected error while verifying position signature")
+            return Response({"detail": "Unable to verify position signature."}, status=status.HTTP_400_BAD_REQUEST)
+
         position = Position.objects.create(
             author=user,
             community=community,
@@ -694,6 +1003,8 @@ class PositionListCreateView(APIView):
             stop_loss=data["stop_loss"],
             take_profit=data["take_profit"],
             lifetime=data["lifetime"],
+            signature=sig,
+            position_payload=position_payload,
             status=Position.Status.PENDING
         )
         
@@ -769,9 +1080,207 @@ class PositionCloseView(APIView):
 
             from .profitability import recalculate_profitability
             recalculate_profitability(user)
-            
+
             return Response(PositionSerializer(position).data, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"detail": f"Failed to close position: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+# ---------------------------------------------------------------------------
+# Model G — reputation market endpoints
+# ---------------------------------------------------------------------------
+
+
+def _serialize_market(market: ClaimMarket, viewer: WalletUser | None) -> dict:
+    your_stake = None
+    if viewer is not None:
+        st = ClaimStake.objects.filter(market=market, user=viewer).first()
+        if st is not None:
+            your_stake = {
+                "side": st.side,
+                "shares": st.shares,
+                "rep_paid_gross": st.rep_paid_gross,
+                "entry_price": st.entry_price,
+                "is_creator": st.is_creator,
+                "locked_payout_if_win": st.shares,
+            }
+    return {
+        "claim_id": market.hard_claim_id,
+        "yes_price": rep_market.yes_price(market),
+        "y_reserve": market.y_reserve,
+        "n_reserve": market.n_reserve,
+        "yes_outstanding": market.yes_outstanding,
+        "no_outstanding": market.no_outstanding,
+        "escrow": market.escrow,
+        "total_burned": market.total_burned,
+        "creator_side": market.creator_side,
+        "creator_stake_rep": market.creator_stake_rep,
+        "listing_fee_burned": market.listing_fee_burned,
+        "resolved": market.resolved,
+        "refunded_trivial": market.refunded_trivial,
+        "stake_count": market.stakes.count(),
+        "your_stake": your_stake,
+        "trader_stake": rep_market.TRADER_STAKE,
+        "burn_fee": rep_market.BURN_FEE,
+        "min_loser_voters": rep_market.MIN_LOSER_VOTERS,
+        "min_total_voters": rep_market.MIN_TOTAL_VOTERS,
+    }
+
+
+class HardClaimMarketView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        try:
+            market = ClaimMarket.objects.get(hard_claim_id=pk)
+        except ClaimMarket.DoesNotExist:
+            return Response({"detail": "No market."}, status=status.HTTP_404_NOT_FOUND)
+        viewer = _get_wallet_user(request)
+        return Response(_serialize_market(market, viewer))
+
+
+class HardClaimMarketCreateView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, pk):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            hard_claim = HardClaim.objects.get(pk=pk)
+        except HardClaim.DoesNotExist:
+            return Response({"detail": "Claim not found."}, status=status.HTTP_404_NOT_FOUND)
+        if hard_claim.author_id != user.pk:
+            return Response({"detail": "Only the claim author can create its market."}, status=status.HTTP_403_FORBIDDEN)
+        side = str(request.data.get("side", "")).upper()
+        try:
+            stake_rep = float(request.data.get("stake_rep", 0))
+        except (TypeError, ValueError):
+            return Response({"detail": "Invalid stake_rep."}, status=status.HTTP_400_BAD_REQUEST)
+        if side not in ("YES", "NO"):
+            return Response({"detail": "side must be YES or NO."}, status=status.HTTP_400_BAD_REQUEST)
+        if not (rep_market.CREATOR_MIN_STAKE <= stake_rep <= rep_market.CREATOR_MAX_STAKE):
+            return Response(
+                {"detail": f"stake_rep must be in [{rep_market.CREATOR_MIN_STAKE}, {rep_market.CREATOR_MAX_STAKE}]."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if hasattr(hard_claim, "market"):
+            return Response({"detail": "Market already exists."}, status=status.HTTP_409_CONFLICT)
+        if user.rep < rep_market.LISTING_FEE + stake_rep:
+            return Response({"detail": "Insufficient rep."}, status=status.HTTP_400_BAD_REQUEST)
+        if not spend(user, CLAIM_ENERGY_COST):
+            return Response({"detail": "Insufficient energy."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            market = rep_market.init_market(hard_claim, user, side, stake_rep)
+        except rep_market.MarketError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(_serialize_market(market, user), status=status.HTTP_201_CREATED)
+
+
+class HardClaimMarketBuyView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, pk):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            market = ClaimMarket.objects.get(hard_claim_id=pk)
+        except ClaimMarket.DoesNotExist:
+            return Response({"detail": "No market."}, status=status.HTTP_404_NOT_FOUND)
+        if market.resolved:
+            return Response({"detail": "Market resolved."}, status=status.HTTP_400_BAD_REQUEST)
+        side = str(request.data.get("side", "")).upper()
+        if side not in ("YES", "NO"):
+            return Response({"detail": "side must be YES or NO."}, status=status.HTTP_400_BAD_REQUEST)
+        if user.rep < rep_market.TRADER_STAKE:
+            return Response({"detail": "Insufficient rep."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            stake = rep_market.buy(market, user, side)
+        except rep_market.MarketError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {
+                "market": _serialize_market(market, user),
+                "stake": {
+                    "side": stake.side,
+                    "shares": stake.shares,
+                    "rep_paid_gross": stake.rep_paid_gross,
+                    "rep_paid_net": stake.rep_paid_net,
+                    "entry_price": stake.entry_price,
+                    "locked_payout_if_win": stake.shares,
+                },
+                "user_rep": user.rep,
+                "user_energy": user.energy,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class HardClaimMarketPreviewView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        try:
+            market = ClaimMarket.objects.get(hard_claim_id=pk)
+        except ClaimMarket.DoesNotExist:
+            return Response({"detail": "No market."}, status=status.HTTP_404_NOT_FOUND)
+        side = request.query_params.get("side", "").upper()
+        if side not in ("YES", "NO"):
+            return Response({"detail": "side must be YES or NO."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            preview = rep_market.preview_buy(market, side, rep_market.TRADER_STAKE)
+        except rep_market.MarketError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {
+                "side": side,
+                "rep_amount": rep_market.TRADER_STAKE,
+                "shares": preview.shares,
+                "entry_price": preview.entry_price,
+                "locked_payout_if_win": preview.locked_payout_if_win,
+                "new_yes_price": preview.new_yes_price,
+            }
+        )
+
+
+class HardClaimProofView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        claim = get_object_or_404(HardClaim, pk=pk)
+        if not claim.signature:
+            return Response({"detail": "This claim does not have a signature."}, status=status.HTTP_404_NOT_FOUND)
+        
+        return Response({
+            "type": "claim",
+            "claim_id": claim.id,
+            "wallet_address": claim.author.address,
+            "signature": claim.signature,
+            "payload": claim.claim_payload,
+            "server_timestamp": claim.created_at.isoformat()
+        })
+
+
+class PositionProofView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        position = get_object_or_404(Position, pk=pk)
+        if not position.signature:
+            return Response({"detail": "This position does not have a signature."}, status=status.HTTP_404_NOT_FOUND)
+        
+        return Response({
+            "type": "position",
+            "position_id": position.id,
+            "wallet_address": position.author.address,
+            "signature": position.signature,
+            "payload": position.position_payload,
+            "server_timestamp": position.created_at.isoformat()
+        })

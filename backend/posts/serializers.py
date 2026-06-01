@@ -39,9 +39,16 @@ class HardClaimInputSerializer(serializers.Serializer):
     post_id = serializers.IntegerField(required=False, allow_null=True, default=None)
     community_id = serializers.IntegerField(required=False, allow_null=True, default=None)
     direction = serializers.CharField(allow_blank=True, default="")
+    value_type = serializers.ChoiceField(
+        choices=["PRICE", "PERCENTAGE_UP", "PERCENTAGE_DOWN"],
+        default="PERCENTAGE_UP",
+    )
+    payda = serializers.CharField(allow_blank=True, default="", required=False)
     percentage = serializers.FloatField(min_value=0)
     until = serializers.DateField()
     status = serializers.ChoiceField(choices=["confirmed", "undetermined", "rejected"], default="undetermined")
+    signature = serializers.CharField(required=True)
+    claim_payload = serializers.JSONField(required=True)
 
 
     def validate_until(self, value):
@@ -56,12 +63,18 @@ class HardClaimEventSerializer(serializers.ModelSerializer):
 
 class HardClaimSerializer(serializers.ModelSerializer):
     author_address = serializers.CharField(source="author.address", read_only=True, allow_null=True)
+    author_username = serializers.CharField(source="author.username", read_only=True, allow_null=True)
     events = HardClaimEventSerializer(many=True, read_only=True)
     profitability = serializers.SerializerMethodField()
 
     class Meta:
         model = HardClaim
-        fields = ["id", "author_address", "post_id", "community", "asset", "direction", "percentage", "until", "created_at", "status", "events", "profitability"]
+        fields = [
+            "id", "author_address", "author_username", "post_id", "community",
+            "asset", "direction", "value_type", "payda", "percentage",
+            "until", "created_at", "status", "events", "profitability",
+            "signature", "claim_payload"
+        ]
 
     def get_profitability(self, obj):
         try:
@@ -76,13 +89,14 @@ class HardClaimSerializer(serializers.ModelSerializer):
 
 class PostSerializer(serializers.ModelSerializer):
     author_address = serializers.CharField(source="author.address", read_only=True)
+    author_username = serializers.CharField(source="author.username", read_only=True)
     claims = ClaimSerializer(many=True, read_only=True)
     hard_claims = HardClaimSerializer(many=True, read_only=True)
     profitability = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
-        fields = ["id", "author_address", "content", "community", "created_at", "claims", "hard_claims", "profitability"]
+        fields = ["id", "author_address", "author_username", "content", "community", "created_at", "claims", "hard_claims", "profitability"]
 
     def get_profitability(self, obj):
         try:
@@ -103,22 +117,24 @@ class OHLCDataSerializer(serializers.ModelSerializer):
 
 class CommunitySerializer(serializers.ModelSerializer):
     creator_address = serializers.CharField(source="creator.address", read_only=True)
+    creator_username = serializers.CharField(source="creator.username", read_only=True)
     member_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Community
-        fields = ["id", "name", "description", "creator_address", "privacy_type", "post_permission", "created_at", "member_count"]
+        fields = ["id", "name", "description", "creator_address", "creator_username", "privacy_type", "post_permission", "created_at", "member_count"]
 
     def get_member_count(self, obj):
         return obj.memberships.filter(status="approved").count()
 
 class CommunityMembershipSerializer(serializers.ModelSerializer):
     user_address = serializers.CharField(source="user.address", read_only=True)
+    user_username = serializers.CharField(source="user.username", read_only=True)
     profitability = serializers.SerializerMethodField()
 
     class Meta:
         model = CommunityMembership
-        fields = ["id", "community", "user_address", "status", "created_at", "profitability"]
+        fields = ["id", "community", "user_address", "user_username", "status", "created_at", "profitability"]
 
     def get_profitability(self, obj):
         try:
@@ -140,15 +156,17 @@ class PositionEventSerializer(serializers.ModelSerializer):
 
 class PositionSerializer(serializers.ModelSerializer):
     author_address = serializers.CharField(source="author.address", read_only=True)
+    author_username = serializers.CharField(source="author.username", read_only=True)
     events = PositionEventSerializer(many=True, read_only=True)
     profitability = serializers.SerializerMethodField()
 
     class Meta:
         model = Position
         fields = [
-            "id", "author_address", "community", "asset", "direction",
+            "id", "author_address", "author_username", "community", "asset", "direction",
             "entry_price", "entry_interval", "stop_loss", "take_profit",
-            "lifetime", "exit_price", "pnl_percentage", "status", "created_at", "events", "profitability"
+            "lifetime", "exit_price", "pnl_percentage", "status", "created_at", "events", "profitability",
+            "signature", "position_payload"
         ]
 
     def get_profitability(self, obj):
@@ -173,6 +191,8 @@ class PositionInputSerializer(serializers.Serializer):
     stop_loss = serializers.FloatField(required=True)
     take_profit = serializers.FloatField(required=True)
     lifetime = serializers.DateTimeField(required=True)
+    signature = serializers.CharField(required=True)
+    position_payload = serializers.JSONField(required=True)
 
     def validate(self, data):
         now = timezone.now()

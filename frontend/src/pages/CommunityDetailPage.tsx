@@ -4,24 +4,26 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getCommunity, joinCommunity, approveCommunityMember, banCommunityMember, getFeed, getAssets, getCommunityMembers, getPositions, updateCommunity } from '@/lib/api';
-import type { CommunityItem, PostItem, AssetItem, CommunityMembershipItem, PositionItem } from '@/lib/types';
+import { getCommunity, joinCommunity, approveCommunityMember, banCommunityMember, getAssets, getCommunityMembers, getPositions, updateCommunity } from '@/lib/api';
+import type { CommunityItem, AssetItem, CommunityMembershipItem, PositionItem } from '@/lib/types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { loadAddress } from '@/lib/auth';
-import { PostCard } from '@/components/feed/PostCard';
+import { useAuthState, useOpenLogin } from '@/lib/auth';
+import { FeedList } from '@/components/feed/FeedList';
 import { NewPostButton } from '@/components/feed/NewPostModal';
 import ProfitabilityBadge from '@/components/ProfitabilityBadge';
 import { PositionCard } from '@/components/PositionCard';
 import { NewPositionModal } from '@/components/NewPositionModal';
 import { Settings } from 'lucide-react';
+import { PageContent } from '@/components/PageContent';
 
 export default function CommunityDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const myAddress = loadAddress();
+  const openLogin = useOpenLogin();
+  const auth = useAuthState();
+  const myAddress = auth.address;
   
   const [community, setCommunity] = useState<CommunityItem | null>(null);
-  const [posts, setPosts] = useState<PostItem[]>([]);
   const [positions, setPositions] = useState<PositionItem[]>([]);
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [members, setMembers] = useState<CommunityMembershipItem[]>([]);
@@ -39,13 +41,11 @@ export default function CommunityDetailPage() {
       const canView = comm.privacy_type === 'public' || comm.my_membership_status === 'approved' || comm.creator_address === myAddress;
       
       if (canView) {
-        const [p, a, m, pos] = await Promise.all([
-          getFeed({ community: Number(id) }),
+        const [a, m, pos] = await Promise.all([
           getAssets(),
           getCommunityMembers(Number(id)),
-          getPositions(Number(id))
+          getPositions(Number(id)),
         ]);
-        setPosts(p);
         setAssets(a);
         setMembers(m);
         setPositions(pos);
@@ -73,6 +73,10 @@ export default function CommunityDetailPage() {
 
   const handleJoin = async () => {
     if (!id) return;
+    if (!auth.authenticated) {
+      openLogin(`/c/${id}`);
+      return;
+    }
     try {
       await joinCommunity(Number(id));
       await fetchCommunityAndPosts();
@@ -130,9 +134,9 @@ export default function CommunityDetailPage() {
   const canPost = isCreator || (community.my_membership_status === 'approved' && community.post_permission === 'all');
 
   return (
-    <div className="space-y-6 max-w-2xl mx-auto">
+    <PageContent className="space-y-6">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/app/communities')}>
+        <Button variant="ghost" size="icon" onClick={() => navigate('/c')}>
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
         </Button>
         <div className="flex-1">
@@ -160,7 +164,7 @@ export default function CommunityDetailPage() {
       </div>
 
       <div className="text-sm text-muted-foreground">
-        <strong>{community.member_count}</strong> member{community.member_count !== 1 ? 's' : ''} &middot; Created by {community.creator_address.slice(0,6)}...{community.creator_address.slice(-4)}
+        <strong>{community.member_count}</strong> member{community.member_count !== 1 ? 's' : ''} &middot; Created by {community.creator_username ? `@${community.creator_username}` : `${community.creator_address.slice(0,6)}...${community.creator_address.slice(-4)}`}
       </div>
 
       {isCreator && community.pending_requests && community.pending_requests.length > 0 && (
@@ -171,7 +175,7 @@ export default function CommunityDetailPage() {
           <CardContent className="space-y-3">
             {community.pending_requests.map(req => (
               <div key={req.id} className="flex items-center justify-between">
-                <code className="text-xs">{req.user_address}</code>
+                <code className="text-xs">{req.user_username ? `@${req.user_username}` : req.user_address}</code>
                 <div className="flex gap-2">
                   <Button size="sm" variant="destructive" onClick={() => handleBan(req.user_address)}>Ban</Button>
                   <Button size="sm" variant="outline" onClick={() => handleApprove(req.user_address, 'reject')}>Reject</Button>
@@ -193,13 +197,7 @@ export default function CommunityDetailPage() {
           </TabsList>
           
           <TabsContent value="posts" className="space-y-4 mt-4">
-            {posts.length === 0 ? (
-              <p className="text-muted-foreground text-sm">No posts in this community yet.</p>
-            ) : (
-              posts.map(post => (
-                <PostCard key={post.id} post={post} hardClaims={post.hard_claims} assets={assets} />
-              ))
-            )}
+            <FeedList community={Number(id)} />
           </TabsContent>
           
           <TabsContent value="positions" className="space-y-4 mt-4">
@@ -228,7 +226,7 @@ export default function CommunityDetailPage() {
                     <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div>
                         <div className="font-mono font-bold text-sm flex items-center gap-2">
-                          {member.user_address}
+                          {member.user_username ? `@${member.user_username}` : member.user_address}
                           <ProfitabilityBadge data={member.profitability} />
                         </div>
                         <div className="text-xs text-muted-foreground">Joined: {new Date(member.created_at).toLocaleDateString()}</div>
@@ -271,7 +269,7 @@ export default function CommunityDetailPage() {
                       When set to "Creator Only", only you can create posts and positions in this community.
                     </p>
                     {settingsSaved && (
-                      <p className={`text-xs font-medium ${settingsSaved.startsWith('Error') ? 'text-destructive' : 'text-green-600'}`}>
+                      <p className={`text-xs font-medium ${settingsSaved.startsWith('Error') ? 'text-destructive' : 'text-success'}`}>
                         {settingsSaved}
                       </p>
                     )}
@@ -288,6 +286,6 @@ export default function CommunityDetailPage() {
           </AlertDescription>
         </Alert>
       )}
-    </div>
+    </PageContent>
   );
 }

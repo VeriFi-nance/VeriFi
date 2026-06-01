@@ -55,8 +55,17 @@ def _parse_origins(raw: str, default: str) -> list[str]:
 
 CORS_ALLOWED_ORIGINS = _parse_origins(
     "CORS_ALLOWED_ORIGINS",
-    "http://localhost:5173",
+    "http://localhost:5173,http://127.0.0.1:5173",
 )
+
+# Local development convenience: accept any localhost / 127.0.0.1 port so the
+# Vite dev server works whether it's reached via "localhost" or "127.0.0.1" and
+# regardless of which fallback port it picks (5173, 5174, …).
+if DEBUG:
+    CORS_ALLOWED_ORIGIN_REGEXES = [
+        r"^http://localhost:\d+$",
+        r"^http://127\.0\.0\.1:\d+$",
+    ]
 
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
@@ -134,6 +143,12 @@ DATABASES = {
         ssl_require=_use_ssl,
     )
 }
+
+# Bound the time spent on a single connection attempt so a suspended Neon
+# compute (cold start) fails fast and is retried, rather than hanging until the
+# default OS-level timeout. Only applies to Postgres.
+if _database_url.startswith(("postgres://", "postgresql://")):
+    DATABASES["default"].setdefault("OPTIONS", {}).setdefault("connect_timeout", 10)
 
 
 # Password validation

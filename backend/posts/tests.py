@@ -39,7 +39,8 @@ class HardClaimAPITestCase(APITestCase):
         refresh["address"] = user.address
         return str(refresh.access_token)
 
-    def test_create_hard_claim_success(self):
+    @patch('posts.views.verify_claim_signature')
+    def test_create_hard_claim_success(self, mock_verify):
         """Test successfully creating a hard claim."""
         url = reverse('hard-claims')
         data = {
@@ -47,7 +48,9 @@ class HardClaimAPITestCase(APITestCase):
             'direction': 'bullish',
             'percentage': 25.0,
             'until': '2027-12-31',
-            'status': 'undetermined'
+            'status': 'undetermined',
+            'signature': '0x123',
+            'claim_payload': {'asset_symbol': 'BTC', 'direction': 'bullish', 'percentage': 25.0, 'until': '2027-12-31'}
         }
 
         response = self.client.post(url, data, format='json')
@@ -234,7 +237,7 @@ class HardClaimResolutionContractTestCase(APITestCase):
         self.assertEqual(payload["target"]["value"], 10.0)
         self.assertEqual(payload["target"]["direction"], "bullish")
 
-    def test_normalize_claim_for_resolution_rejects_missing_provider_symbol(self):
+    def test_missing_provider_symbol_bubbles_no_price_data(self):
         self.asset.provider_symbol = ""
         self.asset.save(update_fields=["provider_symbol"])
         created_at = timezone.now() - timedelta(days=10)
@@ -251,9 +254,10 @@ class HardClaimResolutionContractTestCase(APITestCase):
         hard_claim.refresh_from_db()
 
         with self.assertRaises(ResolutionError) as ctx:
-            normalize_claim_for_resolution(hard_claim)
+            from posts.resolution import fetch_reference_price
+            fetch_reference_price(hard_claim)
 
-        self.assertEqual(ctx.exception.code, "ASSET_PROVIDER_SYMBOL_MISSING")
+        self.assertEqual(ctx.exception.code, "PROVIDER_NO_PRICE_DATA")
 
 
 class HardClaimResolveApiTestCase(APITestCase):
@@ -332,12 +336,15 @@ class HardClaimResolveApiTestCase(APITestCase):
         self.assertEqual(response.data["status"], "confirmed")
         mock_resolve.assert_called_once()
 
-    @patch("posts.resolution._fetch_coingecko_peak")
-    @patch("posts.resolution._fetch_coingecko_price")
-    def test_actual_resolution_persists_status_and_returns_computed_payload(self, mock_ref, mock_peak):
+    @patch("posts.resolution.get_ohlc_data")
+    @patch("posts.resolution.fetch_reference_price")
+    def test_actual_resolution_persists_status_and_returns_computed_payload(self, mock_ref, mock_ohlc):
         claim = self._make_claim(asset=self.crypto_asset, direction="bullish", percentage=10.0)
-        mock_ref.return_value = 70000.0
-        mock_peak.return_value = 78100.0
+        mock_ref.return_value = (70000.0, "http://mock.ref")
+        from posts.models import OHLCData
+        mock_ohlc.return_value = [
+            OHLCData(asset=self.crypto_asset, timestamp=claim.created_at, interval="1d", open=70000.0, high=78100.0, low=69000.0, close=75000.0)
+        ]
 
         with self.settings(ADMIN_ADDRESSES=[self.admin_address]):
             self._auth(self.admin_user)
@@ -468,45 +475,29 @@ class HardClaimResolveApiTestCase(APITestCase):
             response = self.client.post(self._url(claim), {}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data["error_code"], "UNSUPPORTED_PROVIDER")
+        self.assertEqual(response.data["error_code"], "PROVIDER_NO_PRICE_DATA")
 
-    @patch("posts.resolution._fetch_coingecko_peak")
     @patch("posts.resolution._fetch_coingecko_price")
-    def test_coingecko_provider_is_used_for_crypto(self, mock_price, mock_peak):
+    def test_coingecko_provider_is_used_for_crypto(self, mock_price):
         claim = self._make_claim(asset=self.crypto_asset)
-        mock_price.return_value = 70000.0
-        mock_peak.return_value = 78000.0
+        mock_price.return_value = (70000.0, "http://mock")
 
-        payload = normalize_claim_for_resolution(claim)
-        reference_price = fetch_reference_price(payload)
-        from datetime import datetime, timezone as tz
-        ref_at = datetime.fromisoformat(payload["reference_at"].replace("Z", "+00:00"))
-        due_at = datetime.fromisoformat(payload["due_at"].replace("Z", "+00:00"))
-        peak_price = fetch_peak_price(payload["instrument"], ref_at, due_at, "bullish")
+        from posts.resolution import fetch_current_price
+        reference_price, _ = fetch_current_price(claim.asset, claim.created_at)
 
         self.assertEqual(reference_price, 70000.0)
-        self.assertEqual(peak_price, 78000.0)
         mock_price.assert_called_once()
-        mock_peak.assert_called_once()
 
-    @patch("posts.resolution._fetch_yfinance_peak")
     @patch("posts.resolution._fetch_yfinance_price")
-    def test_yfinance_provider_is_used_for_non_crypto(self, mock_price, mock_peak):
+    def test_yfinance_provider_is_used_for_non_crypto(self, mock_price):
         claim = self._make_claim(asset=self.forex_asset)
-        mock_price.return_value = 1.12
-        mock_peak.return_value = 1.15
+        mock_price.return_value = (1.12, "http://mock")
 
-        payload = normalize_claim_for_resolution(claim)
-        reference_price = fetch_reference_price(payload)
-        from datetime import datetime, timezone as tz
-        ref_at = datetime.fromisoformat(payload["reference_at"].replace("Z", "+00:00"))
-        due_at = datetime.fromisoformat(payload["due_at"].replace("Z", "+00:00"))
-        peak_price = fetch_peak_price(payload["instrument"], ref_at, due_at, "bullish")
+        from posts.resolution import fetch_current_price
+        reference_price, _ = fetch_current_price(claim.asset, claim.created_at)
 
         self.assertEqual(reference_price, 1.12)
-        self.assertEqual(peak_price, 1.15)
         mock_price.assert_called_once()
-        mock_peak.assert_called_once()
 
     @patch("posts.views.resolve_hard_claim")
     def test_malformed_provider_response_bubbles_as_structured_error(self, mock_resolve):
@@ -715,7 +706,8 @@ class PositionTestCase(APITestCase):
         refresh["address"] = user.address
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {str(refresh.access_token)}')
 
-    def test_create_valid_long_position(self):
+    @patch('posts.views.verify_position_signature')
+    def test_create_valid_long_position(self, mock_verify):
         self._auth(self.member_user)
         now = timezone.now()
         data = {
@@ -726,14 +718,17 @@ class PositionTestCase(APITestCase):
             "entry_interval": (now + timedelta(days=1)).isoformat(),
             "stop_loss": 40000,
             "take_profit": 60000,
-            "lifetime": (now + timedelta(days=7)).isoformat()
+            "lifetime": (now + timedelta(days=7)).isoformat(),
+            "signature": "0x123",
+            "position_payload": {"fake": "payload"}
         }
         url = reverse('position-list-create')
         response = self.client.post(url, data, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["status"], "pending")
 
-    def test_create_invalid_long_position_sl_tp(self):
+    @patch('posts.views.verify_position_signature')
+    def test_create_invalid_long_position_sl_tp(self, mock_verify):
         self._auth(self.member_user)
         now = timezone.now()
         data = {
@@ -744,13 +739,16 @@ class PositionTestCase(APITestCase):
             "entry_interval": (now + timedelta(days=1)).isoformat(),
             "stop_loss": 60000,  # SL > entry
             "take_profit": 40000, # TP < entry
-            "lifetime": (now + timedelta(days=7)).isoformat()
+            "lifetime": (now + timedelta(days=7)).isoformat(),
+            "signature": "0x123",
+            "position_payload": {"fake": "payload"}
         }
         url = reverse('position-list-create')
         response = self.client.post(url, data, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_create_invalid_short_position_sl_tp(self):
+    @patch('posts.views.verify_position_signature')
+    def test_create_invalid_short_position_sl_tp(self, mock_verify):
         self._auth(self.member_user)
         now = timezone.now()
         data = {
@@ -761,13 +759,16 @@ class PositionTestCase(APITestCase):
             "entry_interval": (now + timedelta(days=1)).isoformat(),
             "stop_loss": 40000,  # SL < entry
             "take_profit": 60000, # TP > entry
-            "lifetime": (now + timedelta(days=7)).isoformat()
+            "lifetime": (now + timedelta(days=7)).isoformat(),
+            "signature": "0x123",
+            "position_payload": {"fake": "payload"}
         }
         url = reverse('position-list-create')
         response = self.client.post(url, data, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_create_invalid_dates(self):
+    @patch('posts.views.verify_position_signature')
+    def test_create_invalid_dates(self, mock_verify):
         self._auth(self.member_user)
         now = timezone.now()
         data = {
@@ -778,7 +779,9 @@ class PositionTestCase(APITestCase):
             "entry_interval": (now - timedelta(days=1)).isoformat(), # Past
             "stop_loss": 40000,
             "take_profit": 60000,
-            "lifetime": (now + timedelta(days=7)).isoformat()
+            "lifetime": (now + timedelta(days=7)).isoformat(),
+            "signature": "0x123",
+            "position_payload": {"fake": "payload"}
         }
         url = reverse('position-list-create')
         response = self.client.post(url, data, format="json")
@@ -833,7 +836,7 @@ class PositionTestCase(APITestCase):
             stop_loss=40000,
             take_profit=60000,
             lifetime=now + timedelta(days=7),
-            status=Position.Status.PENDING # Not active
+            status=Position.Status.CONFIRMED # Not active
         )
 
         url = reverse('position-close', kwargs={"pk": pos.id})
@@ -862,3 +865,226 @@ class PositionTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
+class PostFeedPaginationTestCase(APITestCase):
+    def setUp(self):
+        self.author = WalletUser.objects.create(address="0xauthor000000000000000000000000000000")
+        for i in range(25):
+            Post.objects.create(author=self.author, content=f"Post {i}")
+
+    def test_feed_returns_paginated_response(self):
+        url = reverse("post-list-create")
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 25)
+        self.assertEqual(response.data["page"], 1)
+        self.assertEqual(response.data["page_size"], 20)
+        self.assertTrue(response.data["has_next"])
+        self.assertEqual(len(response.data["results"]), 20)
+
+    def test_feed_page_two(self):
+        url = reverse("post-list-create")
+        response = self.client.get(url, {"page": 2})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["results"]), 5)
+        self.assertFalse(response.data["has_next"])
+
+
+class PostDetailTestCase(APITestCase):
+    def setUp(self):
+        self.author = WalletUser.objects.create(address="0xauthor000000000000000000000000000000")
+        self.post = Post.objects.create(author=self.author, content="Detail me")
+
+    def test_get_post_by_id(self):
+        url = reverse("post-detail", kwargs={"pk": self.post.id})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["id"], self.post.id)
+        self.assertEqual(response.data["content"], "Detail me")
+
+    def test_get_post_not_found(self):
+        url = reverse("post-detail", kwargs={"pk": 99999})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class SignatureVerificationTestCase(APITestCase):
+    def setUp(self):
+        self.wallet_user = WalletUser.objects.create(
+            address="0x742d35cc6634c0532925a3b844bc454e4438f44e",
+            username="testuser"
+        )
+        self.asset = Asset.objects.create(
+            name="Bitcoin",
+            symbol="BTC",
+            description="Digital gold",
+            market_type=Asset.MarketType.CRYPTO,
+            provider=Asset.Provider.COINGECKO,
+            provider_symbol="bitcoin",
+        )
+        self.token = self._get_jwt_token(self.wallet_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
+
+    def _get_jwt_token(self, user):
+        refresh = RefreshToken()
+        refresh["address"] = user.address
+        return str(refresh.access_token)
+
+    @patch('posts.views.verify_claim_signature')
+    def test_stale_signature_timestamp(self, mock_verify):
+        from rest_framework.exceptions import ValidationError
+        mock_verify.side_effect = ValidationError({"signature": "Payload timestamp is stale or too far in the future (±5 min)."})
+        url = reverse('hard-claims')
+        data = {
+            'asset_id': self.asset.id,
+            'direction': 'bullish',
+            'percentage': 25.0,
+            'until': '2027-12-31',
+            'status': 'undetermined',
+            'signature': '0x123',
+            'claim_payload': {
+                'asset_symbol': 'BTC', 
+                'author_username': 'testuser',
+                'direction': 'bullish', 
+                'percentage': 25.0, 
+                'until': '2027-12-31',
+                'created_at': (timezone.now() - timedelta(minutes=10)).isoformat()
+            }
+        }
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("signature", response.data)
+
+    @patch('posts.views.verify_claim_signature')
+    def test_verify_invalid_signature_graceful_fail(self, mock_verify):
+        from rest_framework.exceptions import ValidationError
+        mock_verify.side_effect = ValidationError({"signature": "Invalid signature: recovery failed."})
+        url = reverse('hard-claims')
+        data = {
+            'asset_id': self.asset.id,
+            'direction': 'bullish',
+            'percentage': 25.0,
+            'until': '2027-12-31',
+            'status': 'undetermined',
+            'signature': '0xbadsignature',
+            'claim_payload': {
+                'asset_symbol': 'BTC', 
+                'author_username': 'testuser',
+                'direction': 'bullish', 
+                'percentage': 25.0, 
+                'until': '2027-12-31',
+                'created_at': timezone.now().isoformat()
+            }
+        }
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("signature", response.data)
+
+    @patch('posts.views.verify_claim_signature')
+    def test_payload_consistency_mismatch(self, mock_verify):
+        from rest_framework.exceptions import ValidationError
+        mock_verify.side_effect = ValidationError({"signature": "Signed payload does not match request data."})
+        url = reverse('hard-claims')
+        data = {
+            'asset_id': self.asset.id,
+            'direction': 'bullish',
+            'percentage': 25.0,
+            'until': '2027-12-31',
+            'status': 'undetermined',
+            'signature': '0x123',
+            'claim_payload': {
+                'asset_symbol': 'BTC', 
+                'author_username': 'testuser',
+                'direction': 'bullish', 
+                'percentage': 50.0,  # Mismatched percentage
+                'until': '2027-12-31',
+                'created_at': timezone.now().isoformat()
+            }
+        }
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("signature", response.data)
+
+
+class ProofAndOGEndpointsTestCase(APITestCase):
+    def setUp(self):
+        from decimal import Decimal
+        from django.utils import timezone
+        from .models import Position
+        self.wallet_user = WalletUser.objects.create(
+            address="0x742d35cc6634c0532925a3b844bc454e4438f44e",
+            username="testuser"
+        )
+        self.asset = Asset.objects.create(
+            name="Bitcoin",
+            symbol="BTC",
+            description="Digital gold",
+            market_type=Asset.MarketType.CRYPTO,
+            provider=Asset.Provider.COINGECKO,
+            provider_symbol="bitcoin",
+        )
+        self.post = Post.objects.create(
+            author=self.wallet_user,
+            content="I predict BTC will go up",
+        )
+        self.claim = HardClaim.objects.create(
+            post=self.post,
+            author=self.wallet_user,
+            asset=self.asset,
+            direction="bullish",
+            percentage=Decimal("10.00"),
+            until=timezone.now() + timezone.timedelta(days=7),
+            signature="0xmocksignature",
+            claim_payload={"mock": "payload"}
+        )
+        from .models import Community
+        self.community = Community.objects.create(name="Test Community")
+        self.position = Position.objects.create(
+            author=self.wallet_user,
+            community=self.community,
+            asset=self.asset,
+            direction="LONG",
+            entry_price=Decimal("50000.00"),
+            entry_interval=timezone.now() + timezone.timedelta(days=1),
+            stop_loss=Decimal("45000.00"),
+            take_profit=Decimal("60000.00"),
+            lifetime=timezone.now() + timezone.timedelta(days=7),
+            signature="0xmockpossignature",
+            position_payload={"mock": "pospayload"}
+        )
+
+    def test_hard_claim_proof_endpoint(self):
+        url = reverse('hard-claim-proof', args=[self.claim.id])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["type"], "claim")
+        self.assertEqual(response.data["claim_id"], self.claim.id)
+        self.assertEqual(response.data["signature"], "0xmocksignature")
+
+    def test_hard_claim_og_endpoint(self):
+        url = reverse('hard-claim-og', args=[self.claim.id])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["asset_symbol"], "BTC")
+        self.assertEqual(response.data["direction"], "bullish")
+        self.assertIn("title", response.data)
+        self.assertIn("description", response.data)
+
+    def test_position_proof_endpoint(self):
+        url = reverse('position-proof', args=[self.position.id])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["type"], "position")
+        self.assertEqual(response.data["position_id"], self.position.id)
+        self.assertEqual(response.data["signature"], "0xmockpossignature")
+
+    def test_position_og_endpoint(self):
+        url = reverse('position-og', args=[self.position.id])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["asset_symbol"], "BTC")
+        self.assertEqual(response.data["direction"], "LONG")
+        self.assertIn("title", response.data)
+        self.assertIn("description", response.data)

@@ -202,10 +202,10 @@ def normalize_claim_for_resolution(hard_claim: HardClaim) -> dict[str, Any]:
             "quote_currency": asset.quote_currency,
         },
         "target": {
-            "kind": "percentage",
+            "kind": "price" if hard_claim.value_type == "PRICE" else "percentage",
             "direction": hard_claim.direction.lower(),
             "value": float(hard_claim.percentage),
-            "unit": "percent",
+            "unit": asset.quote_currency if hard_claim.value_type == "PRICE" else "percent",
         },
         "reference_at": _isoformat_utc(hard_claim.created_at),
         "due_at": _isoformat_utc(due_at),
@@ -237,7 +237,9 @@ def _evaluate_ohlc(
         raise ResolutionError("INVALID_REFERENCE_PRICE", "Reference price must be greater than zero.")
 
     # Compute target price
-    if direction == "bullish":
+    if hard_claim.value_type == "PRICE":
+        target_price = percentage
+    elif direction == "bullish":
         target_price = reference_price * (1 + percentage / 100)
     else:
         target_price = reference_price * (1 - percentage / 100)
@@ -252,9 +254,9 @@ def _evaluate_ohlc(
         if direction == "bullish":
             # Check if high reached or exceeded target
             if candle.high >= target_price:
-                hit_days.append(candle.date.isoformat())
+                hit_days.append(candle.timestamp.date().isoformat())
                 if first_hit_date is None:
-                    first_hit_date = candle.date.isoformat()
+                    first_hit_date = candle.timestamp.date().isoformat()
             # Track closest approach via high
             distance = abs(candle.high - target_price)
             if distance < closest_distance:
@@ -263,9 +265,9 @@ def _evaluate_ohlc(
         else:
             # Bearish: check if low reached or went below target
             if candle.low <= target_price:
-                hit_days.append(candle.date.isoformat())
+                hit_days.append(candle.timestamp.date().isoformat())
                 if first_hit_date is None:
-                    first_hit_date = candle.date.isoformat()
+                    first_hit_date = candle.timestamp.date().isoformat()
             # Track closest approach via low
             distance = abs(candle.low - target_price)
             if distance < closest_distance:
@@ -299,7 +301,7 @@ def _evaluate_ohlc(
     # Build OHLC array for chart
     ohlc_list = [
         {
-            "date": c.date.isoformat(),
+            "date": c.timestamp.date().isoformat(),
             "open": _round_decimal(c.open),
             "high": _round_decimal(c.high),
             "low": _round_decimal(c.low),
@@ -320,10 +322,10 @@ def _evaluate_ohlc(
             "provider_symbol": hard_claim.asset.provider_symbol,
         },
         "target": {
-            "kind": "percentage",
+            "kind": "price" if hard_claim.value_type == "PRICE" else "percentage",
             "direction": direction,
             "value": percentage,
-            "unit": "percent",
+            "unit": hard_claim.asset.quote_currency if hard_claim.value_type == "PRICE" else "percent",
         },
         "prices": {
             "reference": _round_decimal(reference_price),
@@ -356,9 +358,9 @@ def preview_resolution(hard_claim: HardClaim) -> dict[str, Any]:
     reference_price, reference_url = fetch_reference_price(hard_claim)
 
     # 2. Load OHLC data for the claim period
-    start_date = hard_claim.created_at.date()
-    end_date = hard_claim.until
-    ohlc_rows = get_ohlc_data(hard_claim.asset, start_date, end_date)
+    start_time = datetime.combine(hard_claim.created_at.date(), datetime.min.time(), tzinfo=timezone.utc)
+    end_time = datetime.combine(hard_claim.until, datetime.min.time(), tzinfo=timezone.utc)
+    ohlc_rows = get_ohlc_data(hard_claim.asset, start_time, end_time)
 
     if not ohlc_rows:
         raise ResolutionError("NO_OHLC_DATA", "Could not obtain any OHLC data for the claim period.")
@@ -387,4 +389,17 @@ def resolve_hard_claim(hard_claim: HardClaim) -> dict[str, Any]:
             "hit_days": result["hit_days"],
         },
     )
+
+    # Model G rep market: settle stakes if a market is attached.
+    if hard_claim.status in (HardClaim.Status.CONFIRMED, HardClaim.Status.REJECTED):
+        try:
+            market = hard_claim.market
+        except HardClaim.market.RelatedObjectDoesNotExist:
+            market = None
+        if market is not None and not market.resolved:
+            from .rep_market import resolve as resolve_market
+
+            winning_side = "YES" if hard_claim.status == HardClaim.Status.CONFIRMED else "NO"
+            resolve_market(market, winning_side)
+
     return result

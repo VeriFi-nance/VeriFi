@@ -70,7 +70,7 @@ class ResolutionTests(TestCase):
             price = base_price * (1 + trend_pct * i / 100)
             rows.append(OHLCData(
                 asset=self.asset,
-                date=d,
+                timestamp=d,
                 open=price,
                 high=price * 1.02,
                 low=price * 0.98,
@@ -92,7 +92,7 @@ class ResolutionTests(TestCase):
                 break
             price = 1000 + i * 30  # 1000, 1030, 1060, 1090, 1120
             OHLCData.objects.create(
-                asset=self.asset, date=d,
+                asset=self.asset, timestamp=d,
                 open=price, high=price + 20, low=price - 20, close=price + 10,
             )
         mock_ohlc_fetch.return_value = []  # Already in DB, won't be called
@@ -122,7 +122,7 @@ class ResolutionTests(TestCase):
                 break
             price = 1000 + i * 10  # 1000, 1010, 1020, 1030, 1040 — max high = 1060
             OHLCData.objects.create(
-                asset=self.asset, date=d,
+                asset=self.asset, timestamp=d,
                 open=price, high=price + 20, low=price - 20, close=price + 5,
             )
         mock_ohlc_fetch.return_value = []
@@ -148,10 +148,66 @@ class ResolutionTests(TestCase):
                 break
             price = 1000 - i * 30  # 1000, 970, 940, 910, 880
             OHLCData.objects.create(
-                asset=self.asset, date=d,
+                asset=self.asset, timestamp=d,
                 open=price, high=price + 10, low=price - 20, close=price - 5,
             )
         mock_ohlc_fetch.return_value = []
 
         result = resolve_hard_claim(self.claim)
         self.assertEqual(result["status"], HardClaim.Status.CONFIRMED)
+
+    def test_normalize_price_claim(self):
+        self.claim.value_type = "PRICE"
+        self.claim.percentage = 1500.0
+        self.claim.save()
+        payload = normalize_claim_for_resolution(self.claim)
+        self.assertEqual(payload["target"]["kind"], "price")
+        self.assertEqual(payload["target"]["value"], 1500.0)
+        self.assertEqual(payload["target"]["unit"], "USD")
+
+    @patch("posts.resolution.fetch_reference_price")
+    @patch("posts.ohlc_fetcher.fetch_ohlc_for_asset")
+    def test_resolve_price_bullish_confirmed(self, mock_ohlc_fetch, mock_ref):
+        self.claim.value_type = "PRICE"
+        self.claim.percentage = 1100.0
+        self.claim.save()
+        mock_ref.return_value = (1000.0, "http://mock.ref")
+        start = self.claim.created_at.date()
+        for i in range(5):
+            d = start + timedelta(days=i)
+            if d > self.claim.until:
+                break
+            price = 1000 + i * 30
+            OHLCData.objects.create(
+                asset=self.asset, timestamp=d,
+                open=price, high=price + 20, low=price - 20, close=price + 10,
+            )
+        mock_ohlc_fetch.return_value = []
+
+        result = resolve_hard_claim(self.claim)
+        self.assertEqual(result["status"], HardClaim.Status.CONFIRMED)
+        self.assertEqual(result["prices"]["target"], 1100.0)
+
+    @patch("posts.resolution.fetch_reference_price")
+    @patch("posts.ohlc_fetcher.fetch_ohlc_for_asset")
+    def test_resolve_price_bullish_rejected(self, mock_ohlc_fetch, mock_ref):
+        self.claim.value_type = "PRICE"
+        self.claim.percentage = 1200.0
+        self.claim.save()
+        mock_ref.return_value = (1000.0, "http://mock.ref")
+        start = self.claim.created_at.date()
+        for i in range(5):
+            d = start + timedelta(days=i)
+            if d > self.claim.until:
+                break
+            price = 1000 + i * 10
+            OHLCData.objects.create(
+                asset=self.asset, timestamp=d,
+                open=price, high=price + 20, low=price - 20, close=price + 5,
+            )
+        mock_ohlc_fetch.return_value = []
+
+        result = resolve_hard_claim(self.claim)
+        self.assertEqual(result["status"], HardClaim.Status.REJECTED)
+        self.assertEqual(result["prices"]["target"], 1200.0)
+

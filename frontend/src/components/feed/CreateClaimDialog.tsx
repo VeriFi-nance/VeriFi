@@ -1,25 +1,26 @@
-import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
+import { ClaimForm } from './composer/ClaimForm';
+import { emptyDraft, validateDraft, type ClaimDraft } from './composer/types';
 import { createHardClaim, getAssets } from '@/lib/api';
+import { useAuthState, useOpenLogin } from '@/lib/auth';
 import type { AssetItem } from '@/lib/types';
+import { buildClaimPayload } from '@/lib/crypto';
+import { signPayload, resolveUsername } from '@/lib/signing';
 
 interface Props {
   onCreated: () => void;
 }
 
-/** Standalone dialog for creating a single HardClaim (used in Profile etc.) */
+/** Standalone dialog for creating a single HardClaim (no parent post). */
 export function CreateClaimDialog({ onCreated }: Props) {
+  const openLogin = useOpenLogin();
+  const auth = useAuthState();
   const [open, setOpen] = useState(false);
   const [assets, setAssets] = useState<AssetItem[]>([]);
-  const [assetId, setAssetId] = useState('');
-  const [direction, setDirection] = useState('');
-  const [percentage, setPercentage] = useState('');
-  const [until, setUntil] = useState('');
+  const [draft, setDraft] = useState<ClaimDraft>(emptyDraft);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -27,85 +28,87 @@ export function CreateClaimDialog({ onCreated }: Props) {
     if (open) getAssets().then(setAssets).catch(console.error);
   }, [open]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!assetId || !direction || !percentage || !until) {
-      setError('Please fill all fields');
+  function patch(p: Partial<ClaimDraft>) {
+    setDraft((d) => ({ ...d, ...p }));
+  }
+
+  function handleTriggerClick(e: React.MouseEvent) {
+    if (!auth.authenticated) {
+      e.preventDefault();
+      openLogin();
+    }
+  }
+
+  async function handleSubmit() {
+    if (!auth.authenticated) {
+      openLogin();
       return;
     }
-    const pct = parseFloat(percentage);
-    if (isNaN(pct) || pct <= 0) {
-      setError('Percentage must be a positive number');
+    const result = validateDraft(draft, assets);
+    if (!result.ok) {
+      setError(result.error);
       return;
     }
     setError('');
     setSubmitting(true);
     try {
-      await createHardClaim({ asset_id: parseInt(assetId, 10), direction, percentage: pct, until });
+      const payloadObj = {
+        asset_symbol: result.value.asset.symbol,
+        author_username: await resolveUsername(),
+        direction: result.value.direction,
+        percentage: result.value.percentage,
+        until: result.value.until,
+        created_at: new Date().toISOString(),
+      };
+      
+      const payloadStr = buildClaimPayload(payloadObj);
+      const signature = await signPayload(payloadStr);
+
+      await createHardClaim({
+        asset_id: result.value.asset.id,
+        direction: result.value.direction,
+        percentage: result.value.percentage,
+        until: result.value.until,
+        signature,
+        claim_payload: payloadObj,
+        ...(result.value.market ? { market: result.value.market } : {}),
+      });
       setOpen(false);
-      setAssetId(''); setDirection(''); setPercentage(''); setUntil('');
+      setDraft(emptyDraft());
       onCreated();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to create claim.');
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm">+ New Claim</Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>New Hard Claim</DialogTitle>
-          <DialogDescription>Submit a verifiable prediction.</DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
+    <RD.Root open={open} onOpenChange={setOpen}>
+      <RD.Trigger asChild>
+        <Button size="sm" onClick={handleTriggerClick}>+ New Claim</Button>
+      </RD.Trigger>
+      <RD.Content>
+        <RD.Header>
+          <RD.Title>New Hard Claim</RD.Title>
+          <RD.Description>Submit a verifiable prediction.</RD.Description>
+        </RD.Header>
 
-          <div className="space-y-2">
-            <Label>Asset</Label>
-            <Select value={assetId} onValueChange={setAssetId}>
-              <SelectTrigger><SelectValue placeholder="Select asset" /></SelectTrigger>
-              <SelectContent>
-                {assets.map((a) => (
-                  <SelectItem key={a.id} value={a.id.toString()}>{a.symbol} — {a.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Direction</Label>
-            <Select value={direction} onValueChange={setDirection}>
-              <SelectTrigger><SelectValue placeholder="Select direction" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Bullish">Bullish</SelectItem>
-                <SelectItem value="Bearish">Bearish</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Expected move (%)</Label>
-            <Input type="number" min="0.1" step="0.1" required value={percentage}
-              onChange={(e) => setPercentage(e.target.value)} placeholder="e.g. 25" />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Until (Date)</Label>
-            <Input type="date" required
-              min={new Date(Date.now() + 86400000).toISOString().split('T')[0]}
-              value={until} onChange={(e) => setUntil(e.target.value)} />
-          </div>
-
-          <Button type="submit" disabled={submitting} className="w-full">
-            {submitting ? 'Creating…' : 'Submit Claim'}
-          </Button>
-        </form>
-      </DialogContent>
-    </Dialog>
+        <div className="space-y-3">
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          <ClaimForm
+            value={draft}
+            assets={assets}
+            onChange={patch}
+            onSubmit={handleSubmit}
+            submitLabel={submitting ? 'Creating…' : 'Submit Claim'}
+          />
+        </div>
+      </RD.Content>
+    </RD.Root>
   );
 }

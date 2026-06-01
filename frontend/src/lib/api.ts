@@ -1,5 +1,5 @@
 import { getToken } from './auth';
-import type { ReviewClaim, PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, ProfileStats, CommunityItem, CommunityMembershipItem, PositionItem } from './types';
+import type { ReviewClaim, PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, ProfileStats, CommunityItem, CommunityMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType, ProofBundle, OGMetadata } from './types';
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
@@ -25,10 +25,10 @@ function authHeaders(): Record<string, string> {
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
-export async function register(address: string): Promise<{ access: string }> {
+export async function register(address: string, username?: string): Promise<{ access: string, username: string }> {
   return request('/api/auth/register/', {
     method: 'POST',
-    body: JSON.stringify({ address }),
+    body: JSON.stringify({ address, ...(username ? { username } : {}) }),
   });
 }
 
@@ -44,7 +44,7 @@ export async function login(
   address: string,
   signature: string,
   nonce: string
-): Promise<{ access: string }> {
+): Promise<{ access: string, username: string }> {
   return request('/api/auth/login/', {
     method: 'POST',
     body: JSON.stringify({ address, signature, nonce }),
@@ -65,24 +65,57 @@ export async function extractClaims(content: string): Promise<ExtractClaimsRespo
   });
 }
 
+export interface HardClaimPayload {
+  asset_id: number;
+  community_id?: number;
+  direction: string;
+  /** Backend field — mapped from frontend `claim_type`. */
+  value_type?: ClaimType;
+  /** Backend field — mapped from frontend `parity`. */
+  payda?: string;
+  percentage: number;
+  until: string;
+  market?: { side: 'YES' | 'NO'; stake_rep: number };
+}
+
 export async function createPost(
   content: string,
   claims: ReviewClaim[],
-  community_id?: number
+  community_id?: number,
+  hard_claims?: HardClaimPayload[],
 ): Promise<PostItem> {
   return request('/api/posts/', {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ content, claims, community_id }),
+    body: JSON.stringify({ content, claims, community_id, hard_claims }),
   });
 }
 
-export async function getFeed(params?: { feed?: string, community?: number }): Promise<PostItem[]> {
+export interface PaginatedResponse<T> {
+  count: number;
+  page: number;
+  page_size: number;
+  has_next: boolean;
+  results: T[];
+}
+
+export async function getFeed(params?: {
+  feed?: string;
+  community?: number;
+  page?: number;
+  page_size?: number;
+}): Promise<PaginatedResponse<PostItem>> {
   const query = new URLSearchParams();
   if (params?.feed) query.append('feed', params.feed);
   if (params?.community) query.append('community', params.community.toString());
+  if (params?.page) query.append('page', params.page.toString());
+  if (params?.page_size) query.append('page_size', params.page_size.toString());
   const qs = query.toString() ? `?${query.toString()}` : '';
   return request(`/api/posts/${qs}`, { headers: authHeaders() });
+}
+
+export async function getPost(id: number): Promise<PostItem> {
+  return request(`/api/posts/${id}/`, { headers: authHeaders() });
 }
 
 export async function getHardClaims(params?: { feed?: string, community?: number }): Promise<HardClaimItem[]> {
@@ -97,18 +130,73 @@ export async function getHardClaimsByAddress(address: string): Promise<HardClaim
   return request(`/api/posts/hard-claims/?address=${encodeURIComponent(address)}`);
 }
 
+export async function getHardClaim(id: number): Promise<HardClaimItem> {
+  return request(`/api/posts/hard-claims/${id}/`, { headers: authHeaders() });
+}
+
 export async function createHardClaim(data: {
   asset_id: number;
   post_id?: number;
   community_id?: number;
   direction: string;
+  value_type?: ClaimType;
+  payda?: string;
   percentage: number;
   until: string;
+  signature: string;
+  claim_payload: Record<string, unknown>;
+  market?: { side: 'YES' | 'NO'; stake_rep: number };
 }): Promise<HardClaimItem> {
   return request('/api/posts/hard-claims/', {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(data),
+  });
+}
+
+export async function getMarket(claimId: number): Promise<ClaimMarketItem> {
+  return request(`/api/posts/hard-claims/${claimId}/market/`, {
+    headers: authHeaders(),
+  });
+}
+
+export async function getClaimProof(claimId: number): Promise<ProofBundle> {
+  return request(`/api/posts/hard-claims/${claimId}/proof/`);
+}
+
+export async function getClaimOG(claimId: number): Promise<OGMetadata> {
+  return request(`/api/posts/hard-claims/${claimId}/og/`);
+}
+
+export async function createMarket(
+  claimId: number,
+  body: { side: 'YES' | 'NO'; stake_rep: number }
+): Promise<ClaimMarketItem> {
+  return request(`/api/posts/hard-claims/${claimId}/market/create/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  });
+}
+
+export async function previewBuy(
+  claimId: number,
+  side: 'YES' | 'NO'
+): Promise<BuyPreviewResult> {
+  return request(
+    `/api/posts/hard-claims/${claimId}/market/preview/?side=${side}`,
+    { headers: authHeaders() }
+  );
+}
+
+export async function buyShares(
+  claimId: number,
+  side: 'YES' | 'NO'
+): Promise<BuyResult> {
+  return request(`/api/posts/hard-claims/${claimId}/market/buy/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ side }),
   });
 }
 
@@ -134,6 +222,14 @@ export async function getClaimChartData(claimId: number): Promise<ClaimChartData
 export async function getProfileStats(address: string): Promise<ProfileStats> {
   return request(`/api/auth/profile/${encodeURIComponent(address)}/`, {
     headers: authHeaders(),
+  });
+}
+
+export async function updateUsername(username: string): Promise<{ username: string }> {
+  return request('/api/auth/profile/update/', {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify({ username }),
   });
 }
 
@@ -234,6 +330,8 @@ export async function createPosition(data: {
   stop_loss: number;
   take_profit: number;
   lifetime: string;
+  signature: string;
+  position_payload: Record<string, unknown>;
 }): Promise<PositionItem> {
   return request('/api/posts/positions/', {
     method: 'POST',
@@ -247,4 +345,12 @@ export async function closePosition(id: number): Promise<PositionItem> {
     method: 'POST',
     headers: authHeaders(),
   });
+}
+
+export async function getPositionProof(positionId: number): Promise<ProofBundle> {
+  return request(`/api/posts/positions/${positionId}/proof/`);
+}
+
+export async function getPositionOG(positionId: number): Promise<OGMetadata> {
+  return request(`/api/posts/positions/${positionId}/og/`);
 }
