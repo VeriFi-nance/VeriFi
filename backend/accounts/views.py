@@ -11,6 +11,7 @@ from eth_account import Account
 from eth_account.messages import encode_defunct
 
 from .models import WalletUser, Follow
+from .serializers import RegisterSerializer, LoginSerializer, FollowSerializer
 from .serializers import RegisterSerializer, LoginSerializer, FollowSerializer, validate_username_format
 from .energy import grant_energy, ENERGY_CAP
 

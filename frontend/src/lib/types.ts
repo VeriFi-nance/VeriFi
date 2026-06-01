@@ -94,6 +94,8 @@ export interface HardClaimItem {
   until: string;
   created_at: string;
   status: string;
+  signature?: string;
+  claim_payload?: Record<string, unknown>;
   events?: HardClaimEvent[];
   profitability?: ProfitabilityData | null;
 }
@@ -245,6 +247,31 @@ export interface PositionItem {
   pnl_percentage: number | null;
   status: 'pending' | 'active' | 'confirmed' | 'rejected' | 'missed' | 'closed_early' | 'expired';
   created_at: string;
+  signature?: string;
+  position_payload?: Record<string, unknown>;
   events?: PositionEventItem[];
   profitability?: ProfitabilityData | null;
+}
+
+export interface ProofBundle {
+  type: 'claim' | 'position';
+  claim_id?: number;
+  position_id?: number;
+  wallet_address: string;
+  signature: string;
+  payload: Record<string, unknown>;
+  server_timestamp: string;
+}
+
+export interface OGMetadata {
+  title: string;
+  description: string;
+  asset_symbol: string;
+  direction: string;
+  percentage?: number;
+  entry_price?: number;
+  take_profit?: number | null;
+  stop_loss?: number | null;
+  status: string;
+  author_username?: string;
 }

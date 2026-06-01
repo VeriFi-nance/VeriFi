@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, CheckCircle2, XCircle } from 'lucide-react';
+import { CalendarDays, CheckCircle2, XCircle, Download } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/UserAvatar';
 import type { HardClaimItem, AssetItem, ClaimChartData } from '@/lib/types';
 import { truncateAddress } from '@/lib/wallet';
-import { getClaimChartData } from '@/lib/api';
+import { getClaimChartData, getClaimProof } from '@/lib/api';
 import { PriceChart } from './PriceChart';
 import { MarketPanel } from '../MarketPanel';
 
@@ -30,6 +31,27 @@ export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
   const [chartData, setChartData] = useState<ClaimChartData | null>(null);
   const [chartLoading, setChartLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
+  const [downloadingProof, setDownloadingProof] = useState(false);
+
+  async function handleDownloadProof() {
+    try {
+      setDownloadingProof(true);
+      const proof = await getClaimProof(claim.id);
+      const blob = new Blob([JSON.stringify(proof, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `claim-proof-${claim.id}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      alert(e.message || 'Failed to download proof');
+    } finally {
+      setDownloadingProof(false);
+    }
+  }
 
   useEffect(() => {
     setChartLoading(true);
@@ -98,6 +120,15 @@ export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
           <span>
             Created {new Date(claim.created_at).toLocaleDateString()} · Due {untilLabel}
           </span>
+        </div>
+      )}
+
+      {claim.signature && (
+        <div>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleDownloadProof} disabled={downloadingProof}>
+            <Download className="size-4" />
+            {downloadingProof ? 'Downloading...' : 'Download Proof'}
+          </Button>
         </div>
       )}
 
