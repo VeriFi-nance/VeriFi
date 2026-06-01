@@ -171,19 +171,12 @@ export function PostComposer({
         )}
       </div>
 
-      {(extracting || extracted.length > 0) && (
+      {extracted.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between h-4">
             <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              {extracted.length > 0
-                ? `Detected claims${visible.length > 0 ? ` (${visible.length})` : ''}`
-                : 'Analysing…'}
+              Detected claims{visible.length > 0 ? ` (${visible.length})` : ''}
             </p>
-            {extracting && extracted.length > 0 && (
-              <span className="text-[10px] text-muted-foreground/60 animate-pulse font-mono select-none">
-                analysing…
-              </span>
-            )}
           </div>
           <div className={cn('space-y-1.5 transition-opacity duration-200', extracting && 'opacity-50')}>
             {visible.map((c, i) => {
