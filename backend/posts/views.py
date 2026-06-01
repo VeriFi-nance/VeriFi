@@ -770,6 +770,27 @@ class CommunityBanView(APIView):
         membership.save()
         return Response(CommunityMembershipSerializer(membership).data)
 
+    def delete(self, request, pk, user_address):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+            
+        community = get_object_or_404(Community, pk=pk)
+        if community.creator != user:
+            return Response({"detail": "Only the community creator can unban members."}, status=status.HTTP_403_FORBIDDEN)
+            
+        target_user = get_object_or_404(WalletUser, address=user_address.lower())
+        
+        try:
+            membership = CommunityMembership.objects.get(community=community, user=target_user)
+            if membership.status == CommunityMembership.Status.BANNED:
+                membership.delete()
+                return Response({"detail": "User unbanned."}, status=status.HTTP_204_NO_CONTENT)
+            else:
+                return Response({"detail": "User is not banned."}, status=status.HTTP_400_BAD_REQUEST)
+        except CommunityMembership.DoesNotExist:
+            return Response({"detail": "User is not banned."}, status=status.HTTP_400_BAD_REQUEST)
+
 class CommunityMemberListView(APIView):
     authentication_classes = []
     permission_classes = []
@@ -783,6 +804,20 @@ class CommunityMemberListView(APIView):
                 return Response({"detail": "You must be a member to view this list."}, status=status.HTTP_403_FORBIDDEN)
                 
         memberships = CommunityMembership.objects.filter(community=community, status=CommunityMembership.Status.APPROVED).order_by('created_at')
+        return Response(CommunityMembershipSerializer(memberships, many=True).data)
+
+class CommunityBannedListView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        community = get_object_or_404(Community, pk=pk)
+        
+        user = _get_wallet_user(request)
+        if not user or community.creator != user:
+            return Response({"detail": "Only the creator can view the banned list."}, status=status.HTTP_403_FORBIDDEN)
+                
+        memberships = CommunityMembership.objects.filter(community=community, status=CommunityMembership.Status.BANNED).order_by('created_at')
         return Response(CommunityMembershipSerializer(memberships, many=True).data)
 
 from django.core.cache import cache as django_cache

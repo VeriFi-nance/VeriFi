@@ -271,6 +271,19 @@ export async function banCommunityMember(id: number, user_address: string): Prom
   });
 }
 
+export async function unbanCommunityMember(id: number, user_address: string): Promise<any> {
+  return request(`/api/posts/communities/${id}/ban/${encodeURIComponent(user_address)}/`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+}
+
+export async function getBannedCommunityMembers(id: number): Promise<CommunityMembershipItem[]> {
+  return request(`/api/posts/communities/${id}/banned/`, {
+    headers: authHeaders(),
+  });
+}
+
 export async function getCommunityMembers(id: number): Promise<CommunityMembershipItem[]> {
   return request(`/api/posts/communities/${id}/members/`, {
     headers: authHeaders(),

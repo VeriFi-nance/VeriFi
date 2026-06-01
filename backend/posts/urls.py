@@ -2,7 +2,7 @@ from django.urls import path
 from .views import (
     HardClaimView, HardClaimDetailView, HardClaimResolveView, HardClaimChartDataView,
     PostListCreateView, PostDetailView, ExtractClaimsView, AssetListView,
-    CommunityListView, CommunityDetailView, CommunityJoinView, CommunityApproveView, CommunityBanView,
+    CommunityListView, CommunityDetailView, CommunityJoinView, CommunityApproveView, CommunityBanView, CommunityBannedListView,
     CommunityMemberListView, PositionListCreateView, PositionCloseView, PositionResolveView,
     HardClaimMarketView, HardClaimMarketCreateView, HardClaimMarketBuyView, HardClaimMarketPreviewView,
 )
@@ -26,6 +26,7 @@ urlpatterns = [
     path("communities/<int:pk>/join/", CommunityJoinView.as_view(), name="community-join"),
     path("communities/<int:pk>/approve/<str:user_address>/", CommunityApproveView.as_view(), name="community-approve"),
     path("communities/<int:pk>/ban/<str:user_address>/", CommunityBanView.as_view(), name="community-ban"),
+    path("communities/<int:pk>/banned/", CommunityBannedListView.as_view(), name="community-banned"),
     path("communities/<int:pk>/members/", CommunityMemberListView.as_view(), name="community-members"),
     path("positions/", PositionListCreateView.as_view(), name="position-list-create"),
     path("positions/<int:pk>/close/", PositionCloseView.as_view(), name="position-close"),

@@ -4,8 +4,8 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getCommunity, joinCommunity, approveCommunityMember, banCommunityMember, getAssets, getCommunityMembers, getPositions, updateCommunity } from '@/lib/api';
-import type { CommunityItem, AssetItem, CommunityMembershipItem, PositionItem } from '@/lib/types';
+import { getCommunity, joinCommunity, approveCommunityMember, banCommunityMember, unbanCommunityMember, getBannedCommunityMembers, getFeed, getAssets, getCommunityMembers, getPositions, updateCommunity } from '@/lib/api';
+import type { CommunityItem, PostItem, AssetItem, CommunityMembershipItem, PositionItem } from '@/lib/types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuthState, useOpenLogin } from '@/lib/auth';
 import { FeedList } from '@/components/feed/FeedList';
@@ -27,6 +27,7 @@ export default function CommunityDetailPage() {
   const [positions, setPositions] = useState<PositionItem[]>([]);
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [members, setMembers] = useState<CommunityMembershipItem[]>([]);
+  const [bannedMembers, setBannedMembers] = useState<CommunityMembershipItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [settingsSaved, setSettingsSaved] = useState('');
@@ -49,6 +50,15 @@ export default function CommunityDetailPage() {
         setAssets(a);
         setMembers(m);
         setPositions(pos);
+        
+        if (comm.creator_address.toLowerCase() === myAddress?.toLowerCase()) {
+          try {
+            const banned = await getBannedCommunityMembers(Number(id));
+            setBannedMembers(banned);
+          } catch (e) {
+            console.error("Failed to load banned members", e);
+          }
+        }
       }
     } catch (e: any) {
       setError(e.message);
@@ -99,6 +109,16 @@ export default function CommunityDetailPage() {
     if (!id || !confirm(`Are you sure you want to ban ${userAddress}?`)) return;
     try {
       await banCommunityMember(Number(id), userAddress);
+      await fetchCommunityAndPosts();
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
+
+  const handleUnban = async (userAddress: string) => {
+    if (!id || !confirm(`Are you sure you want to unban ${userAddress}?`)) return;
+    try {
+      await unbanCommunityMember(Number(id), userAddress);
       await fetchCommunityAndPosts();
     } catch (e: any) {
       alert(e.message);
@@ -272,6 +292,22 @@ export default function CommunityDetailPage() {
                       <p className={`text-xs font-medium ${settingsSaved.startsWith('Error') ? 'text-destructive' : 'text-success'}`}>
                         {settingsSaved}
                       </p>
+                    )}
+                  </div>
+
+                  <div className="pt-4 border-t space-y-4">
+                    <h3 className="text-sm font-medium">Banned Users</h3>
+                    {bannedMembers.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">No banned users.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {bannedMembers.map(member => (
+                          <div key={member.id} className="flex items-center justify-between bg-muted/50 p-2 rounded-md">
+                            <code className="text-xs">{member.user_address}</code>
+                            <Button size="sm" variant="outline" onClick={() => handleUnban(member.user_address)}>Unban</Button>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 </CardContent>
