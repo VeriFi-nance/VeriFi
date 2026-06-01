@@ -1259,6 +1259,7 @@ class HardClaimProofView(APIView):
         
         return Response({
             "type": "claim",
+            "claim_id": claim.id,
             "wallet_address": claim.author.address,
             "signature": claim.signature,
             "payload": claim.claim_payload,
