@@ -1,9 +1,7 @@
 import os
 import binascii
-import re
 
 from django.core.cache import cache
-from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -13,7 +11,7 @@ from eth_account import Account
 from eth_account.messages import encode_defunct
 
 from .models import WalletUser, Follow
-from .serializers import RegisterSerializer, LoginSerializer, FollowSerializer, ProfileSerializer, validate_username_format
+from .serializers import RegisterSerializer, LoginSerializer, FollowSerializer, validate_username_format
 from .energy import grant_energy, ENERGY_CAP
 
 

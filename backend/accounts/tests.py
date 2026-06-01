@@ -121,10 +121,10 @@ class UsernameTests(TestCase):
     def test_profile_lookup_shadowing(self):
         # User A's address is identical to User B's username
         address_a = "0x" + "a" * 40
-        user_a = WalletUser.objects.create(address=address_a, username="user_a")
+        WalletUser.objects.create(address=address_a, username="user_a")
         
         address_b = "0x" + "b" * 40
-        user_b = WalletUser.objects.create(address=address_b, username=address_a)
+        WalletUser.objects.create(address=address_b, username=address_a)
 
         # Lookup address_a (User A's address, which is also User B's username)
         res = self.client.get(f"/api/auth/profile/{address_a}/")
