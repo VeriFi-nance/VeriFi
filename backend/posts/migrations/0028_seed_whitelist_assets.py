@@ -57,7 +57,7 @@ def seed_whitelist_assets(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("posts", "0025_claimmarket_claimstake"),
+        ("posts", "0027_backfill_crypto_ohlc_symbols"),
     ]
 
     operations = [
