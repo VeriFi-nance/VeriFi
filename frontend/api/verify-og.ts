@@ -20,13 +20,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Extract claim ID from the URL path: /verify/claim/:id
   const match = req.url?.match(/\/verify\/claim\/(\d+)/);
   const claimId = match?.[1];
+  const safeClaimId =
+    claimId && /^[1-9]\d*$/.test(claimId) ? String(Number.parseInt(claimId, 10)) : null;
 
-  if (!claimId) {
+  if (!safeClaimId) {
     return serveDefaultOG(res);
   }
 
   try {
-    const ogRes = await fetch(`${API_BASE}/api/posts/hard-claims/${claimId}/og/`);
+    const ogRes = await fetch(`${API_BASE}/api/posts/hard-claims/${safeClaimId}/og/`);
     if (!ogRes.ok) {
       return serveDefaultOG(res);
     }
@@ -36,7 +38,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const html = buildOGHtml({
       title: data.title || "VeriFi — Verified Proof",
       description: data.description || "Verify this cryptographic proof on VeriFi.",
-      url: `https://${req.headers.host}/verify/claim/${claimId}`,
+      url: `https://${req.headers.host}/verify/claim/${safeClaimId}`,
     });
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");
