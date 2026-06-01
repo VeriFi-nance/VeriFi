@@ -39,6 +39,11 @@ class HardClaimInputSerializer(serializers.Serializer):
     post_id = serializers.IntegerField(required=False, allow_null=True, default=None)
     community_id = serializers.IntegerField(required=False, allow_null=True, default=None)
     direction = serializers.CharField(allow_blank=True, default="")
+    value_type = serializers.ChoiceField(
+        choices=["PRICE", "PERCENTAGE_UP", "PERCENTAGE_DOWN"],
+        default="PERCENTAGE_UP",
+    )
+    payda = serializers.CharField(allow_blank=True, default="", required=False)
     percentage = serializers.FloatField(min_value=0)
     until = serializers.DateField()
     status = serializers.ChoiceField(choices=["confirmed", "undetermined", "rejected"], default="undetermined")
@@ -62,7 +67,11 @@ class HardClaimSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = HardClaim
-        fields = ["id", "author_address", "author_username", "post_id", "community", "asset", "direction", "percentage", "until", "created_at", "status", "events", "profitability"]
+        fields = [
+            "id", "author_address", "author_username", "post_id", "community",
+            "asset", "direction", "value_type", "payda", "percentage",
+            "until", "created_at", "status", "events", "profitability"
+        ]
 
     def get_profitability(self, obj):
         try:

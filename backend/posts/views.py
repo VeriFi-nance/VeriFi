@@ -251,6 +251,8 @@ class PostListCreateView(APIView):
                         community=community_obj,
                         asset=asset,
                         direction=valid_hc.get("direction", ""),
+                        value_type=valid_hc.get("value_type", "PERCENTAGE_UP"),
+                        payda=valid_hc.get("payda", ""),
                         percentage=valid_hc["percentage"],
                         until=valid_hc["until"],
                         status=valid_hc.get("status", "undetermined"),
@@ -428,6 +430,8 @@ class HardClaimView(APIView):
                 community=community_obj,
                 asset=asset,
                 direction=data.get("direction", ""),
+                value_type=data.get("value_type", "PERCENTAGE_UP"),
+                payda=data.get("payda", ""),
                 percentage=data["percentage"],
                 until=data["until"],
                 status=data.get("status", "undetermined"),
@@ -572,7 +576,9 @@ class HardClaimChartDataView(APIView):
 
             direction = hard_claim.direction.lower()
             pct = float(hard_claim.percentage)
-            if direction == "bullish":
+            if hard_claim.value_type == "PRICE":
+                target_price = pct
+            elif direction == "bullish":
                 target_price = _round_decimal(reference_price * (1 + pct / 100))
             else:
                 target_price = _round_decimal(reference_price * (1 - pct / 100))

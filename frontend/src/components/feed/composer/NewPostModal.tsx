@@ -1,15 +1,21 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { PenSquare, Plus, X } from 'lucide-react';
+import { PenSquare, Plus, Pencil, X } from 'lucide-react';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 import { useAuthState, useOpenLogin } from '@/lib/auth';
 import { createPost, getAssets } from '@/lib/api';
 import type { AssetItem, ReviewClaim } from '@/lib/types';
+import { getClaimType } from '@/lib/claims';
 import { PostComposer, MAX_CHARS } from './PostComposer';
 import { ClaimForm } from './ClaimForm';
 import { ClaimRow } from './ClaimRow';
-import { emptyDraft, validateDraft, type AttachedClaim, type ClaimDraft } from './types';
+import {
+  emptyDraft,
+  validateDraft,
+  type AttachedClaim,
+  type ClaimDraft,
+} from './types';
 
 interface NewPostModalProps {
   open: boolean;
@@ -24,7 +30,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
   const [content, setContent] = useState('');
   const [attached, setAttached] = useState<AttachedClaim[]>([]);
   const [assets, setAssets] = useState<AssetItem[]>([]);
-  const [draft, setDraft] = useState<ClaimDraft>(emptyDraft);
+  const [draft, setDraft] = useState<ClaimDraft>(emptyDraft());
   const [showDraft, setShowDraft] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -61,7 +67,16 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
     setError('');
     setAttached((prev) => [
       ...prev,
-      { ...draft, direction: result.value.direction },
+      {
+        asset_id: draft.asset_id,
+        assetSymbol: draft.assetSymbol,
+        parity: draft.parity,
+        claim_type: result.value.claim_type,
+        direction: result.value.direction,
+        percentage: draft.percentage,
+        until: draft.until,
+        stakeRep: draft.stakeRep,
+      },
     ]);
     setDraft(emptyDraft());
     setShowDraft(false);
@@ -71,12 +86,33 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
     setAttached((prev) => prev.filter((_, i) => i !== idx));
   }
 
+  function editAttached(idx: number) {
+    const c = attached[idx];
+    if (!c) return;
+    setDraft({
+      asset_id: c.asset_id,
+      assetSymbol: c.assetSymbol,
+      parity: c.parity,
+      claim_type: c.claim_type,
+      direction: c.direction,
+      percentage: c.percentage,
+      until: c.until,
+      stakeRep: c.stakeRep,
+    });
+    setAttached((prev) => prev.filter((_, i) => i !== idx));
+    setShowDraft(true);
+    setError('');
+  }
+
   function loadExtractedIntoDraft(c: ReviewClaim) {
     const asset = assets.find((a) => a.symbol === c.asset);
+    const claimType = getClaimType(c);
     setDraft({
       asset_id: asset ? asset.id.toString() : '',
-      assetSymbol: asset?.symbol ?? '',
-      direction: c.direction === 'bullish' ? 'Bullish' : 'Bearish',
+      assetSymbol: asset?.symbol ?? c.asset,
+      parity: c.parity || '',
+      claim_type: claimType,
+      direction: claimType === 'PERCENTAGE_DOWN' ? 'Bearish' : 'Bullish',
       percentage: c.percentage ?? '',
       until: c.until ?? '',
       stakeRep: '10',
@@ -103,6 +139,8 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
           asset_id: parseInt(c.asset_id, 10),
           community_id: communityId,
           direction: c.direction,
+          value_type: c.claim_type,
+          payda: c.parity || undefined,
           percentage: parseFloat(c.percentage),
           until: c.until,
           ...(market ? { market } : {}),
@@ -163,8 +201,18 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
                         direction={c.direction}
                         percentage={c.percentage}
                         until={c.until}
+                        parity={c.parity}
+                        claim_type={c.claim_type}
                       />
                     </div>
+                    <button
+                      onClick={() => editAttached(i)}
+                      title="Edit claim"
+                      className="size-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                      aria-label="Edit claim"
+                    >
+                      <Pencil className="size-3.5" />
+                    </button>
                     <button
                       onClick={() => removeAttached(i)}
                       className="size-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"

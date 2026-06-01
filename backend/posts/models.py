@@ -138,7 +138,12 @@ class HardClaim(models.Model):
     post = models.ForeignKey(Post, on_delete=models.SET_NULL, null=True, blank=True, related_name="hard_claims")
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE, blank=False, null=False)
     direction = models.CharField(max_length=20, blank=True, default="") # this will be binary, 1 up, 0 down
-    percentage = models.FloatField(blank=False, null=False) # this will be a percentage value between 0 and 100
+    # Numerator/denominator + magnitude semantics from the ensemble extractor.
+    # value_type distinguishes an absolute price target from a percentage move;
+    # `percentage` stores the magnitude (a price when value_type == "PRICE").
+    value_type = models.CharField(max_length=20, default="PERCENTAGE_UP")
+    payda = models.CharField(max_length=10, blank=True, default="")  # denominator ticker
+    percentage = models.FloatField(blank=False, null=False) # magnitude: percentage move, or absolute price when value_type == PRICE
     until = models.DateField(blank=False, null=False)
     created_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=12, choices=Status.choices, default="undetermined")

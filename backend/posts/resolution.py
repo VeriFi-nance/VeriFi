@@ -202,10 +202,10 @@ def normalize_claim_for_resolution(hard_claim: HardClaim) -> dict[str, Any]:
             "quote_currency": asset.quote_currency,
         },
         "target": {
-            "kind": "percentage",
+            "kind": "price" if hard_claim.value_type == "PRICE" else "percentage",
             "direction": hard_claim.direction.lower(),
             "value": float(hard_claim.percentage),
-            "unit": "percent",
+            "unit": asset.quote_currency if hard_claim.value_type == "PRICE" else "percent",
         },
         "reference_at": _isoformat_utc(hard_claim.created_at),
         "due_at": _isoformat_utc(due_at),
@@ -237,7 +237,9 @@ def _evaluate_ohlc(
         raise ResolutionError("INVALID_REFERENCE_PRICE", "Reference price must be greater than zero.")
 
     # Compute target price
-    if direction == "bullish":
+    if hard_claim.value_type == "PRICE":
+        target_price = percentage
+    elif direction == "bullish":
         target_price = reference_price * (1 + percentage / 100)
     else:
         target_price = reference_price * (1 - percentage / 100)
@@ -320,10 +322,10 @@ def _evaluate_ohlc(
             "provider_symbol": hard_claim.asset.provider_symbol,
         },
         "target": {
-            "kind": "percentage",
+            "kind": "price" if hard_claim.value_type == "PRICE" else "percentage",
             "direction": direction,
             "value": percentage,
-            "unit": "percent",
+            "unit": hard_claim.asset.quote_currency if hard_claim.value_type == "PRICE" else "percent",
         },
         "prices": {
             "reference": _round_decimal(reference_price),
