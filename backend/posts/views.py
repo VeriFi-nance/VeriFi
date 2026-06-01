@@ -572,7 +572,9 @@ class HardClaimChartDataView(APIView):
 
             direction = hard_claim.direction.lower()
             pct = float(hard_claim.percentage)
-            if direction == "bullish":
+            if hard_claim.value_type == "PRICE":
+                target_price = pct
+            elif direction == "bullish":
                 target_price = _round_decimal(reference_price * (1 + pct / 100))
             else:
                 target_price = _round_decimal(reference_price * (1 - pct / 100))

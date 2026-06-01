@@ -88,6 +88,27 @@ class HardClaimChartDataViewTests(TestCase):
         self.assertEqual(candle["date"], self.candle_timestamp.isoformat())
         self.assertEqual(float(candle["open"]), 1000.0)
 
+    @patch("posts.resolution.fetch_reference_price")
+    @patch("posts.ohlc_fetcher.fetch_ohlc_for_asset")
+    def test_hardclaim_chart_data_price_value_type(self, mock_ohlc_fetch, mock_ref):
+        """
+        Ensures that if value_type is PRICE, the target_price returned is exactly the
+        absolute value stored in percentage.
+        """
+        self.claim.value_type = "PRICE"
+        self.claim.percentage = 1500.0
+        self.claim.save()
+
+        mock_ref.return_value = (1000.0, "http://mock.ref")
+        mock_ohlc_fetch.return_value = []
+
+        url = reverse("hard-claim-chart-data", kwargs={"pk": self.claim.id})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["target_price"], 1500.0)
+
 class PostCreationAtomicTests(TestCase):
     def setUp(self):
         self.client = Client()
