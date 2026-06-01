@@ -4,7 +4,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getCommunity, joinCommunity, approveCommunityMember, banCommunityMember, unbanCommunityMember, getBannedCommunityMembers, getFeed, getAssets, getCommunityMembers, getPositions, updateCommunity, promoteModerator, demoteModerator } from '@/lib/api';
+import { getCommunity, joinCommunity, approveCommunityMember, banCommunityMember, unbanCommunityMember, getBannedCommunityMembers, getAssets, getCommunityMembers, getPositions, updateCommunity, promoteModerator, demoteModerator } from '@/lib/api';
 import type { CommunityItem, PostItem, AssetItem, CommunityMembershipItem, PositionItem } from '@/lib/types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuthState, useOpenLogin } from '@/lib/auth';
