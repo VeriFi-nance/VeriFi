@@ -3,6 +3,10 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/verify/claim/:id",
+      "destination": "/api/verify-og"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

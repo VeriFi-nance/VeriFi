@@ -1,19 +1,32 @@
 import { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, XCircle, UploadCloud, ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckCircle2, XCircle, UploadCloud, ChevronDown, ChevronUp, Share2, Copy, Check, Loader2 } from 'lucide-react';
 import { verifyProofSignature, buildClaimPayload } from '@/lib/crypto';
 import type { ProofBundle, ClaimChartData } from '@/lib/types';
 import { truncateAddress } from '@/lib/wallet';
 import { ClaimRow } from '@/components/feed/composer/ClaimRow';
-import { getClaimChartData } from '@/lib/api';
+import { getClaimChartData, getClaimProof } from '@/lib/api';
 import { PriceChart } from '@/components/feed/PriceChart';
 
+function buildSummaryText(proof: ProofBundle): string {
+  const author = (proof.payload as any).author_username;
+  const authorPrefix = author ? `@${author} predicts` : 'Predicts';
+  const asset = String(proof.payload.asset_symbol || '');
+  const direction = String(proof.payload.direction).toLowerCase();
+  const verb = direction === 'bullish' ? 'rises' : 'falls';
+  const pct = String(proof.payload.percentage || '');
+  const until = new Date(String(proof.payload.until || '')).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  return `${authorPrefix} ${asset} ${verb} ${pct}% by ${until}`;
+}
+
 export function VerifyPage() {
+  const { id: claimIdParam } = useParams<{ id?: string }>();
   const [proof, setProof] = useState<ProofBundle | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isValid, setIsValid] = useState<boolean | null>(null);
@@ -21,7 +34,40 @@ export function VerifyPage() {
   const [chartData, setChartData] = useState<ClaimChartData | null>(null);
   const [chartLoading, setChartLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
+  const [autoLoading, setAutoLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
 
+  // Auto-fetch proof when navigating to /verify/claim/:id
+  useEffect(() => {
+    if (!claimIdParam) return;
+    const claimId = parseInt(claimIdParam, 10);
+    if (isNaN(claimId)) {
+      setError('Invalid claim ID.');
+      return;
+    }
+
+    setAutoLoading(true);
+    setError(null);
+    setProof(null);
+    setIsValid(null);
+
+    getClaimProof(claimId)
+      .then((parsed) => {
+        if (!parsed.signature || !parsed.payload || !parsed.wallet_address) {
+          throw new Error('Invalid proof data from server.');
+        }
+        setProof(parsed);
+        const payloadStr = buildClaimPayload(parsed.payload as any);
+        const valid = verifyProofSignature(payloadStr, parsed.signature, parsed.wallet_address);
+        setIsValid(valid);
+      })
+      .catch((err) => {
+        setError(err.message || 'Failed to load proof.');
+      })
+      .finally(() => setAutoLoading(false));
+  }, [claimIdParam]);
+
+  // Fetch chart when proof is verified
   useEffect(() => {
     if (proof && isValid && proof.type === 'claim' && proof.claim_id) {
       setChartLoading(true);
@@ -67,31 +113,90 @@ export function VerifyPage() {
     e.target.value = '';
   };
 
+  const getShareableUrl = () => {
+    if (proof?.claim_id) {
+      return `${window.location.origin}/verify/claim/${proof.claim_id}`;
+    }
+    return window.location.href;
+  };
+
+  const handleShareTwitter = () => {
+    if (!proof) return;
+    const summary = buildSummaryText(proof);
+    const statusEmoji = isValid ? '✅' : '❌';
+    const text = `${statusEmoji} Cryptographically verified on VeriFi: ${summary}.\n\nVerify the proof yourself:`;
+    const url = getShareableUrl();
+    window.open(
+      `https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
+      '_blank',
+      'noopener,noreferrer'
+    );
+  };
+
+  const handleCopyLink = async () => {
+    const url = getShareableUrl();
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // fallback
+      const input = document.createElement('input');
+      input.value = url;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   return (
     <div className="container max-w-2xl mx-auto py-12 px-4 space-y-6">
       <div className="text-center space-y-2">
         <h1 className="text-3xl font-bold tracking-tight">Verify Cryptographic Proof</h1>
-        <p className="text-muted-foreground">Upload a downloaded proof file to independently verify its authenticity.</p>
+        <p className="text-muted-foreground">
+          {claimIdParam
+            ? 'Verifying the cryptographic signature of this claim.'
+            : 'Upload a downloaded proof file to independently verify its authenticity.'}
+        </p>
       </div>
 
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-lg p-12 text-center hover:bg-muted/50 transition-colors">
-            <UploadCloud className="size-10 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-1">Upload Proof JSON</h3>
-            <p className="text-sm text-muted-foreground mb-4">Drag and drop or click to select</p>
-            <div className="relative">
-              <Input 
-                type="file" 
-                accept=".json" 
-                onChange={handleFileUpload} 
-                className="absolute inset-0 opacity-0 cursor-pointer"
-              />
-              <Button variant="outline">Select File</Button>
+      {/* Auto-loading state */}
+      {autoLoading && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col items-center justify-center p-12 text-center">
+              <Loader2 className="size-10 text-muted-foreground mb-4 animate-spin" />
+              <h3 className="text-lg font-semibold mb-1">Loading Proof</h3>
+              <p className="text-sm text-muted-foreground">Fetching and verifying claim #{claimIdParam}…</p>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* File upload — only show when not in shareable URL mode */}
+      {!claimIdParam && !autoLoading && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-lg p-12 text-center hover:bg-muted/50 transition-colors">
+              <UploadCloud className="size-10 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-1">Upload Proof JSON</h3>
+              <p className="text-sm text-muted-foreground mb-4">Drag and drop or click to select</p>
+              <div className="relative">
+                <Input 
+                  type="file" 
+                  accept=".json" 
+                  onChange={handleFileUpload} 
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                />
+                <Button variant="outline">Select File</Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {error && (
         <Alert variant="destructive">
@@ -106,7 +211,7 @@ export function VerifyPage() {
           <CardHeader>
             <div className="flex items-center gap-2">
               {isValid ? <CheckCircle2 className="size-6 text-success" /> : <XCircle className="size-6 text-destructive" />}
-              <div>
+              <div className="flex-1">
                 <CardTitle className={isValid ? 'text-success' : 'text-destructive'}>
                   {isValid ? 'Signature Verified' : 'Invalid Signature'}
                 </CardTitle>
@@ -145,10 +250,7 @@ export function VerifyPage() {
               {proof.type === 'claim' ? (
                 <div className="mb-2 space-y-3">
                   <div className="text-sm font-medium">
-                    Predicts {String(proof.payload.asset_symbol || '')}{' '}
-                    {String(proof.payload.direction).toLowerCase() === 'bullish' ? 'rises' : 'falls'}{' '}
-                    {String(proof.payload.percentage || '')}% by{' '}
-                    {new Date(String(proof.payload.until || '')).toLocaleDateString()}{' '}
+                    {buildSummaryText(proof)}{' '}
                     (at {new Date(String(proof.payload.created_at || proof.server_timestamp)).toLocaleDateString()})
                   </div>
                   <ClaimRow
@@ -213,6 +315,30 @@ export function VerifyPage() {
                 )}
               </div>
             </div>
+
+            {/* Share buttons */}
+            {isValid && (
+              <div className="flex gap-2 pt-4 border-t">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={handleShareTwitter}
+                >
+                  <Share2 className="size-4 mr-2" />
+                  Share on X
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={handleCopyLink}
+                >
+                  {copied ? <Check className="size-4 mr-2 text-success" /> : <Copy className="size-4 mr-2" />}
+                  {copied ? 'Copied!' : 'Copy Link'}
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
