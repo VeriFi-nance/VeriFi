@@ -103,7 +103,8 @@ function AppRoutes() {
           <Route path="/c" element={<CommunitiesPage />} />
           <Route path="/c/:id" element={<CommunityDetailPage />} />
           <Route path="/verify" element={<VerifyPage />} />
-          <Route path="/verify/claim/:id" element={<VerifyPage />} />
+          <Route path="/verify/claim/:id" element={<VerifyPage type="claim" />} />
+          <Route path="/verify/position/:id" element={<VerifyPage type="position" />} />
           <Route path="/login" element={null} />
         </Route>
 

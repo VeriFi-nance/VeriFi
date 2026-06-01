@@ -7,11 +7,11 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, XCircle, UploadCloud, ChevronDown, ChevronUp, Share2, Copy, Check, Loader2 } from 'lucide-react';
-import { verifyProofSignature, buildClaimPayload } from '@/lib/crypto';
+import { verifyProofSignature, buildClaimPayload, buildPositionPayload } from '@/lib/crypto';
 import type { ProofBundle, ClaimChartData } from '@/lib/types';
 import { truncateAddress } from '@/lib/wallet';
 import { ClaimRow } from '@/components/feed/composer/ClaimRow';
-import { getClaimChartData, getClaimProof, getClaimOG, getPositionOG } from '@/lib/api';
+import { getClaimChartData, getClaimProof, getPositionProof, getClaimOG, getPositionOG } from '@/lib/api';
 import { PriceChart } from '@/components/feed/PriceChart';
 
 function buildSummaryText(proof: ProofBundle): string {
@@ -25,8 +25,8 @@ function buildSummaryText(proof: ProofBundle): string {
   return `${authorPrefix} ${asset} ${verb} ${pct}% by ${until}`;
 }
 
-export function VerifyPage() {
-  const { id: claimIdParam } = useParams<{ id?: string }>();
+export function VerifyPage({ type }: { type?: 'claim' | 'position' }) {
+  const { id: routeIdParam } = useParams<{ id?: string }>();
   const [proof, setProof] = useState<ProofBundle | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isValid, setIsValid] = useState<boolean | null>(null);
@@ -38,12 +38,12 @@ export function VerifyPage() {
   const [copied, setCopied] = useState(false);
   const [liveStatus, setLiveStatus] = useState<string | null>(null);
 
-  // Auto-fetch proof when navigating to /verify/claim/:id
+  // Auto-fetch proof when navigating to /verify/claim/:id or /verify/position/:id
   useEffect(() => {
-    if (!claimIdParam) return;
-    const claimId = parseInt(claimIdParam, 10);
-    if (isNaN(claimId)) {
-      setError('Invalid claim ID.');
+    if (!routeIdParam || !type) return;
+    const targetId = parseInt(routeIdParam, 10);
+    if (isNaN(targetId)) {
+      setError('Invalid ID.');
       return;
     }
 
@@ -52,13 +52,17 @@ export function VerifyPage() {
     setProof(null);
     setIsValid(null);
 
-    getClaimProof(claimId)
+    const fetchProof = type === 'position' ? getPositionProof : getClaimProof;
+
+    fetchProof(targetId)
       .then((parsed) => {
         if (!parsed.signature || !parsed.payload || !parsed.wallet_address) {
           throw new Error('Invalid proof data from server.');
         }
         setProof(parsed);
-        const payloadStr = buildClaimPayload(parsed.payload as any);
+        const payloadStr = type === 'position' 
+          ? buildPositionPayload(parsed.payload as any)
+          : buildClaimPayload(parsed.payload as any);
         const valid = verifyProofSignature(payloadStr, parsed.signature, parsed.wallet_address);
         setIsValid(valid);
       })
@@ -66,7 +70,7 @@ export function VerifyPage() {
         setError(err.message || 'Failed to load proof.');
       })
       .finally(() => setAutoLoading(false));
-  }, [claimIdParam]);
+  }, [routeIdParam, type]);
 
   // Fetch chart and live status when proof is verified
   useEffect(() => {
@@ -117,7 +121,9 @@ export function VerifyPage() {
       setProof(parsed);
       
       // Rebuild canonical string to verify
-      const payloadStr = buildClaimPayload(parsed.payload as any);
+      const payloadStr = parsed.type === 'position'
+        ? buildPositionPayload(parsed.payload as any)
+        : buildClaimPayload(parsed.payload as any);
       
       const valid = verifyProofSignature(payloadStr, parsed.signature, parsed.wallet_address);
       setIsValid(valid);
@@ -133,6 +139,9 @@ export function VerifyPage() {
   const getShareableUrl = () => {
     if (proof?.claim_id) {
       return `${window.location.origin}/verify/claim/${proof.claim_id}`;
+    }
+    if (proof?.position_id) {
+      return `${window.location.origin}/verify/position/${proof.position_id}`;
     }
     return window.location.href;
   };
@@ -174,8 +183,8 @@ export function VerifyPage() {
       <div className="text-center space-y-2">
         <h1 className="text-3xl font-bold tracking-tight">Verify Cryptographic Proof</h1>
         <p className="text-muted-foreground">
-          {claimIdParam
-            ? 'Verifying the cryptographic signature of this claim.'
+          {routeIdParam
+            ? `Verifying the cryptographic signature of this ${type}.`
             : 'Upload a downloaded proof file to independently verify its authenticity.'}
         </p>
       </div>
@@ -187,14 +196,14 @@ export function VerifyPage() {
             <div className="flex flex-col items-center justify-center p-12 text-center">
               <Loader2 className="size-10 text-muted-foreground mb-4 animate-spin" />
               <h3 className="text-lg font-semibold mb-1">Loading Proof</h3>
-              <p className="text-sm text-muted-foreground">Fetching and verifying claim #{claimIdParam}…</p>
+              <p className="text-sm text-muted-foreground">Fetching and verifying {type} #{routeIdParam}…</p>
             </div>
           </CardContent>
         </Card>
       )}
 
       {/* File upload — only show when not in shareable URL mode */}
-      {!claimIdParam && !autoLoading && (
+      {!routeIdParam && !autoLoading && (
         <Card>
           <CardContent className="pt-6">
             <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-lg p-12 text-center hover:bg-muted/50 transition-colors">

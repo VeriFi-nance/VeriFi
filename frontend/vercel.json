@@ -7,6 +7,10 @@
       "destination": "/api/verify-og"
     },
     {
+      "source": "/verify/position/:id",
+      "destination": "/api/verify-og"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
