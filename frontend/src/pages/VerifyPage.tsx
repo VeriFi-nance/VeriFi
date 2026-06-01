@@ -1,18 +1,39 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { CheckCircle2, XCircle, UploadCloud } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { CheckCircle2, XCircle, UploadCloud, ChevronDown, ChevronUp } from 'lucide-react';
 import { verifyProofSignature, buildClaimPayload } from '@/lib/crypto';
-import type { ProofBundle } from '@/lib/types';
+import type { ProofBundle, ClaimChartData } from '@/lib/types';
 import { truncateAddress } from '@/lib/wallet';
+import { ClaimRow } from '@/components/feed/composer/ClaimRow';
+import { getClaimChartData } from '@/lib/api';
+import { PriceChart } from '@/components/feed/PriceChart';
 
 export function VerifyPage() {
   const [proof, setProof] = useState<ProofBundle | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isValid, setIsValid] = useState<boolean | null>(null);
+  const [showJson, setShowJson] = useState(false);
+  const [chartData, setChartData] = useState<ClaimChartData | null>(null);
+  const [chartLoading, setChartLoading] = useState(false);
+  const [chartError, setChartError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (proof && isValid && proof.type === 'claim' && proof.claim_id) {
+      setChartLoading(true);
+      setChartError(null);
+      getClaimChartData(proof.claim_id)
+        .then(setChartData)
+        .catch(err => setChartError(err.message || 'Failed to load chart data.'))
+        .finally(() => setChartLoading(false));
+    } else {
+      setChartData(null);
+    }
+  }, [proof, isValid]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -119,11 +140,78 @@ export function VerifyPage() {
               </div>
             </div>
             
-            <div className="space-y-2 pt-2 border-t">
-              <Label className="text-muted-foreground">Signed Payload</Label>
-              <pre className="bg-muted p-3 rounded-md text-xs font-mono overflow-auto">
-                {JSON.stringify(proof.payload, null, 2)}
-              </pre>
+            <div className="space-y-4 pt-4 border-t">
+              <Label className="text-muted-foreground">Proof Details</Label>
+              {proof.type === 'claim' ? (
+                <div className="mb-2 space-y-3">
+                  <div className="text-sm font-medium">
+                    Predicts {String(proof.payload.asset_symbol || '')}{' '}
+                    {String(proof.payload.direction).toLowerCase() === 'bullish' ? 'rises' : 'falls'}{' '}
+                    {String(proof.payload.percentage || '')}% by{' '}
+                    {new Date(String(proof.payload.until || '')).toLocaleDateString()}{' '}
+                    (at {new Date(String(proof.payload.created_at || proof.server_timestamp)).toLocaleDateString()})
+                  </div>
+                  <ClaimRow
+                    assetSymbol={String(proof.payload.asset_symbol || '')}
+                    direction={String(proof.payload.direction || 'bullish') as any}
+                    percentage={String(proof.payload.percentage || '')}
+                    until={String(proof.payload.until || '')}
+                  />
+                  {chartLoading && <div className="text-sm text-muted-foreground animate-pulse text-center p-4">Loading chart…</div>}
+                  {chartError && <div className="text-sm text-amber-500 text-center p-4">Could not load chart: {chartError}</div>}
+                  {!chartLoading && !chartError && !chartData && !proof.claim_id && (
+                    <div className="text-sm text-muted-foreground text-center p-4 border border-dashed rounded-md bg-muted/20">
+                      Chart data is unavailable for this offline proof.
+                    </div>
+                  )}
+                  {chartData && chartData.ohlc.length > 0 && (
+                    <div className="mt-4 pt-2">
+                      <PriceChart data={chartData} />
+                    </div>
+                  )}
+                </div>
+              ) : proof.type === 'position' ? (
+                <div className="grid grid-cols-3 gap-2 text-sm bg-muted/30 rounded-lg p-3 border border-border mb-2">
+                  <div className="col-span-3 flex items-center justify-between mb-2">
+                    <Badge variant="outline" className="text-sm font-bold bg-muted/50">
+                      {String(proof.payload.asset_symbol || 'Unknown')}
+                    </Badge>
+                    <Badge variant={String(proof.payload.direction).toLowerCase() === 'long' ? 'success' : 'destructive'} className="uppercase">
+                      {String(proof.payload.direction || '')}
+                    </Badge>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground text-[10px] uppercase tracking-wider">Entry Price</div>
+                    <div className="font-mono font-medium">${Number(proof.payload.entry_price || 0).toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground text-[10px] uppercase tracking-wider">Stop Loss</div>
+                    <div className="font-mono text-danger font-medium">${Number(proof.payload.stop_loss || 0).toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground text-[10px] uppercase tracking-wider">Take Profit</div>
+                    <div className="font-mono text-success font-medium">${Number(proof.payload.take_profit || 0).toLocaleString()}</div>
+                  </div>
+                </div>
+              ) : null}
+
+              <div>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="w-full flex justify-between items-center text-xs text-muted-foreground"
+                  onClick={() => setShowJson(!showJson)}
+                >
+                  <span>{showJson ? 'Hide' : 'Show'} Raw JSON Payload</span>
+                  {showJson ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                </Button>
+                
+                {showJson && (
+                  <pre className="bg-muted p-3 rounded-md text-xs font-mono overflow-auto mt-2 border border-border">
+                    {JSON.stringify(proof.payload, null, 2)}
+                  </pre>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>

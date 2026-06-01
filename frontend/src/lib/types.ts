@@ -255,6 +255,7 @@ export interface PositionItem {
 
 export interface ProofBundle {
   type: 'claim' | 'position';
+  claim_id?: number;
   payload: Record<string, unknown>;
   signature: string;
   wallet_address: string;
