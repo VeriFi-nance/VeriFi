@@ -17,7 +17,7 @@ import {
   type ClaimDraft,
 } from './types';
 import { buildClaimPayload } from '@/lib/crypto';
-import { signPayload } from '@/lib/signing';
+import { signPayload, resolveUsername } from '@/lib/signing';
 
 interface NewPostModalProps {
   open: boolean;
@@ -135,7 +135,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
       for (const c of attached) {
         const payloadObj = {
           asset_symbol: c.assetSymbol,
-          author_username: auth.username || '',
+          author_username: await resolveUsername(),
           direction: c.direction,
           percentage: parseFloat(c.percentage),
           until: c.until,

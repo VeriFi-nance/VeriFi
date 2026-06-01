@@ -8,8 +8,7 @@ import { createPosition } from '@/lib/api';
 import type { AssetItem } from '@/lib/types';
 import { PlusCircle } from 'lucide-react';
 import { buildPositionPayload } from '@/lib/crypto';
-import { signPayload } from '@/lib/signing';
-import { useAuthState } from '@/lib/auth';
+import { signPayload, resolveUsername } from '@/lib/signing';
 
 interface NewPositionModalProps {
   communityId: number;
@@ -18,7 +17,6 @@ interface NewPositionModalProps {
 }
 
 export function NewPositionModal({ communityId, assets, onCreated }: NewPositionModalProps) {
-  const auth = useAuthState();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -87,7 +85,7 @@ export function NewPositionModal({ communityId, assets, onCreated }: NewPosition
       
       const payloadObj = {
         asset_symbol: selectedAsset?.symbol || '',
-        author_username: auth.username || '',
+        author_username: await resolveUsername(),
         direction,
         entry_price: entry,
         stop_loss: sl,

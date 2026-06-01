@@ -1,5 +1,26 @@
 import { signClaimPayload, loadEncryptedKey, decryptPrivateKey } from './crypto';
-import { loadAddress } from './auth';
+import { loadAddress, loadUsername, saveUsername } from './auth';
+import { getProfileStats } from './api';
+
+/**
+ * Returns the current user's username for inclusion in a signed payload.
+ * Falls back to fetching from the DB (and persisting) when localStorage is
+ * empty — e.g. stale sessions created before username persistence existed.
+ */
+export async function resolveUsername(): Promise<string> {
+  const stored = loadUsername();
+  if (stored) return stored;
+
+  const address = loadAddress();
+  if (!address) {
+    throw new Error('Wallet not connected');
+  }
+  const profile = await getProfileStats(address);
+  if (profile.username) {
+    saveUsername(profile.username);
+  }
+  return profile.username || '';
+}
 
 /**
  * Prompts the user for their password if native, or uses MetaMask popup to sign a payload.
