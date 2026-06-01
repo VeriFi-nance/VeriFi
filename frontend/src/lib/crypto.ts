@@ -142,7 +142,7 @@ export function verifyProofSignature(
   try {
     const recovered = verifyMessage(payload, signatureHex);
     return recovered.toLowerCase() === expectedAddress.toLowerCase();
-  } catch (e) {
+  } catch {
     return false;
   }
 }

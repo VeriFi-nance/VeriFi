@@ -23,7 +23,7 @@ export async function signPayload(payload: string): Promise<string> {
     try {
       const privateKey = await decryptPrivateKey(encryptedKey, password);
       return await signClaimPayload(privateKey, payload);
-    } catch (e) {
+    } catch {
       throw new Error('Wrong password or failed to decrypt key');
     }
   } else {
