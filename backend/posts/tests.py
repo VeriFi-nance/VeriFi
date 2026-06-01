@@ -7,7 +7,7 @@ from rest_framework.test import APITestCase
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from accounts.models import WalletUser
-from .models import Post, Asset, HardClaim, Community, CommunityMembership
+from .models import Post, Asset, HardClaim, CommunityMembership
 from .resolution import ResolutionError, normalize_claim_for_resolution
 
 
