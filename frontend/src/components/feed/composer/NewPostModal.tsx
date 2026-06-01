@@ -135,6 +135,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
       for (const c of attached) {
         const payloadObj = {
           asset_symbol: c.assetSymbol,
+          author_username: auth.username || '',
           direction: c.direction,
           percentage: parseFloat(c.percentage),
           until: c.until,

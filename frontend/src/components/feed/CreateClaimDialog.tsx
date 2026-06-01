@@ -54,6 +54,7 @@ export function CreateClaimDialog({ onCreated }: Props) {
     try {
       const payloadObj = {
         asset_symbol: result.value.asset.symbol,
+        author_username: auth.username || '',
         direction: result.value.direction,
         percentage: result.value.percentage,
         until: result.value.until,

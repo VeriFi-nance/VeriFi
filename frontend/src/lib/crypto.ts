@@ -101,7 +101,7 @@ export async function signMessage(
 // ---------------------------------------------------------------------------
 
 export function buildClaimPayload(data: {
-  asset_symbol: string; direction: string; percentage: number;
+  asset_symbol: string; author_username: string; direction: string; percentage: number;
   until: string; created_at: string;
 }): string {
   const sorted = Object.keys(data)
@@ -114,7 +114,7 @@ export function buildClaimPayload(data: {
 }
 
 export function buildPositionPayload(data: {
-  asset_symbol: string; direction: string; entry_price: number;
+  asset_symbol: string; author_username: string; direction: string; entry_price: number;
   stop_loss: number; take_profit: number; lifetime: string;
   created_at: string;
 }): string {

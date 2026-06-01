@@ -103,6 +103,12 @@ export function VerifyPage() {
                 <Label className="text-muted-foreground">Signer Address</Label>
                 <div className="font-mono">{truncateAddress(proof.wallet_address)}</div>
               </div>
+              {(proof.payload as any).author_username && (
+                <div className="space-y-1">
+                  <Label className="text-muted-foreground">Author Username</Label>
+                  <div className="font-medium">@{(proof.payload as any).author_username}</div>
+                </div>
+              )}
               <div className="space-y-1">
                 <Label className="text-muted-foreground">Proof Type</Label>
                 <div className="capitalize">{proof.type || 'Unknown'}</div>
