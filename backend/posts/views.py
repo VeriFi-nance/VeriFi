@@ -1278,6 +1278,7 @@ class PositionProofView(APIView):
         
         return Response({
             "type": "position",
+            "position_id": position.id,
             "wallet_address": position.author.address,
             "signature": position.signature,
             "payload": position.position_payload,

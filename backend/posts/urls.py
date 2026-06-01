@@ -7,7 +7,7 @@ from .views import (
     HardClaimMarketView, HardClaimMarketCreateView, HardClaimMarketBuyView, HardClaimMarketPreviewView,
     HardClaimProofView, PositionProofView,
 )
-from .og import HardClaimOGView
+from .og import HardClaimOGView, PositionOGView
 
 urlpatterns = [
     path("", PostListCreateView.as_view(), name="post-list-create"),
@@ -35,4 +35,5 @@ urlpatterns = [
     path("positions/<int:pk>/close/", PositionCloseView.as_view(), name="position-close"),
     path("positions/<int:pk>/resolve/", PositionResolveView.as_view(), name="position-resolve"),
     path("positions/<int:pk>/proof/", PositionProofView.as_view(), name="position-proof"),
+    path("positions/<int:pk>/og/", PositionOGView.as_view(), name="position-og"),
 ]

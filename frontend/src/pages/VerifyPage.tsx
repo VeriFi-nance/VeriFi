@@ -11,7 +11,7 @@ import { verifyProofSignature, buildClaimPayload } from '@/lib/crypto';
 import type { ProofBundle, ClaimChartData } from '@/lib/types';
 import { truncateAddress } from '@/lib/wallet';
 import { ClaimRow } from '@/components/feed/composer/ClaimRow';
-import { getClaimChartData, getClaimProof } from '@/lib/api';
+import { getClaimChartData, getClaimProof, getClaimOG, getPositionOG } from '@/lib/api';
 import { PriceChart } from '@/components/feed/PriceChart';
 
 function buildSummaryText(proof: ProofBundle): string {
@@ -36,6 +36,7 @@ export function VerifyPage() {
   const [chartError, setChartError] = useState<string | null>(null);
   const [autoLoading, setAutoLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [liveStatus, setLiveStatus] = useState<string | null>(null);
 
   // Auto-fetch proof when navigating to /verify/claim/:id
   useEffect(() => {
@@ -67,17 +68,33 @@ export function VerifyPage() {
       .finally(() => setAutoLoading(false));
   }, [claimIdParam]);
 
-  // Fetch chart when proof is verified
+  // Fetch chart and live status when proof is verified
   useEffect(() => {
-    if (proof && isValid && proof.type === 'claim' && proof.claim_id) {
+    if (!proof || !isValid) {
+      setChartData(null);
+      setLiveStatus(null);
+      return;
+    }
+
+    if (proof.type === 'claim' && proof.claim_id) {
       setChartLoading(true);
       setChartError(null);
       getClaimChartData(proof.claim_id)
         .then(setChartData)
         .catch(err => setChartError(err.message || 'Failed to load chart data.'))
         .finally(() => setChartLoading(false));
+      
+      getClaimOG(proof.claim_id)
+        .then(og => setLiveStatus(og.status))
+        .catch(() => setLiveStatus(null));
+    } else if (proof.type === 'position' && proof.position_id) {
+      setChartData(null);
+      getPositionOG(proof.position_id)
+        .then(og => setLiveStatus(og.status))
+        .catch(() => setLiveStatus(null));
     } else {
       setChartData(null);
+      setLiveStatus(null);
     }
   }, [proof, isValid]);
 
@@ -246,7 +263,18 @@ export function VerifyPage() {
             </div>
             
             <div className="space-y-4 pt-4 border-t">
-              <Label className="text-muted-foreground">Proof Details</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-muted-foreground">Proof Details</Label>
+                {liveStatus && (
+                  <Badge variant={
+                    liveStatus.toLowerCase() === 'confirmed' || liveStatus.toLowerCase() === 'won' ? 'success' :
+                    liveStatus.toLowerCase() === 'rejected' || liveStatus.toLowerCase() === 'lost' || liveStatus.toLowerCase() === 'missed' ? 'destructive' :
+                    'secondary'
+                  } className="uppercase text-[10px]">
+                    Current Status: {liveStatus}
+                  </Badge>
+                )}
+              </div>
               {proof.type === 'claim' ? (
                 <div className="mb-2 space-y-3">
                   <div className="text-sm font-medium">

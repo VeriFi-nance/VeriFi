@@ -256,8 +256,22 @@ export interface PositionItem {
 export interface ProofBundle {
   type: 'claim' | 'position';
   claim_id?: number;
-  payload: Record<string, unknown>;
-  signature: string;
+  position_id?: number;
   wallet_address: string;
+  signature: string;
+  payload: Record<string, unknown>;
   server_timestamp: string;
+}
+
+export interface OGMetadata {
+  title: string;
+  description: string;
+  asset_symbol: string;
+  direction: string;
+  percentage?: number;
+  entry_price?: number;
+  take_profit?: number | null;
+  stop_loss?: number | null;
+  status: string;
+  author_username?: string;
 }

@@ -1,5 +1,5 @@
 import { getToken } from './auth';
-import type { ReviewClaim, PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, ProfileStats, CommunityItem, CommunityMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType, ProofBundle } from './types';
+import type { ReviewClaim, PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, ProfileStats, CommunityItem, CommunityMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType, ProofBundle, OGMetadata } from './types';
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
@@ -162,6 +162,10 @@ export async function getMarket(claimId: number): Promise<ClaimMarketItem> {
 
 export async function getClaimProof(claimId: number): Promise<ProofBundle> {
   return request(`/api/posts/hard-claims/${claimId}/proof/`);
+}
+
+export async function getClaimOG(claimId: number): Promise<OGMetadata> {
+  return request(`/api/posts/hard-claims/${claimId}/og/`);
 }
 
 export async function createMarket(
@@ -345,4 +349,8 @@ export async function closePosition(id: number): Promise<PositionItem> {
 
 export async function getPositionProof(positionId: number): Promise<ProofBundle> {
   return request(`/api/posts/positions/${positionId}/proof/`);
+}
+
+export async function getPositionOG(positionId: number): Promise<OGMetadata> {
+  return request(`/api/posts/positions/${positionId}/og/`);
 }
