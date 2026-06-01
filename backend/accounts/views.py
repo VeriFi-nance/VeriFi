@@ -13,7 +13,7 @@ from eth_account import Account
 from eth_account.messages import encode_defunct
 
 from .models import WalletUser, Follow
-from .serializers import RegisterSerializer, LoginSerializer, FollowSerializer, ProfileSerializer
+from .serializers import RegisterSerializer, LoginSerializer, FollowSerializer, ProfileSerializer, validate_username_format
 from .energy import grant_energy, ENERGY_CAP
 
 
@@ -129,9 +129,20 @@ class ProfileView(APIView):
     authentication_classes = []
     permission_classes = []
 
-    def get(self, request, address):
-        lookup = address.lower()
-        target_user = get_object_or_404(WalletUser, Q(address=lookup) | Q(username__iexact=lookup))
+    def get(self, request, lookup):
+        """
+        Retrieve profile stats for a user.
+        The `lookup` parameter is polymorphic and can be either:
+        1. A hex-encoded Ethereum wallet address (e.g., '0x123...')
+        2. A user's custom username (e.g., 'john_doe')
+        
+        To prevent MultipleObjectsReturned (shadowing 500s) if a username matches another
+        user's address, we prioritize wallet address lookup first, and then fall back to username lookup.
+        """
+        lookup_lower = lookup.lower()
+        target_user = WalletUser.objects.filter(address=lookup_lower).first()
+        if not target_user:
+            target_user = get_object_or_404(WalletUser, username__iexact=lookup_lower)
         grant_energy(target_user)
 
         followers = target_user.follower_set.all().select_related("follower")
@@ -261,8 +272,9 @@ class UpdateProfileView(APIView):
         if not new_username:
             return Response({"detail": "Username is required."}, status=status.HTTP_400_BAD_REQUEST)
             
-        if not re.match(r"^[a-zA-Z0-9_]+$", new_username):
-            return Response({"detail": "Username can only contain letters, numbers, and underscores."}, status=status.HTTP_400_BAD_REQUEST)
+        error = validate_username_format(new_username)
+        if error:
+            return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
             
         if WalletUser.objects.filter(username__iexact=new_username).exclude(pk=current_user.pk).exists():
             return Response({"detail": "Username is already taken."}, status=status.HTTP_400_BAD_REQUEST)
