@@ -211,6 +211,7 @@ export interface CommunityItem {
   created_at: string;
   member_count: number;
   my_membership_status?: 'pending' | 'approved' | null;
+  my_role?: 'member' | 'moderator' | 'owner' | null;
   pending_requests?: CommunityMembershipItem[];
 }
 
@@ -220,6 +221,7 @@ export interface CommunityMembershipItem {
   user_address: string;
   user_username: string;
   status: 'pending' | 'approved' | 'banned';
+  role: 'member' | 'moderator' | 'owner';
   created_at: string;
   profitability?: ProfitabilityData | null;
 }

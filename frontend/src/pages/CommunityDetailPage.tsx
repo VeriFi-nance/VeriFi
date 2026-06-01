@@ -4,7 +4,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getCommunity, joinCommunity, approveCommunityMember, banCommunityMember, unbanCommunityMember, getBannedCommunityMembers, getFeed, getAssets, getCommunityMembers, getPositions, updateCommunity } from '@/lib/api';
+import { getCommunity, joinCommunity, approveCommunityMember, banCommunityMember, unbanCommunityMember, getBannedCommunityMembers, getFeed, getAssets, getCommunityMembers, getPositions, updateCommunity, promoteModerator, demoteModerator } from '@/lib/api';
 import type { CommunityItem, PostItem, AssetItem, CommunityMembershipItem, PositionItem } from '@/lib/types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuthState, useOpenLogin } from '@/lib/auth';
@@ -15,6 +15,7 @@ import { PositionCard } from '@/components/PositionCard';
 import { NewPositionModal } from '@/components/NewPositionModal';
 import { Settings } from 'lucide-react';
 import { PageContent } from '@/components/PageContent';
+import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 
 export default function CommunityDetailPage() {
   const { id } = useParams();
@@ -31,6 +32,17 @@ export default function CommunityDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [settingsSaved, setSettingsSaved] = useState('');
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    title: string;
+    description: string;
+    onConfirm: () => void | Promise<void>;
+  }>({
+    open: false,
+    title: '',
+    description: '',
+    onConfirm: () => {},
+  });
 
   const fetchCommunityAndPosts = useCallback(async () => {
     if (!id) return;
@@ -105,20 +117,54 @@ export default function CommunityDetailPage() {
     }
   };
 
-  const handleBan = async (userAddress: string) => {
-    if (!id || !confirm(`Are you sure you want to ban ${userAddress}?`)) return;
+  const handleBan = (userAddress: string) => {
+    if (!id) return;
+    setConfirmDialog({
+      open: true,
+      title: 'Ban Member',
+      description: `Are you sure you want to ban ${userAddress}?`,
+      onConfirm: async () => {
+        try {
+          await banCommunityMember(Number(id), userAddress);
+          await fetchCommunityAndPosts();
+        } catch (e: any) {
+          alert(e.message);
+        }
+      }
+    });
+  };
+
+  const handleUnban = (userAddress: string) => {
+    if (!id) return;
+    setConfirmDialog({
+      open: true,
+      title: 'Unban Member',
+      description: `Are you sure you want to unban ${userAddress}?`,
+      onConfirm: async () => {
+        try {
+          await unbanCommunityMember(Number(id), userAddress);
+          await fetchCommunityAndPosts();
+        } catch (e: any) {
+          alert(e.message);
+        }
+      }
+    });
+  };
+
+  const handlePromote = async (userAddress: string) => {
+    if (!id) return;
     try {
-      await banCommunityMember(Number(id), userAddress);
+      await promoteModerator(Number(id), userAddress);
       await fetchCommunityAndPosts();
     } catch (e: any) {
       alert(e.message);
     }
   };
 
-  const handleUnban = async (userAddress: string) => {
-    if (!id || !confirm(`Are you sure you want to unban ${userAddress}?`)) return;
+  const handleDemote = async (userAddress: string) => {
+    if (!id) return;
     try {
-      await unbanCommunityMember(Number(id), userAddress);
+      await demoteModerator(Number(id), userAddress);
       await fetchCommunityAndPosts();
     } catch (e: any) {
       alert(e.message);
@@ -150,6 +196,9 @@ export default function CommunityDetailPage() {
   if (!community) return <p className="text-center py-10">Community not found.</p>;
 
   const isCreator = myAddress && myAddress.toLowerCase() === community.creator_address.toLowerCase();
+  const isOwner = isCreator;
+  const isModerator = community.my_role === 'moderator';
+  const canModerate = isOwner || isModerator;
   const canViewPosts = community.privacy_type === 'public' || community.my_membership_status === 'approved' || isCreator;
   const canPost = isCreator || (community.my_membership_status === 'approved' && community.post_permission === 'all');
 
@@ -177,7 +226,9 @@ export default function CommunityDetailPage() {
         )}
         {canPost && (
           <div className="shrink-0 flex items-center gap-2">
-            <NewPositionModal communityId={Number(id)} assets={assets} onCreated={fetchCommunityAndPosts} />
+            {isCreator && (
+              <NewPositionModal communityId={Number(id)} assets={assets} onCreated={fetchCommunityAndPosts} />
+            )}
             <NewPostButton onPosted={fetchCommunityAndPosts} communityId={Number(id)} />
           </div>
         )}
@@ -187,7 +238,7 @@ export default function CommunityDetailPage() {
         <strong>{community.member_count}</strong> member{community.member_count !== 1 ? 's' : ''} &middot; Created by {community.creator_username ? `@${community.creator_username}` : `${community.creator_address.slice(0,6)}...${community.creator_address.slice(-4)}`}
       </div>
 
-      {isCreator && community.pending_requests && community.pending_requests.length > 0 && (
+      {canModerate && community.pending_requests && community.pending_requests.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Pending Join Requests</CardTitle>
@@ -217,7 +268,7 @@ export default function CommunityDetailPage() {
           </TabsList>
           
           <TabsContent value="posts" className="space-y-4 mt-4">
-            <FeedList community={Number(id)} />
+            <FeedList community={Number(id)} myRole={community.my_role} creatorAddress={community.creator_address} />
           </TabsContent>
           
           <TabsContent value="positions" className="space-y-4 mt-4">
@@ -248,12 +299,33 @@ export default function CommunityDetailPage() {
                         <div className="font-mono font-bold text-sm flex items-center gap-2">
                           {member.user_username ? `@${member.user_username}` : member.user_address}
                           <ProfitabilityBadge data={member.profitability} />
+                          {member.role === 'owner' && (
+                            <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                              Owner
+                            </span>
+                          )}
+                          {member.role === 'moderator' && (
+                            <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
+                              Mod
+                            </span>
+                          )}
                         </div>
                         <div className="text-xs text-muted-foreground">Joined: {new Date(member.created_at).toLocaleDateString()}</div>
                       </div>
-                      {isCreator && member.user_address.toLowerCase() !== community.creator_address.toLowerCase() && (
-                        <Button size="sm" variant="destructive" onClick={() => handleBan(member.user_address)}>Ban</Button>
-                      )}
+                      <div className="flex gap-2">
+                        {canModerate && member.role === 'member' && member.user_address.toLowerCase() !== community.creator_address.toLowerCase() && (
+                          <Button size="sm" variant="destructive" onClick={() => handleBan(member.user_address)}>Ban</Button>
+                        )}
+                        {isOwner && member.role === 'member' && member.user_address.toLowerCase() !== community.creator_address.toLowerCase() && (
+                          <Button size="sm" variant="outline" onClick={() => handlePromote(member.user_address)}>Make Mod</Button>
+                        )}
+                        {isOwner && member.role === 'moderator' && (
+                          <>
+                            <Button size="sm" variant="destructive" onClick={() => handleBan(member.user_address)}>Ban</Button>
+                            <Button size="sm" variant="ghost" onClick={() => handleDemote(member.user_address)}>Demote</Button>
+                          </>
+                        )}
+                      </div>
                     </CardContent>
                   </Card>
                 ))}
@@ -322,6 +394,27 @@ export default function CommunityDetailPage() {
           </AlertDescription>
         </Alert>
       )}
+
+      <RD.Root open={confirmDialog.open} onOpenChange={(val) => setConfirmDialog(prev => ({ ...prev, open: val }))}>
+        <RD.Content>
+          <RD.Header>
+            <RD.Title>{confirmDialog.title}</RD.Title>
+            <RD.Description>{confirmDialog.description}</RD.Description>
+          </RD.Header>
+          <RD.Footer className="mt-4 flex gap-2">
+            <Button variant="outline" onClick={() => setConfirmDialog(prev => ({ ...prev, open: false }))}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                await confirmDialog.onConfirm();
+                setConfirmDialog(prev => ({ ...prev, open: false }));
+              }}
+            >
+              Confirm
+            </Button>
+          </RD.Footer>
+        </RD.Content>
+      </RD.Root>
     </PageContent>
   );
 }

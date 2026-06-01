@@ -131,7 +131,7 @@ class CommunityMembershipSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CommunityMembership
-        fields = ["id", "community", "user_address", "user_username", "status", "created_at", "profitability"]
+        fields = ["id", "community", "user_address", "user_username", "status", "role", "created_at", "profitability"]
 
     def get_profitability(self, obj):
         try:

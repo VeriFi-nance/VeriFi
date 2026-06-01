@@ -34,13 +34,13 @@ class ResolutionTests(TestCase):
             asset=self.asset,
             direction="bullish",
             percentage="10.00",
-            until=date.today() + timedelta(days=1), # initially future to pass create
+            until=(timezone.now() + timedelta(days=1)).date(), # initially future to pass create
             status=HardClaim.Status.UNDETERMINED,
         )
         # Backdate so it counts as due
         HardClaim.objects.filter(id=self.claim.id).update(
             created_at=timezone.now() - timedelta(days=5),
-            until=date.today() - timedelta(days=1)
+            until=(timezone.now() - timedelta(days=2)).date()
         )
         self.claim.refresh_from_db()
 

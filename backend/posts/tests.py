@@ -7,7 +7,7 @@ from rest_framework.test import APITestCase
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from accounts.models import WalletUser
-from .models import Post, Asset, HardClaim
+from .models import Post, Asset, HardClaim, Community, CommunityMembership
 from .resolution import ResolutionError, normalize_claim_for_resolution
 
 
@@ -704,7 +704,7 @@ class PositionTestCase(APITestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {str(refresh.access_token)}')
 
     def test_create_valid_long_position(self):
-        self._auth(self.member_user)
+        self._auth(self.creator_user)
         now = timezone.now()
         data = {
             "community_id": self.community.id,
@@ -722,7 +722,7 @@ class PositionTestCase(APITestCase):
         self.assertEqual(response.data["status"], "pending")
 
     def test_create_invalid_long_position_sl_tp(self):
-        self._auth(self.member_user)
+        self._auth(self.creator_user)
         now = timezone.now()
         data = {
             "community_id": self.community.id,
@@ -739,7 +739,7 @@ class PositionTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_create_invalid_short_position_sl_tp(self):
-        self._auth(self.member_user)
+        self._auth(self.creator_user)
         now = timezone.now()
         data = {
             "community_id": self.community.id,
@@ -756,7 +756,7 @@ class PositionTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_create_invalid_dates(self):
-        self._auth(self.member_user)
+        self._auth(self.creator_user)
         now = timezone.now()
         data = {
             "community_id": self.community.id,
@@ -893,4 +893,169 @@ class PostDetailTestCase(APITestCase):
         url = reverse("post-detail", kwargs={"pk": 99999})
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class CommunityRolesTestCase(APITestCase):
+    def setUp(self):
+        self.owner_user = WalletUser.objects.create(address="0xowner00000000000000000000000000000000")
+        self.moderator_user = WalletUser.objects.create(address="0xmod0000000000000000000000000000000000")
+        self.member_user = WalletUser.objects.create(address="0xmember00000000000000000000000000000000")
+        self.other_member_user = WalletUser.objects.create(address="0xothermember0000000000000000000000000")
+        
+        self.asset = Asset.objects.create(
+            name="Bitcoin",
+            symbol="BTC",
+            description="Digital gold",
+            market_type=Asset.MarketType.CRYPTO,
+            provider=Asset.Provider.COINGECKO,
+            provider_symbol="bitcoin",
+        )
+
+        from .models import Community, CommunityMembership
+        self.community = Community.objects.create(
+            name="Role Test Community",
+            creator=self.owner_user,
+            privacy_type=Community.PrivacyType.PUBLIC
+        )
+        
+        self.owner_membership = CommunityMembership.objects.create(
+            community=self.community,
+            user=self.owner_user,
+            status=CommunityMembership.Status.APPROVED,
+            role=CommunityMembership.Role.OWNER
+        )
+        
+        self.mod_membership = CommunityMembership.objects.create(
+            community=self.community,
+            user=self.moderator_user,
+            status=CommunityMembership.Status.APPROVED,
+            role=CommunityMembership.Role.MODERATOR
+        )
+        
+        self.member_membership = CommunityMembership.objects.create(
+            community=self.community,
+            user=self.member_user,
+            status=CommunityMembership.Status.APPROVED,
+            role=CommunityMembership.Role.MEMBER
+        )
+
+    def _auth(self, user):
+        refresh = RefreshToken()
+        refresh["address"] = user.address
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {str(refresh.access_token)}')
+
+    def test_one_community_per_user(self):
+        """Creating a second community by the same user returns 400."""
+        self._auth(self.owner_user)
+        url = reverse("community-list")
+        data = {
+            "name": "Second Community",
+            "description": "Fail please"
+        }
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("You can only create one community.", response.data["detail"])
+
+    def test_moderator_can_ban(self):
+        """A moderator can ban a regular member."""
+        self._auth(self.moderator_user)
+        url = reverse("community-ban", kwargs={"pk": self.community.id, "user_address": self.member_user.address})
+        response = self.client.post(url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.member_membership.refresh_from_db()
+        self.assertEqual(self.member_membership.status, CommunityMembership.Status.BANNED)
+
+    def test_moderator_cannot_ban_owner(self):
+        """A moderator cannot ban the owner."""
+        self._auth(self.moderator_user)
+        url = reverse("community-ban", kwargs={"pk": self.community.id, "user_address": self.owner_user.address})
+        response = self.client.post(url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.owner_membership.refresh_from_db()
+        self.assertEqual(self.owner_membership.status, CommunityMembership.Status.APPROVED)
+
+    def test_owner_can_promote_moderator(self):
+        """Owner can promote a member to moderator."""
+        self._auth(self.owner_user)
+        url = reverse("community-moderator", kwargs={"pk": self.community.id, "user_address": self.member_user.address})
+        response = self.client.post(url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.member_membership.refresh_from_db()
+        self.assertEqual(self.member_membership.role, CommunityMembership.Role.MODERATOR)
+
+        # Also test demote
+        response_demote = self.client.delete(url, format="json")
+        self.assertEqual(response_demote.status_code, status.HTTP_200_OK)
+        self.member_membership.refresh_from_db()
+        self.assertEqual(self.member_membership.role, CommunityMembership.Role.MEMBER)
+
+    def test_non_owner_cannot_promote(self):
+        """A moderator cannot promote another moderator."""
+        self._auth(self.moderator_user)
+        url = reverse("community-moderator", kwargs={"pk": self.community.id, "user_address": self.member_user.address})
+        response = self.client.post(url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_author_cannot_delete_own_post(self):
+        """Post author cannot delete their own post unless moderator/owner."""
+        post = Post.objects.create(author=self.member_user, community=self.community, content="my post")
+        self._auth(self.member_user)
+        url = reverse("post-delete", kwargs={"pk": post.id})
+        response = self.client.delete(url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(Post.objects.filter(id=post.id).exists())
+
+    def test_moderator_can_delete_post(self):
+        """A moderator can delete a community post."""
+        post = Post.objects.create(author=self.member_user, community=self.community, content="member post")
+        self._auth(self.moderator_user)
+        url = reverse("post-delete", kwargs={"pk": post.id})
+        response = self.client.delete(url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Post.objects.filter(id=post.id).exists())
+
+    def test_member_cannot_delete_post(self):
+        """A regular member cannot delete another member's post."""
+        post = Post.objects.create(author=self.member_user, community=self.community, content="member post")
+        self._auth(self.other_member_user)
+        url = reverse("post-delete", kwargs={"pk": post.id})
+        response = self.client.delete(url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(Post.objects.filter(id=post.id).exists())
+
+    def test_only_owner_can_create_position(self):
+        """A regular member/moderator gets 403 when trying to create a position."""
+        now = timezone.now()
+        # Test moderator
+        self._auth(self.moderator_user)
+        data = {
+            "community_id": self.community.id,
+            "asset_id": self.asset.id,
+            "direction": "long",
+            "entry_price": 50000.0,
+            "entry_interval": (now + timedelta(days=1)).isoformat(),
+            "stop_loss": 40000.0,
+            "take_profit": 60000.0,
+            "lifetime": (now + timedelta(days=7)).isoformat()
+        }
+        url = reverse("position-list-create")
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        # Test owner
+        self._auth(self.owner_user)
+        response_owner = self.client.post(url, data, format="json")
+        self.assertEqual(response_owner.status_code, status.HTTP_201_CREATED)
+
+    def test_role_field_in_member_list(self):
+        """Member list response includes the `role` field."""
+        self._auth(self.member_user)
+        url = reverse("community-members", kwargs={"pk": self.community.id})
+        response = self.client.get(url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Verify role is in serialization
+        roles = {item["user_address"]: item["role"] for item in response.data}
+        self.assertEqual(roles[self.owner_user.address], "owner")
+        self.assertEqual(roles[self.moderator_user.address], "moderator")
+        self.assertEqual(roles[self.member_user.address], "member")
 

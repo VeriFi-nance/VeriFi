@@ -27,9 +27,19 @@ class CommunityMembership(models.Model):
         APPROVED = "approved"
         BANNED = "banned"
 
+    class Role(models.TextChoices):
+        MEMBER = "member"
+        MODERATOR = "moderator"
+        OWNER = "owner"
+
     community = models.ForeignKey(Community, on_delete=models.CASCADE, related_name="memberships")
     user = models.ForeignKey(WalletUser, on_delete=models.CASCADE, related_name="community_memberships")
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    role = models.CharField(
+        max_length=15,
+        choices=Role.choices,
+        default=Role.MEMBER,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

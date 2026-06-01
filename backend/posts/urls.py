@@ -5,11 +5,13 @@ from .views import (
     CommunityListView, CommunityDetailView, CommunityJoinView, CommunityApproveView, CommunityBanView, CommunityBannedListView,
     CommunityMemberListView, PositionListCreateView, PositionCloseView, PositionResolveView,
     HardClaimMarketView, HardClaimMarketCreateView, HardClaimMarketBuyView, HardClaimMarketPreviewView,
+    CommunityModeratorView, PostDeleteView,
 )
 
 urlpatterns = [
     path("", PostListCreateView.as_view(), name="post-list-create"),
     path("<int:pk>/", PostDetailView.as_view(), name="post-detail"),
+    path("<int:pk>/delete/", PostDeleteView.as_view(), name="post-delete"),
     path("extract-claims/", ExtractClaimsView.as_view(), name="extract-claims"),
     path("hard-claims/", HardClaimView.as_view(), name="hard-claims"),
     path("hard-claims/<int:pk>/", HardClaimDetailView.as_view(), name="hard-claim-detail"),
@@ -28,6 +30,7 @@ urlpatterns = [
     path("communities/<int:pk>/ban/<str:user_address>/", CommunityBanView.as_view(), name="community-ban"),
     path("communities/<int:pk>/banned/", CommunityBannedListView.as_view(), name="community-banned"),
     path("communities/<int:pk>/members/", CommunityMemberListView.as_view(), name="community-members"),
+    path("communities/<int:pk>/moderator/<str:user_address>/", CommunityModeratorView.as_view(), name="community-moderator"),
     path("positions/", PositionListCreateView.as_view(), name="position-list-create"),
     path("positions/<int:pk>/close/", PositionCloseView.as_view(), name="position-close"),
     path("positions/<int:pk>/resolve/", PositionResolveView.as_view(), name="position-resolve"),

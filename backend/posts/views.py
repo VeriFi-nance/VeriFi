@@ -136,6 +136,17 @@ def _require_admin_user(request) -> WalletUser | Response:
     return user
 
 
+def _is_community_moderator(community, user) -> bool:
+    if community.creator == user:
+        return True
+    return CommunityMembership.objects.filter(
+        community=community,
+        user=user,
+        status=CommunityMembership.Status.APPROVED,
+        role__in=[CommunityMembership.Role.OWNER, CommunityMembership.Role.MODERATOR],
+    ).exists()
+
+
 class PostListCreateView(APIView):
     authentication_classes = []
     permission_classes = []
@@ -623,6 +634,12 @@ class CommunityListView(APIView):
         if user is None:
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
             
+        if Community.objects.filter(creator=user).exists():
+            return Response(
+                {"detail": "You can only create one community."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         name = request.data.get("name")
         description = request.data.get("description", "")
         privacy_type = request.data.get("privacy_type", Community.PrivacyType.PUBLIC)
@@ -642,7 +659,8 @@ class CommunityListView(APIView):
         CommunityMembership.objects.create(
             community=community,
             user=user,
-            status=CommunityMembership.Status.APPROVED
+            status=CommunityMembership.Status.APPROVED,
+            role=CommunityMembership.Role.OWNER
         )
         
         return Response(CommunitySerializer(community).data, status=status.HTTP_201_CREATED)
@@ -657,14 +675,17 @@ class CommunityDetailView(APIView):
         
         user = _get_wallet_user(request)
         membership_status = None
+        membership_role = None
         if user:
             membership = CommunityMembership.objects.filter(community=community, user=user).first()
             if membership:
                 membership_status = membership.status
+                membership_role = membership.role
                 
         data["my_membership_status"] = membership_status
+        data["my_role"] = membership_role
         
-        if user and community.creator == user:
+        if user and (community.creator == user or _is_community_moderator(community, user)):
             pending_memberships = CommunityMembership.objects.filter(community=community, status=CommunityMembership.Status.PENDING)
             data["pending_requests"] = CommunityMembershipSerializer(pending_memberships, many=True).data
             
@@ -728,8 +749,8 @@ class CommunityApproveView(APIView):
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
             
         community = get_object_or_404(Community, pk=pk)
-        if community.creator != user:
-            return Response({"detail": "Only the community creator can approve members."}, status=status.HTTP_403_FORBIDDEN)
+        if not _is_community_moderator(community, user):
+            return Response({"detail": "Only moderators or the owner can approve members."}, status=status.HTTP_403_FORBIDDEN)
             
         target_user = get_object_or_404(WalletUser, address=user_address.lower())
         membership = get_object_or_404(CommunityMembership, community=community, user=target_user)
@@ -755,12 +776,18 @@ class CommunityBanView(APIView):
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
             
         community = get_object_or_404(Community, pk=pk)
-        if community.creator != user:
-            return Response({"detail": "Only the community creator can ban members."}, status=status.HTTP_403_FORBIDDEN)
+        if not _is_community_moderator(community, user):
+            return Response({"detail": "Only moderators or the owner can ban members."}, status=status.HTTP_403_FORBIDDEN)
             
         target_user = get_object_or_404(WalletUser, address=user_address.lower())
         if target_user == user:
             return Response({"detail": "You cannot ban yourself."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Guard: moderators cannot ban the owner or other moderators of equal/higher rank
+        target_membership = CommunityMembership.objects.filter(community=community, user=target_user).first()
+        if target_membership and target_membership.role in [CommunityMembership.Role.OWNER, CommunityMembership.Role.MODERATOR]:
+            if community.creator != user:  # Only owner can ban moderators
+                return Response({"detail": "Moderators cannot ban the owner or other moderators."}, status=status.HTTP_403_FORBIDDEN)
 
         membership, _ = CommunityMembership.objects.get_or_create(
             community=community,
@@ -776,8 +803,8 @@ class CommunityBanView(APIView):
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
             
         community = get_object_or_404(Community, pk=pk)
-        if community.creator != user:
-            return Response({"detail": "Only the community creator can unban members."}, status=status.HTTP_403_FORBIDDEN)
+        if not _is_community_moderator(community, user):
+            return Response({"detail": "Only moderators or the owner can unban members."}, status=status.HTTP_403_FORBIDDEN)
             
         target_user = get_object_or_404(WalletUser, address=user_address.lower())
         
@@ -814,8 +841,8 @@ class CommunityBannedListView(APIView):
         community = get_object_or_404(Community, pk=pk)
         
         user = _get_wallet_user(request)
-        if not user or community.creator != user:
-            return Response({"detail": "Only the creator can view the banned list."}, status=status.HTTP_403_FORBIDDEN)
+        if not user or not _is_community_moderator(community, user):
+            return Response({"detail": "Only moderators or the owner can view the banned list."}, status=status.HTTP_403_FORBIDDEN)
                 
         memberships = CommunityMembership.objects.filter(community=community, status=CommunityMembership.Status.BANNED).order_by('created_at')
         return Response(CommunityMembershipSerializer(memberships, many=True).data)
@@ -964,8 +991,8 @@ class PositionListCreateView(APIView):
             if not membership or membership.status != CommunityMembership.Status.APPROVED:
                 return Response({"detail": "You must be an approved member to post positions in this private community."}, status=status.HTTP_403_FORBIDDEN)
                 
-        if community.post_permission == Community.PostPermission.CREATOR_ONLY and user != community.creator:
-            return Response({"detail": "Only the creator can post in this community."}, status=status.HTTP_403_FORBIDDEN)
+        if community.creator != user:
+            return Response({"detail": "Only the community owner can share positions."}, status=status.HTTP_403_FORBIDDEN)
 
         asset = get_object_or_404(Asset, pk=data["asset_id"])
         
@@ -1220,5 +1247,71 @@ class HardClaimMarketPreviewView(APIView):
                 "new_yes_price": preview.new_yes_price,
             }
         )
+
+
+class CommunityModeratorView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, pk, user_address):
+        """Promote a member to moderator (owner only)."""
+        user = _get_wallet_user(request)
+        if not user:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        community = get_object_or_404(Community, pk=pk)
+        if community.creator != user:
+            return Response({"detail": "Only the owner can promote moderators."}, status=status.HTTP_403_FORBIDDEN)
+
+        target_user = get_object_or_404(WalletUser, address=user_address.lower())
+        if target_user == user:
+            return Response({"detail": "You are already the owner."}, status=status.HTTP_400_BAD_REQUEST)
+
+        membership = get_object_or_404(CommunityMembership, community=community, user=target_user)
+        if membership.status != CommunityMembership.Status.APPROVED:
+            return Response({"detail": "User must be an approved member to be promoted."}, status=status.HTTP_400_BAD_REQUEST)
+
+        membership.role = CommunityMembership.Role.MODERATOR
+        membership.save()
+        return Response(CommunityMembershipSerializer(membership).data)
+
+    def delete(self, request, pk, user_address):
+        """Demote a moderator back to member (owner only)."""
+        user = _get_wallet_user(request)
+        if not user:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        community = get_object_or_404(Community, pk=pk)
+        if community.creator != user:
+            return Response({"detail": "Only the owner can demote moderators."}, status=status.HTTP_403_FORBIDDEN)
+
+        target_user = get_object_or_404(WalletUser, address=user_address.lower())
+        membership = get_object_or_404(CommunityMembership, community=community, user=target_user)
+        if membership.role != CommunityMembership.Role.MODERATOR:
+            return Response({"detail": "User is not a moderator."}, status=status.HTTP_400_BAD_REQUEST)
+
+        membership.role = CommunityMembership.Role.MEMBER
+        membership.save()
+        return Response(CommunityMembershipSerializer(membership).data)
+
+
+class PostDeleteView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def delete(self, request, pk):
+        user = _get_wallet_user(request)
+        if not user:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        post = get_object_or_404(Post, pk=pk)
+
+        is_community_mod = post.community and _is_community_moderator(post.community, user)
+
+        if not is_community_mod:
+            return Response({"detail": "You do not have permission to delete this post."}, status=status.HTTP_403_FORBIDDEN)
+
+        post.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 

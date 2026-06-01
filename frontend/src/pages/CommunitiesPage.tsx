@@ -24,9 +24,10 @@ import type { CommunityItem } from '@/lib/types';
 export default function CommunitiesPage() {
   const navigate = useNavigate();
   const openLogin = useOpenLogin();
-  const { authenticated } = useAuthState();
+  const { authenticated, address } = useAuthState();
   const [communities, setCommunities] = useState<CommunityItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [alreadyOwns, setAlreadyOwns] = useState(false);
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -38,10 +39,18 @@ export default function CommunitiesPage() {
   useEffect(() => {
     setLoading(true);
     getCommunities()
-      .then(setCommunities)
+      .then((data) => {
+        setCommunities(data);
+        if (address) {
+          const owned = data.some((c) => c.creator_address.toLowerCase() === address.toLowerCase());
+          setAlreadyOwns(owned);
+        } else {
+          setAlreadyOwns(false);
+        }
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [address]);
 
   async function handleCreate() {
     try {
@@ -155,10 +164,13 @@ export default function CommunitiesPage() {
           <button
             type="button"
             onClick={newCommunity}
-            className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card/50 p-5 text-muted-foreground transition-colors hover:border-foreground/20 hover:bg-muted/50 hover:text-foreground"
+            disabled={alreadyOwns}
+            title={alreadyOwns ? "You already own a community" : undefined}
+            className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card/50 p-5 text-muted-foreground transition-colors hover:border-foreground/20 hover:bg-muted/50 hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="size-5" />
             <span className="text-sm font-medium">New community</span>
+            {alreadyOwns && <span className="text-[10px] text-destructive">Limit: 1 community per user</span>}
           </button>
           {communities.map((c) => (
             <Card

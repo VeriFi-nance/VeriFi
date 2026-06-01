@@ -5,15 +5,21 @@ import { PostCard } from '@/components/feed/PostCard';
 import { SkeletonPostCard } from '@/components/Skeleton';
 import { EmptyState } from '@/components/EmptyState';
 import { MessageSquare } from 'lucide-react';
-import { getFeed, getAssets } from '@/lib/api';
+import { getFeed, getAssets, deletePost } from '@/lib/api';
 import type { PostItem, AssetItem } from '@/lib/types';
+import { useAuthState } from '@/lib/auth';
+import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 
 interface FeedListProps {
   feed?: string;
   community?: number;
+  myRole?: 'member' | 'moderator' | 'owner' | null;
+  creatorAddress?: string;
 }
 
-export function FeedList({ feed, community }: FeedListProps) {
+export function FeedList({ feed, community, myRole, creatorAddress }: FeedListProps) {
+  const auth = useAuthState();
+  const myAddress = auth.address;
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,6 +27,17 @@ export function FeedList({ feed, community }: FeedListProps) {
   const [error, setError] = useState('');
   const [page, setPage] = useState(1);
   const [hasNext, setHasNext] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    title: string;
+    description: string;
+    onConfirm: () => void | Promise<void>;
+  }>({
+    open: false,
+    title: '',
+    description: '',
+    onConfirm: () => {},
+  });
 
   useEffect(() => {
     getAssets()
@@ -94,16 +111,39 @@ export function FeedList({ feed, community }: FeedListProps) {
     );
   }
 
+  const handleDeletePost = (postId: number) => {
+    setConfirmDialog({
+      open: true,
+      title: 'Delete Post',
+      description: 'Are you sure you want to delete this post?',
+      onConfirm: async () => {
+        try {
+          await deletePost(postId);
+          setPosts((prev) => prev.filter((p) => p.id !== postId));
+        } catch (e: any) {
+          alert(e.message);
+        }
+      }
+    });
+  };
+
+  const isCreator = creatorAddress && myAddress && myAddress.toLowerCase() === creatorAddress.toLowerCase();
+  const isMod = myRole === 'moderator' || myRole === 'owner' || isCreator;
+
   return (
     <div className="space-y-4">
-      {posts.map((post) => (
-        <PostCard
-          key={post.id}
-          post={post}
-          hardClaims={post.hard_claims}
-          assets={assets}
-        />
-      ))}
+      {posts.map((post) => {
+        const canDelete = !!(post.community && isMod);
+        return (
+          <PostCard
+            key={post.id}
+            post={post}
+            hardClaims={post.hard_claims}
+            assets={assets}
+            onDelete={canDelete ? () => handleDeletePost(post.id) : undefined}
+          />
+        );
+      })}
 
       {hasNext && (
         <div className="flex justify-center pt-2">
@@ -117,6 +157,27 @@ export function FeedList({ feed, community }: FeedListProps) {
           </Button>
         </div>
       )}
+
+      <RD.Root open={confirmDialog.open} onOpenChange={(val) => setConfirmDialog(prev => ({ ...prev, open: val }))}>
+        <RD.Content>
+          <RD.Header>
+            <RD.Title>{confirmDialog.title}</RD.Title>
+            <RD.Description>{confirmDialog.description}</RD.Description>
+          </RD.Header>
+          <RD.Footer className="mt-4 flex gap-2">
+            <Button variant="outline" onClick={() => setConfirmDialog(prev => ({ ...prev, open: false }))}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                await confirmDialog.onConfirm();
+                setConfirmDialog(prev => ({ ...prev, open: false }));
+              }}
+            >
+              Confirm
+            </Button>
+          </RD.Footer>
+        </RD.Content>
+      </RD.Root>
     </div>
   );
 }

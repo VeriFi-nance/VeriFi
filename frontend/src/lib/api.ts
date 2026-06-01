@@ -13,7 +13,12 @@ async function request<T>(
     headers: { 'Content-Type': 'application/json', ...optHeaders },
   });
 
-  const data = await res.json();
+  if (res.status === 204) {
+    return {} as T;
+  }
+
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : {};
   if (!res.ok) {
     throw new Error(data.detail ?? 'Request failed');
   }
@@ -344,6 +349,27 @@ export async function createPosition(data: {
 export async function closePosition(id: number): Promise<PositionItem> {
   return request(`/api/posts/positions/${id}/close/`, {
     method: 'POST',
+    headers: authHeaders(),
+  });
+}
+
+export async function promoteModerator(communityId: number, userAddress: string): Promise<CommunityMembershipItem> {
+  return request(`/api/posts/communities/${communityId}/moderator/${encodeURIComponent(userAddress)}/`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+}
+
+export async function demoteModerator(communityId: number, userAddress: string): Promise<CommunityMembershipItem> {
+  return request(`/api/posts/communities/${communityId}/moderator/${encodeURIComponent(userAddress)}/`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+}
+
+export async function deletePost(postId: number): Promise<void> {
+  return request(`/api/posts/${postId}/delete/`, {
+    method: 'DELETE',
     headers: authHeaders(),
   });
 }
