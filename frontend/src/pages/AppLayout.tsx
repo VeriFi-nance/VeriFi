@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Home, LogOut, Moon, Settings, Sun, User, Users } from 'lucide-react';
+import { Home, LogOut, Moon, Settings, Sun, User, Users, ShieldCheck } from 'lucide-react';
 import { clearAuth, useAuthState, useOpenLogin } from '@/lib/auth';
 import { clearPrivateKey } from '@/lib/crypto';
 import { loadTheme, toggleTheme, type Theme } from '@/lib/theme';
@@ -32,6 +32,12 @@ export function buildNavItems(): NavItem[] {
       icon: <Users className="size-5" />,
       label: 'Communities',
       matches: (p) => p.startsWith('/c'),
+    },
+    {
+      to: '/verify',
+      icon: <ShieldCheck className="size-5" />,
+      label: 'Verify Proof',
+      matches: (p) => p.startsWith('/verify'),
     },
     {
       to: '/settings',
