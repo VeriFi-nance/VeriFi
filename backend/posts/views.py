@@ -340,6 +340,10 @@ class HardClaimView(APIView):
         if address:
             qs = qs.filter(author__address=address)
             
+        username_q = request.query_params.get("username", "").strip()
+        if username_q:
+            qs = qs.filter(author__username__iexact=username_q)
+            
         feed_type = request.query_params.get("feed")
         if feed_type == "following":
             user = _get_wallet_user(request)

@@ -109,10 +109,13 @@ def assign_authors(apps, schema_editor):
     HardClaim.objects.filter(author=None).delete()
 
     # Create seed users (get_or_create in case they already exist)
-    users = {
-        addr: WalletUser.objects.get_or_create(address=addr)[0]
-        for addr in SEED_USERS
-    }
+    users = {}
+    for addr in SEED_USERS:
+        user, created = WalletUser.objects.get_or_create(
+            address=addr,
+            defaults={"username": f"user_{addr[2:8]}"}
+        )
+        users[addr] = user
 
     for claim_data in HARD_CLAIMS:
         try:

@@ -144,6 +144,12 @@ DATABASES = {
     )
 }
 
+# Bound the time spent on a single connection attempt so a suspended Neon
+# compute (cold start) fails fast and is retried, rather than hanging until the
+# default OS-level timeout. Only applies to Postgres.
+if _database_url.startswith(("postgres://", "postgresql://")):
+    DATABASES["default"].setdefault("OPTIONS", {}).setdefault("connect_timeout", 10)
+
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
