@@ -16,9 +16,17 @@ Including another URLconf
 """
 
 from django.contrib import admin
+from django.http import JsonResponse
 from django.urls import path, include
 
+
+def healthz(request):
+    """Lightweight liveness probe — no DB hit. Used by the keep-warm ping."""
+    return JsonResponse({"status": "ok"})
+
+
 urlpatterns = [
+    path("healthz", healthz),
     path("admin/", admin.site.urls),
     path("api/auth/", include("accounts.urls")),
     path("api/posts/", include("posts.urls")),
