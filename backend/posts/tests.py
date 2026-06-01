@@ -39,7 +39,8 @@ class HardClaimAPITestCase(APITestCase):
         refresh["address"] = user.address
         return str(refresh.access_token)
 
-    def test_create_hard_claim_success(self):
+    @patch('posts.views.verify_claim_signature')
+    def test_create_hard_claim_success(self, mock_verify):
         """Test successfully creating a hard claim."""
         url = reverse('hard-claims')
         data = {
@@ -47,7 +48,16 @@ class HardClaimAPITestCase(APITestCase):
             'direction': 'bullish',
             'percentage': 25.0,
             'until': '2027-12-31',
-            'status': 'undetermined'
+            'status': 'undetermined',
+            'signature': '0x123',
+            'claim_payload': {
+                'asset_symbol': 'BTC',
+                'author_username': self.wallet_user.username,
+                'direction': 'bullish',
+                'percentage': 25.0,
+                'until': '2027-12-31',
+                'created_at': timezone.now().isoformat(),
+            },
         }
 
         response = self.client.post(url, data, format='json')
@@ -703,7 +713,8 @@ class PositionTestCase(APITestCase):
         refresh["address"] = user.address
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {str(refresh.access_token)}')
 
-    def test_create_valid_long_position(self):
+    @patch('posts.views.verify_position_signature')
+    def test_create_valid_long_position(self, mock_verify):
         self._auth(self.creator_user)
         now = timezone.now()
         data = {
@@ -714,14 +725,17 @@ class PositionTestCase(APITestCase):
             "entry_interval": (now + timedelta(days=1)).isoformat(),
             "stop_loss": 40000,
             "take_profit": 60000,
-            "lifetime": (now + timedelta(days=7)).isoformat()
+            "lifetime": (now + timedelta(days=7)).isoformat(),
+            "signature": "0x123",
+            "position_payload": {"fake": "payload"},
         }
         url = reverse('position-list-create')
         response = self.client.post(url, data, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["status"], "pending")
 
-    def test_create_invalid_long_position_sl_tp(self):
+    @patch('posts.views.verify_position_signature')
+    def test_create_invalid_long_position_sl_tp(self, mock_verify):
         self._auth(self.creator_user)
         now = timezone.now()
         data = {
@@ -732,13 +746,16 @@ class PositionTestCase(APITestCase):
             "entry_interval": (now + timedelta(days=1)).isoformat(),
             "stop_loss": 60000,  # SL > entry
             "take_profit": 40000, # TP < entry
-            "lifetime": (now + timedelta(days=7)).isoformat()
+            "lifetime": (now + timedelta(days=7)).isoformat(),
+            "signature": "0x123",
+            "position_payload": {"fake": "payload"},
         }
         url = reverse('position-list-create')
         response = self.client.post(url, data, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_create_invalid_short_position_sl_tp(self):
+    @patch('posts.views.verify_position_signature')
+    def test_create_invalid_short_position_sl_tp(self, mock_verify):
         self._auth(self.creator_user)
         now = timezone.now()
         data = {
@@ -749,13 +766,16 @@ class PositionTestCase(APITestCase):
             "entry_interval": (now + timedelta(days=1)).isoformat(),
             "stop_loss": 40000,  # SL < entry
             "take_profit": 60000, # TP > entry
-            "lifetime": (now + timedelta(days=7)).isoformat()
+            "lifetime": (now + timedelta(days=7)).isoformat(),
+            "signature": "0x123",
+            "position_payload": {"fake": "payload"},
         }
         url = reverse('position-list-create')
         response = self.client.post(url, data, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_create_invalid_dates(self):
+    @patch('posts.views.verify_position_signature')
+    def test_create_invalid_dates(self, mock_verify):
         self._auth(self.creator_user)
         now = timezone.now()
         data = {
@@ -766,7 +786,9 @@ class PositionTestCase(APITestCase):
             "entry_interval": (now - timedelta(days=1)).isoformat(), # Past
             "stop_loss": 40000,
             "take_profit": 60000,
-            "lifetime": (now + timedelta(days=7)).isoformat()
+            "lifetime": (now + timedelta(days=7)).isoformat(),
+            "signature": "0x123",
+            "position_payload": {"fake": "payload"},
         }
         url = reverse('position-list-create')
         response = self.client.post(url, data, format="json")
