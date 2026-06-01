@@ -909,3 +909,101 @@ class PostDetailTestCase(APITestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
+
+class SignatureVerificationTestCase(APITestCase):
+    def setUp(self):
+        self.wallet_user = WalletUser.objects.create(
+            address="0x742d35cc6634c0532925a3b844bc454e4438f44e",
+            username="testuser"
+        )
+        self.asset = Asset.objects.create(
+            name="Bitcoin",
+            symbol="BTC",
+            description="Digital gold",
+            market_type=Asset.MarketType.CRYPTO,
+            provider=Asset.Provider.COINGECKO,
+            provider_symbol="bitcoin",
+        )
+        self.token = self._get_jwt_token(self.wallet_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
+
+    def _get_jwt_token(self, user):
+        refresh = RefreshToken()
+        refresh["address"] = user.address
+        return str(refresh.access_token)
+
+    @patch('posts.views.verify_claim_signature')
+    def test_stale_signature_timestamp(self, mock_verify):
+        from rest_framework.exceptions import ValidationError
+        mock_verify.side_effect = ValidationError({"signature": "Payload timestamp is stale or too far in the future (±5 min)."})
+        url = reverse('hard-claims')
+        data = {
+            'asset_id': self.asset.id,
+            'direction': 'bullish',
+            'percentage': 25.0,
+            'until': '2027-12-31',
+            'status': 'undetermined',
+            'signature': '0x123',
+            'claim_payload': {
+                'asset_symbol': 'BTC', 
+                'author_username': 'testuser',
+                'direction': 'bullish', 
+                'percentage': 25.0, 
+                'until': '2027-12-31',
+                'created_at': (timezone.now() - timedelta(minutes=10)).isoformat()
+            }
+        }
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("signature", response.data)
+
+    @patch('posts.views.verify_claim_signature')
+    def test_verify_invalid_signature_graceful_fail(self, mock_verify):
+        from rest_framework.exceptions import ValidationError
+        mock_verify.side_effect = ValidationError({"signature": "Invalid signature: recovery failed."})
+        url = reverse('hard-claims')
+        data = {
+            'asset_id': self.asset.id,
+            'direction': 'bullish',
+            'percentage': 25.0,
+            'until': '2027-12-31',
+            'status': 'undetermined',
+            'signature': '0xbadsignature',
+            'claim_payload': {
+                'asset_symbol': 'BTC', 
+                'author_username': 'testuser',
+                'direction': 'bullish', 
+                'percentage': 25.0, 
+                'until': '2027-12-31',
+                'created_at': timezone.now().isoformat()
+            }
+        }
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("signature", response.data)
+
+    @patch('posts.views.verify_claim_signature')
+    def test_payload_consistency_mismatch(self, mock_verify):
+        from rest_framework.exceptions import ValidationError
+        mock_verify.side_effect = ValidationError({"signature": "Signed payload does not match request data."})
+        url = reverse('hard-claims')
+        data = {
+            'asset_id': self.asset.id,
+            'direction': 'bullish',
+            'percentage': 25.0,
+            'until': '2027-12-31',
+            'status': 'undetermined',
+            'signature': '0x123',
+            'claim_payload': {
+                'asset_symbol': 'BTC', 
+                'author_username': 'testuser',
+                'direction': 'bullish', 
+                'percentage': 50.0,  # Mismatched percentage
+                'until': '2027-12-31',
+                'created_at': timezone.now().isoformat()
+            }
+        }
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("signature", response.data)
+
