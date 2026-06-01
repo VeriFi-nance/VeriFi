@@ -157,16 +157,16 @@ export default function UserPage() {
       )}
 
       <Tabs defaultValue="claims" className="mt-6 w-full">
-        <TabsList className="w-full justify-start border-b rounded-none bg-transparent p-0 h-10 space-x-6">
+        <TabsList className="bg-transparent border-none p-0 flex gap-2 h-auto justify-start w-full">
           <TabsTrigger
             value="claims"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none h-10 px-1 font-medium cursor-pointer"
+            className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground data-[state=active]:bg-foreground/5 dark:data-[state=active]:bg-foreground/5 data-[state=active]:text-foreground data-[state=active]:border-transparent dark:data-[state=active]:border-transparent data-[state=active]:shadow-none cursor-pointer transition-colors border-0"
           >
             Hard Claims
           </TabsTrigger>
           <TabsTrigger
             value="communities"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none h-10 px-1 font-medium cursor-pointer"
+            className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground data-[state=active]:bg-foreground/5 dark:data-[state=active]:bg-foreground/5 data-[state=active]:text-foreground data-[state=active]:border-transparent dark:data-[state=active]:border-transparent data-[state=active]:shadow-none cursor-pointer transition-colors border-0"
           >
             Communities
           </TabsTrigger>
