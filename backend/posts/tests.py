@@ -1007,3 +1007,84 @@ class SignatureVerificationTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("signature", response.data)
 
+
+class ProofAndOGEndpointsTestCase(APITestCase):
+    def setUp(self):
+        from decimal import Decimal
+        from django.utils import timezone
+        from .models import Position
+        self.wallet_user = WalletUser.objects.create(
+            address="0x742d35cc6634c0532925a3b844bc454e4438f44e",
+            username="testuser"
+        )
+        self.asset = Asset.objects.create(
+            name="Bitcoin",
+            symbol="BTC",
+            description="Digital gold",
+            market_type=Asset.MarketType.CRYPTO,
+            provider=Asset.Provider.COINGECKO,
+            provider_symbol="bitcoin",
+        )
+        self.post = Post.objects.create(
+            author=self.wallet_user,
+            content="I predict BTC will go up",
+        )
+        self.claim = HardClaim.objects.create(
+            post=self.post,
+            author=self.wallet_user,
+            asset=self.asset,
+            direction="bullish",
+            percentage=Decimal("10.00"),
+            until=timezone.now() + timezone.timedelta(days=7),
+            signature="0xmocksignature",
+            claim_payload={"mock": "payload"}
+        )
+        from .models import Community
+        self.community = Community.objects.create(name="Test Community")
+        self.position = Position.objects.create(
+            author=self.wallet_user,
+            community=self.community,
+            asset=self.asset,
+            direction="LONG",
+            entry_price=Decimal("50000.00"),
+            entry_interval=timezone.now() + timezone.timedelta(days=1),
+            stop_loss=Decimal("45000.00"),
+            take_profit=Decimal("60000.00"),
+            lifetime=timezone.now() + timezone.timedelta(days=7),
+            signature="0xmockpossignature",
+            position_payload={"mock": "pospayload"}
+        )
+
+    def test_hard_claim_proof_endpoint(self):
+        url = reverse('hard-claim-proof', args=[self.claim.id])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["type"], "claim")
+        self.assertEqual(response.data["claim_id"], self.claim.id)
+        self.assertEqual(response.data["signature"], "0xmocksignature")
+
+    def test_hard_claim_og_endpoint(self):
+        url = reverse('hard-claim-og', args=[self.claim.id])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["asset_symbol"], "BTC")
+        self.assertEqual(response.data["direction"], "bullish")
+        self.assertIn("title", response.data)
+        self.assertIn("description", response.data)
+
+    def test_position_proof_endpoint(self):
+        url = reverse('position-proof', args=[self.position.id])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["type"], "position")
+        self.assertEqual(response.data["position_id"], self.position.id)
+        self.assertEqual(response.data["signature"], "0xmockpossignature")
+
+    def test_position_og_endpoint(self):
+        url = reverse('position-og', args=[self.position.id])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["asset_symbol"], "BTC")
+        self.assertEqual(response.data["direction"], "LONG")
+        self.assertIn("title", response.data)
+        self.assertIn("description", response.data)
