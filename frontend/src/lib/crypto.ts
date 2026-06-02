@@ -3,11 +3,12 @@ import { wordlist } from '@scure/bip39/wordlists/english.js';
 import { HDKey } from '@scure/bip32';
 import * as secp from '@noble/secp256k1';
 import { keccak_256 } from '@noble/hashes/sha3.js';
+import { verifyMessage } from 'ethers';
 import { toHex, fromHex } from './keystore';
 
 // Lightweight key storage / AES helpers live in ./keystore so modules that only
-// read or clear the stored key don't drag the BIP39/BIP32/secp256k1 bundle into
-// the initial chunk. Re-exported here for backward compatibility.
+// read or clear the stored key (AppLayout, SettingsPage, useWalletReveal) don't
+// pull the heavy BIP39/BIP32/secp256k1 bundle into the initial chunk. Re-exported here for backward compatibility.
 export {
   type EncryptedKey,
   encryptPrivateKey,
@@ -85,5 +86,56 @@ export async function signMessage(
   const sigBytes = new Uint8Array(65);
   sigBytes.set(sig.slice(1));    // r + s
   sigBytes[64] = 27 + sig[0];   // v
-  return toHex(sigBytes);
+  return '0x' + toHex(sigBytes);
+}
+
+// ---------------------------------------------------------------------------
+// Proof Payload Builders & Verification
+// ---------------------------------------------------------------------------
+
+export function buildClaimPayload(data: {
+  asset_symbol: string; author_username: string; direction: string; percentage: number;
+  until: string; created_at: string;
+}): string {
+  const sorted = Object.keys(data)
+    .sort()
+    .reduce((acc, key) => {
+      acc[key] = data[key as keyof typeof data];
+      return acc;
+    }, {} as Record<string, unknown>);
+  return JSON.stringify(sorted);
+}
+
+export function buildPositionPayload(data: {
+  asset_symbol: string; author_username: string; direction: string; entry_price: number;
+  stop_loss: number; take_profit: number; lifetime: string;
+  created_at: string;
+}): string {
+  const sorted = Object.keys(data)
+    .sort()
+    .reduce((acc, key) => {
+      acc[key] = data[key as keyof typeof data];
+      return acc;
+    }, {} as Record<string, unknown>);
+  return JSON.stringify(sorted);
+}
+
+export async function signClaimPayload(
+  privateKey: Uint8Array,
+  payload: string
+): Promise<string> {
+  return signMessage(privateKey, payload);
+}
+
+export function verifyProofSignature(
+  payload: string,
+  signatureHex: string,
+  expectedAddress: string
+): boolean {
+  try {
+    const recovered = verifyMessage(payload, signatureHex);
+    return recovered.toLowerCase() === expectedAddress.toLowerCase();
+  } catch {
+    return false;
+  }
 }

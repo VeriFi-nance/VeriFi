@@ -13,9 +13,9 @@ The periodic scheduler (cron / management command) calls update_all_assets().
 from __future__ import annotations
 
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta, timezone as datetime_timezone
 
-from django.utils import timezone
+from django.utils import timezone as django_timezone
 
 from .models import Asset, AssetSubscription, OHLCData, Position, PositionEvent
 from .ohlc_fetcher import OHLCFetchError, fetch_ohlc_for_asset
@@ -48,8 +48,12 @@ def update_asset_price(asset: Asset) -> list[OHLCData]:
         # No active subscribers, but we still update the asset's price data
         start_date = today - timedelta(days=30)
 
+    # Convert start_date and today to timezone-aware datetimes for external API fetch
+    start_dt = datetime.combine(start_date, time.min, tzinfo=datetime_timezone.utc)
+    end_dt = datetime.combine(today, time.max, tzinfo=datetime_timezone.utc)
+
     # 1. Fetch directly from external APIs (skip DB cache)
-    raw_rows = fetch_ohlc_for_asset(asset, start_date, today)
+    raw_rows = fetch_ohlc_for_asset(asset, start_dt, end_dt)
 
     # 2. Persist the fetched data into OHLCData table
     new_ohlc = [
@@ -68,7 +72,7 @@ def update_asset_price(asset: Asset) -> list[OHLCData]:
         OHLCData.objects.bulk_create(new_ohlc, ignore_conflicts=True)
 
     # 3. Update the asset's last_price_update timestamp
-    asset.last_price_update = timezone.now()
+    asset.last_price_update = django_timezone.now()
     asset.save(update_fields=["last_price_update"])
 
     # 4. Return the saved OHLCData model instances for notification
@@ -119,7 +123,7 @@ def _notify_position(
 
     Returns True if the position's status changed (state transition occurred).
     """
-    now = timezone.now()
+    now = django_timezone.now()
     old_status = position.status
 
     if position.status == Position.Status.PENDING:
