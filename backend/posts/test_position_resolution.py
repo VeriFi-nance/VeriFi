@@ -3,7 +3,7 @@ from django.utils import timezone
 from django.test import TestCase
 from unittest.mock import patch, MagicMock
 
-from posts.models import Position, PositionEvent, Asset, Channel, ChannelMembership
+from posts.models import Position, PositionEvent, Asset, Channel
 from accounts.models import WalletUser
 from posts.position_resolution import _resolve_pending, _resolve_active, calculate_pnl
 
