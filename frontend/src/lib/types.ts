@@ -66,6 +66,7 @@ export interface PostItem {
   claims: ClaimItem[];
   hard_claims: HardClaimItem[];
   profitability?: ProfitabilityData | null;
+  community?: number | null;
 }
 
 export interface HardClaimEvent {
