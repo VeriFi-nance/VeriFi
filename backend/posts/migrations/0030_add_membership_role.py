@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('posts', '0029_hardclaim_value_type_payda'),
+        ('posts', '0030_merge_20260601_1228'),
     ]
 
     operations = [
