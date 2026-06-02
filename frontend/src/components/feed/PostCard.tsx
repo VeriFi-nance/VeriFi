@@ -28,7 +28,7 @@ export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) 
       <Link
         to={`/post/${post.id}`}
         className="absolute inset-0 z-0"
-        aria-label={`View post by ${truncateAddress(post.author_address)}`}
+        aria-label={`View post by ${post.author_username || truncateAddress(post.author_address)}`}
         aria-hidden={claimsOpen}
         tabIndex={claimsOpen ? -1 : undefined}
       />
@@ -44,8 +44,8 @@ export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) 
               asChild
               className="pointer-events-auto h-auto p-0 font-mono font-semibold text-sm leading-none justify-start min-w-0"
             >
-              <Link to={`/u/${post.author_address}`}>
-                <span className="truncate">{truncateAddress(post.author_address)}</span>
+              <Link to={`/u/${post.author_username || post.author_address}`}>
+                <span className="truncate">{post.author_username ? `@${post.author_username}` : truncateAddress(post.author_address)}</span>
               </Link>
             </Button>
 

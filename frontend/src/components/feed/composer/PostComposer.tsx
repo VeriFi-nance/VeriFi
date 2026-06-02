@@ -47,6 +47,7 @@ export function PostComposer({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    let active = true;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!content.trim()) {
       setExtracted([]);
@@ -55,22 +56,43 @@ export function PostComposer({
       return;
     }
     debounceRef.current = setTimeout(async () => {
+      if (!active) return;
       setExtracting(true);
+      const startTime = Date.now();
       try {
         const res = await extractClaims(content);
+        if (!active) return;
         const fresh = res.claims.map(toReviewClaim);
+
+        const elapsed = Date.now() - startTime;
+        const delay = Math.max(0, 500 - elapsed);
+        if (delay > 0) {
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+        if (!active) return;
+
         setExtracted(fresh);
         const freshKeys = new Set(fresh.map(dismissKey));
         setDismissedClaims((prev) => prev.filter((d) => freshKeys.has(dismissKey(d))));
         setExtractError('');
       } catch (e) {
+        if (!active) return;
+        const elapsed = Date.now() - startTime;
+        const delay = Math.max(0, 500 - elapsed);
+        if (delay > 0) {
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+        if (!active) return;
         setExtracted([]);
         setExtractError(e instanceof Error ? e.message : 'Could not analyse claims.');
       } finally {
-        setExtracting(false);
+        if (active) {
+          setExtracting(false);
+        }
       }
     }, DEBOUNCE_MS);
     return () => {
+      active = false;
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [content]);
@@ -149,14 +171,14 @@ export function PostComposer({
         )}
       </div>
 
-      {(extracting || extracted.length > 0) && (
+      {extracted.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            {extracting
-              ? 'Analysing…'
-              : `Detected claims${visible.length > 1 ? ` (${visible.length})` : ''}`}
-          </p>
-          <div className="space-y-1.5">
+          <div className="flex items-center justify-between h-4">
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              Detected claims{visible.length > 0 ? ` (${visible.length})` : ''}
+            </p>
+          </div>
+          <div className={cn('space-y-1.5 transition-opacity duration-200', extracting && 'opacity-50')}>
             {visible.map((c, i) => {
               const complete = isClaimComplete(c);
               const incomplete = isClaimIncomplete(c);

@@ -7,6 +7,8 @@ import { emptyDraft, validateDraft, type ClaimDraft } from './composer/types';
 import { createHardClaim, getAssets } from '@/lib/api';
 import { useAuthState, useOpenLogin } from '@/lib/auth';
 import type { AssetItem } from '@/lib/types';
+import { buildClaimPayload } from '@/lib/crypto';
+import { signPayload, resolveUsername } from '@/lib/signing';
 
 interface Props {
   onCreated: () => void;
@@ -50,11 +52,25 @@ export function CreateClaimDialog({ onCreated }: Props) {
     setError('');
     setSubmitting(true);
     try {
+      const payloadObj = {
+        asset_symbol: result.value.asset.symbol,
+        author_username: await resolveUsername(),
+        direction: result.value.direction,
+        percentage: result.value.percentage,
+        until: result.value.until,
+        created_at: new Date().toISOString(),
+      };
+      
+      const payloadStr = buildClaimPayload(payloadObj);
+      const signature = await signPayload(payloadStr);
+
       await createHardClaim({
         asset_id: result.value.asset.id,
         direction: result.value.direction,
         percentage: result.value.percentage,
         until: result.value.until,
+        signature,
+        claim_payload: payloadObj,
         ...(result.value.market ? { market: result.value.market } : {}),
       });
       setOpen(false);

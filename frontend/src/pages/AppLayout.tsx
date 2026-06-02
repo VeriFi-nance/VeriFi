@@ -1,7 +1,8 @@
+/* eslint-disable react-refresh/only-export-components */
 import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Home, LogOut, Moon, Settings, Sun, User, Users } from 'lucide-react';
+import { Home, LogOut, Moon, Settings, Sun, User, Users, ShieldCheck } from 'lucide-react';
 import { clearAuth, useAuthState, useOpenLogin } from '@/lib/auth';
 import { clearPrivateKey } from '@/lib/crypto';
 import { loadTheme, toggleTheme, type Theme } from '@/lib/theme';
@@ -32,6 +33,12 @@ export function buildNavItems(): NavItem[] {
       icon: <Users className="size-5" />,
       label: 'Communities',
       matches: (p) => p.startsWith('/c'),
+    },
+    {
+      to: '/verify',
+      icon: <ShieldCheck className="size-5" />,
+      label: 'Verify Proof',
+      matches: (p) => p.startsWith('/verify'),
     },
     {
       to: '/settings',
@@ -89,6 +96,7 @@ export default function AppLayout() {
   const openLogin = useOpenLogin();
   const auth = useAuthState();
   const address = auth.address ?? '';
+  const username = auth.username;
   const [theme, setTheme] = useState<Theme>(loadTheme);
 
   useEffect(() => {
@@ -206,13 +214,13 @@ export default function AppLayout() {
 
               {address && (
                 <Link
-                  to={`/u/${address}`}
+                  to={`/u/${username || address}`}
                   className="flex items-center gap-2 hover:opacity-80 transition-opacity"
                   aria-label="Your profile"
                 >
                   <UserAvatar address={address} size="sm" ring />
                   <span className="hidden sm:inline text-sm font-mono text-muted-foreground">
-                    {truncateAddress(address)}
+                    {username ? `@${username}` : truncateAddress(address)}
                   </span>
                 </Link>
               )}

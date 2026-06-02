@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, CheckCircle2, XCircle } from 'lucide-react';
+import { CalendarDays, CheckCircle2, XCircle, Download } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/UserAvatar';
 import type { HardClaimItem, AssetItem, ClaimChartData } from '@/lib/types';
 import { truncateAddress } from '@/lib/wallet';
-import { getClaimChartData } from '@/lib/api';
+import { getClaimChartData, getClaimProof } from '@/lib/api';
 import { PriceChart } from './PriceChart';
 import { MarketPanel } from '../MarketPanel';
 
@@ -30,6 +31,27 @@ export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
   const [chartData, setChartData] = useState<ClaimChartData | null>(null);
   const [chartLoading, setChartLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
+  const [downloadingProof, setDownloadingProof] = useState(false);
+
+  async function handleDownloadProof() {
+    try {
+      setDownloadingProof(true);
+      const proof = await getClaimProof(claim.id);
+      const blob = new Blob([JSON.stringify(proof, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `claim-proof-${claim.id}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      alert(e.message || 'Failed to download proof');
+    } finally {
+      setDownloadingProof(false);
+    }
+  }
 
   useEffect(() => {
     setChartLoading(true);
@@ -74,13 +96,13 @@ export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
 
       {claim.author_address ? (
         <Link
-          to={`/u/${claim.author_address}`}
+          to={`/u/${claim.author_username || claim.author_address}`}
           className="flex items-center gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted/50"
         >
           <UserAvatar address={claim.author_address} size="md" />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium">Posted by</p>
-            <p className="text-sm font-mono truncate">{truncateAddress(claim.author_address)}</p>
+            <p className="text-sm font-mono truncate">{claim.author_username ? `@${claim.author_username}` : truncateAddress(claim.author_address)}</p>
           </div>
           <div className="text-right text-xs text-muted-foreground shrink-0">
             <div className="flex items-center gap-1 justify-end">
@@ -98,6 +120,15 @@ export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
           <span>
             Created {new Date(claim.created_at).toLocaleDateString()} · Due {untilLabel}
           </span>
+        </div>
+      )}
+
+      {claim.signature && (
+        <div>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleDownloadProof} disabled={downloadingProof}>
+            <Download className="size-4" />
+            {downloadingProof ? 'Downloading...' : 'Download Proof'}
+          </Button>
         </div>
       )}
 

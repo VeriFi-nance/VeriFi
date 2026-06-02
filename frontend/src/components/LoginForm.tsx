@@ -16,7 +16,7 @@ import {
   saveEncryptedKey,
 } from '@/lib/crypto';
 import { register, getChallenge, login } from '@/lib/api';
-import { saveToken, saveAddress } from '@/lib/auth';
+import { saveAuthSession } from '@/lib/auth';
 import { connectAndAuthenticateMetaMask } from '@/lib/walletAuth';
 
 type Tab = 'create' | 'signin';
@@ -31,6 +31,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   const [saved, setSaved] = useState(false);
   const [createPassword, setCreatePassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [createUsername, setCreateUsername] = useState('');
   const [creating, setCreating] = useState(false);
   const [restoreMethod, setRestoreMethod] = useState<'mnemonic' | 'privatekey'>('mnemonic');
   const [inputMnemonic, setInputMnemonic] = useState('');
@@ -45,6 +46,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     setError('');
     setMnemonic('');
     setSaved(false);
+    setCreateUsername('');
     setCreatePassword('');
     setConfirmPassword('');
     setRestoreMethod('mnemonic');
@@ -56,6 +58,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   function handleGenerate() {
     setMnemonic(generateMnemonic());
     setSaved(false);
+    setCreateUsername('');
     setCreatePassword('');
     setConfirmPassword('');
     setError('');
@@ -66,6 +69,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   const createReady =
     mnemonic &&
     saved &&
+    createUsername.trim().length >= 3 &&
     createPassword.length >= 8 &&
     createPassword === confirmPassword;
 
@@ -75,10 +79,9 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     try {
       const { privateKey, address } = deriveKeyPair(mnemonic);
       const encrypted = await encryptPrivateKey(privateKey, createPassword);
-      const { access } = await register(address);
+      const { access, username } = await register(address, createUsername.trim());
       saveEncryptedKey(encrypted);
-      saveAddress(address);
-      saveToken(access);
+      saveAuthSession(address, username, access);
       onSuccess();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
@@ -101,11 +104,10 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           : privateKeyToKeyPair(inputPrivateKey.trim());
       const { nonce } = await getChallenge(address);
       const signature = await signMessage(privateKey, nonce);
-      const { access } = await login(address, signature, nonce);
+      const { access, username } = await login(address, signature, nonce);
       const encrypted = await encryptPrivateKey(privateKey, signinPassword);
       saveEncryptedKey(encrypted);
-      saveAddress(address);
-      saveToken(access);
+      saveAuthSession(address, username, access);
       onSuccess();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
@@ -196,8 +198,18 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
                 {saved && (
                   <div className="space-y-3 border rounded-lg p-3">
                     <p className="text-sm text-muted-foreground">
-                      Set a password to encrypt your private key on this device (min. 8 characters).
+                      Pick a unique username and set a password to encrypt your private key locally.
                     </p>
+                    <div className="space-y-1">
+                      <Label htmlFor="create-username">Username</Label>
+                      <Input
+                        id="create-username"
+                        type="text"
+                        placeholder="e.g. Satoshi"
+                        value={createUsername}
+                        onChange={(e) => setCreateUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
+                      />
+                    </div>
                     <div className="space-y-1">
                       <Label htmlFor="create-pw">Password</Label>
                       <Input
