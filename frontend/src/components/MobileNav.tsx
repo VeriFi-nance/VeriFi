@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { Home, Users, Settings, Menu, LogOut, Sun, Moon, User, ShieldCheck } from 'lucide-react';
+import { Home, Tv, Settings, Menu, LogOut, Sun, Moon, User, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -23,10 +23,10 @@ function buildNavItems(): NavItem[] {
       matches: (p) => p === '/feed' || p === '/' || p.startsWith('/post/') || p.startsWith('/claim/'),
     },
     {
-      to: '/c',
-      icon: <Users className="size-5" />,
-      label: 'Communities',
-      matches: (p) => p.startsWith('/c'),
+      to: '/channels',
+      icon: <Tv className="size-5" />,
+      label: 'Channels',
+      matches: (p) => p.startsWith('/channels') || p.startsWith('/c'),
     },
     {
       to: '/verify',

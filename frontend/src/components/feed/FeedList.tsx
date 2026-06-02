@@ -12,12 +12,12 @@ import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 
 interface FeedListProps {
   feed?: string;
-  community?: number;
+  channel?: number;
   myRole?: 'member' | 'moderator' | 'owner' | null;
   creatorAddress?: string;
 }
 
-export function FeedList({ feed, community, myRole, creatorAddress }: FeedListProps) {
+export function FeedList({ feed, channel, myRole, creatorAddress }: FeedListProps) {
   const auth = useAuthState();
   const myAddress = auth.address;
   const [posts, setPosts] = useState<PostItem[]>([]);
@@ -54,7 +54,7 @@ export function FeedList({ feed, community, myRole, creatorAddress }: FeedListPr
       }
 
       try {
-        const feedPage = await getFeed({ feed, community, page: pageNum });
+        const feedPage = await getFeed({ feed, channel, page: pageNum });
         setPosts((prev) => (append ? [...prev, ...feedPage.results] : feedPage.results));
         setPage(feedPage.page);
         setHasNext(feedPage.has_next);
@@ -66,7 +66,7 @@ export function FeedList({ feed, community, myRole, creatorAddress }: FeedListPr
         setLoadingMore(false);
       }
     },
-    [feed, community],
+    [feed, channel],
   );
 
   useEffect(() => {
@@ -133,7 +133,7 @@ export function FeedList({ feed, community, myRole, creatorAddress }: FeedListPr
   return (
     <div className="space-y-4">
       {posts.map((post) => {
-        const canDelete = !!(post.community && isMod);
+        const canDelete = !!(post.channel && isMod);
         return (
           <PostCard
             key={post.id}

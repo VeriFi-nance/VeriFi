@@ -130,24 +130,54 @@ export default function UserPage() {
           </div>
         )}
 
-        <div className="flex justify-end mt-5 pt-4 border-t border-border">
-          {isSelf ? (
-            <Button asChild variant="outline" size="sm" className="gap-2">
-              <Link to="/settings">
-                <SettingsIcon className="size-4" />
-                Settings
-              </Link>
-            </Button>
-          ) : (
-            <Button
-              variant={following ? 'outline' : 'default'}
-              size="sm"
-              onClick={handleFollow}
-            >
-              {following ? 'Unfollow' : 'Follow'}
-            </Button>
-          )}
-        </div>
+        {stats && (
+          <div className="mt-5 pt-4 border-t border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="text-sm">
+              {stats.channel_owned ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground font-medium">Channel:</span>
+                  <Link
+                    to={`/channels/${stats.channel_owned.id}`}
+                    className="inline-flex items-center gap-1.5 text-primary hover:text-primary/80 font-semibold hover:underline"
+                  >
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 bg-primary/20 text-primary border border-primary/25 rounded uppercase tracking-wider shrink-0">
+                      Live
+                    </span>
+                    {stats.channel_owned.name}
+                  </Link>
+                </div>
+              ) : isSelf ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground text-xs">No channel created yet.</span>
+                  <Link to="/channels" className="text-xs text-primary hover:underline font-semibold">
+                    Create Channel
+                  </Link>
+                </div>
+              ) : (
+                <span className="text-muted-foreground text-xs">No channel created.</span>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2">
+              {isSelf ? (
+                <Button asChild variant="outline" size="sm" className="gap-2">
+                  <Link to="/settings">
+                    <SettingsIcon className="size-4" />
+                    Settings
+                  </Link>
+                </Button>
+              ) : (
+                <Button
+                  variant={following ? 'outline' : 'default'}
+                  size="sm"
+                  onClick={handleFollow}
+                >
+                  {following ? 'Unfollow' : 'Follow'}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
       </Card>
 
       {error && (
@@ -165,10 +195,10 @@ export default function UserPage() {
             Hard Claims
           </TabsTrigger>
           <TabsTrigger
-            value="communities"
+            value="channels"
             className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground data-[state=active]:bg-foreground/5 dark:data-[state=active]:bg-foreground/5 data-[state=active]:text-foreground data-[state=active]:border-transparent dark:data-[state=active]:border-transparent data-[state=active]:shadow-none cursor-pointer transition-colors border-0"
           >
-            Communities
+            Channels
           </TabsTrigger>
         </TabsList>
 
@@ -197,85 +227,46 @@ export default function UserPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="communities" className="space-y-6 mt-4 animate-in fade-in-50 duration-200">
+        <TabsContent value="channels" className="space-y-6 mt-4 animate-in fade-in-50 duration-200">
           {loading ? (
             <div className="space-y-2">
               <SkeletonRow />
               <SkeletonRow />
             </div>
           ) : (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                  Owned Communities ({stats?.communities_owned?.length ?? 0})
-                </h3>
-                {!stats?.communities_owned || stats.communities_owned.length === 0 ? (
-                  <p className="text-sm text-muted-foreground bg-muted/20 p-4 rounded-lg border border-dashed text-center">No owned communities.</p>
-                ) : (
-                  <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
-                    {stats.communities_owned.map((c) => (
-                      <Link key={c.id} to={`/c/${c.id}`} className="block group">
-                        <Card className="bg-card hover:bg-muted/50 hover:border-primary/20 transition-all duration-200 h-full">
-                          <div className="p-4 space-y-2">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-semibold text-sm group-hover:text-primary transition-colors truncate">{c.name}</span>
-                              <span className="text-[9px] font-normal px-2 py-0.5 bg-secondary text-secondary-foreground rounded-full uppercase tracking-wider shrink-0">
-                                {c.privacy_type}
-                              </span>
-                            </div>
-                            <p className="text-xs text-muted-foreground line-clamp-2 min-h-8">
-                              {c.description || 'No description'}
-                            </p>
-                            <div className="text-[10px] text-muted-foreground pt-1 flex items-center justify-between">
-                              <span><strong>{c.member_count}</strong> member{c.member_count !== 1 ? 's' : ''}</span>
-                              {c.post_permission === 'creator_only' && (
-                                <span className="text-[9px] text-primary/80 font-medium uppercase tracking-wider">Broadcast</span>
-                              )}
-                            </div>
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                Joined Channels ({stats?.channels_member_of?.length ?? 0})
+              </h3>
+              {!stats?.channels_member_of || stats.channels_member_of.length === 0 ? (
+                <p className="text-sm text-muted-foreground bg-muted/20 p-4 rounded-lg border border-dashed text-center">No joined channels.</p>
+              ) : (
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
+                  {stats.channels_member_of.map((c) => (
+                    <Link key={c.id} to={`/channels/${c.id}`} className="block group">
+                      <Card className="bg-card hover:bg-muted/50 hover:border-primary/20 transition-all duration-200 h-full">
+                        <div className="p-4 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-sm group-hover:text-primary transition-colors truncate">{c.name}</span>
+                            <span className="text-[9px] font-normal px-2 py-0.5 bg-secondary text-secondary-foreground rounded-full uppercase tracking-wider shrink-0">
+                              {c.privacy_type}
+                            </span>
                           </div>
-                        </Card>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <hr className="border-border" />
-
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                  Joined Communities ({stats?.communities_member_of?.length ?? 0})
-                </h3>
-                {!stats?.communities_member_of || stats.communities_member_of.length === 0 ? (
-                  <p className="text-sm text-muted-foreground bg-muted/20 p-4 rounded-lg border border-dashed text-center">No joined communities.</p>
-                ) : (
-                  <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
-                    {stats.communities_member_of.map((c) => (
-                      <Link key={c.id} to={`/c/${c.id}`} className="block group">
-                        <Card className="bg-card hover:bg-muted/50 hover:border-primary/20 transition-all duration-200 h-full">
-                          <div className="p-4 space-y-2">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-semibold text-sm group-hover:text-primary transition-colors truncate">{c.name}</span>
-                              <span className="text-[9px] font-normal px-2 py-0.5 bg-secondary text-secondary-foreground rounded-full uppercase tracking-wider shrink-0">
-                                {c.privacy_type}
-                              </span>
-                            </div>
-                            <p className="text-xs text-muted-foreground line-clamp-2 min-h-8">
-                              {c.description || 'No description'}
-                            </p>
-                            <div className="text-[10px] text-muted-foreground pt-1 flex items-center justify-between">
-                              <span><strong>{c.member_count}</strong> member{c.member_count !== 1 ? 's' : ''}</span>
-                              {c.post_permission === 'creator_only' && (
-                                <span className="text-[9px] text-primary/80 font-medium uppercase tracking-wider">Broadcast</span>
-                              )}
-                            </div>
+                          <p className="text-xs text-muted-foreground line-clamp-2 min-h-8">
+                            {c.description || 'No description'}
+                          </p>
+                          <div className="text-[10px] text-muted-foreground pt-1 flex items-center justify-between">
+                            <span><strong>{c.member_count}</strong> subscriber{c.member_count !== 1 ? 's' : ''}</span>
+                            {c.post_permission === 'creator_only' && (
+                              <span className="text-[9px] text-primary/80 font-medium uppercase tracking-wider">Broadcast</span>
+                            )}
                           </div>
-                        </Card>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
+                        </div>
+                      </Card>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </TabsContent>

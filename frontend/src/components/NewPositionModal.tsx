@@ -11,12 +11,12 @@ import { buildPositionPayload } from '@/lib/crypto';
 import { signPayload, resolveUsername } from '@/lib/signing';
 
 interface NewPositionModalProps {
-  communityId: number;
+  channelId: number;
   assets: AssetItem[];
   onCreated: () => void;
 }
 
-export function NewPositionModal({ communityId, assets, onCreated }: NewPositionModalProps) {
+export function NewPositionModal({ channelId, assets, onCreated }: NewPositionModalProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -98,7 +98,7 @@ export function NewPositionModal({ communityId, assets, onCreated }: NewPosition
       const signature = await signPayload(payloadStr);
 
       await createPosition({
-        community_id: communityId,
+        channel_id: channelId,
         asset_id: parseInt(assetId),
         direction,
         entry_price: entry,
