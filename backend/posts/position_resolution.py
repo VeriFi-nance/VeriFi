@@ -68,19 +68,19 @@ def _resolve_ambiguous_candle(pos: Position, target_date) -> tuple[bool, float |
     # If exhausted all intervals and still ambiguous, return worst-case SL
     return True, pos.stop_loss, Position.Status.REJECTED, True
 
-def resolve_positions(community_id: int | None = None):
+def resolve_positions(channel_id: int | None = None):
     """Run Phase 1 and Phase 2 of position resolution.
 
     Args:
-        community_id: If provided, resolution is scoped to that community only.
+        channel_id: If provided, resolution is scoped to that channel only.
     """
     now = django_timezone.now()
 
     filters_pending = {"status": Position.Status.PENDING}
     filters_active = {"status": Position.Status.ACTIVE}
-    if community_id is not None:
-        filters_pending["community_id"] = community_id
-        filters_active["community_id"] = community_id
+    if channel_id is not None:
+        filters_pending["channel_id"] = channel_id
+        filters_active["channel_id"] = channel_id
 
     # Phase 1: PENDING -> ACTIVE or MISSED
     for pos in Position.objects.filter(**filters_pending):

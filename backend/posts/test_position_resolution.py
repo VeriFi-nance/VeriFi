@@ -3,17 +3,17 @@ from django.utils import timezone
 from django.test import TestCase
 from unittest.mock import patch, MagicMock
 
-from posts.models import Position, PositionEvent, Asset, Community, CommunityMembership
+from posts.models import Position, PositionEvent, Asset, Channel, ChannelMembership
 from accounts.models import WalletUser
 from posts.position_resolution import _resolve_pending, _resolve_active, calculate_pnl
 
 class PositionResolutionTestCase(TestCase):
     def setUp(self):
         self.creator_user = WalletUser.objects.create(address="0xcreator00000000000000000000000000000000")
-        self.community = Community.objects.create(
-            name="Test Community",
+        self.channel = Channel.objects.create(
+            name="Test Channel",
             creator=self.creator_user,
-            privacy_type=Community.PrivacyType.PUBLIC
+            privacy_type=Channel.PrivacyType.PUBLIC
         )
         self.asset = Asset.objects.create(
             symbol="BTC",
@@ -27,7 +27,7 @@ class PositionResolutionTestCase(TestCase):
     def create_position(self, direction, entry_price, sl, tp, status=Position.Status.PENDING):
         return Position.objects.create(
             author=self.creator_user,
-            community=self.community,
+            channel=self.channel,
             asset=self.asset,
             direction=direction,
             entry_price=entry_price,

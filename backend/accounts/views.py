@@ -153,11 +153,16 @@ class ProfileView(APIView):
         is_following = False
 
         # Import dynamically to avoid circular import issues
-        from posts.models import Community
-        from posts.serializers import CommunitySerializer
+        from posts.models import Channel
+        from posts.serializers import ChannelSerializer
 
-        owned_qs = Community.objects.filter(creator=target_user)
-        member_qs = Community.objects.filter(memberships__user=target_user, memberships__status="approved")
+        owned_qs = Channel.objects.filter(creator=target_user)
+        owned_channel = owned_qs.first()
+
+        member_qs = Channel.objects.filter(
+            memberships__user=target_user,
+            memberships__status="approved"
+        ).exclude(creator=target_user)
 
         data = {
             "address": target_user.address,
@@ -169,8 +174,8 @@ class ProfileView(APIView):
             "rep": target_user.rep,
             "energy": target_user.energy,
             "energy_cap": ENERGY_CAP,
-            "communities_owned": CommunitySerializer(owned_qs, many=True).data,
-            "communities_member_of": CommunitySerializer(member_qs, many=True).data,
+            "channel_owned": ChannelSerializer(owned_channel).data if owned_channel else None,
+            "channels_member_of": ChannelSerializer(member_qs, many=True).data,
         }
         
         try:
