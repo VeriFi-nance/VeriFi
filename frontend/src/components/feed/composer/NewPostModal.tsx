@@ -16,7 +16,7 @@ import {
   type AttachedClaim,
   type ClaimDraft,
 } from './types';
-import { buildClaimPayload } from '@/lib/crypto';
+import { buildClaimPayload } from '@/lib/payloads';
 import { signPayload, resolveUsername } from '@/lib/signing';
 
 interface NewPostModalProps {

@@ -1,4 +1,4 @@
-import { signClaimPayload, loadEncryptedKey, decryptPrivateKey } from './crypto';
+import { loadEncryptedKey, decryptPrivateKey } from './keystore';
 import { loadAddress, loadUsername, saveUsername } from './auth';
 import { getProfileStats } from './api';
 
@@ -43,6 +43,9 @@ export async function signPayload(payload: string): Promise<string> {
     
     try {
       const privateKey = await decryptPrivateKey(encryptedKey, password);
+      // Heavy secp256k1 signer loaded on demand so the eagerly-mounted feed
+      // composer doesn't pull the crypto bundle into the initial chunk.
+      const { signClaimPayload } = await import('./crypto');
       return await signClaimPayload(privateKey, payload);
     } catch {
       throw new Error('Wrong password or failed to decrypt key');

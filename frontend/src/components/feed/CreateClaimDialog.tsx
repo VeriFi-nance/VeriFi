@@ -7,7 +7,7 @@ import { emptyDraft, validateDraft, type ClaimDraft } from './composer/types';
 import { createHardClaim, getAssets } from '@/lib/api';
 import { useAuthState, useOpenLogin } from '@/lib/auth';
 import type { AssetItem } from '@/lib/types';
-import { buildClaimPayload } from '@/lib/crypto';
+import { buildClaimPayload } from '@/lib/payloads';
 import { signPayload, resolveUsername } from '@/lib/signing';
 
 interface Props {

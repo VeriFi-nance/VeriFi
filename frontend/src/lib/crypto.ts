@@ -18,6 +18,10 @@ export {
   clearPrivateKey,
 } from './keystore';
 
+// Pure payload builders live in ./payloads (no heavy deps); re-exported here
+// for backward compatibility.
+export { buildClaimPayload, buildPositionPayload } from './payloads';
+
 const DERIVATION_PATH = "m/44'/60'/0'/0/0";
 
 // ---------------------------------------------------------------------------
@@ -92,33 +96,6 @@ export async function signMessage(
 // ---------------------------------------------------------------------------
 // Proof Payload Builders & Verification
 // ---------------------------------------------------------------------------
-
-export function buildClaimPayload(data: {
-  asset_symbol: string; author_username: string; direction: string; percentage: number;
-  until: string; created_at: string;
-}): string {
-  const sorted = Object.keys(data)
-    .sort()
-    .reduce((acc, key) => {
-      acc[key] = data[key as keyof typeof data];
-      return acc;
-    }, {} as Record<string, unknown>);
-  return JSON.stringify(sorted);
-}
-
-export function buildPositionPayload(data: {
-  asset_symbol: string; author_username: string; direction: string; entry_price: number;
-  stop_loss: number; take_profit: number; lifetime: string;
-  created_at: string;
-}): string {
-  const sorted = Object.keys(data)
-    .sort()
-    .reduce((acc, key) => {
-      acc[key] = data[key as keyof typeof data];
-      return acc;
-    }, {} as Record<string, unknown>);
-  return JSON.stringify(sorted);
-}
 
 export async function signClaimPayload(
   privateKey: Uint8Array,
