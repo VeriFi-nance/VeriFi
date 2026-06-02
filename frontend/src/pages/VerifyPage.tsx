@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,12 +7,16 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, XCircle, UploadCloud, ChevronDown, ChevronUp, Share2, Copy, Check, Loader2 } from 'lucide-react';
-import { verifyProofSignature, buildClaimPayload, buildPositionPayload } from '@/lib/crypto';
+import { verifyProofSignature } from '@/lib/crypto';
+import { buildClaimPayload, buildPositionPayload } from '@/lib/payloads';
 import type { ProofBundle, ClaimChartData } from '@/lib/types';
 import { truncateAddress } from '@/lib/wallet';
 import { ClaimRow } from '@/components/feed/composer/ClaimRow';
 import { getClaimChartData, getClaimProof, getPositionProof, getClaimOG, getPositionOG } from '@/lib/api';
-import { PriceChart } from '@/components/feed/PriceChart';
+
+const PriceChart = lazy(() =>
+  import('@/components/feed/PriceChart').then((m) => ({ default: m.PriceChart }))
+);
 
 function buildSummaryText(proof: ProofBundle): string {
   const author = (proof.payload as any).author_username;
@@ -305,7 +309,9 @@ export function VerifyPage({ type }: { type?: 'claim' | 'position' }) {
                   )}
                   {chartData && chartData.ohlc.length > 0 && (
                     <div className="mt-4 pt-2">
-                      <PriceChart data={chartData} />
+                      <Suspense fallback={null}>
+                        <PriceChart data={chartData} />
+                      </Suspense>
                     </div>
                   )}
                 </div>

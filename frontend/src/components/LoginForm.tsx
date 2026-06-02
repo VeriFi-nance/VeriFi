@@ -12,9 +12,8 @@ import {
   deriveKeyPair,
   privateKeyToKeyPair,
   signMessage,
-  encryptPrivateKey,
-  saveEncryptedKey,
 } from '@/lib/crypto';
+import { encryptPrivateKey, saveEncryptedKey } from '@/lib/keystore';
 import { register, getChallenge, login } from '@/lib/api';
 import { saveAuthSession } from '@/lib/auth';
 import { connectAndAuthenticateMetaMask } from '@/lib/walletAuth';
