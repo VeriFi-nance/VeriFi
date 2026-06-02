@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { createPosition } from '@/lib/api';
 import type { AssetItem } from '@/lib/types';
 import { PlusCircle } from 'lucide-react';
-import { buildPositionPayload } from '@/lib/crypto';
+import { buildPositionPayload } from '@/lib/payloads';
 import { signPayload, resolveUsername } from '@/lib/signing';
 
 interface NewPositionModalProps {

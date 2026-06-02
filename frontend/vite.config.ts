@@ -11,4 +11,18 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Keep the React runtime in a stable, separately-cacheable chunk. The
+        // crypto (@scure/@noble/ethers) and charts (chart.js) bundles are left
+        // to Rollup's natural code-splitting so they stay in the async chunks
+        // behind their dynamic-import boundaries (login modal, signing,
+        // PriceChart) rather than being promoted into the initial preload.
+        manualChunks: {
+          react: ['react', 'react-dom', 'react-router-dom'],
+        },
+      },
+    },
+  },
 })
