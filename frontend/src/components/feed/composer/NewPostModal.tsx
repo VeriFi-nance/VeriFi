@@ -23,10 +23,10 @@ interface NewPostModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onPosted: () => void;
-  communityId?: number;
+  channelId?: number;
 }
 
-export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewPostModalProps) {
+export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPostModalProps) {
   const openLogin = useOpenLogin();
   const auth = useAuthState();
   const [content, setContent] = useState('');
@@ -152,7 +152,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
 
         hardClaimsPayload.push({
           asset_id: parseInt(c.asset_id, 10),
-          community_id: communityId,
+          channel_id: channelId,
           direction: c.direction,
           value_type: c.claim_type,
           payda: c.parity || undefined,
@@ -164,7 +164,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
         });
       }
 
-      await createPost(content.trim(), [], communityId, hardClaimsPayload);
+      await createPost(content.trim(), [], channelId, hardClaimsPayload);
       reset();
       onOpenChange(false);
       onPosted();
@@ -293,10 +293,10 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
 /** Trigger button — opens the modal or redirects to login if unauthenticated. */
 export function NewPostButton({
   onPosted,
-  communityId,
+  channelId,
 }: {
   onPosted: () => void;
-  communityId?: number;
+  channelId?: number;
 }) {
   const openLogin = useOpenLogin();
   const auth = useAuthState();
@@ -320,7 +320,7 @@ export function NewPostButton({
         open={open}
         onOpenChange={setOpen}
         onPosted={onPosted}
-        communityId={communityId}
+        channelId={channelId}
       />
     </>
   );

@@ -15,9 +15,10 @@ interface PostCardProps {
   post: PostItem;
   hardClaims?: HardClaimItem[];
   assets?: AssetItem[];
+  onDelete?: () => void;
 }
 
-export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) {
+export function PostCard({ post, hardClaims = [], assets = [], onDelete }: PostCardProps) {
   const [claimsOpen, setClaimsOpen] = useState(false);
   const confirmedClaims = post.claims.filter((c) => c.status === 'confirmed');
   const claimHints = post.hard_claims.length > 0 ? post.hard_claims : hardClaims;
@@ -57,8 +58,22 @@ export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) 
             </time>
           </div>
 
-          <div className="pointer-events-auto">
+          <div className="pointer-events-auto flex items-center gap-2">
             <ProfitabilityBadge data={post.profitability} />
+            {onDelete && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive h-7 px-2"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onDelete();
+                }}
+              >
+                Delete
+              </Button>
+            )}
           </div>
         </div>
 

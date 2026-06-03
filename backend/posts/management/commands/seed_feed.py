@@ -164,12 +164,14 @@ class Command(BaseCommand):
             for hc in entry.get("hard_claims", []):
                 HardClaim.objects.create(
                     author=author,
-                    text=hc["text"],
+                    post=post,
                     asset=asset_map[hc["asset"]],
                     direction=hc["direction"],
                     percentage=hc["percentage"],
                     until=hc["until"],
                     status=hc["status"],
+                    value_type=hc.get("value_type", "PERCENTAGE_UP"),
+                    payda=hc.get("payda", ""),
                 )
 
         self.stdout.write(self.style.SUCCESS("Feed seeded successfully."))

@@ -20,8 +20,8 @@ from accounts.models import WalletUser
 from posts.models import (
     Asset,
     AssetSubscription,
-    Community,
-    CommunityMembership,
+    Channel,
+    ChannelMembership,
     OHLCData,
     Position,
     PositionEvent,
@@ -44,13 +44,13 @@ class ObserverTestBase(TestCase):
         self.mock_fetch = patcher.start()
 
         self.user = WalletUser.objects.create(address="0x" + "a" * 40)
-        self.community = Community.objects.create(
-            name="Test Community", creator=self.user
+        self.channel = Channel.objects.create(
+            name="Test Channel", creator=self.user
         )
-        CommunityMembership.objects.create(
-            community=self.community,
+        ChannelMembership.objects.create(
+            channel=self.channel,
             user=self.user,
-            status=CommunityMembership.Status.APPROVED,
+            status=ChannelMembership.Status.APPROVED,
         )
         self.asset_btc = Asset.objects.create(
             name="Bitcoin",
@@ -70,7 +70,7 @@ class ObserverTestBase(TestCase):
         now = timezone.now()
         pos = Position.objects.create(
             author=self.user,
-            community=self.community,
+            channel=self.channel,
             asset=asset,
             direction=direction,
             entry_price=entry_price,

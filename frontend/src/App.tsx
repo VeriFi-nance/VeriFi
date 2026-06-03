@@ -14,8 +14,8 @@ import PostDetailPage from './pages/PostDetailPage';
 import UserPage from './pages/UserPage';
 import SettingsPage from './pages/SettingsPage';
 import ClaimDetailPage from './pages/ClaimDetailPage';
-import CommunitiesPage from './pages/CommunitiesPage';
-import CommunityDetailPage from './pages/CommunityDetailPage';
+import ChannelsPage from './pages/ChannelsPage';
+import ChannelDetailPage from './pages/ChannelDetailPage';
 import { clearAuth, loadAddress, openLogin, useAuthState } from './lib/auth';
 import { clearPrivateKey } from './lib/keystore';
 import { authenticateMetaMaskAddress } from './lib/walletAuth';
@@ -108,23 +108,11 @@ function AppRoutes() {
           <Route path="/claim/:id" element={<ClaimDetailPage />} />
           <Route path="/u/:address" element={<UserPage />} />
           <Route path="/settings" element={<SettingsGate />} />
-          <Route path="/c" element={<CommunitiesPage />} />
-          <Route path="/c/:id" element={<CommunityDetailPage />} />
-          <Route path="/verify" element={
-            <Suspense fallback={null}>
-              <VerifyPage />
-            </Suspense>
-          } />
-          <Route path="/verify/claim/:id" element={
-            <Suspense fallback={null}>
-              <VerifyPage type="claim" />
-            </Suspense>
-          } />
-          <Route path="/verify/position/:id" element={
-            <Suspense fallback={null}>
-              <VerifyPage type="position" />
-            </Suspense>
-          } />
+          <Route path="/channels" element={<ChannelsPage />} />
+          <Route path="/channels/:id" element={<ChannelDetailPage />} />
+          <Route path="/verify" element={<Suspense fallback={null}><VerifyPage /></Suspense>} />
+          <Route path="/verify/claim/:id" element={<Suspense fallback={null}><VerifyPage type="claim" /></Suspense>} />
+          <Route path="/verify/position/:id" element={<Suspense fallback={null}><VerifyPage type="position" /></Suspense>} />
           <Route path="/login" element={null} />
         </Route>
 
@@ -133,10 +121,12 @@ function AppRoutes() {
         {/* Legacy redirects */}
         <Route path="/app" element={<Navigate to="/feed" replace />} />
         <Route path="/app/profile" element={<UserLegacyRedirect />} />
-        <Route path="/app/communities" element={<Navigate to="/c" replace />} />
-        <Route path="/app/communities/:id" element={<CommunityLegacyRedirect />} />
+        <Route path="/app/communities" element={<Navigate to="/channels" replace />} />
+        <Route path="/app/communities/:id" element={<ChannelLegacyRedirect />} />
         <Route path="/app/post/:id" element={<PostLegacyRedirect />} />
         <Route path="/app/user/:address" element={<UserLegacyRedirect />} />
+        <Route path="/c" element={<Navigate to="/channels" replace />} />
+        <Route path="/c/:id" element={<ChannelLegacyRedirect />} />
 
         <Route path="*" element={<Navigate to="/feed" replace />} />
       </Routes>
@@ -157,9 +147,9 @@ function UserLegacyRedirect() {
   return <Navigate to={target ? `/u/${target}` : '/feed'} replace />;
 }
 
-function CommunityLegacyRedirect() {
+function ChannelLegacyRedirect() {
   const { id } = useParams();
-  return <Navigate to={id ? `/c/${id}` : '/c'} replace />;
+  return <Navigate to={id ? `/channels/${id}` : '/channels'} replace />;
 }
 
 function PostLegacyRedirect() {

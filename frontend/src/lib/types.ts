@@ -66,6 +66,7 @@ export interface PostItem {
   claims: ClaimItem[];
   hard_claims: HardClaimItem[];
   profitability?: ProfitabilityData | null;
+  channel?: number | null;
 }
 
 export interface HardClaimEvent {
@@ -144,6 +145,8 @@ export interface ProfileStats {
   rep?: number;
   energy?: number;
   energy_cap?: number | null;
+  channel_owned?: ChannelItem | null;
+  channels_member_of?: ChannelItem[];
 }
 
 export interface MarketYourStake {
@@ -200,7 +203,7 @@ export interface BuyResult {
   user_energy: number;
 }
 
-export interface CommunityItem {
+export interface ChannelItem {
   id: number;
   name: string;
   description: string;
@@ -211,15 +214,17 @@ export interface CommunityItem {
   created_at: string;
   member_count: number;
   my_membership_status?: 'pending' | 'approved' | null;
-  pending_requests?: CommunityMembershipItem[];
+  my_role?: 'member' | 'moderator' | 'owner' | null;
+  pending_requests?: ChannelMembershipItem[];
 }
 
-export interface CommunityMembershipItem {
+export interface ChannelMembershipItem {
   id: number;
-  community: number;
+  channel: number;
   user_address: string;
   user_username: string;
   status: 'pending' | 'approved' | 'banned';
+  role: 'member' | 'moderator' | 'owner';
   created_at: string;
   profitability?: ProfitabilityData | null;
 }
@@ -235,7 +240,7 @@ export interface PositionItem {
   id: number;
   author_address: string;
   author_username: string;
-  community: number;
+  channel: number;
   asset: number;
   direction: 'long' | 'short';
   entry_price: number;
