@@ -12,41 +12,9 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.CreateModel(
-            name='Channel',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=100)),
-                ('description', models.TextField(blank=True)),
-                ('privacy_type', models.CharField(choices=[('public', 'Public'), ('private', 'Private')], default='public', max_length=10)),
-                ('post_permission', models.CharField(choices=[('all', 'All'), ('creator_only', 'Creator Only')], default='all', max_length=15)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-            ],
-        ),
-        migrations.CreateModel(
-            name='ChannelMembership',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('status', models.CharField(choices=[('pending', 'Pending'), ('approved', 'Approved'), ('banned', 'Banned')], default='pending', max_length=10)),
-                ('role', models.CharField(choices=[('member', 'Member'), ('moderator', 'Moderator'), ('owner', 'Owner')], default='member', max_length=15)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-            ],
-        ),
-        migrations.RemoveField(
-            model_name='community',
-            name='creator',
-        ),
-        migrations.RemoveField(
-            model_name='hardclaim',
-            name='community',
-        ),
-        migrations.RemoveField(
-            model_name='position',
-            name='community',
-        ),
         migrations.AlterUniqueTogether(
             name='communitymembership',
-            unique_together=None,
+            unique_together=set(),
         ),
         migrations.RemoveIndex(
             model_name='communitymembership',
@@ -54,75 +22,64 @@ class Migration(migrations.Migration):
         ),
         migrations.RemoveIndex(
             model_name='post',
-            name='post_global_feed_idx',
+            name='post_community_feed_idx',
         ),
         migrations.RemoveIndex(
             model_name='post',
-            name='post_community_feed_idx',
+            name='post_global_feed_idx',
         ),
-        migrations.AddField(
+        migrations.RenameModel(
+            old_name='Community',
+            new_name='Channel',
+        ),
+        migrations.RenameModel(
+            old_name='CommunityMembership',
+            new_name='ChannelMembership',
+        ),
+        migrations.RenameField(
+            model_name='channelmembership',
+            old_name='community',
+            new_name='channel',
+        ),
+        migrations.RenameField(
+            model_name='hardclaim',
+            old_name='community',
+            new_name='channel',
+        ),
+        migrations.RenameField(
+            model_name='position',
+            old_name='community',
+            new_name='channel',
+        ),
+        migrations.RenameField(
+            model_name='post',
+            old_name='community',
+            new_name='channel',
+        ),
+        migrations.AlterField(
             model_name='channel',
             name='creator',
             field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='created_channels', to='accounts.walletuser'),
         ),
-        migrations.AddField(
-            model_name='hardclaim',
-            name='channel',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='hard_claims', to='posts.channel'),
-        ),
-        migrations.AddField(
-            model_name='position',
-            name='channel',
-            field=models.ForeignKey(default=1, on_delete=django.db.models.deletion.CASCADE, related_name='positions', to='posts.channel'),
-            preserve_default=False,
-        ),
-        migrations.AddField(
-            model_name='post',
-            name='channel',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='posts', to='posts.channel'),
-        ),
-        migrations.AddIndex(
-            model_name='post',
-            index=models.Index(condition=models.Q(('channel__isnull', True)), fields=['-created_at'], name='post_global_feed_idx'),
-        ),
-        migrations.AddIndex(
-            model_name='post',
-            index=models.Index(fields=['channel', '-created_at'], name='post_channel_feed_idx'),
-        ),
-        migrations.AddField(
-            model_name='channelmembership',
-            name='channel',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='memberships', to='posts.channel'),
-        ),
-        migrations.AddField(
+        migrations.AlterField(
             model_name='channelmembership',
             name='user',
             field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='channel_memberships', to='accounts.walletuser'),
-        ),
-        migrations.RemoveField(
-            model_name='communitymembership',
-            name='community',
-        ),
-        migrations.RemoveField(
-            model_name='communitymembership',
-            name='user',
-        ),
-        migrations.RemoveField(
-            model_name='post',
-            name='community',
-        ),
-        migrations.AddIndex(
-            model_name='channelmembership',
-            index=models.Index(fields=['channel', 'status'], name='chan_member_status_idx'),
         ),
         migrations.AlterUniqueTogether(
             name='channelmembership',
             unique_together={('channel', 'user')},
         ),
-        migrations.DeleteModel(
-            name='CommunityMembership',
+        migrations.AddIndex(
+            model_name='channelmembership',
+            index=models.Index(fields=['channel', 'status'], name='chan_member_status_idx'),
         ),
-        migrations.DeleteModel(
-            name='Community',
+        migrations.AddIndex(
+            model_name='post',
+            index=models.Index(fields=['channel', '-created_at'], name='post_channel_feed_idx'),
+        ),
+        migrations.AddIndex(
+            model_name='post',
+            index=models.Index(condition=models.Q(('channel__isnull', True)), fields=['-created_at'], name='post_global_feed_idx'),
         ),
     ]
