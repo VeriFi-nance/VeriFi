@@ -1,0 +1,33 @@
+# Pings both Render web services every 10 min so the free tier never spins
+# down (Render idles after 15 min, then cold-starts ~50s). Scheduled workflows
+# only run from the default branch.
+
+name: Keep backends warm
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        url:
+          - https://api.veri.finance/healthz
+          - https://api-develop.veri.finance/healthz
+    steps:
+      - name: Ping ${{ matrix.url }}
+        # Goal is to WAKE the free-tier instance, not health-check it: any HTTP
+        # response means it's up. --max-time 90 covers a full cold start; retry
+        # in case the spin-up outlasts the first attempt. Fail only when the
+        # origin never answers (code 000 = timeout / connection refused).
+        run: |
+          code=$(curl -sS --max-time 90 --retry 3 --retry-all-errors --retry-delay 10 \
+            -o /dev/null -w "%{http_code}" "${{ matrix.url }}")
+          echo "HTTP $code"
+          [ "$code" = "000" ] && exit 1 || exit 0

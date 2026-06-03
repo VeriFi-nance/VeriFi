@@ -143,3 +143,38 @@ class UsernameTests(TestCase):
         res_none = self.client.get("/api/auth/profile/non_existent/")
         self.assertEqual(res_none.status_code, 404)
 
+    def test_profile_channels(self):
+        from posts.models import Channel, ChannelMembership
+        address = "0x" + "f" * 40
+        user = WalletUser.objects.create(address=address, username="channel_user")
+        
+        # Create channel owned by user
+        channel_owned = Channel.objects.create(name="Owned Comm", creator=user, privacy_type="public")
+        
+        # Create another channel and join it
+        other_user = WalletUser.objects.create(address="0x" + "e" * 40, username="other_user")
+        channel_joined = Channel.objects.create(name="Joined Comm", creator=other_user, privacy_type="public")
+        
+        # User is not approved member yet
+        ChannelMembership.objects.create(channel=channel_joined, user=user, status="pending")
+        
+        # Verify pending membership doesn't show up
+        res = self.client.get(f"/api/auth/profile/{address}/")
+        self.assertEqual(res.status_code, 200)
+        self.assertIsNotNone(res.data["channel_owned"])
+        self.assertEqual(res.data["channel_owned"]["id"], channel_owned.id)
+        self.assertEqual(len(res.data["channels_member_of"]), 0)
+        
+        # Make membership approved
+        membership = ChannelMembership.objects.get(channel=channel_joined, user=user)
+        membership.status = "approved"
+        membership.save()
+        
+        # Verify approved membership shows up
+        res = self.client.get(f"/api/auth/profile/{address}/")
+        self.assertEqual(res.status_code, 200)
+        self.assertIsNotNone(res.data["channel_owned"])
+        self.assertEqual(len(res.data["channels_member_of"]), 1)
+        self.assertEqual(res.data["channels_member_of"][0]["id"], channel_joined.id)
+
+

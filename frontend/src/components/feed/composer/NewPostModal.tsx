@@ -16,15 +16,17 @@ import {
   type AttachedClaim,
   type ClaimDraft,
 } from './types';
+import { buildClaimPayload } from '@/lib/payloads';
+import { signPayload, resolveUsername } from '@/lib/signing';
 
 interface NewPostModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onPosted: () => void;
-  communityId?: number;
+  channelId?: number;
 }
 
-export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewPostModalProps) {
+export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPostModalProps) {
   const openLogin = useOpenLogin();
   const auth = useAuthState();
   const [content, setContent] = useState('');
@@ -129,25 +131,40 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
     setError('');
     setSubmitting(true);
     try {
-      const hardClaimsPayload = attached.map((c) => {
+      const hardClaimsPayload = [];
+      for (const c of attached) {
+        const payloadObj = {
+          asset_symbol: c.assetSymbol,
+          author_username: await resolveUsername(),
+          direction: c.direction,
+          percentage: parseFloat(c.percentage),
+          until: c.until,
+          created_at: new Date().toISOString(),
+        };
+        const payloadStr = buildClaimPayload(payloadObj);
+        const signature = await signPayload(payloadStr);
+
         const stakeNum = parseFloat(c.stakeRep);
         const market =
           !isNaN(stakeNum) && stakeNum >= 10 && stakeNum <= 100
             ? { side: 'YES' as const, stake_rep: stakeNum }
             : undefined;
-        return {
+
+        hardClaimsPayload.push({
           asset_id: parseInt(c.asset_id, 10),
-          community_id: communityId,
+          channel_id: channelId,
           direction: c.direction,
           value_type: c.claim_type,
           payda: c.parity || undefined,
           percentage: parseFloat(c.percentage),
           until: c.until,
+          signature,
+          claim_payload: payloadObj,
           ...(market ? { market } : {}),
-        };
-      });
+        });
+      }
 
-      await createPost(content.trim(), [], communityId, hardClaimsPayload);
+      await createPost(content.trim(), [], channelId, hardClaimsPayload);
       reset();
       onOpenChange(false);
       onPosted();
@@ -276,10 +293,10 @@ export function NewPostModal({ open, onOpenChange, onPosted, communityId }: NewP
 /** Trigger button — opens the modal or redirects to login if unauthenticated. */
 export function NewPostButton({
   onPosted,
-  communityId,
+  channelId,
 }: {
   onPosted: () => void;
-  communityId?: number;
+  channelId?: number;
 }) {
   const openLogin = useOpenLogin();
   const auth = useAuthState();
@@ -303,7 +320,7 @@ export function NewPostButton({
         open={open}
         onOpenChange={setOpen}
         onPosted={onPosted}
-        communityId={communityId}
+        channelId={channelId}
       />
     </>
   );

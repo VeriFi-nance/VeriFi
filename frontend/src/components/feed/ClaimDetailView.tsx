@@ -1,13 +1,19 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, CheckCircle2, XCircle } from 'lucide-react';
+import { CalendarDays, CheckCircle2, XCircle, Download } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/UserAvatar';
 import type { HardClaimItem, AssetItem, ClaimChartData } from '@/lib/types';
 import { truncateAddress } from '@/lib/wallet';
-import { getClaimChartData } from '@/lib/api';
-import { PriceChart } from './PriceChart';
+import { getClaimChartData, getClaimProof } from '@/lib/api';
 import { MarketPanel } from '../MarketPanel';
+
+// Lazy so the chart.js/react-chartjs-2 bundle is fetched only when a claim
+// actually has price history to render, not in the initial chunk.
+const PriceChart = lazy(() =>
+  import('./PriceChart').then((m) => ({ default: m.PriceChart }))
+);
 
 interface ClaimDetailViewProps {
   claim: HardClaimItem;
@@ -30,6 +36,27 @@ export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
   const [chartData, setChartData] = useState<ClaimChartData | null>(null);
   const [chartLoading, setChartLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
+  const [downloadingProof, setDownloadingProof] = useState(false);
+
+  async function handleDownloadProof() {
+    try {
+      setDownloadingProof(true);
+      const proof = await getClaimProof(claim.id);
+      const blob = new Blob([JSON.stringify(proof, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `claim-proof-${claim.id}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      alert(e.message || 'Failed to download proof');
+    } finally {
+      setDownloadingProof(false);
+    }
+  }
 
   useEffect(() => {
     setChartLoading(true);
@@ -101,6 +128,15 @@ export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
         </div>
       )}
 
+      {claim.signature && (
+        <div>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleDownloadProof} disabled={downloadingProof}>
+            <Download className="size-4" />
+            {downloadingProof ? 'Downloading...' : 'Download Proof'}
+          </Button>
+        </div>
+      )}
+
       <MarketPanel claimId={claim.id} />
 
       {resolutionEvent && resDetails && (
@@ -150,7 +186,9 @@ export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Price history
           </h3>
-          <PriceChart data={chartData} />
+          <Suspense fallback={null}>
+            <PriceChart data={chartData} />
+          </Suspense>
         </div>
       )}
     </div>

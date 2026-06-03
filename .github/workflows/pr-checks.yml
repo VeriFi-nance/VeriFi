@@ -22,6 +22,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Fix VIRTUAL_ENV for backend directory
+        run: echo "VIRTUAL_ENV=${{ github.workspace }}/backend/.venv" >> $GITHUB_ENV
+
       - name: Install backend dependencies
         run: uv sync
 

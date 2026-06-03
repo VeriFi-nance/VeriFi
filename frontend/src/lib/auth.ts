@@ -78,6 +78,10 @@ export function saveUsername(username: string): void {
   notifyAuthChange();
 }
 
+export function loadUsername(): string | null {
+  return localStorage.getItem(USERNAME_STORAGE);
+}
+
 export function clearAuth(): void {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(ADDRESS_STORAGE);

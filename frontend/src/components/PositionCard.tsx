@@ -2,13 +2,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { closePosition, getPositionResolveStatus, triggerPositionResolve } from '@/lib/api';
+import { closePosition, getPositionResolveStatus, triggerPositionResolve, getPositionProof } from '@/lib/api';
 import type { PositionItem, AssetItem } from '@/lib/types';
 import { useAuthState } from '@/lib/auth';
 import ProfitabilityBadge from './ProfitabilityBadge';
 import { Link } from 'react-router-dom';
 import { truncateAddress } from '@/lib/wallet';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Download } from 'lucide-react';
 
 interface PositionCardProps {
   position: PositionItem;
@@ -22,6 +22,27 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
   const [resolving, setResolving] = useState(false);
   const [resolveMsg, setResolveMsg] = useState('');
   const [countdown, setCountdown] = useState(0);
+  const [downloadingProof, setDownloadingProof] = useState(false);
+
+  const handleDownloadProof = async () => {
+    try {
+      setDownloadingProof(true);
+      const proof = await getPositionProof(position.id);
+      const blob = new Blob([JSON.stringify(proof, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `position-proof-${position.id}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      alert(e.message || 'Failed to download proof');
+    } finally {
+      setDownloadingProof(false);
+    }
+  };
 
   const { address: myAddress } = useAuthState();
   const asset = assets.find(a => a.id === position.asset);
@@ -154,6 +175,14 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
               </span>
             )}
             {position.status === 'missed' && <span>Entry target not reached.</span>}
+            {position.signature && (
+              <div className="mt-2">
+                <Button variant="outline" size="sm" onClick={handleDownloadProof} disabled={downloadingProof} className="h-6 text-[10px] gap-1">
+                  <Download className="size-3" />
+                  {downloadingProof ? 'Downloading...' : 'Download Proof'}
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Author actions */}

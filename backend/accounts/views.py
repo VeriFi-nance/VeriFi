@@ -11,6 +11,7 @@ from eth_account import Account
 from eth_account.messages import encode_defunct
 
 from .models import WalletUser, Follow
+from .serializers import RegisterSerializer, LoginSerializer, FollowSerializer
 from .serializers import RegisterSerializer, LoginSerializer, FollowSerializer, validate_username_format
 from .energy import grant_energy, ENERGY_CAP
 
@@ -151,6 +152,18 @@ class ProfileView(APIView):
 
         is_following = False
 
+        # Import dynamically to avoid circular import issues
+        from posts.models import Channel
+        from posts.serializers import ChannelSerializer
+
+        owned_qs = Channel.objects.filter(creator=target_user)
+        owned_channel = owned_qs.first()
+
+        member_qs = Channel.objects.filter(
+            memberships__user=target_user,
+            memberships__status="approved"
+        ).exclude(creator=target_user)
+
         data = {
             "address": target_user.address,
             "username": target_user.username,
@@ -161,6 +174,8 @@ class ProfileView(APIView):
             "rep": target_user.rep,
             "energy": target_user.energy,
             "energy_cap": ENERGY_CAP,
+            "channel_owned": ChannelSerializer(owned_channel).data if owned_channel else None,
+            "channels_member_of": ChannelSerializer(member_qs, many=True).data,
         }
         
         try:

@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Copy, Check, Sun, Moon, LogOut, KeyRound } from 'lucide-react';
 import { clearAuth, useAuthState, saveUsername } from '@/lib/auth';
 import { updateUsername } from '@/lib/api';
-import { clearPrivateKey } from '@/lib/crypto';
+import { clearPrivateKey } from '@/lib/keystore';
 import { loadTheme, toggleTheme, type Theme } from '@/lib/theme';
 import { useWalletReveal } from '@/lib/useWalletReveal';
 import { PageContent } from '@/components/PageContent';

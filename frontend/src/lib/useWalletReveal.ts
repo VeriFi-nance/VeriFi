@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { decryptPrivateKey, loadEncryptedKey } from './crypto';
+import { decryptPrivateKey, loadEncryptedKey } from './keystore';
 
 const REVEAL_TTL_SECONDS = 60;
 
