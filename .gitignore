@@ -232,3 +232,5 @@ pnpm-debug.log*
 copilot-instructions.md
 .roo
 .agents/
+.agent
+.cline
