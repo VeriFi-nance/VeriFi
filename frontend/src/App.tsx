@@ -16,8 +16,6 @@ import SettingsPage from './pages/SettingsPage';
 import ClaimDetailPage from './pages/ClaimDetailPage';
 import ChannelsPage from './pages/ChannelsPage';
 import ChannelDetailPage from './pages/ChannelDetailPage';
-import { VerifyPage } from './pages/VerifyPage';
-import { LoginModal } from './components/LoginModal';
 import { clearAuth, loadAddress, openLogin, useAuthState } from './lib/auth';
 import { clearPrivateKey } from './lib/keystore';
 import { authenticateMetaMaskAddress } from './lib/walletAuth';
@@ -112,9 +110,9 @@ function AppRoutes() {
           <Route path="/settings" element={<SettingsGate />} />
           <Route path="/channels" element={<ChannelsPage />} />
           <Route path="/channels/:id" element={<ChannelDetailPage />} />
-          <Route path="/verify" element={<VerifyPage />} />
-          <Route path="/verify/claim/:id" element={<VerifyPage type="claim" />} />
-          <Route path="/verify/position/:id" element={<VerifyPage type="position" />} />
+          <Route path="/verify" element={<Suspense fallback={null}><VerifyPage /></Suspense>} />
+          <Route path="/verify/claim/:id" element={<Suspense fallback={null}><VerifyPage type="claim" /></Suspense>} />
+          <Route path="/verify/position/:id" element={<Suspense fallback={null}><VerifyPage type="position" /></Suspense>} />
           <Route path="/login" element={null} />
         </Route>
 
