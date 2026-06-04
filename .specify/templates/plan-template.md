@@ -40,7 +40,17 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+**VeriFi Core Gates (NON-NEGOTIABLE — verify for every feature):**
+
+- [ ] **Crypto Integrity** — All user-generated claims/positions are EIP-191 signed client-side; backend verifies with `eth-account`; no private key leaves the browser.
+- [ ] **Immutability** — No retroactive edits to resolved claims or Truth Score records.
+- [ ] **UI Token Source** — All colors, radii, shadows are defined in `frontend/src/index.css` CSS custom properties; zero hard-coded Tailwind palette classes in components.
+- [ ] **No Inline Styles** — Zero `style={{...}}` props in React components.
+- [ ] **shadcn/ui Primitives** — All UI composed from shadcn primitives (Button, Card, Badge, Dialog, etc.); no hand-rolled base components.
+- [ ] **Lucide Icons** — All icons from `lucide-react`; no emoji icons or raw SVG literals in JSX.
+- [ ] **File Size** — Frontend files ≤ 150 lines; backend files ≤ 300 lines.
+- [ ] **Package Manager** — `pnpm` for frontend, `uv` for backend; no npm/pip project commands.
+- [ ] **Observer Pattern** — Position resolution is push-based via `update_and_notify`; no pull-based price fetching in components.
 
 ## Project Structure
 

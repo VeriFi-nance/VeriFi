@@ -22,9 +22,23 @@ description: "Task list template for feature implementation"
 ## Path Conventions
 
 - **Single project**: `src/`, `tests/` at repository root
-- **Web app**: `backend/src/`, `frontend/src/`
+- **Web app**: `backend/`, `frontend/`
 - **Mobile**: `api/src/`, `ios/src/` or `android/src/`
-- Paths shown below assume single project - adjust based on plan.md structure
+- VeriFi frontend root: `frontend/src/` — adjust based on plan.md structure
+
+## Task Categories (VeriFi)
+
+| Category | Label | Description |
+|----------|-------|-------------|
+| UI Component | `[UI]` | Feature composite built from shadcn primitives. File MUST be ≤ 150 lines. No inline styles. |
+| API Endpoint | `[API]` | DRF view + serializer + URL registration. |
+| Model | `[MODEL]` | Django model + migration. |
+| Hook/Util | `[HOOK]` | React hook or frontend utility. File MUST be ≤ 150 lines. |
+| Auth | `[AUTH]` | Wallet signature, JWT, or permission layer. |
+| Resolution | `[RES]` | Observer-pattern or scheduled job for claim/position resolution. |
+| Test | `[TEST]` | Backend pytest or frontend Vitest. Always WRITE BEFORE implement. |
+
+> **UI tasks MUST reference shadcn primitives used.** Example: "Build `ClaimBadge` component using `Card`, `Badge`, `Tooltip` from shadcn/ui — ≤150 lines, no inline styles, all colors from CSS tokens."
 
 <!--
   ============================================================================
