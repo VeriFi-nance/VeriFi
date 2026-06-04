@@ -51,6 +51,10 @@
 - [ ] **File Size** — Frontend files ≤ 150 lines; backend files ≤ 300 lines.
 - [ ] **Package Manager** — `pnpm` for frontend, `uv` for backend; no npm/pip project commands.
 - [ ] **Observer Pattern** — Position resolution is push-based via `update_and_notify`; no pull-based price fetching in components.
+- [ ] **FSD Placement** — New components placed in correct FSD location: dumb → `src/components/ui/`, layout → `src/components/layout/`, smart/domain → `src/features/[domain]/components/`, routing → `src/pages/`.
+- [ ] **No `index.tsx`** — No React component file named `index.tsx`; files named after the component they export.
+- [ ] **Cross-Domain Imports** — Imports of other-domain components go through `src/features/[domain]/index.ts` only; no internal path imports across domain boundaries.
+- [ ] **Domain Ownership** — New components belonging to `posts`, `channels`, `users`, or `claims` are placed in the correct feature domain and exported from its `index.ts`.
 
 ## Project Structure
 

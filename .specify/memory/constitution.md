@@ -1,22 +1,18 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 0.0.0 (template) → 1.0.0 (initial ratification)
-Added sections:
-  - I. Cryptographic Integrity (core principle)
-  - II. Truth Score Immutability (core principle)
-  - III. UI Design System (NEW — derived from mockup.html + ui-ux-pro-max)
-  - IV. File-Size Discipline (frontend)
-  - V. Backend Architecture (Django / DRF / Observer pattern)
-  - Tech Stack Constraints
-  - Development Workflow
-  - Governance
-Modified principles: All (template placeholders → concrete content)
+Version change: 1.0.0 → 1.1.0
+Added principles:
+  - VI.  Folder Architecture & Organization (Feature-Sliced Design)
+  - VII. Component Rules (Dumb vs Smart)
+  - VIII. Cross-Domain Dependency Rules
+Modified sections:
+  - Development Workflow — PR checklist updated with FSD gates
 Templates requiring updates:
   ✅ .specify/memory/constitution.md — this file
-  ⚠ .specify/templates/plan-template.md — should reference UI principle for frontend tasks
-  ⚠ .specify/templates/spec-template.md — should add UI/Design System constraints to scope
-  ⚠ .specify/templates/tasks-template.md — should add UI task category: "UI Component"
+  ✅ .specify/templates/plan-template.md — constitution check gates (prev session)
+  ✅ .specify/templates/tasks-template.md — task categories (prev session)
+  ⚠  .specify/templates/spec-template.md — should reference FSD folder rules
 Deferred items: None
 -->
 
@@ -124,6 +120,78 @@ windows. The observer pattern guarantees exactly-once notification per price upd
 
 ---
 
+### VI. Folder Architecture & Organization — Feature-Sliced Design (NON-NEGOTIABLE)
+Code MUST follow a Feature-Sliced Design (FSD) structure. The legacy `/pages` monolith MUST be
+migrated away from incrementally. New code MUST NOT be placed in monolithic page files.
+
+**Canonical directory layout:**
+
+```
+src/
+├── components/
+│   ├── ui/       ← Global, generic, "dumb" presentation components
+│   │              (Button, Card, Input — shadcn primitives live here)
+│   └── layout/   ← Global shell elements (Sidebar, TopNav, AppLayout)
+├── features/
+│   └── [domain]/ ← One folder per bounded domain
+│       ├── components/  ← Smart UI components tied to this domain
+│       └── index.ts     ← Public API: ONLY export what other features may consume
+└── pages/        ← Thin routing wrappers ONLY
+                    (read URL params → render from /features/)
+```
+
+**File naming rules:**
+- NEVER name a React component file `index.tsx`. Name it after the component (`PostCard.tsx`).
+- Keep directories **flat** — avoid deep nesting inside `/components/`.
+- `index.ts` barrel files are allowed only at the feature boundary (`/features/[domain]/index.ts`).
+
+**Rationale:** FSD makes domain ownership explicit, prevents cross-domain coupling, and keeps
+routing logic separate from business logic. Every developer should know exactly where to find
+and place any given piece of code.
+
+---
+
+### VII. Component Rules — "Dumb" vs "Smart" (NON-NEGOTIABLE)
+Every component MUST be classified before creation and placed in the correct location:
+
+| Type | Location | Criteria |
+|------|----------|---------|
+| **Global / Dumb** | `src/components/ui/` | Accepts generic props (`children`, `text`); knows nothing about backend models or API calls |
+| **Feature / Smart** | `src/features/[domain]/components/` | Requires a specific Django model shape (e.g., `Post`, `Channel`) or triggers domain-specific API calls |
+| **Layout** | `src/components/layout/` | Structural shell — `Sidebar`, `TopNav`, `AppLayout` |
+| **Page** | `src/pages/` | Routing wrapper only — reads URL params, renders feature components, no business logic |
+
+A component that starts "dumb" and later needs domain data MUST be moved to the appropriate
+`/features/[domain]/components/` directory — not extended with API calls in-place.
+
+**Rationale:** Mixing data-fetching and presentation in the same component destroys reusability
+and makes testing expensive. The dumb/smart split is the enabling condition for the FSD structure.
+
+---
+
+### VIII. Cross-Domain Dependency Rules (NON-NEGOTIABLE)
+Domain entities MUST NEVER be duplicated across features. If a feature needs UI or logic from
+another domain, it MUST import it from that domain's `index.ts` public API — never from an
+internal path.
+
+**Domain Ownership Map:**
+
+| Domain | Path | Owns |
+|--------|------|------|
+| Posts | `src/features/posts` | `PostCard`, `FeedList` — core social feed, financial predictions |
+| Channels | `src/features/channels` | `ChannelCard`, `ChannelHeader`, `ChannelDirectory` |
+| Users | `src/features/users` | `UserAvatar`, `UserProfileHeader`, `SettingsForm` — native BIP39 / MetaMask profiles |
+| Claims | `src/features/claims` | `ClaimBadge`, `AnalysisChart` — resolution engine, reputation markets |
+
+**Import rule:** `import { ClaimBadge } from '@/features/claims'` ✅  
+**Forbidden:** `import { ClaimBadge } from '@/features/claims/components/ClaimBadge'` ❌
+
+**Rationale:** Owning a domain means being the single source of truth for its entities.
+Cross-feature imports via `index.ts` create a stable contract; internal path imports couple
+consumers to implementation details and cause cascading breakage on refactors.
+
+---
+
 ## Tech Stack Constraints
 
 - **Frontend:** React 19 + Vite 7 + TypeScript + Tailwind CSS v4 + shadcn/ui. Deployed on Vercel.
@@ -141,8 +209,14 @@ windows. The observer pattern guarantees exactly-once notification per price upd
    implementation begins.
 2. **Branch per feature.** Work happens on feature branches (`/speckit-git-feature`), never
    directly on `main`.
-3. **Constitution check on every PR.** Reviewers MUST verify: no inline styles, no files > 150
-   lines, all tokens sourced from `index.css`, Lucide icons only, shadcn primitives used.
+3. **Constitution check on every PR.** Reviewers MUST verify:
+   - No inline styles (`style={{...}}`)
+   - No files > 150 lines (frontend) / 300 lines (backend)
+   - All tokens sourced from `frontend/src/index.css`
+   - Lucide icons only; shadcn primitives used
+   - New React components placed in correct FSD location (`ui/`, `layout/`, or `features/[domain]/components/`)
+   - No component named `index.tsx`
+   - Cross-domain imports go through `features/[domain]/index.ts` only
 4. **Backend first.** API contracts (serializers, endpoints, permissions) MUST be stable before
    frontend integration begins.
 5. **Tests are non-optional.** Backend: Django test runner with ≥80% model/view coverage.
@@ -164,4 +238,4 @@ This constitution supersedes all other documented practices. Amendments require:
 All agents operating on VeriFi MUST treat NON-NEGOTIABLE markers as hard constraints —
 they are not subject to convenience trade-offs or time pressure exceptions.
 
-**Version**: 1.0.0 | **Ratified**: 2026-06-04 | **Last Amended**: 2026-06-04
+**Version**: 1.1.0 | **Ratified**: 2026-06-04 | **Last Amended**: 2026-06-04
