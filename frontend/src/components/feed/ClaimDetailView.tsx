@@ -44,7 +44,13 @@ export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
     error: chartError,
     interval: chartInterval,
     setInterval: setChartInterval,
-  } = useClaimChartData(claim.id, claim.created_at, claim.until, claim.status);
+  } = useClaimChartData(claim.id, claim.created_at, claim.until, claim.status, {
+    reference_price: claim.reference_price,
+    target_price: claim.target_price,
+    direction: claim.direction,
+    percentage: claim.percentage,
+    value_type: getHardClaimType(claim),
+  });
   const [downloadingProof, setDownloadingProof] = useState(false);
 
   async function handleDownloadProof() {

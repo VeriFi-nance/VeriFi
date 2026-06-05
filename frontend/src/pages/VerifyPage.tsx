@@ -46,6 +46,8 @@ export function VerifyPage({ type }: { type?: 'claim' | 'position' }) {
     ? String(proof.payload.created_at || proof.server_timestamp)
     : undefined;
   const claimUntil = proof?.payload.until ? String(proof.payload.until) : undefined;
+  const claimReferencePrice = proof?.reference_price ?? null;
+  const claimTargetPrice = proof?.target_price ?? null;
   const {
     data: chartData,
     loading: chartLoading,
@@ -58,6 +60,14 @@ export function VerifyPage({ type }: { type?: 'claim' | 'position' }) {
     claimCreatedAt,
     claimUntil,
     liveStatus ?? (proof?.payload?.status ? String(proof.payload.status) : undefined),
+    proof?.type === 'claim'
+      ? {
+          reference_price: claimReferencePrice,
+          target_price: claimTargetPrice,
+          direction: String(proof.payload.direction || 'bullish'),
+          percentage: Number(proof.payload.percentage || 0),
+        }
+      : undefined,
   );
 
   // Auto-fetch proof when navigating to /verify/claim/:id or /verify/position/:id

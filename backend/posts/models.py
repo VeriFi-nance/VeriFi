@@ -156,6 +156,8 @@ class HardClaim(models.Model):
     percentage = models.FloatField(blank=False, null=False) # magnitude: percentage move, or absolute price when value_type == PRICE
     until = models.DateField(blank=False, null=False)
     created_at = models.DateTimeField(auto_now_add=True)
+    reference_price = models.FloatField(blank=True, null=True)
+    reference_price_url = models.TextField(blank=True, default="")
     status = models.CharField(max_length=12, choices=Status.choices, default="undetermined")
     signature = models.TextField(blank=True, default="")
     claim_payload = models.JSONField(blank=True, default=dict)

@@ -14,7 +14,7 @@ import {
   type UTCTimestamp,
 } from 'lightweight-charts';
 import type { ClaimChartData, ChartCandleInterval } from '@/lib/types';
-import { CHART_INTERVAL_OPTIONS } from '@/lib/chart';
+import { CHART_INTERVAL_OPTIONS, claimWindowForChart, markerWindowEnd } from '@/lib/chart';
 import { cn } from '@/lib/utils';
 
 interface PriceChartProps {
@@ -25,21 +25,21 @@ interface PriceChartProps {
 }
 
 const CANDLE_UP = {
-  color: '#10b981',
-  borderColor: '#059669',
-  wickColor: '#10b981',
+  color: '#22c55e',
+  borderColor: '#16a34a',
+  wickColor: '#16a34a',
 } as const;
 
 const CANDLE_DOWN = {
-  color: '#ef4444',
-  borderColor: '#dc2626',
+  color: '#f87171',
+  borderColor: '#ef4444',
   wickColor: '#ef4444',
 } as const;
 
 const CANDLE_OUTSIDE = {
-  color: '#64748b',
-  borderColor: '#475569',
-  wickColor: '#64748b',
+  color: '#475569',
+  borderColor: '#334155',
+  wickColor: '#334155',
 } as const;
 
 const ANCHOR_LINE_COLOR = 'rgba(59, 130, 246, 0.95)';
@@ -49,26 +49,6 @@ const CLAIM_MARKER_LABEL_CLASS =
 
 function toUtcTimestamp(iso: string): UTCTimestamp {
   return Math.floor(new Date(iso).getTime() / 1000) as UTCTimestamp;
-}
-
-function claimEndTimestamp(untilIso: string): UTCTimestamp {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(untilIso.trim());
-  if (match) {
-    return Math.floor(
-      Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 23, 59, 59) / 1000,
-    ) as UTCTimestamp;
-  }
-  const end = new Date(untilIso);
-  return Math.floor(
-    Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate(), 23, 59, 59) / 1000,
-  ) as UTCTimestamp;
-}
-
-function claimWindow(data: ClaimChartData): { start: UTCTimestamp; end: UTCTimestamp } {
-  return {
-    start: toUtcTimestamp(data.created_at),
-    end: claimEndTimestamp(data.until),
-  };
 }
 
 function intervalBarDurationSec(interval?: string): number {
@@ -256,13 +236,20 @@ function computeAutoscaleRange(
 function focusClaimWindow(
   chart: IChartApi,
   windowStart: UTCTimestamp,
-  windowEnd: UTCTimestamp,
+  windowEnd: UTCTimestamp | null,
   candles: CandlestickData<UTCTimestamp>[],
   chartInterval?: string,
 ) {
   const timeScale = chart.timeScale();
   const startIdx = timeToLogicalIndex(timeScale, windowStart, candles, chartInterval);
-  const endIdx = timeToLogicalIndex(timeScale, windowEnd, candles, chartInterval);
+  let endIdx =
+    windowEnd !== null
+      ? timeToLogicalIndex(timeScale, windowEnd, candles, chartInterval)
+      : null;
+
+  if (endIdx === null && candles.length > 0) {
+    endIdx = timeScale.timeToIndex(candles[candles.length - 1].time, false) as number | null;
+  }
 
   if (startIdx === null || endIdx === null) {
     timeScale.fitContent();
@@ -300,8 +287,9 @@ export function PriceChart({
   const candlesRef = useRef<CandlestickData<UTCTimestamp>[]>([]);
   const shouldRefocusRef = useRef(true);
 
-  const { start: windowStart, end: windowEnd } = claimWindow(data);
-  const chartInterval = interval;
+  const alignedWindow = claimWindowForChart(data.created_at, data.until, interval);
+  const windowStart = alignedWindow.start as UTCTimestamp;
+  const claimWindowEnd = alignedWindow.end as UTCTimestamp;
 
   const updateOverlay = useCallback(() => {
     const chart = chartRef.current;
@@ -311,9 +299,22 @@ export function PriceChart({
     const candles = candlesRef.current;
     if (!chart || !overlay || !startMarker || !endMarker) return;
 
+    const lastCandleTime =
+      candles.length > 0 ? (candles[candles.length - 1].time as number) : null;
+    const endForMarker = markerWindowEnd(
+      claimWindowEnd as number,
+      lastCandleTime,
+      Boolean(data.live),
+    );
+    const windowEnd =
+      endForMarker !== null ? (endForMarker as UTCTimestamp) : null;
+
     const timeScale = chart.timeScale();
-    const startX = timeToPlotCoordinate(timeScale, windowStart, candles, chartInterval);
-    const endX = timeToPlotCoordinate(timeScale, windowEnd, candles, chartInterval);
+    const startX = timeToPlotCoordinate(timeScale, windowStart, candles, interval);
+    const endX =
+      windowEnd !== null
+        ? timeToPlotCoordinate(timeScale, windowEnd, candles, interval)
+        : null;
 
     if (startX === null && endX === null) {
       overlay.style.display = 'none';
@@ -329,7 +330,7 @@ export function PriceChart({
     endMarker.style.display = showAt(endX) ? 'block' : 'none';
     if (startX !== null && showAt(startX)) startMarker.style.left = `${startX}px`;
     if (endX !== null && showAt(endX)) endMarker.style.left = `${endX}px`;
-  }, [windowStart, windowEnd, chartInterval]);
+  }, [windowStart, claimWindowEnd, interval, data.live]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -370,7 +371,7 @@ export function PriceChart({
       handleScale: { mouseWheel: true, pinch: true },
     });
 
-    const autoscaleRange = computeAutoscaleRange(data, windowStart, windowEnd);
+    const autoscaleRange = computeAutoscaleRange(data, windowStart, claimWindowEnd);
 
     const series = chart.addSeries(CandlestickSeries, {
       upColor: CANDLE_UP.color,
@@ -385,7 +386,7 @@ export function PriceChart({
     });
     seriesRef.current = series;
 
-    if (data.reference_price) {
+    if (data.reference_price != null && !Number.isNaN(data.reference_price)) {
       series.createPriceLine({
         price: data.reference_price,
         color: ANCHOR_LINE_COLOR,
@@ -396,7 +397,7 @@ export function PriceChart({
       });
     }
 
-    if (data.target_price) {
+    if (data.target_price != null && !Number.isNaN(data.target_price)) {
       series.createPriceLine({
         price: data.target_price,
         color: ANCHOR_LINE_COLOR,
@@ -430,21 +431,29 @@ export function PriceChart({
       seriesRef.current = null;
       candlesRef.current = [];
     };
-  }, [data.claim_id, data.reference_price, data.target_price, interval, updateOverlay, windowStart, windowEnd]);
+  }, [data.claim_id, data.reference_price, data.target_price, interval, updateOverlay, windowStart, claimWindowEnd]);
 
   useEffect(() => {
     const chart = chartRef.current;
     const series = seriesRef.current;
     if (!chart || !series) return;
 
-    const styledCandles = toStyledCandles(data, windowStart, windowEnd);
+    const styledCandles = toStyledCandles(data, windowStart, claimWindowEnd);
     candlesRef.current = styledCandles;
     if (styledCandles.length > 0) {
       series.setData(styledCandles);
     }
 
     if (shouldRefocusRef.current && styledCandles.length > 0) {
-      focusClaimWindow(chart, windowStart, windowEnd, styledCandles, chartInterval);
+      const lastTime = styledCandles[styledCandles.length - 1].time as number;
+      const focusEnd = markerWindowEnd(claimWindowEnd as number, lastTime, Boolean(data.live));
+      focusClaimWindow(
+        chart,
+        windowStart,
+        focusEnd !== null ? (focusEnd as UTCTimestamp) : null,
+        styledCandles,
+        interval,
+      );
       shouldRefocusRef.current = false;
     }
 
@@ -452,7 +461,7 @@ export function PriceChart({
     requestAnimationFrame(() => {
       requestAnimationFrame(updateOverlay);
     });
-  }, [data, windowStart, windowEnd, chartInterval, updateOverlay]);
+  }, [data, windowStart, claimWindowEnd, interval, updateOverlay]);
 
   if (data.ohlc.length === 0) {
     return (
@@ -481,7 +490,7 @@ export function PriceChart({
           </button>
         ))}
       </div>
-      <div className={cn('relative h-[320px] overflow-hidden', refetching && 'opacity-60')}>
+      <div className={cn('relative h-[320px] overflow-hidden', refetching && 'opacity-90')}>
         <div ref={containerRef} className="absolute inset-0" />
         <div
           ref={overlayRef}

@@ -16,6 +16,8 @@ from .resolution import (
     ResolutionError,
     preview_resolution,
     resolve_hard_claim,
+    capture_reference_price,
+    claim_target_price,
     _normalize_direction_and_value_type,
     reconcile_claim_fields,
 )
@@ -311,6 +313,14 @@ class PostListCreateView(APIView):
                         event_type=HardClaimEvent.EventType.CREATION,
                         details={}
                     )
+                    try:
+                        capture_reference_price(hard_claim)
+                    except ResolutionError as exc:
+                        logger.warning(
+                            "Reference price not captured for claim %s: %s",
+                            hard_claim.id,
+                            exc.message,
+                        )
                     if market_block is not None:
                         rep_market.init_market(hard_claim, user, m_side, m_stake)
                 except rep_market.MarketError:
@@ -514,6 +524,14 @@ class HardClaimView(APIView):
                 event_type=HardClaimEvent.EventType.CREATION,
                 details={}
             )
+            try:
+                capture_reference_price(hard_claim)
+            except ResolutionError as exc:
+                logger.warning(
+                    "Reference price not captured for claim %s: %s",
+                    hard_claim.id,
+                    exc.message,
+                )
             if market_block is not None:
                 rep_market.init_market(hard_claim, user, m_side, m_stake)
         except rep_market.MarketError as e:
@@ -610,7 +628,13 @@ class HardClaimChartDataView(APIView):
         asset = hard_claim.asset
         # get_ohlc_data requires aligned UTC datetime objects
         from datetime import datetime, timedelta, timezone
-        from .resolution import _effective_direction, fetch_reference_price, ResolutionError, _round_decimal
+        from .resolution import (
+            _effective_direction,
+            claim_entry_price,
+            claim_target_price,
+            ResolutionError,
+            _round_decimal,
+        )
 
         claim_start_day = hard_claim.created_at.date()
         claim_end_day = hard_claim.until
@@ -648,39 +672,26 @@ class HardClaimChartDataView(APIView):
         except OHLCFetchError as e:
             return Response({"detail": str(e)}, status=status.HTTP_502_BAD_GATEWAY)
 
-        # Compute target price
-        reference_price = None
-        target_price = None
+        # Entry/target from locked reference_price; resolution metadata for hit_days only.
+        reference_price = claim_entry_price(hard_claim)
+        if reference_price is not None:
+            reference_price = _round_decimal(reference_price)
+
         target_reached_at = None
         hit_days = []
         closest_price = None
 
-        # Try to get resolution details from events
         resolution_event = hard_claim.events.filter(event_type="resolution").first()
         if resolution_event and resolution_event.details:
             details = resolution_event.details
             prices = details.get("prices", {})
-            reference_price = prices.get("reference")
             closest_price = prices.get("closest")
             target_reached_at = details.get("target_reached_at")
             hit_days = details.get("hit_days", [])
 
-        if reference_price is None and ohlc_rows:
-            try:
-                reference_price, _ = fetch_reference_price(hard_claim)
-                reference_price = _round_decimal(reference_price)
-            except ResolutionError:
-                reference_price = ohlc_rows[0].open
+        target_price = claim_target_price(hard_claim, reference_price)
 
         direction, claim_value_type = reconcile_claim_fields(hard_claim)
-        pct = float(hard_claim.percentage)
-        if reference_price is not None:
-            if claim_value_type == "PRICE":
-                target_price = pct
-            elif direction == "bullish":
-                target_price = _round_decimal(reference_price * (1 + pct / 100))
-            else:
-                target_price = _round_decimal(reference_price * (1 - pct / 100))
 
         ohlc_data = [
             {
@@ -1455,7 +1466,9 @@ class HardClaimProofView(APIView):
             "wallet_address": claim.author.address,
             "signature": claim.signature,
             "payload": claim.claim_payload,
-            "server_timestamp": claim.created_at.isoformat()
+            "server_timestamp": claim.created_at.isoformat(),
+            "reference_price": claim.reference_price,
+            "target_price": claim_target_price(claim),
         })
 
 

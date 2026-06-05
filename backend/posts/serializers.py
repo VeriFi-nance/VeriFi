@@ -97,12 +97,13 @@ class HardClaimSerializer(serializers.ModelSerializer):
         fields = [
             "id", "author_address", "author_username", "post_id", "channel",
             "asset", "direction", "value_type", "payda", "percentage",
-            "until", "created_at", "status", "events", "profitability",
+            "until", "created_at", "reference_price", "reference_price_url",
+            "status", "events", "profitability",
             "signature", "claim_payload"
         ]
 
     def to_representation(self, instance):
-        from .resolution import reconcile_claim_fields, display_percentage
+        from .resolution import reconcile_claim_fields, display_percentage, claim_target_price
 
         data = super().to_representation(instance)
         direction, value_type = reconcile_claim_fields(instance)
@@ -111,6 +112,9 @@ class HardClaimSerializer(serializers.ModelSerializer):
         pct = display_percentage(instance)
         if pct is not None:
             data["display_percentage"] = pct
+        target = claim_target_price(instance)
+        if target is not None:
+            data["target_price"] = target
         return data
 
     def get_profitability(self, obj):

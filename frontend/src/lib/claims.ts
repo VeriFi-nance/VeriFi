@@ -1,6 +1,7 @@
 import type {
   ClaimExtractionStatus,
   ClaimType,
+  ClaimChartData,
   ExtractedClaimContract,
   HardClaimItem,
   ReviewClaim,
@@ -122,6 +123,58 @@ export function getFeedClaimTagLabel(claim: {
 export function getHardClaimParity(claim: HardClaimItem): string | undefined {
   const p = claim.parity ?? claim.payda;
   return p?.trim() || undefined;
+}
+
+/** Format USD price for claim entry/target labels. */
+export function formatClaimPrice(value: number | null | undefined): string | null {
+  if (value == null || Number.isNaN(value)) return null;
+  return `$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+}
+
+/** Target price from locked entry + claim magnitude (mirrors backend claim_target_price). */
+export function computeClaimTargetPrice(claim: {
+  reference_price?: number | null;
+  direction: string;
+  percentage: number;
+  claim_type?: ClaimType;
+  value_type?: ClaimType;
+}): number | null {
+  const entry = claim.reference_price;
+  if (entry == null || entry <= 0 || Number.isNaN(entry)) return null;
+
+  const valueType = claim.claim_type ?? claim.value_type ?? 'PERCENTAGE_UP';
+  if (valueType === 'PRICE') return claim.percentage;
+
+  const isBullish = claim.direction.toLowerCase() === 'bullish';
+  const pct = claim.percentage;
+  const raw = isBullish ? entry * (1 + pct / 100) : entry * (1 - pct / 100);
+  return Math.round(raw * 100) / 100;
+}
+
+/** Prefer stored claim prices over chart API (legacy resolution rows). */
+export function applyClaimPricesToChart(
+  chart: ClaimChartData,
+  claim: {
+    reference_price?: number | null;
+    target_price?: number | null;
+    direction: string;
+    percentage: number;
+    claim_type?: ClaimType;
+    value_type?: ClaimType;
+  },
+): ClaimChartData {
+  const entry = claim.reference_price;
+  if (entry == null || Number.isNaN(entry)) return chart;
+
+  const target =
+    claim.target_price ??
+    computeClaimTargetPrice({ ...claim, reference_price: entry });
+
+  return {
+    ...chart,
+    reference_price: entry,
+    target_price: target,
+  };
 }
 
 export function directionForClaimType(ct: ClaimType): string {

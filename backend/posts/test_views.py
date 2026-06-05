@@ -5,7 +5,7 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from django.utils import timezone
 
-from posts.models import Asset, Post, HardClaim, OHLCData
+from posts.models import Asset, Post, HardClaim, HardClaimEvent, OHLCData
 from accounts.models import WalletUser
 
 
@@ -40,6 +40,8 @@ class HardClaimChartDataViewTests(TestCase):
             percentage="10.00",
             until=(now + timedelta(days=5)).date(),
             status=HardClaim.Status.UNDETERMINED,
+            reference_price=1000.0,
+            reference_price_url="stored_at_creation",
         )
         
         # Seed an OHLCData point to test serialization
@@ -190,6 +192,27 @@ class HardClaimChartDataViewTests(TestCase):
         response = self.client.get(url, {"interval": "1m"})
         self.assertEqual(response.status_code, 400)
         mock_get_ohlc.assert_not_called()
+
+    @patch("posts.ohlc_fetcher.get_ohlc_data")
+    def test_chart_uses_stored_reference_over_resolution_event(self, mock_get_ohlc):
+        mock_get_ohlc.return_value = list(OHLCData.objects.filter(asset=self.asset))
+        self.claim.reference_price = 67507.18
+        self.claim.status = HardClaim.Status.CONFIRMED
+        self.claim.save()
+        HardClaimEvent.objects.create(
+            hard_claim=self.claim,
+            event_type=HardClaimEvent.EventType.RESOLUTION,
+            details={
+                "prices": {"reference": 66760.83, "target": 67428.44},
+                "hit_days": ["2026-06-02"],
+            },
+        )
+
+        response = self.client.get(reverse("hard-claim-chart-data", kwargs={"pk": self.claim.id}))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["reference_price"], 67507.18)
+        self.assertEqual(data["target_price"], 74257.9)
 
 class PostCreationAtomicTests(TestCase):
     def setUp(self):

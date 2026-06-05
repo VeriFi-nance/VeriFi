@@ -1,17 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getClaimChartData } from '@/lib/api';
+import { applyClaimPricesToChart } from '@/lib/claims';
 import {
   chartPollIntervalMs,
   defaultChartInterval,
   isLiveClaimStatus,
 } from '@/lib/chart';
-import type { ClaimChartData, ChartCandleInterval } from '@/lib/types';
+import type { ClaimChartData, ChartCandleInterval, ClaimType } from '@/lib/types';
+
+export interface ClaimPriceSnapshot {
+  reference_price?: number | null;
+  target_price?: number | null;
+  direction: string;
+  percentage: number;
+  value_type?: ClaimType;
+  claim_type?: ClaimType;
+}
 
 export function useClaimChartData(
   claimId: number | undefined,
   createdAt: string | undefined,
   until: string | undefined,
   claimStatus?: string,
+  priceSnapshot?: ClaimPriceSnapshot,
 ) {
   const [interval, setInterval] = useState<ChartCandleInterval>(() =>
     createdAt && until ? defaultChartInterval(createdAt, until) : '4h',
@@ -23,6 +34,21 @@ export function useClaimChartData(
   const hasLoadedRef = useRef(false);
   const live = isLiveClaimStatus(claimStatus);
 
+  const mergePrices = useCallback(
+    (chart: ClaimChartData) =>
+      priceSnapshot?.reference_price != null
+        ? applyClaimPricesToChart(chart, {
+            reference_price: priceSnapshot.reference_price,
+            target_price: priceSnapshot.target_price,
+            direction: priceSnapshot.direction,
+            percentage: priceSnapshot.percentage,
+            value_type: priceSnapshot.value_type,
+            claim_type: priceSnapshot.claim_type,
+          })
+        : chart,
+    [priceSnapshot],
+  );
+
   const loadChart = useCallback(
     (opts?: { silent?: boolean }) => {
       if (!claimId) return Promise.resolve();
@@ -31,7 +57,7 @@ export function useClaimChartData(
       if (isRefetch && opts?.silent) {
         return getClaimChartData(claimId, interval)
           .then((next) => {
-            setData(next);
+            setData(mergePrices(next));
             hasLoadedRef.current = true;
           })
           .catch(() => undefined);
@@ -46,7 +72,7 @@ export function useClaimChartData(
 
       return getClaimChartData(claimId, interval)
         .then((next) => {
-          setData(next);
+          setData(mergePrices(next));
           hasLoadedRef.current = true;
         })
         .catch((err) => setError(err.message || 'Failed to load chart data'))
@@ -55,7 +81,7 @@ export function useClaimChartData(
           setRefetching(false);
         });
     },
-    [claimId, interval],
+    [claimId, interval, mergePrices],
   );
 
   useEffect(() => {

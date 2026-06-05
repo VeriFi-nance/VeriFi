@@ -1,9 +1,8 @@
 """
 Claim resolution engine — OHLC-based daily analysis.
 
-Fetches the reference price at exact created_at timestamp (preserving existing
-behaviour), then performs day-by-day high/low checks against the computed target
-price using cached OHLC candle data.
+Entry (reference) price is captured at claim creation from an intraday quote at
+created_at, stored on HardClaim.reference_price, and reused for charts and resolution.
 """
 
 from __future__ import annotations
@@ -90,14 +89,12 @@ def _normalize_direction_and_value_type(
 
 def infer_price_direction(hard_claim: HardClaim, target_price: float) -> str:
     """Infer bullish/bearish for absolute price targets from reference vs target."""
-    try:
-        reference_price, _ = fetch_reference_price(hard_claim)
-        if target_price < reference_price * 0.995:
+    reference = claim_entry_price(hard_claim)
+    if reference is not None:
+        if target_price < reference * 0.995:
             return "bearish"
-        if target_price > reference_price * 1.005:
+        if target_price > reference * 1.005:
             return "bullish"
-    except ResolutionError:
-        pass
 
     raw = (hard_claim.direction or "").strip().lower()
     if raw in {"bullish", "bearish"}:
@@ -127,39 +124,40 @@ def reconcile_claim_fields(hard_claim: HardClaim) -> tuple[str, str]:
 
 
 def reference_price_for_display(hard_claim: HardClaim) -> float | None:
-    """Best-effort reference price for UI labels (DB-first, no hot-path API fan-out)."""
-    resolution = hard_claim.events.filter(event_type="resolution").first()
-    if resolution and resolution.details:
-        ref = resolution.details.get("prices", {}).get("reference")
-        if ref is not None:
-            return float(ref)
+    """Best-effort entry price for UI labels."""
+    return claim_entry_price(hard_claim)
 
-    from datetime import timezone as dt_tz
 
-    created = hard_claim.created_at.astimezone(dt_tz.utc)
-    day_start = created.replace(hour=0, minute=0, second=0, microsecond=0)
-    row = (
-        OHLCData.objects.filter(
-            asset=hard_claim.asset,
-            timestamp__gte=created.replace(minute=0, second=0, microsecond=0),
-            interval="4h",
-        )
-        .order_by("timestamp")
-        .first()
-    )
-    if row is None:
-        row = OHLCData.objects.filter(
-            asset=hard_claim.asset,
-            timestamp=day_start,
-            interval="1d",
-        ).first()
-    if row is not None:
-        return float(row.open)
+def claim_entry_price(hard_claim: HardClaim) -> float | None:
+    """Entry price locked at creation; falls back for legacy rows only."""
+    if hard_claim.reference_price is not None:
+        return float(hard_claim.reference_price)
+
+    creation = hard_claim.events.filter(event_type=HardClaimEvent.EventType.CREATION).first()
+    if creation and creation.details:
+        stored = creation.details.get("reference_price")
+        if stored is not None:
+            return float(stored)
 
     try:
-        return float(fetch_reference_price(hard_claim)[0])
+        return float(fetch_current_price(hard_claim.asset, hard_claim.created_at)[0])
     except ResolutionError:
         return None
+
+
+def claim_target_price(hard_claim: HardClaim, entry: float | None = None) -> float | None:
+    """Target price derived from entry and claim magnitude."""
+    entry = claim_entry_price(hard_claim) if entry is None else entry
+    if entry is None or entry <= 0:
+        return None
+
+    direction, value_type = reconcile_claim_fields(hard_claim)
+    magnitude = float(hard_claim.percentage)
+    if value_type == "PRICE":
+        return _round_decimal(magnitude)
+    if direction == "bullish":
+        return _round_decimal(entry * (1 + magnitude / 100))
+    return _round_decimal(entry * (1 - magnitude / 100))
 
 
 def display_percentage(hard_claim: HardClaim) -> float | None:
@@ -216,13 +214,14 @@ def _fetch_coingecko_price(provider_symbol: str, quote_currency: str, at_dt: dat
 
 
 def _fetch_yfinance_price(provider_symbol: str, at_dt: datetime) -> tuple[float, str]:
-    day_start = datetime.combine(at_dt.date(), time.min, tzinfo=timezone.utc)
-    day_end = day_start + timedelta(days=1)
+    at_dt = at_dt.astimezone(timezone.utc).replace(microsecond=0)
+    period1 = int((at_dt - timedelta(minutes=10)).timestamp())
+    period2 = int((at_dt + timedelta(minutes=10)).timestamp())
     params = urlencode(
         {
-            "period1": int(day_start.timestamp()),
-            "period2": int(day_end.timestamp()),
-            "interval": "1d",
+            "period1": period1,
+            "period2": period2,
+            "interval": "1m",
             "includePrePost": "false",
             "events": "history",
         }
@@ -232,32 +231,63 @@ def _fetch_yfinance_price(provider_symbol: str, at_dt: datetime) -> tuple[float,
     chart = payload.get("chart", {})
     results = chart.get("result") or []
     if not results:
-        raise ResolutionError("PROVIDER_NO_PRICE_DATA", "Yahoo Finance returned no price data.")
+        raise ResolutionError("PROVIDER_NO_PRICE_DATA", "Yahoo Finance returned no chart data.")
 
-    indicators = results[0].get("indicators", {})
+    result = results[0]
+    timestamps = result.get("timestamp") or []
+    indicators = result.get("indicators", {})
     quotes = indicators.get("quote") or []
     closes = quotes[0].get("close") if quotes else None
-    if not closes:
-        raise ResolutionError("PROVIDER_NO_PRICE_DATA", "Yahoo Finance returned no closing price.")
+    if not timestamps or not closes:
+        raise ResolutionError("PROVIDER_NO_PRICE_DATA", "Yahoo Finance returned no intraday prices.")
 
-    for close in closes:
-        if close is not None:
-            return float(close), url
-    raise ResolutionError("PROVIDER_NO_PRICE_DATA", "Yahoo Finance returned only null close prices.")
+    target_ts = at_dt.timestamp()
+    best_idx = None
+    best_delta = None
+    for idx, (ts, close) in enumerate(zip(timestamps, closes)):
+        if close is None:
+            continue
+        delta = abs(ts - target_ts)
+        if best_delta is None or delta < best_delta:
+            best_delta = delta
+            best_idx = idx
+
+    if best_idx is None:
+        raise ResolutionError("PROVIDER_NO_PRICE_DATA", "Yahoo Finance returned only null close prices.")
+
+    return float(closes[best_idx]), url
 
 
 def _fetch_binance_price(symbol: str, at_dt: datetime) -> tuple[float, str]:
-    """Fetch the close price of the daily candle containing at_dt from Binance."""
-    day_start_ms = int(datetime.combine(at_dt.date(), time.min, tzinfo=timezone.utc).timestamp() * 1000)
-    day_end_ms = int(datetime.combine(at_dt.date(), time.max, tzinfo=timezone.utc).timestamp() * 1000)
-    params = urlencode({"symbol": symbol, "interval": "1d", "startTime": day_start_ms, "endTime": day_end_ms, "limit": 1})
+    """Fetch BTC/USDT-style price at at_dt using the 1m kline containing that instant."""
+    at_dt = at_dt.astimezone(timezone.utc).replace(microsecond=0)
+    minute_start = at_dt.replace(second=0)
+    start_ms = int(minute_start.timestamp() * 1000)
+    end_ms = start_ms + 60_000 - 1
+    params = urlencode(
+        {
+            "symbol": symbol,
+            "interval": "1m",
+            "startTime": start_ms,
+            "endTime": end_ms,
+            "limit": 1,
+        }
+    )
     url = f"https://api.binance.com/api/v3/klines?{params}"
     payload = _http_get_json(url)
     if not payload:
         raise ResolutionError("PROVIDER_NO_PRICE_DATA", "Binance returned no kline data.")
-    # Use the open price if at_dt is at the start of the day, otherwise use close
+
     candle = payload[0]
-    return float(candle[4]), url  # close price
+    open_price = float(candle[1])
+    close_price = float(candle[4])
+    seconds_into_minute = (at_dt - minute_start).total_seconds()
+    if seconds_into_minute <= 0:
+        return open_price, url
+    if seconds_into_minute >= 60:
+        return close_price, url
+    fraction = seconds_into_minute / 60.0
+    return open_price + (close_price - open_price) * fraction, url
 
 
 def fetch_current_price(asset: Asset, at_dt: datetime) -> tuple[float, str]:
@@ -286,10 +316,31 @@ def fetch_current_price(asset: Asset, at_dt: datetime) -> tuple[float, str]:
 
 def fetch_reference_price(hard_claim: HardClaim) -> tuple[float, str]:
     """
-    Fetch the price at the exact created_at timestamp.
-    Routes based on asset type: crypto → Binance / CoinGecko, traditional → Yahoo Finance.
+    Return the entry price captured at claim creation, or fetch it for legacy rows.
     """
+    if hard_claim.reference_price is not None:
+        return float(hard_claim.reference_price), hard_claim.reference_price_url or "stored_at_creation"
     return fetch_current_price(hard_claim.asset, hard_claim.created_at)
+
+
+def capture_reference_price(hard_claim: HardClaim) -> HardClaim:
+    """Fetch spot price at created_at and persist on the claim."""
+    price, url = fetch_current_price(hard_claim.asset, hard_claim.created_at)
+    rounded = _round_decimal(price)
+    hard_claim.reference_price = rounded
+    hard_claim.reference_price_url = url
+    hard_claim.save(update_fields=["reference_price", "reference_price_url"])
+
+    creation_event = hard_claim.events.filter(event_type=HardClaimEvent.EventType.CREATION).first()
+    if creation_event is not None:
+        details = dict(creation_event.details or {})
+        details["reference_price"] = rounded
+        details["reference_url"] = url
+        details["reference_at"] = _isoformat_utc(hard_claim.created_at)
+        creation_event.details = details
+        creation_event.save(update_fields=["details"])
+
+    return hard_claim
 
 
 # ---------------------------------------------------------------------------
@@ -493,9 +544,13 @@ def preview_resolution(hard_claim: HardClaim) -> dict[str, Any]:
     if not ohlc_rows:
         raise ResolutionError("NO_OHLC_DATA", "Could not obtain any OHLC data for the claim period.")
 
-    # 2. Reference price at created_at
+    # 2. Reference price locked at claim creation (fallback for legacy claims)
     try:
         reference_price, reference_url = fetch_reference_price(hard_claim)
+        if hard_claim.reference_price is None:
+            hard_claim.reference_price = _round_decimal(reference_price)
+            hard_claim.reference_price_url = reference_url
+            hard_claim.save(update_fields=["reference_price", "reference_price_url"])
     except ResolutionError:
         # Fallback to the opening price of the creation day if APIs fail (Binance geoblock, CoinGecko rate limits)
         reference_price = float(ohlc_rows[0].open)

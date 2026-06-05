@@ -38,3 +38,63 @@ export function chartPollIntervalMs(interval: ChartCandleInterval): number {
 export function isLiveClaimStatus(status?: string): boolean {
   return status?.toLowerCase() === 'undetermined';
 }
+
+/** Floor a UTC instant to the open of its candle bucket for chart overlays. */
+export function floorToChartInterval(
+  iso: string,
+  interval: ChartCandleInterval,
+): number {
+  const d = new Date(iso);
+  const y = d.getUTCFullYear();
+  const mo = d.getUTCMonth();
+  const day = d.getUTCDate();
+  let h = d.getUTCHours();
+  let mi = d.getUTCMinutes();
+
+  switch (interval) {
+    case '15m':
+      mi = Math.floor(mi / 15) * 15;
+      return Math.floor(Date.UTC(y, mo, day, h, mi, 0) / 1000);
+    case '4h':
+      h = Math.floor(h / 4) * 4;
+      return Math.floor(Date.UTC(y, mo, day, h, 0, 0) / 1000);
+    default:
+      return Math.floor(Date.UTC(y, mo, day, 0, 0, 0) / 1000);
+  }
+}
+
+function claimEndInstantIso(until: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(until.trim());
+  if (match) {
+    return new Date(
+      Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 23, 59, 59),
+    ).toISOString();
+  }
+  const end = new Date(until);
+  return new Date(
+    Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate(), 23, 59, 59),
+  ).toISOString();
+}
+
+/** Claim window snapped to candle opens so Start/End align with visible bars. */
+export function claimWindowForChart(
+  createdAt: string,
+  until: string,
+  interval: ChartCandleInterval,
+): { start: number; end: number } {
+  return {
+    start: floorToChartInterval(createdAt, interval),
+    end: floorToChartInterval(claimEndInstantIso(until), interval),
+  };
+}
+
+/** For open claims, don't plot End in empty future beyond the last candle. */
+export function markerWindowEnd(
+  alignedEnd: number,
+  lastCandleTime: number | null,
+  live: boolean,
+): number | null {
+  if (lastCandleTime == null) return alignedEnd;
+  if (live && alignedEnd > lastCandleTime) return null;
+  return alignedEnd;
+}

@@ -96,6 +96,9 @@ export interface HardClaimItem {
   display_percentage?: number;
   until: string;
   created_at: string;
+  reference_price?: number | null;
+  reference_price_url?: string;
+  target_price?: number | null;
   status: string;
   signature?: string;
   claim_payload?: Record<string, unknown>;
@@ -126,8 +129,8 @@ export interface ClaimChartData {
   claim_id: number;
   asset_symbol: string;
   direction: string;
-  reference_price: number;
-  target_price: number;
+  reference_price: number | null;
+  target_price: number | null;
   percentage: number;
   created_at: string;
   until: string;
@@ -274,6 +277,8 @@ export interface ProofBundle {
   signature: string;
   payload: Record<string, unknown>;
   server_timestamp: string;
+  reference_price?: number | null;
+  target_price?: number | null;
 }
 
 export interface OGMetadata {
@@ -282,6 +287,8 @@ export interface OGMetadata {
   asset_symbol: string;
   direction: string;
   percentage?: number;
+  reference_price?: number | null;
+  target_price?: number | null;
   entry_price?: number;
   take_profit?: number | null;
   stop_loss?: number | null;

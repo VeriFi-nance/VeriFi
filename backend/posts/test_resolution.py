@@ -1,15 +1,18 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone as dt_timezone
 from unittest.mock import patch, MagicMock
 from django.test import TestCase
 from posts.models import Asset, Post, HardClaim, HardClaimEvent, OHLCData
 from posts.resolution import (
     _effective_direction,
+    _fetch_binance_price,
     _normalize_direction_and_value_type,
     reconcile_claim_fields,
     display_percentage,
     normalize_claim_for_resolution,
     preview_resolution,
     resolve_hard_claim,
+    capture_reference_price,
+    fetch_reference_price,
     ResolutionError,
 )
 from posts.ohlc_fetcher import OHLCFetchError
@@ -108,8 +111,8 @@ class ResolutionTests(TestCase):
         self.claim.value_type = "PRICE"
         self.claim.direction = "bearish"
         self.claim.percentage = 50000.0
+        self.claim.reference_price = 60000.0
         self.claim.save()
-        mock_ref.return_value = (60000.0, "http://mock.ref")
         self.assertEqual(display_percentage(self.claim), 16.7)
 
     @patch("posts.resolution.get_ohlc_data")
@@ -338,4 +341,96 @@ class ResolveClaimsCommandTests(TestCase):
         )
         due_ids = list(due_claims_queryset().values_list("id", flat=True))
         self.assertEqual(due_ids, [past.id])
+
+
+class ReferencePriceTests(TestCase):
+    def setUp(self):
+        self.asset = Asset.objects.create(
+            symbol="BTC",
+            name="Bitcoin",
+            market_type=Asset.MarketType.CRYPTO,
+            provider=Asset.Provider.BINANCE,
+            provider_symbol="bitcoin",
+            quote_currency="USD",
+            binance_symbol="BTCUSDT",
+        )
+        self.author = WalletUser.objects.create(address="0xabc")
+        self.post = Post.objects.create(author=self.author, content="test")
+        self.claim = HardClaim.objects.create(
+            post=self.post,
+            asset=self.asset,
+            direction="bullish",
+            percentage=10.0,
+            until=(timezone.now() + timedelta(days=3)).date(),
+        )
+        HardClaimEvent.objects.create(
+            hard_claim=self.claim,
+            event_type=HardClaimEvent.EventType.CREATION,
+            details={},
+        )
+
+    @patch("posts.resolution._http_get_json")
+    def test_fetch_binance_price_interpolates_within_minute(self, mock_http):
+        mock_http.return_value = [[
+            1780420700000,
+            "67507.18000000",
+            "67806.00000000",
+            "67460.00000000",
+            "67740.01000000",
+            "0",
+            1780420759999,
+            "0",
+            0,
+            "0",
+            "0",
+            "0",
+        ]]
+        at_dt = datetime(2026, 6, 2, 17, 18, 20, tzinfo=dt_timezone.utc)
+        price, url = _fetch_binance_price("BTCUSDT", at_dt)
+        expected = 67507.18 + (67740.01 - 67507.18) * (20 / 60)
+        self.assertAlmostEqual(price, expected, places=2)
+        self.assertIn("interval=1m", url)
+
+    @patch("posts.resolution.fetch_current_price")
+    def test_capture_reference_price_persists_on_claim(self, mock_fetch):
+        mock_fetch.return_value = (67507.18, "http://mock.ref")
+        capture_reference_price(self.claim)
+        self.claim.refresh_from_db()
+        self.assertEqual(self.claim.reference_price, 67507.18)
+        self.assertEqual(self.claim.reference_price_url, "http://mock.ref")
+        creation = self.claim.events.get(event_type=HardClaimEvent.EventType.CREATION)
+        self.assertEqual(creation.details["reference_price"], 67507.18)
+
+    def test_fetch_reference_price_prefers_stored_value(self):
+        self.claim.reference_price = 12345.67
+        self.claim.reference_price_url = "stored"
+        self.claim.save()
+        price, url = fetch_reference_price(self.claim)
+        self.assertEqual(price, 12345.67)
+        self.assertEqual(url, "stored")
+
+    @patch("posts.resolution.get_ohlc_data")
+    def test_preview_resolution_uses_stored_reference_price(self, mock_ohlc):
+        past_until = (timezone.now() - timedelta(days=1)).date()
+        HardClaim.objects.filter(pk=self.claim.pk).update(
+            created_at=timezone.now() - timedelta(days=5),
+            until=past_until,
+            reference_price=1000.0,
+            reference_price_url="stored",
+        )
+        self.claim.refresh_from_db()
+        start = self.claim.created_at.date()
+        mock_ohlc.return_value = [
+            OHLCData(
+                asset=self.asset,
+                timestamp=datetime.combine(start, datetime.min.time(), tzinfo=dt_timezone.utc),
+                open=1000.0,
+                high=1120.0,
+                low=980.0,
+                close=1100.0,
+            )
+        ]
+        result = preview_resolution(self.claim)
+        self.assertEqual(result["prices"]["reference"], 1000.0)
+        self.assertEqual(result["prices"]["target"], 1100.0)
 
