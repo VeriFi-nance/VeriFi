@@ -46,14 +46,65 @@ export function directionForClaimType(ct: ClaimType): string {
   return ct === 'PERCENTAGE_DOWN' ? 'bearish' : 'bullish';
 }
 
+/** Parse an API date-only string (YYYY-MM-DD) as a local calendar date. */
+export function parseClaimDate(dateStr: string): Date {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr.trim());
+  if (match) {
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  }
+  const parsed = new Date(dateStr);
+  parsed.setHours(0, 0, 0, 0);
+  return parsed;
+}
+
+/** Format claim deadline for compact UI (e.g. "Jun 3"). */
+export function formatClaimUntil(dateStr: string): string {
+  return parseClaimDate(dateStr).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+/** Whole calendar days until deadline; negative when past due. */
+export function daysUntilClaimDeadline(dateStr: string): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const until = parseClaimDate(dateStr);
+  return Math.ceil((until.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+export type ClaimDeadlineTone = 'default' | 'past-due' | 'confirmed' | 'rejected';
+
+/** Primary + optional secondary text for the claim card date indicator. */
+export function getClaimDeadlineLabel(claim: {
+  status: string;
+  until: string;
+}): { primary: string; secondary?: string; tone: ClaimDeadlineTone } {
+  const untilLabel = formatClaimUntil(claim.until);
+  const daysLeft = daysUntilClaimDeadline(claim.until);
+
+  if (claim.status === 'confirmed') {
+    return { primary: 'Confirmed', secondary: untilLabel, tone: 'confirmed' };
+  }
+  if (claim.status === 'rejected') {
+    return { primary: 'Rejected', secondary: untilLabel, tone: 'rejected' };
+  }
+  if (daysLeft < 0) {
+    return { primary: 'Past due', secondary: untilLabel, tone: 'past-due' };
+  }
+  if (daysLeft === 0) {
+    return { primary: 'Due today', secondary: untilLabel, tone: 'default' };
+  }
+  if (daysLeft === 1) {
+    return { primary: untilLabel, secondary: '1d left', tone: 'default' };
+  }
+  return { primary: untilLabel, secondary: `${daysLeft}d left`, tone: 'default' };
+}
+
 /** True when an undetermined claim's deadline date has passed (local calendar day). */
 export function isClaimPastDue(claim: { status: string; until: string }): boolean {
   if (claim.status !== 'undetermined') return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const until = new Date(claim.until);
-  until.setHours(0, 0, 0, 0);
-  return until < today;
+  return daysUntilClaimDeadline(claim.until) < 0;
 }
 
 /** @deprecated Use directionForClaimType */

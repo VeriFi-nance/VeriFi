@@ -7,7 +7,7 @@ import { UserAvatar } from '@/components/UserAvatar';
 import type { HardClaimItem, AssetItem, ClaimChartData } from '@/lib/types';
 import { truncateAddress } from '@/lib/wallet';
 import { getClaimChartData, getClaimProof } from '@/lib/api';
-import { isClaimPastDue } from '@/lib/claims';
+import { isClaimPastDue, formatClaimUntil } from '@/lib/claims';
 import { MarketPanel } from '../MarketPanel';
 
 // Lazy so the chart.js/react-chartjs-2 bundle is fetched only when a claim
@@ -74,11 +74,7 @@ export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
   const assetSymbol = asset?.symbol ?? `#${claim.asset}`;
   const pastDue = isClaimPastDue(claim);
   const isBullish = claim.direction.toLowerCase() === 'bullish';
-  const untilLabel = new Date(claim.until).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  const untilLabel = formatClaimUntil(claim.until);
 
   const resolutionEvent = [...(claim.events || [])]
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())

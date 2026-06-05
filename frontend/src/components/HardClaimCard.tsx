@@ -1,14 +1,24 @@
-import { CalendarDays } from 'lucide-react';
+import { CalendarDays, CheckCircle2, XCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { HardClaimItem, AssetItem } from '@/lib/types';
-import { getHardClaimParity, getHardClaimType, isClaimPastDue } from '@/lib/claims';
+import {
+  getClaimDeadlineLabel,
+  getHardClaimParity,
+  getHardClaimType,
+  isClaimPastDue,
+} from '@/lib/claims';
 
-function daysUntil(dateStr: string): number {
-  const diff = new Date(dateStr).getTime() - Date.now();
-  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-}
+const DEADLINE_TONE_CLASS: Record<
+  ReturnType<typeof getClaimDeadlineLabel>['tone'],
+  string
+> = {
+  default: 'text-muted-foreground',
+  'past-due': 'text-amber-600 dark:text-amber-400',
+  confirmed: 'text-emerald-600 dark:text-emerald-400',
+  rejected: 'text-red-600 dark:text-red-400',
+};
 
 /** Compact single-row claim card — no text body */
 export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets: AssetItem[] }) {
@@ -21,12 +31,19 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
   const isConfirmed = claim.status === 'confirmed';
   const isRejected = claim.status === 'rejected';
   const pastDue = isClaimPastDue(claim);
-  const days = daysUntil(claim.until);
+  const deadline = getClaimDeadlineLabel(claim);
   const targetChange = claim.percentage;
 
   const communityConfidence = 62.5;
   const href =
     claim.post_id != null ? `/post/${claim.post_id}` : `/claim/${claim.id}`;
+
+  const DeadlineIcon =
+    deadline.tone === 'confirmed'
+      ? CheckCircle2
+      : deadline.tone === 'rejected'
+        ? XCircle
+        : CalendarDays;
 
   return (
     <Link
@@ -43,7 +60,9 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
       <span
         className={cn(
           'size-2 rounded-full shrink-0',
-          isPrice ? 'bg-foreground/50' : isBullish ? 'bg-emerald-500' : 'bg-red-500',
+          isConfirmed && 'bg-emerald-500',
+          isRejected && 'bg-red-500',
+          !isConfirmed && !isRejected && (isPrice ? 'bg-foreground/50' : isBullish ? 'bg-emerald-500' : 'bg-red-500'),
         )}
       />
 
@@ -63,13 +82,16 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
 
       <span className="text-muted-foreground/40 text-xs">·</span>
 
-      <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0 num">
-        <CalendarDays className="size-3" />
-        {new Date(claim.until).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-        {pastDue ? (
-          <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">Past due</span>
-        ) : days > 0 ? (
-          <span className="text-[10px] opacity-60">({days}d)</span>
+      <span
+        className={cn(
+          'flex items-center gap-1 text-xs shrink-0 num',
+          DEADLINE_TONE_CLASS[deadline.tone],
+        )}
+      >
+        <DeadlineIcon className="size-3 shrink-0" />
+        <span className="font-medium">{deadline.primary}</span>
+        {deadline.secondary ? (
+          <span className="text-[10px] opacity-75 font-normal">· {deadline.secondary}</span>
         ) : null}
       </span>
 
