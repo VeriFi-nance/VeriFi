@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { CalendarDays, CheckCircle2, XCircle, Download } from 'lucide-react';
@@ -37,6 +37,14 @@ function statusVariant(status: HardClaimItem['status'], pastDue: boolean) {
 }
 
 export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
+  const priceSnapshot = useMemo(() => ({
+    reference_price: claim.reference_price,
+    target_price: claim.target_price,
+    direction: claim.direction,
+    percentage: claim.percentage,
+    value_type: getHardClaimType(claim),
+  }), [claim]);
+
   const {
     data: chartData,
     loading: chartLoading,
@@ -44,13 +52,7 @@ export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
     error: chartError,
     interval: chartInterval,
     setInterval: setChartInterval,
-  } = useClaimChartData(claim.id, claim.created_at, claim.until, claim.status, {
-    reference_price: claim.reference_price,
-    target_price: claim.target_price,
-    direction: claim.direction,
-    percentage: claim.percentage,
-    value_type: getHardClaimType(claim),
-  });
+  } = useClaimChartData(claim.id, claim.created_at, claim.until, claim.status, priceSnapshot);
   const [downloadingProof, setDownloadingProof] = useState(false);
 
   async function handleDownloadProof() {
