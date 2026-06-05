@@ -37,6 +37,88 @@ export function getHardClaimType(claim: HardClaimItem): ClaimType {
   return claim.claim_type ?? claim.value_type ?? 'PERCENTAGE_UP';
 }
 
+export interface HardClaimDisplayInput {
+  direction: string;
+  percentage: number;
+  until?: string;
+  claim_type?: ClaimType;
+  value_type?: ClaimType;
+  parity?: string;
+  payda?: string;
+}
+
+export interface HardClaimDisplay {
+  isPrice: boolean;
+  isBullish: boolean;
+  badgeVariant: 'success' | 'destructive' | 'secondary';
+  badgeText: string;
+  targetLabel: string;
+  summary: string;
+}
+
+export function getHardClaimDisplay(
+  claim: HardClaimDisplayInput,
+  assetSymbol: string,
+): HardClaimDisplay {
+  const claimType = claim.claim_type ?? claim.value_type ?? 'PERCENTAGE_UP';
+  const isPrice = claimType === 'PRICE';
+  const isBullish = claim.direction.toLowerCase() === 'bullish';
+  const parity = (claim.parity ?? claim.payda)?.trim();
+  const pair = parity ? `${assetSymbol}/${parity}` : assetSymbol;
+  const untilLabel = claim.until ? formatClaimUntil(claim.until) : '';
+
+  if (isPrice) {
+    const priceStr = claim.percentage.toLocaleString(undefined, {
+      maximumFractionDigits: 2,
+    });
+    const currency = parity || 'USD';
+    const verb = isBullish ? 'rise to' : 'fall to';
+    const targetLabel = `${isBullish ? '▲' : '▼'} ${currency} ${priceStr}`;
+    return {
+      isPrice: true,
+      isBullish,
+      badgeVariant: 'secondary',
+      badgeText: `${pair} ${targetLabel}`,
+      targetLabel,
+      summary: untilLabel
+        ? `Predicts ${pair} will ${verb} ${currency} ${priceStr} by ${untilLabel}`
+        : `Predicts ${pair} will ${verb} ${currency} ${priceStr}`,
+    };
+  }
+
+  const pct = claim.percentage.toFixed(1);
+  const targetLabel = `${isBullish ? '▲' : '▼'} ${pct}%`;
+  return {
+    isPrice: false,
+    isBullish,
+    badgeVariant: isBullish ? 'success' : 'destructive',
+    badgeText: `${assetSymbol} ${targetLabel}`,
+    targetLabel,
+    summary: untilLabel
+      ? isBullish
+        ? `Predicts ${assetSymbol} rises ${pct}% by ${untilLabel}`
+        : `Predicts ${assetSymbol} falls ${pct}% by ${untilLabel}`
+      : isBullish
+        ? `Predicts ${assetSymbol} rises ${pct}%`
+        : `Predicts ${assetSymbol} falls ${pct}%`,
+  };
+}
+
+/** Compact feed tag: always ▲/▼ with green/red, percentage only. */
+export function getFeedClaimTagLabel(claim: {
+  direction: string;
+  percentage: number;
+  display_percentage?: number;
+}): { label: string; variant: 'success' | 'destructive' } {
+  const isBullish = claim.direction.toLowerCase() === 'bullish';
+  const pct = claim.display_percentage ?? claim.percentage;
+  const pctStr = Number.isInteger(pct) ? pct.toFixed(0) : pct.toFixed(1);
+  return {
+    label: `${isBullish ? '▲' : '▼'} ${pctStr}%`,
+    variant: isBullish ? 'success' : 'destructive',
+  };
+}
+
 export function getHardClaimParity(claim: HardClaimItem): string | undefined {
   const p = claim.parity ?? claim.payda;
   return p?.trim() || undefined;
@@ -55,6 +137,21 @@ export function parseClaimDate(dateStr: string): Date {
   const parsed = new Date(dateStr);
   parsed.setHours(0, 0, 0, 0);
   return parsed;
+}
+
+/** Progress through the claim window (0–100). */
+export function getClaimWindowProgress(createdAt: string, until: string): number {
+  const startMs = new Date(createdAt).getTime();
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(until.trim());
+  const endMs = match
+    ? Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 23, 59, 59)
+    : new Date(until).getTime();
+  const span = endMs - startMs;
+  if (span <= 0) return 100;
+  const now = Date.now();
+  if (now <= startMs) return 0;
+  if (now >= endMs) return 100;
+  return ((now - startMs) / span) * 100;
 }
 
 /** Format claim deadline for compact UI (e.g. "Jun 3"). */
@@ -140,6 +237,10 @@ export function formatClaimValue(c: ReviewClaim): string {
   const raw = c.percentage?.toString().trim();
   if (!raw) return '?';
   const ct = getClaimType(c);
+  if (ct === 'PRICE') {
+    const n = parseFloat(raw);
+    return Number.isNaN(n) ? raw : n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  }
   if (ct === 'PERCENTAGE_UP') return `+${raw}%`;
   if (ct === 'PERCENTAGE_DOWN') return `-${raw}%`;
   return raw;

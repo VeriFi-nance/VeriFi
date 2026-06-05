@@ -1,5 +1,5 @@
 import { getToken } from './auth';
-import type { ReviewClaim, PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, ProfileStats, ChannelItem, ChannelMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType, ProofBundle, OGMetadata } from './types';
+import type { ReviewClaim, PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, ChartCandleInterval, ProfileStats, ChannelItem, ChannelMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType, ProofBundle, OGMetadata } from './types';
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
@@ -220,8 +220,12 @@ export async function getAssets(): Promise<AssetItem[]> {
   return request('/api/posts/assets/');
 }
 
-export async function getClaimChartData(claimId: number): Promise<ClaimChartData> {
-  return request(`/api/posts/hard-claims/${claimId}/chart-data/`);
+export async function getClaimChartData(
+  claimId: number,
+  interval?: ChartCandleInterval,
+): Promise<ClaimChartData> {
+  const qs = interval ? `?interval=${encodeURIComponent(interval)}` : '';
+  return request(`/api/posts/hard-claims/${claimId}/chart-data${qs}`);
 }
 
 export async function getProfileStats(address: string): Promise<ProfileStats> {

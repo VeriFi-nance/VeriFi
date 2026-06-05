@@ -3,6 +3,10 @@ from unittest.mock import patch, MagicMock
 from django.test import TestCase
 from posts.models import Asset, Post, HardClaim, HardClaimEvent, OHLCData
 from posts.resolution import (
+    _effective_direction,
+    _normalize_direction_and_value_type,
+    reconcile_claim_fields,
+    display_percentage,
     normalize_claim_for_resolution,
     preview_resolution,
     resolve_hard_claim,
@@ -69,6 +73,62 @@ class ResolutionTests(TestCase):
         self.claim.save()
         payload = normalize_claim_for_resolution(self.claim)
         self.assertEqual(payload["target"]["direction"], "bearish")
+
+    def test_effective_direction_prefers_bearish_over_mismatched_value_type(self):
+        self.claim.direction = "Bearish"
+        self.claim.value_type = "PERCENTAGE_UP"
+        self.claim.save()
+        self.assertEqual(_effective_direction(self.claim), "bearish")
+        direction, value_type = _normalize_direction_and_value_type(
+            self.claim.direction,
+            self.claim.value_type,
+        )
+        self.assertEqual(direction, "bearish")
+        self.assertEqual(value_type, "PERCENTAGE_DOWN")
+
+    @patch("posts.resolution.fetch_reference_price")
+    def test_price_claim_infers_bearish_when_target_below_reference(self, mock_ref):
+        self.claim.value_type = "PRICE"
+        self.claim.direction = "bullish"
+        self.claim.percentage = 50000.0
+        self.claim.payda = "USD"
+        self.claim.save()
+        mock_ref.return_value = (100000.0, "http://mock.ref")
+        direction, value_type = reconcile_claim_fields(self.claim)
+        self.assertEqual(value_type, "PRICE")
+        self.assertEqual(direction, "bearish")
+
+    def test_display_percentage_for_percent_claim(self):
+        self.claim.percentage = 10.0
+        self.claim.save()
+        self.assertEqual(display_percentage(self.claim), 10.0)
+
+    @patch("posts.resolution.fetch_reference_price")
+    def test_display_percentage_converts_price_target(self, mock_ref):
+        self.claim.value_type = "PRICE"
+        self.claim.direction = "bearish"
+        self.claim.percentage = 50000.0
+        self.claim.save()
+        mock_ref.return_value = (60000.0, "http://mock.ref")
+        self.assertEqual(display_percentage(self.claim), 16.7)
+
+    @patch("posts.resolution.get_ohlc_data")
+    @patch("posts.resolution.fetch_reference_price")
+    def test_bearish_target_is_below_reference_with_mismatched_value_type(
+        self, mock_ref, mock_ohlc
+    ):
+        self.claim.direction = "bearish"
+        self.claim.value_type = "PERCENTAGE_UP"
+        self.claim.percentage = 10.0
+        self.claim.save()
+        mock_ref.return_value = (1000.0, "http://mock.ref")
+        self._seed_ohlc(base_price=1000.0, days=5, trend_pct=0.0)
+        mock_ohlc.return_value = list(
+            OHLCData.objects.filter(asset=self.asset).order_by("timestamp")
+        )
+        result = preview_resolution(self.claim)
+        self.assertEqual(result["prices"]["reference"], 1000.0)
+        self.assertEqual(result["prices"]["target"], 900.0)
 
     @patch("posts.resolution.get_ohlc_data")
     @patch("posts.resolution.fetch_reference_price")

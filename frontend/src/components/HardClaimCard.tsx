@@ -1,71 +1,37 @@
-import { CalendarDays, CheckCircle2, XCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { HardClaimItem, AssetItem } from '@/lib/types';
-import {
-  getClaimDeadlineLabel,
-  getHardClaimParity,
-  getHardClaimType,
-  isClaimPastDue,
-} from '@/lib/claims';
+import { getClaimWindowProgress, getFeedClaimTagLabel, isClaimPastDue } from '@/lib/claims';
 
-const DEADLINE_TONE_CLASS: Record<
-  ReturnType<typeof getClaimDeadlineLabel>['tone'],
-  string
-> = {
-  default: 'text-muted-foreground',
-  'past-due': 'text-amber-600 dark:text-amber-400',
-  confirmed: 'text-emerald-600 dark:text-emerald-400',
-  rejected: 'text-red-600 dark:text-red-400',
-};
-
-const OUTCOME_BAR_CLASS = {
-  confirmed: {
-    pct: 100,
-    label: '100%',
-    bar: 'bg-emerald-500',
-    text: 'text-emerald-600 dark:text-emerald-400',
-  },
-  rejected: {
-    pct: 0,
-    label: '0%',
-    bar: 'bg-red-500',
-    text: 'text-red-600 dark:text-red-400',
-  },
-} as const;
-
-/** Compact single-row claim card — no text body */
+/** Compact expanded claim row — matches collapsed feed tag + window timeline. */
 export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets: AssetItem[] }) {
   const asset = assets.find((a) => a.id === claim.asset);
   const assetSymbol = asset?.symbol ?? `#${claim.asset}`;
-  const claimType = getHardClaimType(claim);
-  const parity = getHardClaimParity(claim);
-  const isPrice = claimType === 'PRICE';
-  const isBullish = claim.direction.toLowerCase() === 'bullish';
+  const tag = getFeedClaimTagLabel(claim);
   const isConfirmed = claim.status === 'confirmed';
   const isRejected = claim.status === 'rejected';
   const pastDue = isClaimPastDue(claim);
-  const deadline = getClaimDeadlineLabel(claim);
-  const targetChange = claim.percentage;
-  const outcomeBar =
-    isConfirmed ? OUTCOME_BAR_CLASS.confirmed : isRejected ? OUTCOME_BAR_CLASS.rejected : null;
+  const progress = getClaimWindowProgress(claim.created_at, claim.until);
 
   const href =
     claim.post_id != null ? `/post/${claim.post_id}` : `/claim/${claim.id}`;
 
-  const DeadlineIcon =
-    deadline.tone === 'confirmed'
-      ? CheckCircle2
-      : deadline.tone === 'rejected'
-        ? XCircle
-        : CalendarDays;
+  const timelinePct = Math.min(100, Math.max(0, isConfirmed || isRejected ? 100 : progress));
+  const timelineLabel = `${Math.round(timelinePct)}%`;
+  const timelineBarClass = isConfirmed
+    ? 'bg-emerald-500'
+    : isRejected
+      ? 'bg-red-500'
+      : pastDue
+        ? 'bg-amber-500'
+        : 'bg-blue-400';
 
   return (
     <Link
       to={href}
       className={cn(
-        'w-full text-left flex items-center gap-2.5 rounded-lg border px-3.5 py-2.5 bg-card text-card-foreground transition-all hover:bg-muted/30 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        'block w-full rounded-lg border px-3.5 py-2.5 bg-card text-card-foreground transition-all hover:bg-muted/30 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
         isConfirmed && 'border-emerald-500/60 shadow-sm',
         isRejected && 'border-red-500/60 opacity-80',
         !isConfirmed && !isRejected && pastDue && 'border-amber-500/50',
@@ -73,66 +39,25 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
       )}
       aria-label="View claim details"
     >
-      <span
-        className={cn(
-          'size-2 rounded-full shrink-0',
-          isConfirmed && 'bg-emerald-500',
-          isRejected && 'bg-red-500',
-          !isConfirmed && !isRejected && (isPrice ? 'bg-foreground/50' : isBullish ? 'bg-emerald-500' : 'bg-red-500'),
-        )}
-      />
-
-      <span className="font-mono font-semibold text-xs text-foreground shrink-0">
-        {assetSymbol}
-        {parity ? <span className="text-muted-foreground">/{parity}</span> : null}
-      </span>
-
-      <Badge
-        variant={isPrice ? 'secondary' : isBullish ? 'success' : 'destructive'}
-        className="text-[10px] px-1.5 py-0 shrink-0 num"
-      >
-        {isPrice
-          ? `◎ ${targetChange.toLocaleString()}`
-          : `${isBullish ? '▲' : '▼'} ${targetChange.toFixed(1)}%`}
-      </Badge>
-
-      <span className="text-muted-foreground/40 text-xs">·</span>
-
-      <span
-        className={cn(
-          'flex items-center gap-1 text-xs shrink-0 num',
-          DEADLINE_TONE_CLASS[deadline.tone],
-        )}
-      >
-        <DeadlineIcon className="size-3 shrink-0" />
-        <span className="font-medium">{deadline.primary}</span>
-        {deadline.secondary ? (
-          <span className="text-[10px] opacity-75 font-normal">· {deadline.secondary}</span>
-        ) : null}
-      </span>
-
-      {outcomeBar ? (
-        <div className="flex items-center gap-1.5 flex-1 min-w-0">
-          <span
-            className={cn(
-              'text-[10px] whitespace-nowrap shrink-0 num font-medium',
-              outcomeBar.text,
-            )}
-          >
-            {outcomeBar.label}
-          </span>
-          <div className="h-1 flex-1 rounded-full bg-muted overflow-hidden min-w-[32px]">
+      <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-1.5">
+          <span className="font-mono text-xs font-semibold text-foreground">{assetSymbol}</span>
+          <Badge variant={tag.variant} className="text-[10px] px-1.5 py-0 num">
+            {tag.label}
+          </Badge>
+        </div>
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <div className="relative h-1 flex-1 overflow-hidden rounded-full bg-muted">
             <div
-              className={cn('h-full rounded-full transition-all', outcomeBar.bar)}
-              style={{ width: `${outcomeBar.pct}%` }}
+              className={cn('h-full rounded-full transition-all', timelineBarClass)}
+              style={{ width: `${timelinePct}%` }}
             />
           </div>
+          <span className="shrink-0 text-[10px] font-medium tabular-nums text-muted-foreground">
+            {timelineLabel}
+          </span>
         </div>
-      ) : (
-        <span className="flex-1 text-right text-[10px] text-muted-foreground shrink-0">
-          Open
-        </span>
-      )}
+      </div>
     </Link>
   );
 }

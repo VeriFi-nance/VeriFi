@@ -48,7 +48,12 @@ export function ClaimForm({
   function setClaimType(next: ClaimDraft['claim_type']) {
     onChange({
       claim_type: next,
-      direction: next === 'PERCENTAGE_DOWN' ? 'Bearish' : 'Bullish',
+      direction:
+        next === 'PERCENTAGE_DOWN'
+          ? 'Bearish'
+          : next === 'PERCENTAGE_UP'
+            ? 'Bullish'
+            : '',
     });
   }
 
@@ -144,6 +149,40 @@ export function ClaimForm({
           })}
         </div>
       </div>
+
+      {isPrice && (
+        <div className="space-y-1">
+          <Label className="text-xs">Target direction</Label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => onChange({ direction: 'Bullish' })}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md border text-xs font-semibold transition-colors',
+                value.direction === 'Bullish'
+                  ? 'bg-success text-success-foreground border-success'
+                  : 'border-border text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <TrendingUp className="size-3.5" />
+              Rise to price
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange({ direction: 'Bearish' })}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md border text-xs font-semibold transition-colors',
+                value.direction === 'Bearish'
+                  ? 'bg-danger text-danger-foreground border-danger'
+                  : 'border-border text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <TrendingDown className="size-3.5" />
+              Fall to price
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">

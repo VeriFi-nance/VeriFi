@@ -61,28 +61,128 @@ def _round_decimal(value: float, places: str = "0.01") -> float:
     return float(Decimal(str(value)).quantize(Decimal(places), rounding=ROUND_HALF_UP))
 
 
-def _effective_direction(hard_claim: HardClaim) -> str:
+def _normalize_direction_and_value_type(
+    direction: str | None,
+    value_type: str | None,
+) -> tuple[str, str]:
     """
-    Return bullish or bearish for resolution.
+    Return consistent (direction, value_type).
 
-    value_type is the source of truth for percentage claims; direction fills gaps
-    for absolute PRICE targets.
+    For percentage claims, explicit direction wins over value_type so legacy rows
+    with direction=Bearish but value_type=PERCENTAGE_UP still resolve correctly.
     """
-    value_type = (hard_claim.value_type or "").upper()
-    if value_type == "PERCENTAGE_DOWN":
-        return "bearish"
-    if value_type == "PERCENTAGE_UP":
-        return "bullish"
+    raw = (direction or "").strip().lower()
+    vt = (value_type or "").strip().upper() or "PERCENTAGE_UP"
+
+    if vt == "PRICE":
+        if raw in {"bullish", "bearish"}:
+            return raw, vt
+        return "bullish", vt
+
+    if raw == "bearish":
+        return "bearish", "PERCENTAGE_DOWN"
+    if raw == "bullish":
+        return "bullish", "PERCENTAGE_UP"
+    if vt == "PERCENTAGE_DOWN":
+        return "bearish", "PERCENTAGE_DOWN"
+    return "bullish", "PERCENTAGE_UP"
+
+
+def infer_price_direction(hard_claim: HardClaim, target_price: float) -> str:
+    """Infer bullish/bearish for absolute price targets from reference vs target."""
+    try:
+        reference_price, _ = fetch_reference_price(hard_claim)
+        if target_price < reference_price * 0.995:
+            return "bearish"
+        if target_price > reference_price * 1.005:
+            return "bullish"
+    except ResolutionError:
+        pass
 
     raw = (hard_claim.direction or "").strip().lower()
     if raw in {"bullish", "bearish"}:
         return raw
-    if value_type == "PRICE":
-        return "bullish"
-    raise ResolutionError(
-        "UNSUPPORTED_DIRECTION",
-        "Only bullish and bearish percentage claims are supported.",
+    return "bullish"
+
+
+def reconcile_claim_fields(hard_claim: HardClaim) -> tuple[str, str]:
+    """
+    Normalize direction/value_type and fix common legacy mistakes:
+    - large magnitudes stored as percentage moves → PRICE
+    - PRICE targets with direction opposite to reference → corrected
+    """
+    direction, value_type = _normalize_direction_and_value_type(
+        hard_claim.direction,
+        hard_claim.value_type,
     )
+    pct = float(hard_claim.percentage)
+
+    if value_type in {"PERCENTAGE_UP", "PERCENTAGE_DOWN"} and pct > 150:
+        value_type = "PRICE"
+
+    if value_type == "PRICE":
+        direction = infer_price_direction(hard_claim, pct)
+
+    return direction, value_type
+
+
+def reference_price_for_display(hard_claim: HardClaim) -> float | None:
+    """Best-effort reference price for UI labels (DB-first, no hot-path API fan-out)."""
+    resolution = hard_claim.events.filter(event_type="resolution").first()
+    if resolution and resolution.details:
+        ref = resolution.details.get("prices", {}).get("reference")
+        if ref is not None:
+            return float(ref)
+
+    from datetime import timezone as dt_tz
+
+    created = hard_claim.created_at.astimezone(dt_tz.utc)
+    day_start = created.replace(hour=0, minute=0, second=0, microsecond=0)
+    row = (
+        OHLCData.objects.filter(
+            asset=hard_claim.asset,
+            timestamp__gte=created.replace(minute=0, second=0, microsecond=0),
+            interval="4h",
+        )
+        .order_by("timestamp")
+        .first()
+    )
+    if row is None:
+        row = OHLCData.objects.filter(
+            asset=hard_claim.asset,
+            timestamp=day_start,
+            interval="1d",
+        ).first()
+    if row is not None:
+        return float(row.open)
+
+    try:
+        return float(fetch_reference_price(hard_claim)[0])
+    except ResolutionError:
+        return None
+
+
+def display_percentage(hard_claim: HardClaim) -> float | None:
+    """Percentage magnitude for compact UI (converts absolute PRICE targets)."""
+    direction, value_type = reconcile_claim_fields(hard_claim)
+    magnitude = float(hard_claim.percentage)
+
+    if value_type != "PRICE":
+        return round(magnitude, 1)
+
+    reference = reference_price_for_display(hard_claim)
+    if reference is None or reference <= 0:
+        return None
+
+    if direction == "bullish":
+        return round((magnitude - reference) / reference * 100, 1)
+    return round((reference - magnitude) / reference * 100, 1)
+
+
+def _effective_direction(hard_claim: HardClaim) -> str:
+    """Return bullish or bearish for resolution."""
+    direction, _ = reconcile_claim_fields(hard_claim)
+    return direction
 
 
 # ---------------------------------------------------------------------------
@@ -209,7 +309,14 @@ def normalize_claim_for_resolution(hard_claim: HardClaim) -> dict[str, Any]:
         )
 
     asset = hard_claim.asset
+    raw_direction = (hard_claim.direction or "").strip().lower()
+    if raw_direction and raw_direction not in {"bullish", "bearish"}:
+        raise ResolutionError(
+            "UNSUPPORTED_DIRECTION",
+            "Only bullish and bearish percentage claims are supported.",
+        )
     direction = _effective_direction(hard_claim)
+    _, value_type = reconcile_claim_fields(hard_claim)
 
     return {
         "version": CONTRACT_VERSION,
@@ -222,10 +329,10 @@ def normalize_claim_for_resolution(hard_claim: HardClaim) -> dict[str, Any]:
             "quote_currency": asset.quote_currency,
         },
         "target": {
-            "kind": "price" if hard_claim.value_type == "PRICE" else "percentage",
+            "kind": "price" if value_type == "PRICE" else "percentage",
             "direction": direction,
             "value": float(hard_claim.percentage),
-            "unit": asset.quote_currency if hard_claim.value_type == "PRICE" else "percent",
+            "unit": asset.quote_currency if value_type == "PRICE" else "percent",
         },
         "reference_at": _isoformat_utc(hard_claim.created_at),
         "due_at": _isoformat_utc(due_at),
@@ -251,13 +358,14 @@ def _evaluate_ohlc(
     - ohlc data for chart rendering
     """
     direction = _effective_direction(hard_claim)
+    _, value_type = reconcile_claim_fields(hard_claim)
     percentage = float(hard_claim.percentage)
 
     if reference_price <= 0:
         raise ResolutionError("INVALID_REFERENCE_PRICE", "Reference price must be greater than zero.")
 
     # Compute target price
-    if hard_claim.value_type == "PRICE":
+    if value_type == "PRICE":
         target_price = percentage
     elif direction == "bullish":
         target_price = reference_price * (1 + percentage / 100)

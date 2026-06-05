@@ -92,6 +92,8 @@ export interface HardClaimItem {
   /** API field — mapped to `parity` in UI helpers. */
   payda?: string;
   percentage: number;
+  /** Compact UI magnitude (%); absolute PRICE targets converted server-side. */
+  display_percentage?: number;
   until: string;
   created_at: string;
   status: string;
@@ -118,6 +120,8 @@ export interface OHLCRow {
   close: number;
 }
 
+export type ChartCandleInterval = '15m' | '4h' | '1d';
+
 export interface ClaimChartData {
   claim_id: number;
   asset_symbol: string;
@@ -127,6 +131,10 @@ export interface ClaimChartData {
   percentage: number;
   created_at: string;
   until: string;
+  interval?: ChartCandleInterval;
+  default_interval?: ChartCandleInterval;
+  as_of?: string;
+  live?: boolean;
   ohlc: OHLCRow[];
   hit_days: string[];
   closest_price: number | null;

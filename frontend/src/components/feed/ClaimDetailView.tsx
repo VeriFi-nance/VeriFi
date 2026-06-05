@@ -1,16 +1,17 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { CalendarDays, CheckCircle2, XCircle, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/UserAvatar';
-import type { HardClaimItem, AssetItem, ClaimChartData } from '@/lib/types';
+import type { HardClaimItem, AssetItem } from '@/lib/types';
 import { truncateAddress } from '@/lib/wallet';
-import { getClaimChartData, getClaimProof } from '@/lib/api';
-import { isClaimPastDue, formatClaimUntil } from '@/lib/claims';
+import { getClaimProof } from '@/lib/api';
+import { useClaimChartData } from '@/hooks/useClaimChartData';
+import { isClaimPastDue, formatClaimUntil, getHardClaimDisplay, getHardClaimType, getHardClaimParity } from '@/lib/claims';
 import { MarketPanel } from '../MarketPanel';
 
-// Lazy so the chart.js/react-chartjs-2 bundle is fetched only when a claim
+        // Lazy so the lightweight-charts bundle is fetched only when a claim
 // actually has price history to render, not in the initial chunk.
 const PriceChart = lazy(() =>
   import('./PriceChart').then((m) => ({ default: m.PriceChart }))
@@ -36,9 +37,14 @@ function statusVariant(status: HardClaimItem['status'], pastDue: boolean) {
 }
 
 export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
-  const [chartData, setChartData] = useState<ClaimChartData | null>(null);
-  const [chartLoading, setChartLoading] = useState(false);
-  const [chartError, setChartError] = useState<string | null>(null);
+  const {
+    data: chartData,
+    loading: chartLoading,
+    refetching: chartRefetching,
+    error: chartError,
+    interval: chartInterval,
+    setInterval: setChartInterval,
+  } = useClaimChartData(claim.id, claim.created_at, claim.until, claim.status);
   const [downloadingProof, setDownloadingProof] = useState(false);
 
   async function handleDownloadProof() {
@@ -61,42 +67,39 @@ export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
     }
   }
 
-  useEffect(() => {
-    setChartLoading(true);
-    setChartError(null);
-    getClaimChartData(claim.id)
-      .then(setChartData)
-      .catch((err) => setChartError(err.message || 'Failed to load chart data'))
-      .finally(() => setChartLoading(false));
-  }, [claim.id]);
-
   const asset = assets.find((a) => a.id === claim.asset);
   const assetSymbol = asset?.symbol ?? `#${claim.asset}`;
   const pastDue = isClaimPastDue(claim);
-  const isBullish = claim.direction.toLowerCase() === 'bullish';
   const untilLabel = formatClaimUntil(claim.until);
+  const display = getHardClaimDisplay(
+    {
+      direction: claim.direction,
+      percentage: claim.percentage,
+      until: claim.until,
+      claim_type: getHardClaimType(claim),
+      parity: getHardClaimParity(claim),
+    },
+    assetSymbol,
+  );
 
   const resolutionEvent = [...(claim.events || [])]
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
     .find((e) => e.event_type === 'resolution');
 
   const resDetails = resolutionEvent?.details;
-  const summary = isBullish
-    ? `Predicts ${assetSymbol} rises ${claim.percentage.toFixed(1)}% by ${untilLabel}`
-    : `Predicts ${assetSymbol} falls ${claim.percentage.toFixed(1)}% by ${untilLabel}`;
 
   return (
     <div className="space-y-5">
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={isBullish ? 'success' : 'destructive'} className="text-xs font-mono">
-            {assetSymbol} {isBullish ? '▲' : '▼'} {claim.percentage.toFixed(1)}%
+          <Badge variant={display.badgeVariant} className="text-xs font-mono">
+            {display.badgeText}
           </Badge>
           <Badge variant={statusVariant(claim.status, pastDue)} className="text-[10px] uppercase">
             {statusLabel(claim.status, pastDue)}
           </Badge>
         </div>
-        <p className="text-sm text-muted-foreground">{summary}</p>
+        <p className="text-sm text-muted-foreground">{display.summary}</p>
       </div>
 
       {claim.author_address ? (
@@ -182,14 +185,14 @@ export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
       )}
 
       {chartData && chartData.ohlc.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Price history
-          </h3>
-          <Suspense fallback={null}>
-            <PriceChart data={chartData} />
-          </Suspense>
-        </div>
+        <Suspense fallback={null}>
+          <PriceChart
+            data={chartData}
+            interval={chartInterval}
+            onIntervalChange={setChartInterval}
+            refetching={chartRefetching}
+          />
+        </Suspense>
       )}
     </div>
   );
