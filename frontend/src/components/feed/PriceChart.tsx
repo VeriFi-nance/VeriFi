@@ -286,6 +286,7 @@ export function PriceChart({
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const candlesRef = useRef<CandlestickData<UTCTimestamp>[]>([]);
   const shouldRefocusRef = useRef(true);
+  const prevDataIntervalRef = useRef(data.interval);
 
   const alignedWindow = claimWindowForChart(data.created_at, data.until, interval);
   const windowStart = alignedWindow.start as UTCTimestamp;
@@ -444,7 +445,9 @@ export function PriceChart({
       series.setData(styledCandles);
     }
 
-    if (shouldRefocusRef.current && styledCandles.length > 0) {
+    const intervalChanged = prevDataIntervalRef.current !== data.interval;
+
+    if ((shouldRefocusRef.current || intervalChanged) && styledCandles.length > 0) {
       const lastTime = styledCandles[styledCandles.length - 1].time as number;
       const focusEnd = markerWindowEnd(claimWindowEnd as number, lastTime, Boolean(data.live));
       focusClaimWindow(
@@ -455,6 +458,7 @@ export function PriceChart({
         interval,
       );
       shouldRefocusRef.current = false;
+      prevDataIntervalRef.current = data.interval;
     }
 
     chart.priceScale('right').applyOptions({ autoScale: true });
