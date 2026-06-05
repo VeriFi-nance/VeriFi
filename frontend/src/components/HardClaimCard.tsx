@@ -20,6 +20,21 @@ const DEADLINE_TONE_CLASS: Record<
   rejected: 'text-red-600 dark:text-red-400',
 };
 
+const OUTCOME_BAR_CLASS = {
+  confirmed: {
+    pct: 100,
+    label: '100%',
+    bar: 'bg-emerald-500',
+    text: 'text-emerald-600 dark:text-emerald-400',
+  },
+  rejected: {
+    pct: 0,
+    label: '0%',
+    bar: 'bg-red-500',
+    text: 'text-red-600 dark:text-red-400',
+  },
+} as const;
+
 /** Compact single-row claim card — no text body */
 export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets: AssetItem[] }) {
   const asset = assets.find((a) => a.id === claim.asset);
@@ -33,8 +48,9 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
   const pastDue = isClaimPastDue(claim);
   const deadline = getClaimDeadlineLabel(claim);
   const targetChange = claim.percentage;
+  const outcomeBar =
+    isConfirmed ? OUTCOME_BAR_CLASS.confirmed : isRejected ? OUTCOME_BAR_CLASS.rejected : null;
 
-  const communityConfidence = 62.5;
   const href =
     claim.post_id != null ? `/post/${claim.post_id}` : `/claim/${claim.id}`;
 
@@ -95,17 +111,28 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
         ) : null}
       </span>
 
-      <div className="flex items-center gap-1.5 flex-1 min-w-0">
-        <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0 num">
-          {communityConfidence.toFixed(0)}%
-        </span>
-        <div className="h-1 flex-1 rounded-full bg-muted overflow-hidden min-w-[32px]">
-          <div
-            className="h-full bg-foreground/70 rounded-full transition-all"
-            style={{ width: `${communityConfidence}%` }}
-          />
+      {outcomeBar ? (
+        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+          <span
+            className={cn(
+              'text-[10px] whitespace-nowrap shrink-0 num font-medium',
+              outcomeBar.text,
+            )}
+          >
+            {outcomeBar.label}
+          </span>
+          <div className="h-1 flex-1 rounded-full bg-muted overflow-hidden min-w-[32px]">
+            <div
+              className={cn('h-full rounded-full transition-all', outcomeBar.bar)}
+              style={{ width: `${outcomeBar.pct}%` }}
+            />
+          </div>
         </div>
-      </div>
+      ) : (
+        <span className="flex-1 text-right text-[10px] text-muted-foreground shrink-0">
+          Open
+        </span>
+      )}
     </Link>
   );
 }
