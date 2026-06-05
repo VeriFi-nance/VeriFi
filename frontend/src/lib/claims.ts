@@ -46,6 +46,16 @@ export function directionForClaimType(ct: ClaimType): string {
   return ct === 'PERCENTAGE_DOWN' ? 'bearish' : 'bullish';
 }
 
+/** True when an undetermined claim's deadline date has passed (local calendar day). */
+export function isClaimPastDue(claim: { status: string; until: string }): boolean {
+  if (claim.status !== 'undetermined') return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const until = new Date(claim.until);
+  until.setHours(0, 0, 0, 0);
+  return until < today;
+}
+
 /** @deprecated Use directionForClaimType */
 export const directionForValueType = directionForClaimType;
 

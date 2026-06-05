@@ -61,6 +61,30 @@ def _round_decimal(value: float, places: str = "0.01") -> float:
     return float(Decimal(str(value)).quantize(Decimal(places), rounding=ROUND_HALF_UP))
 
 
+def _effective_direction(hard_claim: HardClaim) -> str:
+    """
+    Return bullish or bearish for resolution.
+
+    value_type is the source of truth for percentage claims; direction fills gaps
+    for absolute PRICE targets.
+    """
+    value_type = (hard_claim.value_type or "").upper()
+    if value_type == "PERCENTAGE_DOWN":
+        return "bearish"
+    if value_type == "PERCENTAGE_UP":
+        return "bullish"
+
+    raw = (hard_claim.direction or "").strip().lower()
+    if raw in {"bullish", "bearish"}:
+        return raw
+    if value_type == "PRICE":
+        return "bullish"
+    raise ResolutionError(
+        "UNSUPPORTED_DIRECTION",
+        "Only bullish and bearish percentage claims are supported.",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Reference-price fetchers (single timestamp lookups — kept from old system)
 # ---------------------------------------------------------------------------
@@ -185,11 +209,7 @@ def normalize_claim_for_resolution(hard_claim: HardClaim) -> dict[str, Any]:
         )
 
     asset = hard_claim.asset
-    if hard_claim.direction.lower() not in {"bullish", "bearish"}:
-        raise ResolutionError(
-            "UNSUPPORTED_DIRECTION",
-            "Only bullish and bearish percentage claims are supported.",
-        )
+    direction = _effective_direction(hard_claim)
 
     return {
         "version": CONTRACT_VERSION,
@@ -203,7 +223,7 @@ def normalize_claim_for_resolution(hard_claim: HardClaim) -> dict[str, Any]:
         },
         "target": {
             "kind": "price" if hard_claim.value_type == "PRICE" else "percentage",
-            "direction": hard_claim.direction.lower(),
+            "direction": direction,
             "value": float(hard_claim.percentage),
             "unit": asset.quote_currency if hard_claim.value_type == "PRICE" else "percent",
         },
@@ -230,7 +250,7 @@ def _evaluate_ohlc(
     - status (confirmed / rejected)
     - ohlc data for chart rendering
     """
-    direction = hard_claim.direction.lower()
+    direction = _effective_direction(hard_claim)
     percentage = float(hard_claim.percentage)
 
     if reference_price <= 0:
@@ -357,7 +377,10 @@ def preview_resolution(hard_claim: HardClaim) -> dict[str, Any]:
     # 1. Load OHLC data for the claim period
     start_time = datetime.combine(hard_claim.created_at.date(), datetime.min.time(), tzinfo=timezone.utc)
     end_time = datetime.combine(hard_claim.until, datetime.min.time(), tzinfo=timezone.utc)
-    ohlc_rows = get_ohlc_data(hard_claim.asset, start_time, end_time)
+    try:
+        ohlc_rows = get_ohlc_data(hard_claim.asset, start_time, end_time)
+    except OHLCFetchError as exc:
+        raise ResolutionError("NO_OHLC_DATA", str(exc)) from exc
 
     if not ohlc_rows:
         raise ResolutionError("NO_OHLC_DATA", "Could not obtain any OHLC data for the claim period.")

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { HardClaimItem, AssetItem } from '@/lib/types';
-import { getHardClaimParity, getHardClaimType } from '@/lib/claims';
+import { getHardClaimParity, getHardClaimType, isClaimPastDue } from '@/lib/claims';
 
 function daysUntil(dateStr: string): number {
   const diff = new Date(dateStr).getTime() - Date.now();
@@ -20,6 +20,7 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
   const isBullish = claim.direction.toLowerCase() === 'bullish';
   const isConfirmed = claim.status === 'confirmed';
   const isRejected = claim.status === 'rejected';
+  const pastDue = isClaimPastDue(claim);
   const days = daysUntil(claim.until);
   const targetChange = claim.percentage;
 
@@ -34,7 +35,8 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
         'w-full text-left flex items-center gap-2.5 rounded-lg border px-3.5 py-2.5 bg-card text-card-foreground transition-all hover:bg-muted/30 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
         isConfirmed && 'border-emerald-500/60 shadow-sm',
         isRejected && 'border-red-500/60 opacity-80',
-        !isConfirmed && !isRejected && 'border-border hover:shadow-sm',
+        !isConfirmed && !isRejected && pastDue && 'border-amber-500/50',
+        !isConfirmed && !isRejected && !pastDue && 'border-border hover:shadow-sm',
       )}
       aria-label="View claim details"
     >
@@ -64,7 +66,11 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
       <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0 num">
         <CalendarDays className="size-3" />
         {new Date(claim.until).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-        {days > 0 && <span className="text-[10px] opacity-60">({days}d)</span>}
+        {pastDue ? (
+          <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">Past due</span>
+        ) : days > 0 ? (
+          <span className="text-[10px] opacity-60">({days}d)</span>
+        ) : null}
       </span>
 
       <div className="flex items-center gap-1.5 flex-1 min-w-0">

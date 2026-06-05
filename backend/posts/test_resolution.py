@@ -4,9 +4,11 @@ from django.test import TestCase
 from posts.models import Asset, Post, HardClaim, HardClaimEvent, OHLCData
 from posts.resolution import (
     normalize_claim_for_resolution,
+    preview_resolution,
     resolve_hard_claim,
     ResolutionError,
 )
+from posts.ohlc_fetcher import OHLCFetchError
 
 from accounts.models import WalletUser
 from django.utils import timezone
@@ -56,8 +58,26 @@ class ResolutionTests(TestCase):
 
     def test_normalize_unsupported_direction(self):
         self.claim.direction = "sideways"
+        self.claim.value_type = ""
+        self.claim.save()
         with self.assertRaisesMessage(ResolutionError, "Only bullish and bearish"):
             normalize_claim_for_resolution(self.claim)
+
+    def test_normalize_derives_direction_from_value_type(self):
+        self.claim.direction = ""
+        self.claim.value_type = "PERCENTAGE_DOWN"
+        self.claim.save()
+        payload = normalize_claim_for_resolution(self.claim)
+        self.assertEqual(payload["target"]["direction"], "bearish")
+
+    @patch("posts.resolution.get_ohlc_data")
+    @patch("posts.resolution.fetch_reference_price")
+    def test_preview_resolution_maps_ohlc_fetch_error(self, mock_ref, mock_ohlc):
+        mock_ref.return_value = (1000.0, "http://mock.ref")
+        mock_ohlc.side_effect = OHLCFetchError("all sources failed")
+        with self.assertRaises(ResolutionError) as ctx:
+            preview_resolution(self.claim)
+        self.assertEqual(ctx.exception.code, "NO_OHLC_DATA")
 
     def _seed_ohlc(self, base_price=1000.0, days=5, trend_pct=2.0):
         """Create OHLC rows for the claim period with a simple uptrend."""
@@ -139,6 +159,7 @@ class ResolutionTests(TestCase):
     def test_resolve_bearish_confirmed(self, mock_ohlc_fetch, mock_ref):
         """Bearish claim: low goes below target → confirmed."""
         self.claim.direction = "bearish"
+        self.claim.value_type = "PERCENTAGE_DOWN"
         self.claim.save()
         mock_ref.return_value = (1000.0, "http://mock.ref")
         start = self.claim.created_at.date()
@@ -210,4 +231,51 @@ class ResolutionTests(TestCase):
         result = resolve_hard_claim(self.claim)
         self.assertEqual(result["status"], HardClaim.Status.REJECTED)
         self.assertEqual(result["prices"]["target"], 1200.0)
+
+
+class ResolveClaimsCommandTests(TestCase):
+    def setUp(self):
+        self.asset = Asset.objects.create(
+            symbol="BTC",
+            name="Bitcoin",
+            market_type=Asset.MarketType.CRYPTO,
+            provider=Asset.Provider.BINANCE,
+            provider_symbol="bitcoin",
+            quote_currency="USD",
+            binance_symbol="BTCUSDT",
+        )
+        self.author = WalletUser.objects.create(address="0xabc")
+        self.post = Post.objects.create(author=self.author, content="test")
+
+    def test_due_claims_excludes_until_today(self):
+        from posts.management.commands.resolve_claims import due_claims_queryset
+
+        today_claim = HardClaim.objects.create(
+            author=self.author,
+            post=self.post,
+            asset=self.asset,
+            direction="bullish",
+            percentage=5.0,
+            until=date.today() + timedelta(days=1),
+            status=HardClaim.Status.UNDETERMINED,
+        )
+        past = HardClaim.objects.create(
+            author=self.author,
+            post=self.post,
+            asset=self.asset,
+            direction="bullish",
+            percentage=5.0,
+            until=date.today() + timedelta(days=1),
+            status=HardClaim.Status.UNDETERMINED,
+        )
+        HardClaim.objects.filter(id=today_claim.id).update(
+            created_at=timezone.now() - timedelta(days=5),
+            until=date.today(),
+        )
+        HardClaim.objects.filter(id=past.id).update(
+            created_at=timezone.now() - timedelta(days=5),
+            until=date.today() - timedelta(days=1),
+        )
+        due_ids = list(due_claims_queryset().values_list("id", flat=True))
+        self.assertEqual(due_ids, [past.id])
 

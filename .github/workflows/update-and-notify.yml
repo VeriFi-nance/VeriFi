@@ -14,6 +14,13 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      DATABASE_URL: >-
+        ${{
+          github.ref == 'refs/heads/main'
+          && secrets.DATABASE_URL
+          || (secrets.DATABASE_URL_DEVELOP || secrets.DATABASE_URL)
+        }}
     steps:
       - uses: actions/checkout@v4
 
@@ -29,7 +36,6 @@ jobs:
       - name: Run update_and_notify
         run: uv run python manage.py update_and_notify
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
           DJANGO_DEBUG: "false"
           TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}

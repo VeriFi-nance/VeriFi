@@ -7,6 +7,7 @@ import { UserAvatar } from '@/components/UserAvatar';
 import type { HardClaimItem, AssetItem, ClaimChartData } from '@/lib/types';
 import { truncateAddress } from '@/lib/wallet';
 import { getClaimChartData, getClaimProof } from '@/lib/api';
+import { isClaimPastDue } from '@/lib/claims';
 import { MarketPanel } from '../MarketPanel';
 
 // Lazy so the chart.js/react-chartjs-2 bundle is fetched only when a claim
@@ -20,15 +21,17 @@ interface ClaimDetailViewProps {
   assets: AssetItem[];
 }
 
-function statusLabel(status: HardClaimItem['status']) {
+function statusLabel(status: HardClaimItem['status'], pastDue: boolean) {
   if (status === 'confirmed') return 'Confirmed';
   if (status === 'rejected') return 'Rejected';
+  if (pastDue) return 'Past due';
   return 'Open';
 }
 
-function statusVariant(status: HardClaimItem['status']) {
+function statusVariant(status: HardClaimItem['status'], pastDue: boolean) {
   if (status === 'confirmed') return 'success' as const;
   if (status === 'rejected') return 'destructive' as const;
+  if (pastDue) return 'outline' as const;
   return 'secondary' as const;
 }
 
@@ -69,6 +72,7 @@ export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
 
   const asset = assets.find((a) => a.id === claim.asset);
   const assetSymbol = asset?.symbol ?? `#${claim.asset}`;
+  const pastDue = isClaimPastDue(claim);
   const isBullish = claim.direction.toLowerCase() === 'bullish';
   const untilLabel = new Date(claim.until).toLocaleDateString(undefined, {
     month: 'short',
@@ -92,8 +96,8 @@ export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
           <Badge variant={isBullish ? 'success' : 'destructive'} className="text-xs font-mono">
             {assetSymbol} {isBullish ? '▲' : '▼'} {claim.percentage.toFixed(1)}%
           </Badge>
-          <Badge variant={statusVariant(claim.status)} className="text-[10px] uppercase">
-            {statusLabel(claim.status)}
+          <Badge variant={statusVariant(claim.status, pastDue)} className="text-[10px] uppercase">
+            {statusLabel(claim.status, pastDue)}
           </Badge>
         </div>
         <p className="text-sm text-muted-foreground">{summary}</p>

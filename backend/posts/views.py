@@ -22,6 +22,16 @@ DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
 
 
+def _normalize_claim_direction(direction: str, value_type: str) -> str:
+    """Ensure direction is set consistently from value_type when missing."""
+    raw = (direction or "").strip().lower()
+    if raw in {"bullish", "bearish"}:
+        return raw
+    if value_type == "PERCENTAGE_DOWN":
+        return "bearish"
+    return "bullish"
+
+
 def _posts_queryset():
     return (
         Post.objects.select_related("author", "author__profitability")
@@ -281,7 +291,10 @@ class PostListCreateView(APIView):
                         post=post,
                         channel=channel_obj,
                         asset=asset,
-                        direction=valid_hc.get("direction", ""),
+                        direction=_normalize_claim_direction(
+                            valid_hc.get("direction", ""),
+                            valid_hc.get("value_type", "PERCENTAGE_UP"),
+                        ),
                         value_type=valid_hc.get("value_type", "PERCENTAGE_UP"),
                         payda=valid_hc.get("payda", ""),
                         percentage=valid_hc["percentage"],
@@ -480,7 +493,10 @@ class HardClaimView(APIView):
                 post=post_obj,
                 channel=channel_obj,
                 asset=asset,
-                direction=data.get("direction", ""),
+                direction=_normalize_claim_direction(
+                    data.get("direction", ""),
+                    data.get("value_type", "PERCENTAGE_UP"),
+                ),
                 value_type=data.get("value_type", "PERCENTAGE_UP"),
                 payda=data.get("payda", ""),
                 percentage=data["percentage"],
