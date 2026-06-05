@@ -1,8 +1,10 @@
 """
-Claim resolution engine — OHLC-based daily analysis.
+Claim resolution engine — OHLC-based analysis from claim creation through deadline.
 
 Entry (reference) price is captured at claim creation from an intraday quote at
 created_at, stored on HardClaim.reference_price, and reused for charts and resolution.
+Target hits are evaluated only on candles at or after created_at (mixed intraday +
+daily), so pre-entry moves on the creation day cannot confirm a claim.
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from .models import Asset, HardClaim, HardClaimEvent, OHLCData
-from .ohlc_fetcher import OHLCFetchError, get_ohlc_data
+from .ohlc_fetcher import Interval, OHLCFetchError, get_ohlc_data
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +56,45 @@ def _isoformat_utc(dt: datetime) -> str:
 
 def _due_datetime_utc(value: date) -> datetime:
     return datetime.combine(value, time.max, tzinfo=timezone.utc)
+
+
+def _load_claim_ohlc_rows(hard_claim: HardClaim) -> list[OHLCData]:
+    """OHLC from created_at through end of until day; no pre-creation leakage."""
+    start_time = hard_claim.created_at.astimezone(timezone.utc)
+    # Exclusive end at midnight after until so mixed resolution includes the full last day.
+    end_time = datetime.combine(
+        hard_claim.until + timedelta(days=1),
+        time.min,
+        tzinfo=timezone.utc,
+    )
+    try:
+        return get_ohlc_data(hard_claim.asset, start_time, end_time, mixed_resolution=True)
+    except OHLCFetchError as exc:
+        # Daily-only fallback: skip the creation calendar day entirely so a full-day
+        # bar cannot credit price action that happened before created_at.
+        next_day = datetime.combine(
+            hard_claim.created_at.date() + timedelta(days=1),
+            time.min,
+            tzinfo=timezone.utc,
+        )
+        if next_day >= end_time:
+            raise ResolutionError(
+                "NO_OHLC_DATA",
+                "Could not obtain intraday OHLC for a same-day claim window.",
+            ) from exc
+        logger.warning(
+            "Mixed OHLC unavailable for claim %s; falling back to daily from %s: %s",
+            hard_claim.id,
+            next_day.date().isoformat(),
+            exc,
+        )
+        daily_end = datetime.combine(hard_claim.until, time.min, tzinfo=timezone.utc)
+        return get_ohlc_data(
+            hard_claim.asset,
+            next_day,
+            daily_end,
+            interval=Interval.ONE_DAY,
+        )
 
 
 def _round_decimal(value: float, places: str = "0.01") -> float:
@@ -347,8 +388,12 @@ def capture_reference_price(hard_claim: HardClaim) -> HardClaim:
 # Claim validation
 # ---------------------------------------------------------------------------
 
-def normalize_claim_for_resolution(hard_claim: HardClaim) -> dict[str, Any]:
-    if hard_claim.status != HardClaim.Status.UNDETERMINED:
+def normalize_claim_for_resolution(
+    hard_claim: HardClaim,
+    *,
+    allow_resolved: bool = False,
+) -> dict[str, Any]:
+    if not allow_resolved and hard_claim.status != HardClaim.Status.UNDETERMINED:
         raise ResolutionError("CLAIM_ALREADY_RESOLVED", "Claim is already resolved.")
 
     due_at = _due_datetime_utc(hard_claim.until)
@@ -401,7 +446,7 @@ def _evaluate_ohlc(
     ohlc_rows: list[OHLCData],
 ) -> dict[str, Any]:
     """
-    Day-by-day scan of OHLC data to detect target price breaches.
+    Scan OHLC candles (post-creation) to detect target price breaches.
 
     Returns a full resolution result dict including:
     - target_price, hit_days, target_reached_at, closest_price
@@ -529,15 +574,15 @@ def _evaluate_ohlc(
 # Public API
 # ---------------------------------------------------------------------------
 
-def preview_resolution(hard_claim: HardClaim) -> dict[str, Any]:
+def preview_resolution(hard_claim: HardClaim, *, allow_resolved: bool = False) -> dict[str, Any]:
     """Validate and compute resolution without saving."""
-    normalize_claim_for_resolution(hard_claim)
+    normalize_claim_for_resolution(hard_claim, allow_resolved=allow_resolved)
 
-    # 1. Load OHLC data for the claim period
-    start_time = datetime.combine(hard_claim.created_at.date(), datetime.min.time(), tzinfo=timezone.utc)
-    end_time = datetime.combine(hard_claim.until, datetime.min.time(), tzinfo=timezone.utc)
+    # 1. Load OHLC from claim creation through deadline (mixed intraday + daily).
     try:
-        ohlc_rows = get_ohlc_data(hard_claim.asset, start_time, end_time)
+        ohlc_rows = _load_claim_ohlc_rows(hard_claim)
+    except ResolutionError:
+        raise
     except OHLCFetchError as exc:
         raise ResolutionError("NO_OHLC_DATA", str(exc)) from exc
 
@@ -552,22 +597,26 @@ def preview_resolution(hard_claim: HardClaim) -> dict[str, Any]:
             hard_claim.reference_price_url = reference_url
             hard_claim.save(update_fields=["reference_price", "reference_price_url"])
     except ResolutionError:
-        # Fallback to the opening price of the creation day if APIs fail (Binance geoblock, CoinGecko rate limits)
+        # Fallback to the first in-window candle open if APIs fail.
         reference_price = float(ohlc_rows[0].open)
         reference_url = "fallback_ohlc_open"
 
     # 3. Evaluate
     return _evaluate_ohlc(hard_claim, reference_price, reference_url, ohlc_rows)
 
-def resolve_hard_claim(hard_claim: HardClaim) -> dict[str, Any]:
-    """Resolve a claim and save the result to DB."""
-    result = preview_resolution(hard_claim)
 
-    # Update claim status
+def _persist_resolution_result(
+    hard_claim: HardClaim,
+    result: dict[str, Any],
+    *,
+    replace_existing_event: bool = False,
+) -> None:
     hard_claim.status = result["status"]
     hard_claim.save(update_fields=["status"])
 
-    # Create resolution event with enriched details
+    if replace_existing_event:
+        hard_claim.events.filter(event_type=HardClaimEvent.EventType.RESOLUTION).delete()
+
     HardClaimEvent.objects.create(
         hard_claim=hard_claim,
         event_type=HardClaimEvent.EventType.RESOLUTION,
@@ -580,16 +629,35 @@ def resolve_hard_claim(hard_claim: HardClaim) -> dict[str, Any]:
         },
     )
 
-    # Model G rep market: settle stakes if a market is attached.
-    if hard_claim.status in (HardClaim.Status.CONFIRMED, HardClaim.Status.REJECTED):
-        try:
-            market = hard_claim.market
-        except HardClaim.market.RelatedObjectDoesNotExist:
-            market = None
-        if market is not None and not market.resolved:
-            from .rep_market import resolve as resolve_market
 
-            winning_side = "YES" if hard_claim.status == HardClaim.Status.CONFIRMED else "NO"
-            resolve_market(market, winning_side)
+def _maybe_settle_rep_market(hard_claim: HardClaim) -> None:
+    if hard_claim.status not in (HardClaim.Status.CONFIRMED, HardClaim.Status.REJECTED):
+        return
+    try:
+        market = hard_claim.market
+    except HardClaim.market.RelatedObjectDoesNotExist:
+        return
+    if market is None or market.resolved:
+        return
+    from .rep_market import resolve as resolve_market
 
+    winning_side = "YES" if hard_claim.status == HardClaim.Status.CONFIRMED else "NO"
+    resolve_market(market, winning_side)
+
+
+def resolve_hard_claim(hard_claim: HardClaim) -> dict[str, Any]:
+    """Resolve a claim and save the result to DB."""
+    result = preview_resolution(hard_claim)
+    _persist_resolution_result(hard_claim, result)
+    _maybe_settle_rep_market(hard_claim)
+    return result
+
+
+def reassess_hard_claim(hard_claim: HardClaim) -> dict[str, Any]:
+    """Re-run resolution for an already-settled claim (e.g. after reference_price backfill)."""
+    previous_status = hard_claim.status
+    result = preview_resolution(hard_claim, allow_resolved=True)
+    _persist_resolution_result(hard_claim, result, replace_existing_event=True)
+    result["previous_status"] = previous_status
+    result["status_changed"] = previous_status != result["status"]
     return result

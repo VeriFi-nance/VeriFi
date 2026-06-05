@@ -11,6 +11,7 @@ from posts.resolution import (
     normalize_claim_for_resolution,
     preview_resolution,
     resolve_hard_claim,
+    reassess_hard_claim,
     capture_reference_price,
     fetch_reference_price,
     ResolutionError,
@@ -46,10 +47,13 @@ class ResolutionTests(TestCase):
             until=(timezone.now() + timedelta(days=1)).date(), # initially future to pass create
             status=HardClaim.Status.UNDETERMINED,
         )
-        # Backdate so it counts as due
+        # Backdate so it counts as due; midnight UTC so mixed resolution can use daily bars.
+        created_at = (timezone.now() - timedelta(days=5)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
         HardClaim.objects.filter(id=self.claim.id).update(
-            created_at=timezone.now() - timedelta(days=5),
-            until=(timezone.now() - timedelta(days=2)).date()
+            created_at=created_at,
+            until=(timezone.now() - timedelta(days=2)).date(),
         )
         self.claim.refresh_from_db()
 
@@ -434,3 +438,194 @@ class ReferencePriceTests(TestCase):
         self.assertEqual(result["prices"]["reference"], 1000.0)
         self.assertEqual(result["prices"]["target"], 1100.0)
 
+
+class CreationDayResolutionTests(TestCase):
+    """Target hits must not count price action before created_at."""
+
+    def setUp(self):
+        self.asset = Asset.objects.create(
+            symbol="BTC",
+            name="Bitcoin",
+            market_type=Asset.MarketType.CRYPTO,
+            provider=Asset.Provider.BINANCE,
+            provider_symbol="bitcoin",
+            quote_currency="USD",
+            binance_symbol="BTCUSDT",
+        )
+        self.author = WalletUser.objects.create(address="0xabc")
+        self.post = Post.objects.create(author=self.author, content="test")
+        self.claim = HardClaim.objects.create(
+            post=self.post,
+            asset=self.asset,
+            direction="bullish",
+            percentage=1.0,
+            until=(timezone.now() + timedelta(days=1)).date(),
+            status=HardClaim.Status.UNDETERMINED,
+            reference_price=67519.91,
+            reference_price_url="stored",
+        )
+        created_at = datetime(2026, 6, 2, 17, 18, 20, tzinfo=dt_timezone.utc)
+        HardClaim.objects.filter(pk=self.claim.pk).update(
+            created_at=created_at,
+            until=date(2026, 6, 3),
+        )
+        self.claim.refresh_from_db()
+
+    @patch("posts.resolution.fetch_reference_price")
+    @patch("posts.ohlc_fetcher.fetch_ohlc_for_asset")
+    def test_pre_creation_daily_high_does_not_confirm(self, mock_fetch, mock_ref):
+        """Claim 32 pattern: daily high before entry must not count."""
+        mock_ref.return_value = (67519.91, "stored")
+        mock_fetch.return_value = []
+
+        # Full-day bar would confirm if counted; post-entry hourly bars do not.
+        OHLCData.objects.create(
+            asset=self.asset,
+            timestamp=datetime(2026, 6, 2, 0, 0, tzinfo=dt_timezone.utc),
+            interval="1d",
+            open=71315.5,
+            high=71315.5,
+            low=67530.1,
+            close=67800.9,
+        )
+        OHLCData.objects.create(
+            asset=self.asset,
+            timestamp=datetime(2026, 6, 2, 18, 0, tzinfo=dt_timezone.utc),
+            interval="1h",
+            open=67500.0,
+            high=67545.0,
+            low=67029.5,
+            close=67200.0,
+        )
+        OHLCData.objects.create(
+            asset=self.asset,
+            timestamp=datetime(2026, 6, 2, 19, 0, tzinfo=dt_timezone.utc),
+            interval="1h",
+            open=67200.0,
+            high=67366.5,
+            low=66327.3,
+            close=66500.0,
+        )
+        OHLCData.objects.create(
+            asset=self.asset,
+            timestamp=datetime(2026, 6, 3, 0, 0, tzinfo=dt_timezone.utc),
+            interval="1d",
+            open=66669.7,
+            high=67420.0,
+            low=65379.8,
+            close=67118.3,
+        )
+
+        result = preview_resolution(self.claim)
+
+        self.assertEqual(result["status"], HardClaim.Status.REJECTED)
+        self.assertEqual(result["hit_days"], [])
+        self.assertEqual(result["prices"]["target"], 68195.11)
+        self.assertLess(result["prices"]["closest"], result["prices"]["target"])
+
+    @patch("posts.resolution.fetch_reference_price")
+    @patch("posts.ohlc_fetcher.fetch_ohlc_for_asset")
+    def test_post_creation_intraday_hit_still_confirms(self, mock_fetch, mock_ref):
+        mock_ref.return_value = (1000.0, "stored")
+        mock_fetch.return_value = []
+        created_at = datetime(2026, 6, 2, 10, 0, tzinfo=dt_timezone.utc)
+        HardClaim.objects.filter(pk=self.claim.pk).update(
+            created_at=created_at,
+            until=date(2026, 6, 3),
+            reference_price=1000.0,
+            percentage=5.0,
+        )
+        self.claim.refresh_from_db()
+
+        OHLCData.objects.create(
+            asset=self.asset,
+            timestamp=datetime(2026, 6, 2, 11, 0, tzinfo=dt_timezone.utc),
+            interval="1h",
+            open=1000.0,
+            high=1060.0,
+            low=990.0,
+            close=1050.0,
+        )
+
+        result = preview_resolution(self.claim)
+
+        self.assertEqual(result["status"], HardClaim.Status.CONFIRMED)
+        self.assertEqual(result["hit_days"], ["2026-06-02"])
+
+
+class ReassessResolvedClaimTests(TestCase):
+    def setUp(self):
+        self.asset = Asset.objects.create(
+            symbol="BTC",
+            name="Bitcoin",
+            market_type=Asset.MarketType.CRYPTO,
+            provider=Asset.Provider.BINANCE,
+            provider_symbol="bitcoin",
+            quote_currency="USD",
+            binance_symbol="BTCUSDT",
+        )
+        self.author = WalletUser.objects.create(address="0xabc")
+        self.post = Post.objects.create(author=self.author, content="test")
+        self.claim = HardClaim.objects.create(
+            post=self.post,
+            asset=self.asset,
+            direction="bullish",
+            percentage=10.0,
+            until=(timezone.now() + timedelta(days=3)).date(),
+            status=HardClaim.Status.CONFIRMED,
+            reference_price=900.0,
+            reference_price_url="stored",
+        )
+        HardClaim.objects.filter(pk=self.claim.pk).update(
+            created_at=timezone.now() - timedelta(days=5),
+            until=(timezone.now() - timedelta(days=1)).date(),
+        )
+        self.claim.refresh_from_db()
+        HardClaimEvent.objects.create(
+            hard_claim=self.claim,
+            event_type=HardClaimEvent.EventType.CREATION,
+            details={},
+        )
+        HardClaimEvent.objects.create(
+            hard_claim=self.claim,
+            event_type=HardClaimEvent.EventType.RESOLUTION,
+            details={"prices": {"reference": 900.0, "target": 990.0}},
+        )
+
+    @patch("posts.resolution.get_ohlc_data")
+    def test_reassess_updates_status_and_replaces_resolution_event(self, mock_ohlc):
+        start = self.claim.created_at.date()
+        mock_ohlc.return_value = [
+            OHLCData(
+                asset=self.asset,
+                timestamp=datetime.combine(start, datetime.min.time(), tzinfo=dt_timezone.utc),
+                open=1000.0,
+                high=1050.0,
+                low=980.0,
+                close=1020.0,
+            )
+        ]
+        HardClaim.objects.filter(pk=self.claim.pk).update(reference_price=1000.0)
+        self.claim.refresh_from_db()
+
+        result = reassess_hard_claim(self.claim)
+
+        self.assertTrue(result["status_changed"])
+        self.assertEqual(result["previous_status"], HardClaim.Status.CONFIRMED)
+        self.assertEqual(result["status"], HardClaim.Status.REJECTED)
+        self.claim.refresh_from_db()
+        self.assertEqual(self.claim.status, HardClaim.Status.REJECTED)
+        self.assertEqual(
+            self.claim.events.filter(event_type=HardClaimEvent.EventType.RESOLUTION).count(),
+            1,
+        )
+        resolution = self.claim.events.get(event_type=HardClaimEvent.EventType.RESOLUTION)
+        self.assertEqual(resolution.details["prices"]["reference"], 1000.0)
+
+    def test_reassess_command_dry_run_lists_changes(self):
+        from posts.management.commands.reassess_resolved_claims import Command
+
+        with patch("posts.resolution.preview_resolution") as mock_preview:
+            mock_preview.return_value = {"status": HardClaim.Status.REJECTED}
+            Command().handle(dry_run=True)
+            self.assertTrue(mock_preview.called)
