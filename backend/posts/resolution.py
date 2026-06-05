@@ -354,10 +354,7 @@ def preview_resolution(hard_claim: HardClaim) -> dict[str, Any]:
     """Validate and compute resolution without saving."""
     normalize_claim_for_resolution(hard_claim)
 
-    # 1. Reference price at created_at
-    reference_price, reference_url = fetch_reference_price(hard_claim)
-
-    # 2. Load OHLC data for the claim period
+    # 1. Load OHLC data for the claim period
     start_time = datetime.combine(hard_claim.created_at.date(), datetime.min.time(), tzinfo=timezone.utc)
     end_time = datetime.combine(hard_claim.until, datetime.min.time(), tzinfo=timezone.utc)
     ohlc_rows = get_ohlc_data(hard_claim.asset, start_time, end_time)
@@ -365,9 +362,16 @@ def preview_resolution(hard_claim: HardClaim) -> dict[str, Any]:
     if not ohlc_rows:
         raise ResolutionError("NO_OHLC_DATA", "Could not obtain any OHLC data for the claim period.")
 
+    # 2. Reference price at created_at
+    try:
+        reference_price, reference_url = fetch_reference_price(hard_claim)
+    except ResolutionError:
+        # Fallback to the opening price of the creation day if APIs fail (Binance geoblock, CoinGecko rate limits)
+        reference_price = float(ohlc_rows[0].open)
+        reference_url = "fallback_ohlc_open"
+
     # 3. Evaluate
     return _evaluate_ohlc(hard_claim, reference_price, reference_url, ohlc_rows)
-
 
 def resolve_hard_claim(hard_claim: HardClaim) -> dict[str, Any]:
     """Resolve a claim and save the result to DB."""
