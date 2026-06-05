@@ -5,10 +5,12 @@ import {
   ColorType,
   CrosshairMode,
   LineStyle,
+  type AutoscaleInfoProvider,
   type CandlestickData,
   type IChartApi,
   type ISeriesApi,
   type ITimeScaleApi,
+  type Time,
   type UTCTimestamp,
 } from 'lightweight-charts';
 import type { ClaimChartData, ChartCandleInterval } from '@/lib/types';
@@ -93,7 +95,7 @@ function barDurationSec(
 }
 
 function barWidthPx(
-  timeScale: ITimeScaleApi,
+  timeScale: ITimeScaleApi<Time>,
   candles: CandlestickData<UTCTimestamp>[],
 ): number {
   if (candles.length >= 2) {
@@ -106,7 +108,7 @@ function barWidthPx(
 
 /** Map any timestamp to an x-coordinate, interpolating between bar opens. */
 function timeToPlotCoordinate(
-  timeScale: ITimeScaleApi,
+  timeScale: ITimeScaleApi<Time>,
   time: UTCTimestamp,
   candles: CandlestickData<UTCTimestamp>[],
   chartInterval?: string,
@@ -150,7 +152,7 @@ function timeToPlotCoordinate(
 
 /** Logical bar index for any timestamp; extrapolates before first / after last candle. */
 function timeToLogicalIndex(
-  timeScale: ITimeScaleApi,
+  timeScale: ITimeScaleApi<Time>,
   time: UTCTimestamp,
   candles: CandlestickData<UTCTimestamp>[],
   chartInterval?: string,
@@ -379,7 +381,7 @@ export function PriceChart({
       wickDownColor: CANDLE_DOWN.wickColor,
       autoscaleInfoProvider: autoscaleRange
         ? () => autoscaleRange
-        : (original) => original(),
+        : ((original: Parameters<AutoscaleInfoProvider>[0]) => original()),
     });
     seriesRef.current = series;
 
