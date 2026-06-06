@@ -70,14 +70,17 @@ Workflows:
 
 | Secret | Same as |
 |--------|---------|
-| `DATABASE_URL` | Neon URL |
+| `DATABASE_URL` | Production Neon URL (used on `main` branch) |
+| `DATABASE_URL_DEVELOP` | Develop Neon URL (used on `develop` branch; falls back to `DATABASE_URL` if unset) |
 | `DJANGO_SECRET_KEY` | Copy from Render **verifi-common** env (must match if you rely on signed data; any long random string works for cron-only) |
 | `TWELVE_DATA_API_KEY` | Your API key |
 | `ADMIN_ADDRESSES` | Admin wallet(s) |
 
 Scheduled workflows run from the repo **default branch** only. Merge deploy changes to **`main`** (or change default branch) so schedules run.
 
-**Manual test:** Actions tab → workflow → **Run workflow**.
+**Manual test:** Actions tab → workflow → **Run workflow** (choose `develop` or `production` for resolve-claims).
+
+**Develop stuck claims:** Ensure `DATABASE_URL_DEVELOP` matches the Postgres URL on the Render service behind `api-develop.veri.finance`, then run **Resolve claims** manually or wait for the hourly schedule.
 
 ---
 

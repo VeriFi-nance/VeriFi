@@ -7,18 +7,32 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from accounts.models import WalletUser
-from .models import Post, Claim, HardClaim, Asset, OHLCData, Community, CommunityMembership, AssetSubscription, ClaimMarket, ClaimStake
-from .serializers import PostSerializer, ClaimInputSerializer, HardClaimInputSerializer, HardClaimSerializer, AssetSerializer, CommunitySerializer, CommunityMembershipSerializer
+from .models import Post, Claim, HardClaim, Asset, Channel, ChannelMembership, AssetSubscription, ClaimMarket, ClaimStake
+from .serializers import PostSerializer, ClaimInputSerializer, HardClaimInputSerializer, HardClaimSerializer, AssetSerializer, ChannelSerializer, ChannelMembershipSerializer
 from .claim_extraction import rule_based_claims_from_prompt
 from django.shortcuts import get_object_or_404
-from .resolution import CONTRACT_VERSION, ResolutionError, preview_resolution, resolve_hard_claim
+from .resolution import (
+    CONTRACT_VERSION,
+    ResolutionError,
+    preview_resolution,
+    resolve_hard_claim,
+    capture_reference_price,
+    claim_target_price,
+    _normalize_direction_and_value_type,
+    reconcile_claim_fields,
+)
 from . import rep_market
+from .signature_verification import verify_claim_signature, verify_position_signature
 from accounts.energy import grant_energy, spend, CLAIM_ENERGY_COST
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
+
+
+def _normalized_claim_fields(direction: str, value_type: str) -> tuple[str, str]:
+    return _normalize_direction_and_value_type(direction, value_type)
 
 
 def _posts_queryset():
@@ -38,21 +52,21 @@ def _posts_queryset():
 
 
 def _filter_posts_queryset(qs, request):
-    community_id = request.query_params.get("community")
-    if community_id:
-        qs = qs.filter(community_id=community_id)
-        community = get_object_or_404(Community, id=community_id)
-        if community.privacy_type == Community.PrivacyType.PRIVATE:
+    channel_id = request.query_params.get("channel")
+    if channel_id:
+        qs = qs.filter(channel_id=channel_id)
+        channel = get_object_or_404(Channel, id=channel_id)
+        if channel.privacy_type == Channel.PrivacyType.PRIVATE:
             user = _get_wallet_user(request)
-            if not user or not CommunityMembership.objects.filter(
-                community=community, user=user, status=CommunityMembership.Status.APPROVED
+            if not user or not ChannelMembership.objects.filter(
+                channel=channel, user=user, status=ChannelMembership.Status.APPROVED
             ).exists():
                 return None, Response(
-                    {"detail": "You must be an approved member to view this community's posts."},
+                    {"detail": "You must be an approved member to view this channel's posts."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
     else:
-        qs = qs.filter(community__isnull=True)
+        qs = qs.filter(channel__isnull=True)
 
     feed_type = request.query_params.get("feed")
     if feed_type == "following":
@@ -97,16 +111,16 @@ def _paginate_queryset(qs, request):
 
 
 def _can_view_post(post, request) -> bool | Response:
-    if not post.community_id:
+    if not post.channel_id:
         return True
 
-    community = post.community
-    if community.privacy_type != Community.PrivacyType.PRIVATE:
+    channel = post.channel
+    if channel.privacy_type != Channel.PrivacyType.PRIVATE:
         return True
 
     user = _get_wallet_user(request)
-    if user and CommunityMembership.objects.filter(
-        community=community, user=user, status=CommunityMembership.Status.APPROVED
+    if user and ChannelMembership.objects.filter(
+        channel=channel, user=user, status=ChannelMembership.Status.APPROVED
     ).exists():
         return True
 
@@ -134,6 +148,17 @@ def _require_admin_user(request) -> WalletUser | Response:
     if user.address.lower() not in admin_addresses:
         return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
     return user
+
+
+def _is_channel_moderator(channel, user) -> bool:
+    if channel.creator == user:
+        return True
+    return ChannelMembership.objects.filter(
+        channel=channel,
+        user=user,
+        status=ChannelMembership.Status.APPROVED,
+        role__in=[ChannelMembership.Role.OWNER, ChannelMembership.Role.MODERATOR],
+    ).exists()
 
 
 class PostListCreateView(APIView):
@@ -167,23 +192,23 @@ class PostListCreateView(APIView):
         if len(content) > 500:
             return Response({"detail": "content exceeds 500 characters."}, status=status.HTTP_400_BAD_REQUEST)
 
-        community_id = request.data.get("community_id")
-        community_obj = None
-        if community_id is not None:
+        channel_id = request.data.get("channel_id")
+        channel_obj = None
+        if channel_id is not None:
             try:
-                community_obj = Community.objects.get(id=community_id)
-                membership = CommunityMembership.objects.filter(community=community_obj, user=user).first()
-                if membership and membership.status == CommunityMembership.Status.BANNED:
-                    return Response({"detail": "You are banned from this community."}, status=status.HTTP_403_FORBIDDEN)
+                channel_obj = Channel.objects.get(id=channel_id)
+                membership = ChannelMembership.objects.filter(channel=channel_obj, user=user).first()
+                if membership and membership.status == ChannelMembership.Status.BANNED:
+                    return Response({"detail": "You are banned from this channel."}, status=status.HTTP_403_FORBIDDEN)
                 
-                if community_obj.privacy_type == Community.PrivacyType.PRIVATE:
-                    if not membership or membership.status != CommunityMembership.Status.APPROVED:
-                        return Response({"detail": "You must be an approved member to post in this private community."}, status=status.HTTP_403_FORBIDDEN)
+                if channel_obj.privacy_type == Channel.PrivacyType.PRIVATE:
+                    if not membership or membership.status != ChannelMembership.Status.APPROVED:
+                        return Response({"detail": "You must be an approved member to post in this private channel."}, status=status.HTTP_403_FORBIDDEN)
                 
-                if community_obj.post_permission == Community.PostPermission.CREATOR_ONLY and user != community_obj.creator:
-                    return Response({"detail": "Only the community creator can post in this community."}, status=status.HTTP_403_FORBIDDEN)
-            except Community.DoesNotExist:
-                return Response({"detail": f"Community {community_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
+                if channel_obj.post_permission == Channel.PostPermission.CREATOR_ONLY and user != channel_obj.creator:
+                    return Response({"detail": "Only the channel creator can post in this channel."}, status=status.HTTP_403_FORBIDDEN)
+            except Channel.DoesNotExist:
+                return Response({"detail": f"Channel {channel_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
 
         claims_data = request.data.get("claims", [])
         serializer = ClaimInputSerializer(data=claims_data, many=True)
@@ -193,7 +218,7 @@ class PostListCreateView(APIView):
         hard_claims_data = request.data.get("hard_claims", [])
 
         with transaction.atomic():
-            post = Post.objects.create(author=user, content=content, community=community_obj)
+            post = Post.objects.create(author=user, content=content, channel=channel_obj)
             for claim in serializer.validated_data:
                 if claim.get("status") != "rejected":
                     Claim.objects.create(
@@ -245,17 +270,42 @@ class PostListCreateView(APIView):
                     m_stake = None
                 
                 try:
+                    # Verify claim signature before persisting
+                    hc_sig = valid_hc.get("signature", "")
+                    hc_claim_payload = valid_hc.get("claim_payload", {})
+                    try:
+                        verify_claim_signature(
+                            user_address=user.address,
+                            user_username=user.username,
+                            signature=hc_sig,
+                            claim_payload=hc_claim_payload,
+                            asset_symbol=asset.symbol,
+                        )
+                    except Exception as sig_exc:
+                        transaction.set_rollback(True)
+                        from rest_framework.exceptions import ValidationError as DRFValidationError
+                        if isinstance(sig_exc, DRFValidationError):
+                            return Response(sig_exc.detail, status=status.HTTP_400_BAD_REQUEST)
+                        logger.exception("Unexpected error during claim signature verification")
+                        return Response({"detail": "Invalid claim signature."}, status=status.HTTP_400_BAD_REQUEST)
+
+                    hc_direction, hc_value_type = _normalized_claim_fields(
+                        valid_hc.get("direction", ""),
+                        valid_hc.get("value_type", "PERCENTAGE_UP"),
+                    )
                     hard_claim = HardClaim.objects.create(
                         author=user,
                         post=post,
-                        community=community_obj,
+                        channel=channel_obj,
                         asset=asset,
-                        direction=valid_hc.get("direction", ""),
-                        value_type=valid_hc.get("value_type", "PERCENTAGE_UP"),
+                        direction=hc_direction,
+                        value_type=hc_value_type,
                         payda=valid_hc.get("payda", ""),
                         percentage=valid_hc["percentage"],
                         until=valid_hc["until"],
                         status=valid_hc.get("status", "undetermined"),
+                        signature=hc_sig,
+                        claim_payload=hc_claim_payload,
                     )
                     from .models import HardClaimEvent
                     HardClaimEvent.objects.create(
@@ -263,6 +313,14 @@ class PostListCreateView(APIView):
                         event_type=HardClaimEvent.EventType.CREATION,
                         details={}
                     )
+                    try:
+                        capture_reference_price(hard_claim)
+                    except ResolutionError as exc:
+                        logger.warning(
+                            "Reference price not captured for claim %s: %s",
+                            hard_claim.id,
+                            exc.message,
+                        )
                     if market_block is not None:
                         rep_market.init_market(hard_claim, user, m_side, m_stake)
                 except rep_market.MarketError:
@@ -325,16 +383,16 @@ class HardClaimView(APIView):
     def get(self, request):
         qs = HardClaim.objects.all().order_by("-id")
         
-        community_id = request.query_params.get("community")
-        if community_id:
-            qs = qs.filter(community_id=community_id)
-            community = get_object_or_404(Community, id=community_id)
-            if community.privacy_type == Community.PrivacyType.PRIVATE:
+        channel_id = request.query_params.get("channel")
+        if channel_id:
+            qs = qs.filter(channel_id=channel_id)
+            channel = get_object_or_404(Channel, id=channel_id)
+            if channel.privacy_type == Channel.PrivacyType.PRIVATE:
                 user = _get_wallet_user(request)
-                if not user or not CommunityMembership.objects.filter(community=community, user=user, status=CommunityMembership.Status.APPROVED).exists():
-                    return Response({"detail": "You must be an approved member to view this community's claims."}, status=status.HTTP_403_FORBIDDEN)
+                if not user or not ChannelMembership.objects.filter(channel=channel, user=user, status=ChannelMembership.Status.APPROVED).exists():
+                    return Response({"detail": "You must be an approved member to view this channel's claims."}, status=status.HTTP_403_FORBIDDEN)
         else:
-            qs = qs.filter(community__isnull=True)
+            qs = qs.filter(channel__isnull=True)
 
         address = request.query_params.get("address", "").strip().lower()
         if address:
@@ -380,24 +438,24 @@ class HardClaimView(APIView):
             except Post.DoesNotExist:
                 return Response({"detail": f"Post {post_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Resolve optional community reference
-        community_obj = None
-        community_id = data.get("community_id")
-        if community_id is not None:
+        # Resolve optional channel reference
+        channel_obj = None
+        channel_id = data.get("channel_id")
+        if channel_id is not None:
             try:
-                community_obj = Community.objects.get(id=community_id)
-                membership = CommunityMembership.objects.filter(community=community_obj, user=user).first()
-                if membership and membership.status == CommunityMembership.Status.BANNED:
-                    return Response({"detail": "You are banned from this community."}, status=status.HTTP_403_FORBIDDEN)
+                channel_obj = Channel.objects.get(id=channel_id)
+                membership = ChannelMembership.objects.filter(channel=channel_obj, user=user).first()
+                if membership and membership.status == ChannelMembership.Status.BANNED:
+                    return Response({"detail": "You are banned from this channel."}, status=status.HTTP_403_FORBIDDEN)
 
-                if community_obj.privacy_type == Community.PrivacyType.PRIVATE:
-                    if not membership or membership.status != CommunityMembership.Status.APPROVED:
-                        return Response({"detail": "You must be an approved member to post in this private community."}, status=status.HTTP_403_FORBIDDEN)
+                if channel_obj.privacy_type == Channel.PrivacyType.PRIVATE:
+                    if not membership or membership.status != ChannelMembership.Status.APPROVED:
+                        return Response({"detail": "You must be an approved member to post in this private channel."}, status=status.HTTP_403_FORBIDDEN)
                 
-                if community_obj.post_permission == Community.PostPermission.CREATOR_ONLY and user != community_obj.creator:
-                    return Response({"detail": "Only the community creator can post claims in this community."}, status=status.HTTP_403_FORBIDDEN)
-            except Community.DoesNotExist:
-                return Response({"detail": f"Community {community_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
+                if channel_obj.post_permission == Channel.PostPermission.CREATOR_ONLY and user != channel_obj.creator:
+                    return Response({"detail": "Only the channel creator can post claims in this channel."}, status=status.HTTP_403_FORBIDDEN)
+            except Channel.DoesNotExist:
+                return Response({"detail": f"Channel {channel_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Optional Model G market block.
         market_block = request.data.get("market") if isinstance(request.data, dict) else None
@@ -422,19 +480,43 @@ class HardClaimView(APIView):
             m_side = None
             m_stake = None
 
+        # Validate signature before persisting
+        sig = request.data.get("signature", "")
+        claim_payload = request.data.get("claim_payload", {})
+        try:
+            verify_claim_signature(
+                user_address=user.address,
+                user_username=user.username,
+                signature=sig,
+                claim_payload=claim_payload,
+                asset_symbol=asset.symbol,
+            )
+        except Exception as e:
+            from rest_framework.exceptions import ValidationError as DRFValidationError
+            if isinstance(e, DRFValidationError):
+                return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+            logger.exception("Unexpected error during claim signature verification")
+            return Response({"detail": "Invalid claim signature."}, status=status.HTTP_400_BAD_REQUEST)
+
         # Create HardClaim object in the database with the given data
         try:
+            claim_direction, claim_value_type = _normalized_claim_fields(
+                data.get("direction", ""),
+                data.get("value_type", "PERCENTAGE_UP"),
+            )
             hard_claim = HardClaim.objects.create(
                 author=user,
                 post=post_obj,
-                community=community_obj,
+                channel=channel_obj,
                 asset=asset,
-                direction=data.get("direction", ""),
-                value_type=data.get("value_type", "PERCENTAGE_UP"),
+                direction=claim_direction,
+                value_type=claim_value_type,
                 payda=data.get("payda", ""),
                 percentage=data["percentage"],
                 until=data["until"],
                 status=data.get("status", "undetermined"),
+                signature=sig,
+                claim_payload=claim_payload,
             )
             from .models import HardClaimEvent
             HardClaimEvent.objects.create(
@@ -442,6 +524,14 @@ class HardClaimView(APIView):
                 event_type=HardClaimEvent.EventType.CREATION,
                 details={}
             )
+            try:
+                capture_reference_price(hard_claim)
+            except ResolutionError as exc:
+                logger.warning(
+                    "Reference price not captured for claim %s: %s",
+                    hard_claim.id,
+                    exc.message,
+                )
             if market_block is not None:
                 rep_market.init_market(hard_claim, user, m_side, m_stake)
         except rep_market.MarketError as e:
@@ -483,14 +573,14 @@ class HardClaimDetailView(APIView):
         except HardClaim.DoesNotExist:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        if hard_claim.community_id:
-            community = hard_claim.community
-            if community.privacy_type == Community.PrivacyType.PRIVATE:
+        if hard_claim.channel_id:
+            channel = hard_claim.channel
+            if channel.privacy_type == Channel.PrivacyType.PRIVATE:
                 user = _get_wallet_user(request)
-                if not user or not CommunityMembership.objects.filter(
-                    community=community,
+                if not user or not ChannelMembership.objects.filter(
+                    channel=channel,
                     user=user,
-                    status=CommunityMembership.Status.APPROVED,
+                    status=ChannelMembership.Status.APPROVED,
                 ).exists():
                     return Response(
                         {"detail": "You must be an approved member to view this claim."},
@@ -537,51 +627,71 @@ class HardClaimChartDataView(APIView):
 
         asset = hard_claim.asset
         # get_ohlc_data requires aligned UTC datetime objects
-        from datetime import datetime, timezone
-        start_time = datetime.combine(hard_claim.created_at.date(), datetime.min.time(), tzinfo=timezone.utc)
-        end_time = datetime.combine(hard_claim.until, datetime.min.time(), tzinfo=timezone.utc)
+        from datetime import datetime, timedelta, timezone
+        from .resolution import (
+            _effective_direction,
+            claim_entry_price,
+            claim_target_price,
+            ResolutionError,
+            _round_decimal,
+        )
 
-        # Get or fetch OHLC data
-        from .ohlc_fetcher import get_ohlc_data, OHLCFetchError
+        claim_start_day = hard_claim.created_at.date()
+        claim_end_day = hard_claim.until
+        chart_start = claim_start_day - timedelta(days=3)
+        chart_end = claim_end_day + timedelta(days=3)
+        from .ohlc_fetcher import (
+            get_ohlc_data,
+            OHLCFetchError,
+            resolve_chart_interval,
+            floor_align_datetime,
+        )
         try:
-            ohlc_rows = get_ohlc_data(asset, start_time, end_time)
+            chart_interval, default_interval = resolve_chart_interval(
+                hard_claim, request.query_params.get("interval")
+            )
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        start_time = floor_align_datetime(
+            datetime.combine(chart_start, datetime.min.time(), tzinfo=timezone.utc),
+            chart_interval,
+        )
+        end_time = floor_align_datetime(
+            datetime.combine(chart_end, datetime.min.time(), tzinfo=timezone.utc),
+            chart_interval,
+        )
+        if hard_claim.status == HardClaim.Status.UNDETERMINED:
+            end_time = floor_align_datetime(
+                max(end_time, datetime.now(timezone.utc)),
+                chart_interval,
+            )
+
+        try:
+            ohlc_rows = get_ohlc_data(asset, start_time, end_time, interval=chart_interval)
         except OHLCFetchError as e:
             return Response({"detail": str(e)}, status=status.HTTP_502_BAD_GATEWAY)
 
-        # Compute target price
-        reference_price = None
-        target_price = None
+        # Entry/target from locked reference_price; resolution metadata for hit_days only.
+        reference_price = claim_entry_price(hard_claim)
+        if reference_price is not None:
+            reference_price = _round_decimal(reference_price)
+
         target_reached_at = None
         hit_days = []
         closest_price = None
 
-        # Try to get resolution details from events
         resolution_event = hard_claim.events.filter(event_type="resolution").first()
         if resolution_event and resolution_event.details:
             details = resolution_event.details
             prices = details.get("prices", {})
-            reference_price = prices.get("reference")
-            target_price = prices.get("target")
             closest_price = prices.get("closest")
             target_reached_at = details.get("target_reached_at")
             hit_days = details.get("hit_days", [])
-        elif ohlc_rows:
-            # Not resolved yet — compute from OHLC
-            from .resolution import fetch_reference_price, ResolutionError, _round_decimal
-            try:
-                reference_price, _ = fetch_reference_price(hard_claim)
-                reference_price = _round_decimal(reference_price)
-            except ResolutionError:
-                reference_price = ohlc_rows[0].open
 
-            direction = hard_claim.direction.lower()
-            pct = float(hard_claim.percentage)
-            if hard_claim.value_type == "PRICE":
-                target_price = pct
-            elif direction == "bullish":
-                target_price = _round_decimal(reference_price * (1 + pct / 100))
-            else:
-                target_price = _round_decimal(reference_price * (1 - pct / 100))
+        target_price = claim_target_price(hard_claim, reference_price)
+
+        direction, claim_value_type = reconcile_claim_fields(hard_claim)
 
         ohlc_data = [
             {
@@ -597,12 +707,17 @@ class HardClaimChartDataView(APIView):
         return Response({
             "claim_id": hard_claim.id,
             "asset_symbol": asset.symbol,
-            "direction": hard_claim.direction.lower(),
+            "direction": direction,
+            "value_type": claim_value_type,
             "reference_price": reference_price,
             "target_price": target_price,
             "percentage": float(hard_claim.percentage),
             "created_at": hard_claim.created_at.isoformat(),
             "until": hard_claim.until.isoformat(),
+            "interval": chart_interval.value,
+            "default_interval": default_interval.value,
+            "as_of": datetime.now(timezone.utc).isoformat(),
+            "live": hard_claim.status == HardClaim.Status.UNDETERMINED,
             "ohlc": ohlc_data,
             "hit_days": hit_days,
             "closest_price": closest_price,
@@ -610,28 +725,47 @@ class HardClaimChartDataView(APIView):
         })
 
 
-class CommunityListView(APIView):
+class ChannelListView(APIView):
     authentication_classes = []
     permission_classes = []
 
     def get(self, request):
-        qs = Community.objects.all().order_by("-created_at")
-        return Response(CommunitySerializer(qs, many=True).data)
+        qs = Channel.objects.all().order_by("-created_at")
+        data = ChannelSerializer(qs, many=True).data
+        
+        user = _get_wallet_user(request)
+        if user:
+            # Build a lookup of channel_id -> membership_status for this user
+            memberships = ChannelMembership.objects.filter(
+                user=user
+            ).values("channel_id", "status")
+            membership_map = {m["channel_id"]: m["status"] for m in memberships}
+            
+            for item in data:
+                item["my_membership_status"] = membership_map.get(item["id"])
+        
+        return Response(data)
 
     def post(self, request):
         user = _get_wallet_user(request)
         if user is None:
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
             
+        if Channel.objects.filter(creator=user).exists():
+            return Response(
+                {"detail": "You can only create one channel."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         name = request.data.get("name")
         description = request.data.get("description", "")
-        privacy_type = request.data.get("privacy_type", Community.PrivacyType.PUBLIC)
-        post_permission = request.data.get("post_permission", Community.PostPermission.ALL)
+        privacy_type = request.data.get("privacy_type", Channel.PrivacyType.PUBLIC)
+        post_permission = request.data.get("post_permission", Channel.PostPermission.ALL)
         
         if not name:
             return Response({"detail": "Name is required."}, status=status.HTTP_400_BAD_REQUEST)
             
-        community = Community.objects.create(
+        channel = Channel.objects.create(
             name=name,
             description=description,
             creator=user,
@@ -639,34 +773,38 @@ class CommunityListView(APIView):
             post_permission=post_permission
         )
         
-        CommunityMembership.objects.create(
-            community=community,
+        ChannelMembership.objects.create(
+            channel=channel,
             user=user,
-            status=CommunityMembership.Status.APPROVED
+            status=ChannelMembership.Status.APPROVED,
+            role=ChannelMembership.Role.OWNER
         )
         
-        return Response(CommunitySerializer(community).data, status=status.HTTP_201_CREATED)
+        return Response(ChannelSerializer(channel).data, status=status.HTTP_201_CREATED)
 
-class CommunityDetailView(APIView):
+class ChannelDetailView(APIView):
     authentication_classes = []
     permission_classes = []
 
     def get(self, request, pk):
-        community = get_object_or_404(Community, pk=pk)
-        data = CommunitySerializer(community).data
+        channel = get_object_or_404(Channel, pk=pk)
+        data = ChannelSerializer(channel).data
         
         user = _get_wallet_user(request)
         membership_status = None
+        membership_role = None
         if user:
-            membership = CommunityMembership.objects.filter(community=community, user=user).first()
+            membership = ChannelMembership.objects.filter(channel=channel, user=user).first()
             if membership:
                 membership_status = membership.status
+                membership_role = membership.role
                 
         data["my_membership_status"] = membership_status
+        data["my_role"] = membership_role
         
-        if user and community.creator == user:
-            pending_memberships = CommunityMembership.objects.filter(community=community, status=CommunityMembership.Status.PENDING)
-            data["pending_requests"] = CommunityMembershipSerializer(pending_memberships, many=True).data
+        if user and (channel.creator == user or _is_channel_moderator(channel, user)):
+            pending_memberships = ChannelMembership.objects.filter(channel=channel, status=ChannelMembership.Status.PENDING)
+            data["pending_requests"] = ChannelMembershipSerializer(pending_memberships, many=True).data
             
         return Response(data)
 
@@ -675,25 +813,25 @@ class CommunityDetailView(APIView):
         if not user:
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
 
-        community = get_object_or_404(Community, pk=pk)
-        if community.creator != user:
-            return Response({"detail": "Only the creator can update community settings."}, status=status.HTTP_403_FORBIDDEN)
+        channel = get_object_or_404(Channel, pk=pk)
+        if channel.creator != user:
+            return Response({"detail": "Only the creator can update channel settings."}, status=status.HTTP_403_FORBIDDEN)
 
         allowed_fields = {"post_permission"}
         updated = False
         for field in allowed_fields:
             if field in request.data:
                 value = request.data[field]
-                if field == "post_permission" and value not in (Community.PostPermission.ALL, Community.PostPermission.CREATOR_ONLY):
+                if field == "post_permission" and value not in (Channel.PostPermission.ALL, Channel.PostPermission.CREATOR_ONLY):
                     return Response({"detail": f"Invalid value for {field}."}, status=status.HTTP_400_BAD_REQUEST)
-                setattr(community, field, value)
+                setattr(channel, field, value)
                 updated = True
 
         if updated:
-            community.save()
-        return Response(CommunitySerializer(community).data)
+            channel.save()
+        return Response(ChannelSerializer(channel).data)
 
-class CommunityJoinView(APIView):
+class ChannelJoinView(APIView):
     authentication_classes = []
     permission_classes = []
 
@@ -702,23 +840,23 @@ class CommunityJoinView(APIView):
         if user is None:
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
             
-        community = get_object_or_404(Community, pk=pk)
+        channel = get_object_or_404(Channel, pk=pk)
         
-        membership = CommunityMembership.objects.filter(community=community, user=user).first()
+        membership = ChannelMembership.objects.filter(channel=channel, user=user).first()
         if membership:
-            if membership.status == CommunityMembership.Status.BANNED:
-                return Response({"detail": "You are banned from this community."}, status=status.HTTP_403_FORBIDDEN)
+            if membership.status == ChannelMembership.Status.BANNED:
+                return Response({"detail": "You are banned from this channel."}, status=status.HTTP_403_FORBIDDEN)
             return Response({"detail": f"Already have a membership with status: {membership.status}."}, status=status.HTTP_400_BAD_REQUEST)
             
-        membership = CommunityMembership.objects.create(
-            community=community,
+        membership = ChannelMembership.objects.create(
+            channel=channel,
             user=user,
-            status=CommunityMembership.Status.APPROVED if community.privacy_type == Community.PrivacyType.PUBLIC else CommunityMembership.Status.PENDING
+            status=ChannelMembership.Status.APPROVED if channel.privacy_type == Channel.PrivacyType.PUBLIC else ChannelMembership.Status.PENDING
         )
             
-        return Response(CommunityMembershipSerializer(membership).data, status=status.HTTP_201_CREATED)
+        return Response(ChannelMembershipSerializer(membership).data, status=status.HTTP_201_CREATED)
 
-class CommunityApproveView(APIView):
+class ChannelApproveView(APIView):
     authentication_classes = []
     permission_classes = []
 
@@ -727,25 +865,25 @@ class CommunityApproveView(APIView):
         if user is None:
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
             
-        community = get_object_or_404(Community, pk=pk)
-        if community.creator != user:
-            return Response({"detail": "Only the community creator can approve members."}, status=status.HTTP_403_FORBIDDEN)
+        channel = get_object_or_404(Channel, pk=pk)
+        if not _is_channel_moderator(channel, user):
+            return Response({"detail": "Only moderators or the owner can approve members."}, status=status.HTTP_403_FORBIDDEN)
             
         target_user = get_object_or_404(WalletUser, address=user_address.lower())
-        membership = get_object_or_404(CommunityMembership, community=community, user=target_user)
+        membership = get_object_or_404(ChannelMembership, channel=channel, user=target_user)
         
         action = request.data.get("action")
         if action == "approve":
-            membership.status = CommunityMembership.Status.APPROVED
+            membership.status = ChannelMembership.Status.APPROVED
             membership.save()
-            return Response(CommunityMembershipSerializer(membership).data)
+            return Response(ChannelMembershipSerializer(membership).data)
         elif action == "reject":
             membership.delete()
             return Response({"detail": "Request rejected."})
         else:
             return Response({"detail": "Invalid action. Use 'approve' or 'reject'."}, status=status.HTTP_400_BAD_REQUEST)
 
-class CommunityBanView(APIView):
+class ChannelBanView(APIView):
     authentication_classes = []
     permission_classes = []
 
@@ -754,36 +892,77 @@ class CommunityBanView(APIView):
         if user is None:
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
             
-        community = get_object_or_404(Community, pk=pk)
-        if community.creator != user:
-            return Response({"detail": "Only the community creator can ban members."}, status=status.HTTP_403_FORBIDDEN)
+        channel = get_object_or_404(Channel, pk=pk)
+        if not _is_channel_moderator(channel, user):
+            return Response({"detail": "Only moderators or the owner can ban members."}, status=status.HTTP_403_FORBIDDEN)
             
         target_user = get_object_or_404(WalletUser, address=user_address.lower())
         if target_user == user:
             return Response({"detail": "You cannot ban yourself."}, status=status.HTTP_400_BAD_REQUEST)
 
-        membership, _ = CommunityMembership.objects.get_or_create(
-            community=community,
+        # Guard: moderators cannot ban the owner or other moderators of equal/higher rank
+        target_membership = ChannelMembership.objects.filter(channel=channel, user=target_user).first()
+        if target_membership and target_membership.role in [ChannelMembership.Role.OWNER, ChannelMembership.Role.MODERATOR]:
+            if channel.creator != user:  # Only owner can ban moderators
+                return Response({"detail": "Moderators cannot ban the owner or other moderators."}, status=status.HTTP_403_FORBIDDEN)
+
+        membership, _ = ChannelMembership.objects.get_or_create(
+            channel=channel,
             user=target_user
         )
-        membership.status = CommunityMembership.Status.BANNED
+        membership.status = ChannelMembership.Status.BANNED
         membership.save()
-        return Response(CommunityMembershipSerializer(membership).data)
+        return Response(ChannelMembershipSerializer(membership).data)
 
-class CommunityMemberListView(APIView):
+    def delete(self, request, pk, user_address):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+            
+        channel = get_object_or_404(Channel, pk=pk)
+        if not _is_channel_moderator(channel, user):
+            return Response({"detail": "Only moderators or the owner can unban members."}, status=status.HTTP_403_FORBIDDEN)
+            
+        target_user = get_object_or_404(WalletUser, address=user_address.lower())
+        
+        try:
+            membership = ChannelMembership.objects.get(channel=channel, user=target_user)
+            if membership.status == ChannelMembership.Status.BANNED:
+                membership.delete()
+                return Response({"detail": "User unbanned."}, status=status.HTTP_204_NO_CONTENT)
+            else:
+                return Response({"detail": "User is not banned."}, status=status.HTTP_400_BAD_REQUEST)
+        except ChannelMembership.DoesNotExist:
+            return Response({"detail": "User is not banned."}, status=status.HTTP_400_BAD_REQUEST)
+
+class ChannelMemberListView(APIView):
     authentication_classes = []
     permission_classes = []
 
     def get(self, request, pk):
-        community = get_object_or_404(Community, pk=pk)
+        channel = get_object_or_404(Channel, pk=pk)
         
-        if community.privacy_type == Community.PrivacyType.PRIVATE:
+        if channel.privacy_type == Channel.PrivacyType.PRIVATE:
             user = _get_wallet_user(request)
-            if not user or (community.creator != user and not CommunityMembership.objects.filter(community=community, user=user, status=CommunityMembership.Status.APPROVED).exists()):
+            if not user or (channel.creator != user and not ChannelMembership.objects.filter(channel=channel, user=user, status=ChannelMembership.Status.APPROVED).exists()):
                 return Response({"detail": "You must be a member to view this list."}, status=status.HTTP_403_FORBIDDEN)
                 
-        memberships = CommunityMembership.objects.filter(community=community, status=CommunityMembership.Status.APPROVED).order_by('created_at')
-        return Response(CommunityMembershipSerializer(memberships, many=True).data)
+        memberships = ChannelMembership.objects.filter(channel=channel, status=ChannelMembership.Status.APPROVED).order_by('created_at')
+        return Response(ChannelMembershipSerializer(memberships, many=True).data)
+
+class ChannelBannedListView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        channel = get_object_or_404(Channel, pk=pk)
+        
+        user = _get_wallet_user(request)
+        if not user or not _is_channel_moderator(channel, user):
+            return Response({"detail": "Only moderators or the owner can view the banned list."}, status=status.HTTP_403_FORBIDDEN)
+                
+        memberships = ChannelMembership.objects.filter(channel=channel, status=ChannelMembership.Status.BANNED).order_by('created_at')
+        return Response(ChannelMembershipSerializer(memberships, many=True).data)
 
 from django.core.cache import cache as django_cache
 import time
@@ -893,19 +1072,19 @@ class PositionListCreateView(APIView):
         return super().get_permissions()
 
     def get(self, request):
-        community_id = request.query_params.get("community")
-        if not community_id:
-            return Response({"detail": "community parameter is required."}, status=status.HTTP_400_BAD_REQUEST)
+        channel_id = request.query_params.get("channel")
+        if not channel_id:
+            return Response({"detail": "channel parameter is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        community = get_object_or_404(Community, pk=community_id)
+        channel = get_object_or_404(Channel, pk=channel_id)
         
         # Privacy check
-        if community.privacy_type == Community.PrivacyType.PRIVATE:
+        if channel.privacy_type == Channel.PrivacyType.PRIVATE:
             user = _get_wallet_user(request)
-            if not user or (community.creator != user and not CommunityMembership.objects.filter(community=community, user=user, status=CommunityMembership.Status.APPROVED).exists()):
-                return Response({"detail": "You must be an approved member to view positions in this private community."}, status=status.HTTP_403_FORBIDDEN)
+            if not user or (channel.creator != user and not ChannelMembership.objects.filter(channel=channel, user=user, status=ChannelMembership.Status.APPROVED).exists()):
+                return Response({"detail": "You must be an approved member to view positions in this private channel."}, status=status.HTTP_403_FORBIDDEN)
                 
-        positions = Position.objects.filter(community=community).order_by("-created_at")
+        positions = Position.objects.filter(channel=channel).order_by("-created_at")
         return Response(PositionSerializer(positions, many=True).data)
 
     def post(self, request):
@@ -918,25 +1097,42 @@ class PositionListCreateView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         data = serializer.validated_data
-        community = get_object_or_404(Community, pk=data["community_id"])
+        channel = get_object_or_404(Channel, pk=data["channel_id"])
         
         # Permission checks
-        membership = CommunityMembership.objects.filter(community=community, user=user).first()
-        if membership and membership.status == CommunityMembership.Status.BANNED:
-            return Response({"detail": "You are banned from this community."}, status=status.HTTP_403_FORBIDDEN)
+        membership = ChannelMembership.objects.filter(channel=channel, user=user).first()
+        if membership and membership.status == ChannelMembership.Status.BANNED:
+            return Response({"detail": "You are banned from this channel."}, status=status.HTTP_403_FORBIDDEN)
 
-        if community.privacy_type == Community.PrivacyType.PRIVATE:
-            if not membership or membership.status != CommunityMembership.Status.APPROVED:
-                return Response({"detail": "You must be an approved member to post positions in this private community."}, status=status.HTTP_403_FORBIDDEN)
+        if channel.privacy_type == Channel.PrivacyType.PRIVATE:
+            if not membership or membership.status != ChannelMembership.Status.APPROVED:
+                return Response({"detail": "You must be an approved member to post positions in this private channel."}, status=status.HTTP_403_FORBIDDEN)
                 
-        if community.post_permission == Community.PostPermission.CREATOR_ONLY and user != community.creator:
-            return Response({"detail": "Only the creator can post in this community."}, status=status.HTTP_403_FORBIDDEN)
+        if channel.creator != user:
+            return Response({"detail": "Only the channel owner can share positions."}, status=status.HTTP_403_FORBIDDEN)
 
         asset = get_object_or_404(Asset, pk=data["asset_id"])
-        
+
+        sig = data.get("signature", "")
+        position_payload = data.get("position_payload", {})
+        try:
+            verify_position_signature(
+                user_address=user.address,
+                user_username=user.username,
+                signature=sig,
+                position_payload=position_payload,
+                asset_symbol=asset.symbol,
+            )
+        except Exception as e:
+            from rest_framework.exceptions import ValidationError as DRFValidationError
+            if isinstance(e, DRFValidationError):
+                return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+            logger.exception("Unexpected error while verifying position signature")
+            return Response({"detail": "Unable to verify position signature."}, status=status.HTTP_400_BAD_REQUEST)
+
         position = Position.objects.create(
             author=user,
-            community=community,
+            channel=channel,
             asset=asset,
             direction=data["direction"],
             entry_price=data["entry_price"],
@@ -944,6 +1140,8 @@ class PositionListCreateView(APIView):
             stop_loss=data["stop_loss"],
             take_profit=data["take_profit"],
             lifetime=data["lifetime"],
+            signature=sig,
+            position_payload=position_payload,
             status=Position.Status.PENDING
         )
         
@@ -1187,3 +1385,107 @@ class HardClaimMarketPreviewView(APIView):
         )
 
 
+class ChannelModeratorView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, pk, user_address):
+        """Promote a member to moderator (owner only)."""
+        user = _get_wallet_user(request)
+        if not user:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        channel = get_object_or_404(Channel, pk=pk)
+        if channel.creator != user:
+            return Response({"detail": "Only the owner can promote moderators."}, status=status.HTTP_403_FORBIDDEN)
+
+        target_user = get_object_or_404(WalletUser, address=user_address.lower())
+        if target_user == user:
+            return Response({"detail": "You are already the owner."}, status=status.HTTP_400_BAD_REQUEST)
+
+        membership = get_object_or_404(ChannelMembership, channel=channel, user=target_user)
+        if membership.status != ChannelMembership.Status.APPROVED:
+            return Response({"detail": "User must be an approved member to be promoted."}, status=status.HTTP_400_BAD_REQUEST)
+
+        membership.role = ChannelMembership.Role.MODERATOR
+        membership.save()
+        return Response(ChannelMembershipSerializer(membership).data)
+
+    def delete(self, request, pk, user_address):
+        """Demote a moderator back to member (owner only)."""
+        user = _get_wallet_user(request)
+        if not user:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        channel = get_object_or_404(Channel, pk=pk)
+        if channel.creator != user:
+            return Response({"detail": "Only the owner can demote moderators."}, status=status.HTTP_403_FORBIDDEN)
+
+        target_user = get_object_or_404(WalletUser, address=user_address.lower())
+        membership = get_object_or_404(ChannelMembership, channel=channel, user=target_user)
+        if membership.role != ChannelMembership.Role.MODERATOR:
+            return Response({"detail": "User is not a moderator."}, status=status.HTTP_400_BAD_REQUEST)
+
+        membership.role = ChannelMembership.Role.MEMBER
+        membership.save()
+        return Response(ChannelMembershipSerializer(membership).data)
+
+
+class PostDeleteView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def delete(self, request, pk):
+        user = _get_wallet_user(request)
+        if not user:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        post = get_object_or_404(Post, pk=pk)
+
+        is_channel_mod = post.channel and _is_channel_moderator(post.channel, user)
+
+        if not is_channel_mod:
+            return Response({"detail": "You do not have permission to delete this post."}, status=status.HTTP_403_FORBIDDEN)
+
+        post.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class HardClaimProofView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        claim = get_object_or_404(HardClaim, pk=pk)
+        if not claim.signature:
+            return Response({"detail": "This claim does not have a signature."}, status=status.HTTP_404_NOT_FOUND)
+        
+        return Response({
+            "type": "claim",
+            "claim_id": claim.id,
+            "wallet_address": claim.author.address,
+            "signature": claim.signature,
+            "payload": claim.claim_payload,
+            "server_timestamp": claim.created_at.isoformat(),
+            "reference_price": claim.reference_price,
+            "target_price": claim_target_price(claim),
+        })
+
+
+class PositionProofView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        position = get_object_or_404(Position, pk=pk)
+        if not position.signature:
+            return Response({"detail": "This position does not have a signature."}, status=status.HTTP_404_NOT_FOUND)
+        
+        return Response({
+            "type": "position",
+            "position_id": position.id,
+            "wallet_address": position.author.address,
+            "signature": position.signature,
+            "payload": position.position_payload,
+            "server_timestamp": position.created_at.isoformat()
+        })

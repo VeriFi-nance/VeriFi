@@ -7,14 +7,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { createPosition } from '@/lib/api';
 import type { AssetItem } from '@/lib/types';
 import { PlusCircle } from 'lucide-react';
+import { buildPositionPayload } from '@/lib/payloads';
+import { signPayload, resolveUsername } from '@/lib/signing';
 
 interface NewPositionModalProps {
-  communityId: number;
+  channelId: number;
   assets: AssetItem[];
   onCreated: () => void;
 }
 
-export function NewPositionModal({ communityId, assets, onCreated }: NewPositionModalProps) {
+export function NewPositionModal({ channelId, assets, onCreated }: NewPositionModalProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -79,8 +81,24 @@ export function NewPositionModal({ communityId, assets, onCreated }: NewPosition
 
     setLoading(true);
     try {
+      const selectedAsset = assets.find((a) => a.id.toString() === assetId);
+      
+      const payloadObj = {
+        asset_symbol: selectedAsset?.symbol || '',
+        author_username: await resolveUsername(),
+        direction,
+        entry_price: entry,
+        stop_loss: sl,
+        take_profit: tp,
+        lifetime: lifeDate.toISOString(),
+        created_at: new Date().toISOString(),
+      };
+      
+      const payloadStr = buildPositionPayload(payloadObj);
+      const signature = await signPayload(payloadStr);
+
       await createPosition({
-        community_id: communityId,
+        channel_id: channelId,
         asset_id: parseInt(assetId),
         direction,
         entry_price: entry,
@@ -88,6 +106,8 @@ export function NewPositionModal({ communityId, assets, onCreated }: NewPosition
         stop_loss: sl,
         take_profit: tp,
         lifetime: lifeDate.toISOString(),
+        signature,
+        position_payload: payloadObj,
       });
       setOpen(false);
       onCreated();

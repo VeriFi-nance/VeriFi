@@ -2,7 +2,7 @@ from django.db import models
 from accounts.models import WalletUser
 
 
-class Community(models.Model):
+class Channel(models.Model):
     class PrivacyType(models.TextChoices):
         PUBLIC = "public"
         PRIVATE = "private"
@@ -13,7 +13,7 @@ class Community(models.Model):
 
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
-    creator = models.ForeignKey(WalletUser, on_delete=models.SET_NULL, null=True, related_name="created_communities")
+    creator = models.ForeignKey(WalletUser, on_delete=models.SET_NULL, null=True, related_name="created_channels")
     privacy_type = models.CharField(max_length=10, choices=PrivacyType.choices, default=PrivacyType.PUBLIC)
     post_permission = models.CharField(max_length=15, choices=PostPermission.choices, default=PostPermission.ALL)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -21,33 +21,43 @@ class Community(models.Model):
     def __str__(self):
         return self.name
 
-class CommunityMembership(models.Model):
+class ChannelMembership(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending"
         APPROVED = "approved"
         BANNED = "banned"
 
-    community = models.ForeignKey(Community, on_delete=models.CASCADE, related_name="memberships")
-    user = models.ForeignKey(WalletUser, on_delete=models.CASCADE, related_name="community_memberships")
+    class Role(models.TextChoices):
+        MEMBER = "member"
+        MODERATOR = "moderator"
+        OWNER = "owner"
+
+    channel = models.ForeignKey(Channel, on_delete=models.CASCADE, related_name="memberships")
+    user = models.ForeignKey(WalletUser, on_delete=models.CASCADE, related_name="channel_memberships")
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    role = models.CharField(
+        max_length=15,
+        choices=Role.choices,
+        default=Role.MEMBER,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ("community", "user")
+        unique_together = ("channel", "user")
         indexes = [
             models.Index(
-                fields=["community", "status"],
-                name="comm_member_status_idx",
+                fields=["channel", "status"],
+                name="chan_member_status_idx",
             ),
         ]
 
     def __str__(self):
-        return f"{self.user.address[:10]} in {self.community.name} ({self.status})"
+        return f"{self.user.address[:10]} in {self.channel.name} ({self.status})"
 
 
 class Post(models.Model):
     author = models.ForeignKey(WalletUser, on_delete=models.CASCADE, related_name="posts")
-    community = models.ForeignKey(Community, on_delete=models.CASCADE, related_name="posts", null=True, blank=True)
+    channel = models.ForeignKey(Channel, on_delete=models.CASCADE, related_name="posts", null=True, blank=True)
     content = models.TextField(max_length=500)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -57,11 +67,11 @@ class Post(models.Model):
             models.Index(
                 fields=["-created_at"],
                 name="post_global_feed_idx",
-                condition=models.Q(community__isnull=True),
+                condition=models.Q(channel__isnull=True),
             ),
             models.Index(
-                fields=["community", "-created_at"],
-                name="post_community_feed_idx",
+                fields=["channel", "-created_at"],
+                name="post_channel_feed_idx",
             ),
             models.Index(
                 fields=["author", "-created_at"],
@@ -134,7 +144,7 @@ class HardClaim(models.Model):
         REJECTED = "rejected"
 
     author = models.ForeignKey(WalletUser, on_delete=models.CASCADE, related_name="hard_claims", null=True, blank=True)
-    community = models.ForeignKey(Community, on_delete=models.CASCADE, related_name="hard_claims", null=True, blank=True)
+    channel = models.ForeignKey(Channel, on_delete=models.CASCADE, related_name="hard_claims", null=True, blank=True)
     post = models.ForeignKey(Post, on_delete=models.SET_NULL, null=True, blank=True, related_name="hard_claims")
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE, blank=False, null=False)
     direction = models.CharField(max_length=20, blank=True, default="") # this will be binary, 1 up, 0 down
@@ -146,7 +156,11 @@ class HardClaim(models.Model):
     percentage = models.FloatField(blank=False, null=False) # magnitude: percentage move, or absolute price when value_type == PRICE
     until = models.DateField(blank=False, null=False)
     created_at = models.DateTimeField(auto_now_add=True)
+    reference_price = models.FloatField(blank=True, null=True)
+    reference_price_url = models.TextField(blank=True, default="")
     status = models.CharField(max_length=12, choices=Status.choices, default="undetermined")
+    signature = models.TextField(blank=True, default="")
+    claim_payload = models.JSONField(blank=True, default=dict)
 
     class Meta:
         constraints = [
@@ -226,7 +240,7 @@ class Position(models.Model):
         CLOSED_EARLY = "closed_early"
 
     author = models.ForeignKey(WalletUser, on_delete=models.CASCADE, related_name="positions")
-    community = models.ForeignKey(Community, on_delete=models.CASCADE, related_name="positions")
+    channel = models.ForeignKey(Channel, on_delete=models.CASCADE, related_name="positions")
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE)
     direction = models.CharField(max_length=10, choices=Direction.choices)
     entry_price = models.FloatField()
@@ -238,6 +252,8 @@ class Position(models.Model):
     pnl_percentage = models.FloatField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     created_at = models.DateTimeField(auto_now_add=True)
+    signature = models.TextField(blank=True, default="")
+    position_payload = models.JSONField(blank=True, default=dict)
 
     def __str__(self):
         return f"Position {self.id} ({self.asset.symbol} {self.direction})"

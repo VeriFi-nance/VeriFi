@@ -1,9 +1,10 @@
+/* eslint-disable react-refresh/only-export-components */
 import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Home, LogOut, Moon, Settings, Sun, User, Users } from 'lucide-react';
+import { Home, LogOut, Moon, Settings, Sun, User, Tv, ShieldCheck } from 'lucide-react';
 import { clearAuth, useAuthState, useOpenLogin } from '@/lib/auth';
-import { clearPrivateKey } from '@/lib/crypto';
+import { clearPrivateKey } from '@/lib/keystore';
 import { loadTheme, toggleTheme, type Theme } from '@/lib/theme';
 import { EnergyMeter } from '@/components/EnergyMeter';
 import { UserAvatar } from '@/components/UserAvatar';
@@ -28,10 +29,16 @@ export function buildNavItems(): NavItem[] {
       matches: (p) => p === '/feed' || p === '/' || p.startsWith('/post/') || p.startsWith('/claim/'),
     },
     {
-      to: '/c',
-      icon: <Users className="size-5" />,
-      label: 'Communities',
-      matches: (p) => p.startsWith('/c'),
+      to: '/channels',
+      icon: <Tv className="size-5" />,
+      label: 'Channels',
+      matches: (p) => p.startsWith('/channels') || p.startsWith('/c'),
+    },
+    {
+      to: '/verify',
+      icon: <ShieldCheck className="size-5" />,
+      label: 'Verify Proof',
+      matches: (p) => p.startsWith('/verify'),
     },
     {
       to: '/settings',
@@ -50,8 +57,10 @@ function pageTitle(pathname: string): string {
   if (pathname.startsWith('/post/')) return 'Post';
   if (pathname.startsWith('/claim/')) return 'Claim';
   if (pathname.startsWith('/u/')) return 'Profile';
-  if (pathname.startsWith('/c/')) return 'Community';
-  if (pathname === '/c') return 'Communities';
+  if (pathname.startsWith('/channels/')) return 'Channel';
+  if (pathname === '/channels') return 'Channels';
+  if (pathname.startsWith('/c/')) return 'Channel';
+  if (pathname === '/c') return 'Channels';
   return 'VeriFi';
 }
 

@@ -66,6 +66,7 @@ export interface PostItem {
   claims: ClaimItem[];
   hard_claims: HardClaimItem[];
   profitability?: ProfitabilityData | null;
+  channel?: number | null;
 }
 
 export interface HardClaimEvent {
@@ -91,9 +92,16 @@ export interface HardClaimItem {
   /** API field — mapped to `parity` in UI helpers. */
   payda?: string;
   percentage: number;
+  /** Compact UI magnitude (%); absolute PRICE targets converted server-side. */
+  display_percentage?: number;
   until: string;
   created_at: string;
+  reference_price?: number | null;
+  reference_price_url?: string;
+  target_price?: number | null;
   status: string;
+  signature?: string;
+  claim_payload?: Record<string, unknown>;
   events?: HardClaimEvent[];
   profitability?: ProfitabilityData | null;
 }
@@ -115,15 +123,21 @@ export interface OHLCRow {
   close: number;
 }
 
+export type ChartCandleInterval = '15m' | '4h' | '1d';
+
 export interface ClaimChartData {
   claim_id: number;
   asset_symbol: string;
   direction: string;
-  reference_price: number;
-  target_price: number;
+  reference_price: number | null;
+  target_price: number | null;
   percentage: number;
   created_at: string;
   until: string;
+  interval?: ChartCandleInterval;
+  default_interval?: ChartCandleInterval;
+  as_of?: string;
+  live?: boolean;
   ohlc: OHLCRow[];
   hit_days: string[];
   closest_price: number | null;
@@ -142,6 +156,8 @@ export interface ProfileStats {
   rep?: number;
   energy?: number;
   energy_cap?: number | null;
+  channel_owned?: ChannelItem | null;
+  channels_member_of?: ChannelItem[];
 }
 
 export interface MarketYourStake {
@@ -198,7 +214,7 @@ export interface BuyResult {
   user_energy: number;
 }
 
-export interface CommunityItem {
+export interface ChannelItem {
   id: number;
   name: string;
   description: string;
@@ -209,15 +225,17 @@ export interface CommunityItem {
   created_at: string;
   member_count: number;
   my_membership_status?: 'pending' | 'approved' | null;
-  pending_requests?: CommunityMembershipItem[];
+  my_role?: 'member' | 'moderator' | 'owner' | null;
+  pending_requests?: ChannelMembershipItem[];
 }
 
-export interface CommunityMembershipItem {
+export interface ChannelMembershipItem {
   id: number;
-  community: number;
+  channel: number;
   user_address: string;
   user_username: string;
   status: 'pending' | 'approved' | 'banned';
+  role: 'member' | 'moderator' | 'owner';
   created_at: string;
   profitability?: ProfitabilityData | null;
 }
@@ -233,7 +251,7 @@ export interface PositionItem {
   id: number;
   author_address: string;
   author_username: string;
-  community: number;
+  channel: number;
   asset: number;
   direction: 'long' | 'short';
   entry_price: number;
@@ -245,6 +263,35 @@ export interface PositionItem {
   pnl_percentage: number | null;
   status: 'pending' | 'active' | 'confirmed' | 'rejected' | 'missed' | 'closed_early' | 'expired';
   created_at: string;
+  signature?: string;
+  position_payload?: Record<string, unknown>;
   events?: PositionEventItem[];
   profitability?: ProfitabilityData | null;
+}
+
+export interface ProofBundle {
+  type: 'claim' | 'position';
+  claim_id?: number;
+  position_id?: number;
+  wallet_address: string;
+  signature: string;
+  payload: Record<string, unknown>;
+  server_timestamp: string;
+  reference_price?: number | null;
+  target_price?: number | null;
+}
+
+export interface OGMetadata {
+  title: string;
+  description: string;
+  asset_symbol: string;
+  direction: string;
+  percentage?: number;
+  reference_price?: number | null;
+  target_price?: number | null;
+  entry_price?: number;
+  take_profit?: number | null;
+  stop_loss?: number | null;
+  status: string;
+  author_username?: string;
 }

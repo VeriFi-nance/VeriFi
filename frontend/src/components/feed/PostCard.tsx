@@ -10,14 +10,16 @@ import ProfitabilityBadge from '@/components/ProfitabilityBadge';
 import { truncateAddress } from '@/lib/wallet';
 import { cn } from '@/lib/utils';
 import type { PostItem, HardClaimItem, AssetItem } from '@/lib/types';
+import { getFeedClaimTagLabel } from '@/lib/claims';
 
 interface PostCardProps {
   post: PostItem;
   hardClaims?: HardClaimItem[];
   assets?: AssetItem[];
+  onDelete?: () => void;
 }
 
-export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) {
+export function PostCard({ post, hardClaims = [], assets = [], onDelete }: PostCardProps) {
   const [claimsOpen, setClaimsOpen] = useState(false);
   const confirmedClaims = post.claims.filter((c) => c.status === 'confirmed');
   const claimHints = post.hard_claims.length > 0 ? post.hard_claims : hardClaims;
@@ -57,8 +59,22 @@ export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) 
             </time>
           </div>
 
-          <div className="pointer-events-auto">
+          <div className="pointer-events-auto flex items-center gap-2">
             <ProfitabilityBadge data={post.profitability} />
+            {onDelete && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive h-7 px-2"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onDelete();
+                }}
+              >
+                Delete
+              </Button>
+            )}
           </div>
         </div>
 
@@ -114,7 +130,7 @@ export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) 
                   {claimHints.map((hc, index) => {
                     const asset = assets.find((a) => a.id === hc.asset);
                     const symbol = asset?.symbol ?? `#${hc.asset}`;
-                    const isBullish = hc.direction.toLowerCase() === 'bullish';
+                    const tag = getFeedClaimTagLabel(hc);
                     return (
                       <span key={hc.id} className="inline-flex items-center gap-1.5">
                         {index > 0 && (
@@ -123,11 +139,8 @@ export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) 
                           </span>
                         )}
                         <span className="font-mono text-xs font-semibold text-foreground">{symbol}</span>
-                        <Badge
-                          variant={isBullish ? 'success' : 'destructive'}
-                          className="text-[10px] px-1.5 py-0 num"
-                        >
-                          {isBullish ? '▲' : '▼'} {hc.percentage.toFixed(1)}%
+                        <Badge variant={tag.variant} className="text-[10px] px-1.5 py-0 num">
+                          {tag.label}
                         </Badge>
                       </span>
                     );

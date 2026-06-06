@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 import os
+import sys
 from pathlib import Path
 
 import dj_database_url
@@ -149,6 +150,16 @@ DATABASES = {
 # default OS-level timeout. Only applies to Postgres.
 if _database_url.startswith(("postgres://", "postgresql://")):
     DATABASES["default"].setdefault("OPTIONS", {}).setdefault("connect_timeout", 10)
+
+# Always use a local in-memory SQLite DB for `manage.py test`, regardless of
+# DATABASE_URL in .env (Neon/Postgres makes the suite slow or appear hung).
+if "test" in sys.argv:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+        }
+    }
 
 
 # Password validation

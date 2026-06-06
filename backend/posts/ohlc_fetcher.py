@@ -76,9 +76,71 @@ class OHLCFetchError(Exception):
 
 class Interval(Enum):
     ONE_DAY = "1d"
+    FOUR_HOUR = "4h"
     ONE_HOUR = "1h"
     FIFTEEN_MIN = "15m"
     ONE_MIN = "1m"
+
+
+def chart_interval_for_claim(hard_claim) -> Interval:
+    """Default chart candle size from claim window length."""
+    claim_end = datetime.combine(hard_claim.until, time(23, 59, 59), tzinfo=timezone.utc)
+    claim_start = hard_claim.created_at
+    if claim_start.tzinfo is None:
+        claim_start = claim_start.replace(tzinfo=timezone.utc)
+    else:
+        claim_start = claim_start.astimezone(timezone.utc)
+    window_sec = (claim_end - claim_start).total_seconds()
+    if window_sec < 7 * 86400:
+        return Interval.FIFTEEN_MIN
+    if window_sec < 30 * 86400:
+        return Interval.FOUR_HOUR
+    return Interval.ONE_DAY
+
+
+CHART_INTERVAL_CHOICES = frozenset(
+    {Interval.FIFTEEN_MIN, Interval.FOUR_HOUR, Interval.ONE_DAY}
+)
+
+
+def resolve_chart_interval(hard_claim, requested: str | None) -> tuple[Interval, Interval]:
+    """Return (selected_interval, default_interval)."""
+    default = chart_interval_for_claim(hard_claim)
+    if not requested:
+        return default, default
+    try:
+        interval = Interval(requested)
+    except ValueError as exc:
+        raise ValueError(f"Invalid interval: {requested}") from exc
+    if interval not in CHART_INTERVAL_CHOICES:
+        raise ValueError(
+            f"Interval {requested} is not supported for charts. Use 15m, 4h, or 1d."
+        )
+    return interval, default
+
+
+def _aggregate_to_4h(rows: list[OHLCRow]) -> list[OHLCRow]:
+    """Bucket hourly (or finer) candles into 4-hour OHLC bars aligned to UTC."""
+    if not rows:
+        return []
+    buckets: dict[datetime, OHLCRow] = {}
+    for row in sorted(rows, key=lambda r: r["timestamp"]):
+        ts = row["timestamp"]
+        bucket_ts = ts.replace(hour=(ts.hour // 4) * 4, minute=0, second=0, microsecond=0)
+        if bucket_ts not in buckets:
+            buckets[bucket_ts] = {
+                "timestamp": bucket_ts,
+                "open": row["open"],
+                "high": row["high"],
+                "low": row["low"],
+                "close": row["close"],
+            }
+        else:
+            bucket = buckets[bucket_ts]
+            bucket["high"] = max(bucket["high"], row["high"])
+            bucket["low"] = min(bucket["low"], row["low"])
+            bucket["close"] = row["close"]
+    return sorted(buckets.values(), key=lambda r: r["timestamp"])
 
 
 # ---------------------------------------------------------------------------
@@ -102,13 +164,14 @@ def _fetch_binance_ohlc(symbol: str, start: datetime, end: datetime, interval: I
     """
     Binance klines endpoint.  symbol e.g. 'BTCUSDT'.
     Returns OHLC candles in the [start, end] datetime range (inclusive) with intervals.
-    Intervals: 1d, 1h, 15m, 1m
+    Intervals: 1d, 4h, 1h, 15m, 1m
     """
     start_ms = int(start.timestamp() * 1000)
     end_ms = int(end.timestamp() * 1000)
     
     interval_map = {
         Interval.ONE_DAY: "1d",
+        Interval.FOUR_HOUR: "4h",
         Interval.ONE_HOUR: "1h",
         Interval.FIFTEEN_MIN: "15m",
         Interval.ONE_MIN: "1m",
@@ -136,13 +199,14 @@ def _fetch_binance_ohlc(symbol: str, start: datetime, end: datetime, interval: I
 def _fetch_kucoin_ohlc(symbol: str, start: datetime, end: datetime, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
     """
     Kucoin kline endpoint.  symbol e.g. 'BTC-USDT'.
-    Intervals: 1day, 1hour, 15min, 1min
+    Intervals: 1day, 4hour, 1hour, 15min, 1min
     """
     start_sec = int(start.timestamp())
     end_sec = int(end.timestamp())
     
     interval_map = {
         Interval.ONE_DAY: "1day",
+        Interval.FOUR_HOUR: "4hour",
         Interval.ONE_HOUR: "1hour",
         Interval.FIFTEEN_MIN: "15min",
         Interval.ONE_MIN: "1min",
@@ -180,12 +244,13 @@ def _fetch_kraken_ohlc(pair: str, start: datetime, end: datetime, interval: Inte
     """
     Kraken OHLC endpoint.  pair e.g. 'XBTUSD'.
     Note: Kraken returns up to 720 entries and only recent data.
-    Intervals (in minutes): 1440 (1 day), 60 (1 hour), 15, 1
+    Intervals (in minutes): 1440 (1 day), 240 (4 hour), 60 (1 hour), 15, 1
     """
     since_sec = int(start.timestamp())
     
     interval_map = {
         Interval.ONE_DAY: 1440,
+        Interval.FOUR_HOUR: 240,
         Interval.ONE_HOUR: 60,
         Interval.FIFTEEN_MIN: 15,
         Interval.ONE_MIN: 1,
@@ -289,8 +354,12 @@ def _fetch_coingecko_ohlc(
 def _fetch_yfinance_ohlc(symbol: str, start: datetime, end: datetime, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
     """
     Yahoo Finance v8 chart API.  symbol e.g. 'AAPL', 'GC=F' (gold futures).
-    Intervals: 1d, 1h, 15m, 1m
+    Intervals: 1d, 4h (aggregated from 1h), 1h, 15m, 1m
     """
+    if interval == Interval.FOUR_HOUR:
+        hourly = _fetch_yfinance_ohlc(symbol, start, end, Interval.ONE_HOUR)
+        return _aggregate_to_4h(hourly)
+
     period1 = int(start.timestamp())
     period2 = int(end.timestamp())
     
@@ -344,14 +413,19 @@ def _fetch_twelvedata_ohlc(symbol: str, start: datetime, end: datetime, interval
     """
     Twelve Data time_series API.  symbol e.g. 'AAPL', 'XAU/USD'.
     Requires TWELVE_DATA_API_KEY in Django settings.
-    Intervals: 1day, 1h, 15min, 1min
+    Intervals: 1day, 4h, 1h, 15min, 1min
     """
     api_key = getattr(settings, "TWELVE_DATA_API_KEY", "")
     if not api_key:
         raise OHLCFetchError("TWELVE_DATA_API_KEY not configured.")
 
+    if interval == Interval.FOUR_HOUR:
+        hourly = _fetch_twelvedata_ohlc(symbol, start, end, Interval.ONE_HOUR)
+        return _aggregate_to_4h(hourly)
+
     interval_map = {
         Interval.ONE_DAY: "1day",
+        Interval.FOUR_HOUR: "4h",
         Interval.ONE_HOUR: "1h",
         Interval.FIFTEEN_MIN: "15min",
         Interval.ONE_MIN: "1min",
@@ -479,10 +553,36 @@ def _try_traditional_chain(asset: Asset, start: datetime, end: datetime, interva
 
 def fetch_ohlc_for_asset(asset: Asset, start: datetime, end: datetime, interval: Interval = Interval.ONE_DAY) -> list[OHLCRow]:
     """Route to the correct API chain based on asset.market_type."""
+    if interval == Interval.FOUR_HOUR:
+        try:
+            if asset.market_type == Asset.MarketType.CRYPTO:
+                return _try_crypto_chain(asset, start, end, interval)
+            return _try_traditional_chain(asset, start, end, interval)
+        except OHLCFetchError:
+            hourly = fetch_ohlc_for_asset(asset, start, end, Interval.ONE_HOUR)
+            if not hourly:
+                raise OHLCFetchError(f"No 4h or 1h OHLC data for {asset.symbol}")
+            return _aggregate_to_4h(hourly)
+
     if asset.market_type == Asset.MarketType.CRYPTO:
         return _try_crypto_chain(asset, start, end, interval)
-    else:
-        return _try_traditional_chain(asset, start, end, interval)
+    return _try_traditional_chain(asset, start, end, interval)
+
+
+def floor_align_datetime(dt: datetime, interval: Interval) -> datetime:
+    """Floor a UTC datetime to the open of its candle bucket."""
+    dt = dt.astimezone(timezone.utc).replace(microsecond=0)
+    if interval == Interval.ONE_DAY:
+        return dt.replace(hour=0, minute=0, second=0)
+    if interval == Interval.FOUR_HOUR:
+        return dt.replace(hour=(dt.hour // 4) * 4, minute=0, second=0)
+    if interval == Interval.ONE_HOUR:
+        return dt.replace(minute=0, second=0)
+    if interval == Interval.FIFTEEN_MIN:
+        return dt.replace(minute=(dt.minute // 15) * 15, second=0)
+    if interval == Interval.ONE_MIN:
+        return dt.replace(second=0)
+    return dt
 
 
 def _assert_aligned(dt: datetime, interval: Interval):
@@ -494,6 +594,9 @@ def _assert_aligned(dt: datetime, interval: Interval):
     if interval == Interval.ONE_DAY:
         if not (dt.hour == 0 and dt.minute == 0 and dt.second == 0 and dt.microsecond == 0):
             raise AssertionError(f"datetime {dt} is not aligned with ONE_DAY boundary (needs to be 00:00:00 UTC)")
+    elif interval == Interval.FOUR_HOUR:
+        if not (dt.hour % 4 == 0 and dt.minute == 0 and dt.second == 0 and dt.microsecond == 0):
+            raise AssertionError(f"datetime {dt} is not aligned with FOUR_HOUR boundary")
     elif interval == Interval.ONE_HOUR:
         if not (dt.minute == 0 and dt.second == 0 and dt.microsecond == 0):
             raise AssertionError(f"datetime {dt} is not aligned with ONE_HOUR boundary")
@@ -591,6 +694,7 @@ def _ensure_interval_cached(asset: Asset, start_time: datetime, end_time: dateti
     missing_dts = set()
     expected_crypto_counts = {
         Interval.ONE_DAY.value: 1,
+        Interval.FOUR_HOUR.value: 6,
         Interval.ONE_HOUR.value: 24,
         Interval.FIFTEEN_MIN.value: 96,
         Interval.ONE_MIN.value: 1440

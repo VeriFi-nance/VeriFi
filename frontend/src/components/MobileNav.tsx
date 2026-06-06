@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { Home, Users, Settings, Menu, LogOut, Sun, Moon, User } from 'lucide-react';
+import { Home, Tv, Settings, Menu, LogOut, Sun, Moon, User, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -23,10 +23,16 @@ function buildNavItems(): NavItem[] {
       matches: (p) => p === '/feed' || p === '/' || p.startsWith('/post/') || p.startsWith('/claim/'),
     },
     {
-      to: '/c',
-      icon: <Users className="size-5" />,
-      label: 'Communities',
-      matches: (p) => p.startsWith('/c'),
+      to: '/channels',
+      icon: <Tv className="size-5" />,
+      label: 'Channels',
+      matches: (p) => p.startsWith('/channels') || p.startsWith('/c'),
+    },
+    {
+      to: '/verify',
+      icon: <ShieldCheck className="size-5" />,
+      label: 'Verify Proof',
+      matches: (p) => p.startsWith('/verify'),
     },
     {
       to: '/settings',
@@ -147,7 +153,7 @@ export function BottomTabBar() {
       aria-label="Primary"
       className="md:hidden fixed bottom-0 inset-x-0 z-30 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 pb-[env(safe-area-inset-bottom)]"
     >
-      <ul className="grid grid-cols-3">
+      <ul className="grid grid-cols-4">
         {items.map((item) => {
           const active = item.matches(location.pathname);
           return (

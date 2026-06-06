@@ -7,6 +7,15 @@ on:
   schedule:
     - cron: "0 * * * *"
   workflow_dispatch:
+    inputs:
+      environment:
+        description: Target database
+        required: true
+        default: develop
+        type: choice
+        options:
+          - develop
+          - production
 
 jobs:
   run:
@@ -14,6 +23,8 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      DATABASE_URL: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production' || github.ref == 'refs/heads/main') && secrets.DATABASE_URL || (secrets.DATABASE_URL_DEVELOP || secrets.DATABASE_URL) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -21,12 +32,14 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Fix VIRTUAL_ENV for backend directory
+        run: echo "VIRTUAL_ENV=${{ github.workspace }}/backend/.venv" >> $GITHUB_ENV
+
       - run: uv sync
 
       - name: Run resolve_claims
         run: uv run python manage.py resolve_claims
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
           DJANGO_DEBUG: "false"
           TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}

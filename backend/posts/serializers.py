@@ -1,6 +1,6 @@
 from datetime import date
 from rest_framework import serializers
-from .models import Asset, Post, Claim, HardClaim, HardClaimEvent, OHLCData, Community, CommunityMembership
+from .models import Asset, Post, Claim, HardClaim, HardClaimEvent, OHLCData, Channel, ChannelMembership
 
 
 class ClaimSerializer(serializers.ModelSerializer):
@@ -37,7 +37,7 @@ class AssetSerializer(serializers.ModelSerializer):
 class HardClaimInputSerializer(serializers.Serializer):
     asset_id = serializers.IntegerField()
     post_id = serializers.IntegerField(required=False, allow_null=True, default=None)
-    community_id = serializers.IntegerField(required=False, allow_null=True, default=None)
+    channel_id = serializers.IntegerField(required=False, allow_null=True, default=None)
     direction = serializers.CharField(allow_blank=True, default="")
     value_type = serializers.ChoiceField(
         choices=["PRICE", "PERCENTAGE_UP", "PERCENTAGE_DOWN"],
@@ -47,7 +47,34 @@ class HardClaimInputSerializer(serializers.Serializer):
     percentage = serializers.FloatField(min_value=0)
     until = serializers.DateField()
     status = serializers.ChoiceField(choices=["confirmed", "undetermined", "rejected"], default="undetermined")
+    signature = serializers.CharField(required=True)
+    claim_payload = serializers.JSONField(required=True)
 
+
+    def validate(self, data):
+        value_type = (data.get("value_type") or "PERCENTAGE_UP").upper()
+        direction = (data.get("direction") or "").strip().lower()
+        pct = float(data.get("percentage", 0))
+
+        if value_type == "PRICE":
+            if direction not in {"bullish", "bearish"}:
+                raise serializers.ValidationError(
+                    {"direction": "PRICE claims require direction (bullish or bearish)."}
+                )
+            if not (data.get("payda") or "").strip():
+                raise serializers.ValidationError(
+                    {"payda": "PRICE claims require a parity (payda)."}
+                )
+        elif pct > 150:
+            raise serializers.ValidationError(
+                {
+                    "percentage": (
+                        "Values above 150 look like absolute prices — use value_type PRICE instead."
+                    )
+                }
+            )
+
+        return data
 
     def validate_until(self, value):
         if value <= date.today():
@@ -68,10 +95,27 @@ class HardClaimSerializer(serializers.ModelSerializer):
     class Meta:
         model = HardClaim
         fields = [
-            "id", "author_address", "author_username", "post_id", "community",
+            "id", "author_address", "author_username", "post_id", "channel",
             "asset", "direction", "value_type", "payda", "percentage",
-            "until", "created_at", "status", "events", "profitability"
+            "until", "created_at", "reference_price", "reference_price_url",
+            "status", "events", "profitability",
+            "signature", "claim_payload"
         ]
+
+    def to_representation(self, instance):
+        from .resolution import reconcile_claim_fields, display_percentage, claim_target_price
+
+        data = super().to_representation(instance)
+        direction, value_type = reconcile_claim_fields(instance)
+        data["direction"] = direction
+        data["value_type"] = value_type
+        pct = display_percentage(instance)
+        if pct is not None:
+            data["display_percentage"] = pct
+        target = claim_target_price(instance)
+        if target is not None:
+            data["target_price"] = target
+        return data
 
     def get_profitability(self, obj):
         try:
@@ -93,7 +137,7 @@ class PostSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Post
-        fields = ["id", "author_address", "author_username", "content", "community", "created_at", "claims", "hard_claims", "profitability"]
+        fields = ["id", "author_address", "author_username", "content", "channel", "created_at", "claims", "hard_claims", "profitability"]
 
     def get_profitability(self, obj):
         try:
@@ -112,26 +156,26 @@ class OHLCDataSerializer(serializers.ModelSerializer):
         model = OHLCData
         fields = ["date", "open", "high", "low", "close"]
 
-class CommunitySerializer(serializers.ModelSerializer):
+class ChannelSerializer(serializers.ModelSerializer):
     creator_address = serializers.CharField(source="creator.address", read_only=True)
     creator_username = serializers.CharField(source="creator.username", read_only=True)
     member_count = serializers.SerializerMethodField()
 
     class Meta:
-        model = Community
+        model = Channel
         fields = ["id", "name", "description", "creator_address", "creator_username", "privacy_type", "post_permission", "created_at", "member_count"]
 
     def get_member_count(self, obj):
         return obj.memberships.filter(status="approved").count()
 
-class CommunityMembershipSerializer(serializers.ModelSerializer):
+class ChannelMembershipSerializer(serializers.ModelSerializer):
     user_address = serializers.CharField(source="user.address", read_only=True)
     user_username = serializers.CharField(source="user.username", read_only=True)
     profitability = serializers.SerializerMethodField()
 
     class Meta:
-        model = CommunityMembership
-        fields = ["id", "community", "user_address", "user_username", "status", "created_at", "profitability"]
+        model = ChannelMembership
+        fields = ["id", "channel", "user_address", "user_username", "status", "role", "created_at", "profitability"]
 
     def get_profitability(self, obj):
         try:
@@ -160,9 +204,10 @@ class PositionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Position
         fields = [
-            "id", "author_address", "author_username", "community", "asset", "direction",
+            "id", "author_address", "author_username", "channel", "asset", "direction",
             "entry_price", "entry_interval", "stop_loss", "take_profit",
-            "lifetime", "exit_price", "pnl_percentage", "status", "created_at", "events", "profitability"
+            "lifetime", "exit_price", "pnl_percentage", "status", "created_at", "events", "profitability",
+            "signature", "position_payload"
         ]
 
     def get_profitability(self, obj):
@@ -179,7 +224,7 @@ class PositionSerializer(serializers.ModelSerializer):
 from django.utils import timezone
 
 class PositionInputSerializer(serializers.Serializer):
-    community_id = serializers.IntegerField(required=True)
+    channel_id = serializers.IntegerField(required=True)
     asset_id = serializers.IntegerField(required=True)
     direction = serializers.ChoiceField(choices=Position.Direction.choices, required=True)
     entry_price = serializers.FloatField(required=True)
@@ -187,6 +232,8 @@ class PositionInputSerializer(serializers.Serializer):
     stop_loss = serializers.FloatField(required=True)
     take_profit = serializers.FloatField(required=True)
     lifetime = serializers.DateTimeField(required=True)
+    signature = serializers.CharField(required=True)
+    position_payload = serializers.JSONField(required=True)
 
     def validate(self, data):
         now = timezone.now()
