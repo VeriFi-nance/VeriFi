@@ -2089,7 +2089,10 @@ class SearchAPIView(APIView):
             return Response(data)
         
         elif search_type == "channels":
-            qs = Channel.objects.filter(name__icontains=query, is_active=True).select_related("creator")[:10]
+            from django.db.models import Count, Q
+            qs = Channel.objects.filter(name__icontains=query, is_active=True).select_related("creator").annotate(
+                member_count_annotated=Count('memberships', filter=Q(memberships__status='approved'))
+            )[:10]
             return Response(ChannelSerializer(qs, many=True).data)
         
         return Response([])

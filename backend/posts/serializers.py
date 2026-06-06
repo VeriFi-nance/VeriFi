@@ -348,6 +348,8 @@ class ChannelSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "description", "creator_address", "creator_username", "post_permission", "created_at", "member_count"]
 
     def get_member_count(self, obj):
+        if hasattr(obj, "member_count_annotated"):
+            return obj.member_count_annotated
         return obj.memberships.filter(status="approved").count()
 
 
