@@ -59,6 +59,7 @@ export interface PostItem {
   created_at: string;
 
   hard_claims: HardClaimItem[];
+  positions: PositionSummaryItem[];
   profitability?: ProfitabilityData | null;
   channel?: number | null;
 }
@@ -104,6 +105,28 @@ export interface AssetItem {
   symbol: string;
   description: string;
   quote_currency?: string;
+}
+
+/**
+ * Slim position shape embedded in PostItem (no events, no full profitability).
+ * Mirrors PositionSummarySerializer on the backend.
+ */
+export interface PositionSummaryItem {
+  id: number;
+  author_address: string;
+  author_username: string;
+  post: number | null;
+  channel: number | null;
+  asset: number;
+  asset_obj?: AssetItem;
+  direction: 'long' | 'short';
+  entry_price: number;
+  stop_loss: number;
+  take_profit: number;
+  status: 'pending' | 'active' | 'confirmed' | 'rejected' | 'missed' | 'closed_early' | 'expired';
+  pnl_percentage: number | null;
+  created_at: string;
+  lifetime: string;
 }
 
 // OHLC chart data types
@@ -259,8 +282,10 @@ export interface PositionItem {
   id: number;
   author_address: string;
   author_username: string;
+  post?: number | null;
   channel: number;
   asset: number;
+  asset_obj?: AssetItem;
   direction: 'long' | 'short';
   entry_price: number;
   entry_interval: string;

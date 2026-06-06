@@ -150,15 +150,28 @@ export interface HardClaimPayload {
   market?: { side: 'YES' | 'NO'; stake_rep: number };
 }
 
+export interface PositionPayload {
+  asset_id: number;
+  direction: 'long' | 'short';
+  entry_price: number;
+  entry_interval: string;
+  stop_loss: number;
+  take_profit: number;
+  lifetime: string;
+  signature: string;
+  position_payload: Record<string, unknown>;
+}
+
 export async function createPost(
   content: string,
   channel_id?: number,
   hard_claims?: HardClaimPayload[],
+  positions?: PositionPayload[],
 ): Promise<PostItem> {
   return request('/api/posts/', {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ content, channel_id, hard_claims }),
+    body: JSON.stringify({ content, channel_id, hard_claims, positions }),
   });
 }
 
@@ -175,12 +188,19 @@ export async function getFeed(params?: {
   channel?: number;
   page?: number;
   page_size?: number;
+  asset_ids?: number[];
+  has_claims?: boolean;
+  has_positions?: boolean;
 }): Promise<PaginatedResponse<PostItem>> {
   const query = new URLSearchParams();
   if (params?.feed) query.append('feed', params.feed);
   if (params?.channel) query.append('channel', params.channel.toString());
   if (params?.page) query.append('page', params.page.toString());
   if (params?.page_size) query.append('page_size', params.page_size.toString());
+  if (params?.asset_ids && params.asset_ids.length > 0)
+    query.append('asset_ids', params.asset_ids.join(','));
+  if (params?.has_claims !== undefined) query.append('has_claims', String(params.has_claims));
+  if (params?.has_positions !== undefined) query.append('has_positions', String(params.has_positions));
   const qs = query.toString() ? `?${query.toString()}` : '';
   return request(`/api/posts/${qs}`, { headers: authHeaders() });
 }
@@ -413,6 +433,7 @@ export async function getPositions(channelId?: number): Promise<PositionItem[]> 
 
 export async function createPosition(data: {
   channel_id: number;
+  post_id?: number;
   asset_id: number;
   direction: 'long' | 'short';
   entry_price: number;

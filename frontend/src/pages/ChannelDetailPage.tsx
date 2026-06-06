@@ -4,14 +4,12 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getChannel, joinChannel, approveChannelMember, banChannelMember, unbanChannelMember, getBannedChannelMembers, getAssets, getChannelMembers, getPositions, updateChannel, promoteModerator, demoteModerator } from '@/lib/api';
-import type { ChannelItem, AssetItem, ChannelMembershipItem, PositionItem } from '@/lib/types';
+import { getChannel, joinChannel, approveChannelMember, banChannelMember, unbanChannelMember, getBannedChannelMembers, getChannelMembers, updateChannel, promoteModerator, demoteModerator } from '@/lib/api';
+import type { ChannelItem, ChannelMembershipItem } from '@/lib/types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuthState, useOpenLogin } from '@/lib/auth';
 import { FeedList } from '@/components/feed/FeedList';
 import { NewPostButton } from '@/components/feed/NewPostModal';
-import { PositionCard } from '@/components/PositionCard';
-import { NewPositionModal } from '@/components/NewPositionModal';
 import { Settings, ArrowLeft, Lock, Users } from 'lucide-react';
 import { PageContent } from '@/components/PageContent';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
@@ -24,8 +22,6 @@ export default function ChannelDetailPage() {
   const myAddress = auth.address;
   
   const [channel, setChannel] = useState<ChannelItem | null>(null);
-  const [positions, setPositions] = useState<PositionItem[]>([]);
-  const [assets, setAssets] = useState<AssetItem[]>([]);
   const [members, setMembers] = useState<ChannelMembershipItem[]>([]);
   const [bannedMembers, setBannedMembers] = useState<ChannelMembershipItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,18 +45,11 @@ export default function ChannelDetailPage() {
     try {
       const chan = await getChannel(Number(id));
       setChannel(chan);
-      
       const canView = chan.my_membership_status === 'approved' || chan.creator_address === myAddress;
       
       if (canView) {
-        const [a, m, pos] = await Promise.all([
-          getAssets(),
-          getChannelMembers(Number(id)),
-          getPositions(Number(id)),
-        ]);
-        setAssets(a);
+        const m = await getChannelMembers(Number(id));
         setMembers(m);
-        setPositions(pos);
         
         if (chan.creator_address.toLowerCase() === myAddress?.toLowerCase()) {
           try {
@@ -170,10 +159,6 @@ export default function ChannelDetailPage() {
     }
   };
 
-  const handlePositionResolved = (updated: PositionItem) => {
-    setPositions(prev => prev.map(p => p.id === updated.id ? updated : p));
-  };
-
   const handlePostPermissionChange = async (value: 'all' | 'creator_only') => {
     if (!id || !channel) return;
     // Optimistic update
@@ -228,11 +213,12 @@ export default function ChannelDetailPage() {
           <Button size="sm" variant="secondary" disabled className="shrink-0">Request Pending</Button>
         )}
         {canPost && (
-          <div className="shrink-0 flex items-center gap-2">
-            {isCreator && (
-              <NewPositionModal channelId={Number(id)} assets={assets} onCreated={fetchChannelAndPosts} />
-            )}
-            <NewPostButton onPosted={fetchChannelAndPosts} channelId={Number(id)} />
+          <div className="shrink-0">
+            <NewPostButton
+              onPosted={fetchChannelAndPosts}
+              channelId={Number(id)}
+              channelCreatorAddress={channel.creator_address}
+            />
           </div>
         )}
       </div>
@@ -272,29 +258,12 @@ export default function ChannelDetailPage() {
         <Tabs defaultValue="posts" className="w-full">
           <TabsList className="flex w-full sm:w-auto overflow-x-auto justify-start">
             <TabsTrigger value="posts" className="text-sm">Posts</TabsTrigger>
-            <TabsTrigger value="positions" className="text-sm">Positions</TabsTrigger>
             <TabsTrigger value="members" className="text-sm">Members</TabsTrigger>
             {isCreator && <TabsTrigger value="settings" className="text-sm gap-1.5"><Settings className="size-3.5" />Settings</TabsTrigger>}
           </TabsList>
           
           <TabsContent value="posts" className="space-y-4 mt-4">
             <FeedList channel={Number(id)} myRole={channel.my_role} creatorAddress={channel.creator_address} />
-          </TabsContent>
-          
-          <TabsContent value="positions" className="space-y-4 mt-4">
-            {positions.length === 0 ? (
-              <p className="text-muted-foreground text-xs py-6 text-center">No positions active in this channel.</p>
-            ) : (
-              positions.map(position => (
-                <PositionCard
-                  key={position.id}
-                  position={position}
-                  assets={assets}
-                  onClosed={fetchChannelAndPosts}
-                  onResolved={handlePositionResolved}
-                />
-              ))
-            )}
           </TabsContent>
           
           <TabsContent value="members" className="space-y-4 mt-4">

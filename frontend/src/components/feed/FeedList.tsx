@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { PostCard } from '@/components/feed/PostCard';
+import { FeedFilterPopover, type FeedFilter } from '@/components/feed/FeedFilterPopover';
 import { SkeletonPostCard } from '@/components/Skeleton';
 import { EmptyState } from '@/components/EmptyState';
 import { MessageSquare } from 'lucide-react';
@@ -10,14 +11,22 @@ import type { PostItem, AssetItem } from '@/lib/types';
 import { useAuthState } from '@/lib/auth';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 
+const DEFAULT_FILTER: FeedFilter = {
+  assetIds: [],
+  hasClaims: false,
+  hasPositions: false,
+};
+
 interface FeedListProps {
   feed?: string;
   channel?: number;
   myRole?: 'member' | 'moderator' | 'owner' | null;
   creatorAddress?: string;
+  filter?: FeedFilter;
+  hideFilterToolbar?: boolean;
 }
 
-export function FeedList({ feed, channel, myRole, creatorAddress }: FeedListProps) {
+export function FeedList({ feed, channel, myRole, creatorAddress, filter: propFilter, hideFilterToolbar }: FeedListProps) {
   const auth = useAuthState();
   const myAddress = auth.address;
   const [posts, setPosts] = useState<PostItem[]>([]);
@@ -27,6 +36,7 @@ export function FeedList({ feed, channel, myRole, creatorAddress }: FeedListProp
   const [error, setError] = useState('');
   const [page, setPage] = useState(1);
   const [hasNext, setHasNext] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<FeedFilter>(DEFAULT_FILTER);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     title: string;
@@ -46,7 +56,8 @@ export function FeedList({ feed, channel, myRole, creatorAddress }: FeedListProp
   }, []);
 
   const loadPage = useCallback(
-    async (pageNum: number, append: boolean) => {
+    async (pageNum: number, append: boolean, overrideFilter?: FeedFilter) => {
+      const f = overrideFilter ?? propFilter ?? activeFilter;
       if (append) {
         setLoadingMore(true);
       } else {
@@ -54,7 +65,14 @@ export function FeedList({ feed, channel, myRole, creatorAddress }: FeedListProp
       }
 
       try {
-        const feedPage = await getFeed({ feed, channel, page: pageNum });
+        const feedPage = await getFeed({
+          feed,
+          channel,
+          page: pageNum,
+          asset_ids: f.assetIds.length > 0 ? f.assetIds : undefined,
+          has_claims: f.hasClaims || undefined,
+          has_positions: f.hasPositions || undefined,
+        });
         setPosts((prev) => (append ? [...prev, ...feedPage.results] : feedPage.results));
         setPage(feedPage.page);
         setHasNext(feedPage.has_next);
@@ -66,7 +84,8 @@ export function FeedList({ feed, channel, myRole, creatorAddress }: FeedListProp
         setLoadingMore(false);
       }
     },
-    [feed, channel],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [feed, channel, activeFilter, propFilter],
   );
 
   useEffect(() => {
@@ -83,6 +102,13 @@ export function FeedList({ feed, channel, myRole, creatorAddress }: FeedListProp
     };
   }, [loadPage]);
 
+  function handleApplyFilter(f: FeedFilter) {
+    setActiveFilter(f);
+    // loadPage will fire via the useEffect dependency on activeFilter
+    // but we call directly to avoid stale closure issue
+    loadPage(1, false, f);
+  }
+
   if (error && posts.length === 0) {
     return (
       <Alert variant="destructive">
@@ -91,71 +117,62 @@ export function FeedList({ feed, channel, myRole, creatorAddress }: FeedListProp
     );
   }
 
-  if (loading) {
-    return (
-      <div className="space-y-4">
-        <SkeletonPostCard />
-        <SkeletonPostCard />
-        <SkeletonPostCard />
-      </div>
-    );
-  }
-
-  if (posts.length === 0) {
-    return (
-      <EmptyState
-        icon={<MessageSquare className="size-5" />}
-        title="No posts yet"
-        description="Be the first to share a verifiable prediction."
-      />
-    );
-  }
-
-  const handleDeletePost = (postId: number) => {
-    setConfirmDialog({
-      open: true,
-      title: 'Delete Post',
-      description: 'Are you sure you want to delete this post?',
-      onConfirm: async () => {
-        try {
-          await deletePost(postId);
-          setPosts((prev) => prev.filter((p) => p.id !== postId));
-        } catch (e: any) {
-          alert(e.message);
-        }
-      }
-    });
-  };
-
   const isCreator = creatorAddress && myAddress && myAddress.toLowerCase() === creatorAddress.toLowerCase();
   const isMod = myRole === 'moderator' || myRole === 'owner' || isCreator;
 
   return (
     <div className="space-y-4">
-      {posts.map((post) => {
-        const canDelete = !!(post.channel && isMod);
-        return (
-          <PostCard
-            key={post.id}
-            post={post}
-            hardClaims={post.hard_claims}
+      {/* Filter toolbar */}
+      {!hideFilterToolbar && (
+        <div className="flex items-center justify-end">
+          <FeedFilterPopover
             assets={assets}
-            onDelete={canDelete ? () => handleDeletePost(post.id) : undefined}
+            filter={activeFilter}
+            onApply={handleApplyFilter}
           />
-        );
-      })}
-
-      {hasNext && (
-        <div className="flex justify-center pt-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={loadingMore}
-            onClick={() => loadPage(page + 1, true)}
-          >
-            {loadingMore ? 'Loading…' : 'Load more'}
-          </Button>
         </div>
+      )}
+
+      {loading ? (
+        <div className="space-y-4">
+          <SkeletonPostCard />
+          <SkeletonPostCard />
+          <SkeletonPostCard />
+        </div>
+      ) : posts.length === 0 ? (
+        <EmptyState
+          icon={<MessageSquare className="size-5" />}
+          title="No posts found"
+          description="No posts match the selected filters."
+        />
+      ) : (
+        <>
+          {posts.map((post) => {
+            const canDelete = !!(post.channel && isMod);
+            return (
+              <PostCard
+                key={post.id}
+                post={post}
+                hardClaims={post.hard_claims}
+                assets={assets}
+                onDelete={canDelete ? () => handleDeletePost(post.id) : undefined}
+              />
+            );
+          })}
+
+          {hasNext && (
+            <div className="flex justify-center pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={loadingMore}
+                onClick={() => loadPage(page + 1, true)}
+              >
+                {loadingMore ? 'Loading…' : 'Load more'}
+              </Button>
+            </div>
+          )}
+        </>
       )}
 
       <RD.Root open={confirmDialog.open} onOpenChange={(val) => setConfirmDialog(prev => ({ ...prev, open: val }))}>
@@ -180,4 +197,20 @@ export function FeedList({ feed, channel, myRole, creatorAddress }: FeedListProp
       </RD.Root>
     </div>
   );
+
+  function handleDeletePost(postId: number) {
+    setConfirmDialog({
+      open: true,
+      title: 'Delete Post',
+      description: 'Are you sure you want to delete this post?',
+      onConfirm: async () => {
+        try {
+          await deletePost(postId);
+          setPosts((prev) => prev.filter((p) => p.id !== postId));
+        } catch (e: any) {
+          alert(e.message);
+        }
+      }
+    });
+  }
 }
