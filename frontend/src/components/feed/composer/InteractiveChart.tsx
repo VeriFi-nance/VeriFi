@@ -64,10 +64,15 @@ export function InteractiveChart({
   const [selectMode, setSelectMode] = useState(false);
   const selectModeRef = useRef(selectMode);
 
-  // Sync ref so the click handler closure gets the latest value
+  // Sync refs so the click handler closure gets the latest values without recreating the chart
   useEffect(() => {
     selectModeRef.current = selectMode;
   }, [selectMode]);
+
+  const onSelectTargetRef = useRef(onSelectTarget);
+  useEffect(() => {
+    onSelectTargetRef.current = onSelectTarget;
+  }, [onSelectTarget]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -138,7 +143,7 @@ export function InteractiveChart({
           // Convert lightweight-charts timestamp back to ISO date string
           // logicalTime is seconds since epoch for UTCTimestamp
           const dateStr = new Date(logicalTime * 1000).toISOString().split('T')[0];
-          onSelectTarget(price, dateStr);
+          onSelectTargetRef.current(price, dateStr);
           // Auto-disable select mode after a successful tap for a better mobile experience
           setSelectMode(false);
         }
@@ -158,7 +163,7 @@ export function InteractiveChart({
       chartRef.current = null;
       seriesRef.current = null;
     };
-  }, [onSelectTarget]);
+  }, []);
 
   useEffect(() => {
     const chart = chartRef.current;
