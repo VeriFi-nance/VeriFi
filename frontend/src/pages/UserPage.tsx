@@ -143,7 +143,7 @@ export default function UserPage() {
     <PageContent className="space-y-6">
       <Card className="p-5">
         <div className="flex items-center gap-4">
-          <UserAvatar address={stats?.address || address} size="lg" />
+          <UserAvatar address={stats?.address || address} src={stats?.avatar_url} size="lg" />
           <div className="min-w-0 flex-1 space-y-1">
             <h1 className="text-xl font-bold truncate">
               {stats?.username ? `@${stats.username}` : truncateAddress(stats?.address || address)}

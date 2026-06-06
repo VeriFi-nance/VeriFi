@@ -12,12 +12,30 @@ const sizeMap: Record<Size, string> = {
 
 interface UserAvatarProps {
   address: string;
+  /** Optional uploaded profile picture URL; falls back to the generated avatar. */
+  src?: string | null;
   size?: Size;
   ring?: boolean;
   className?: string;
 }
 
-export function UserAvatar({ address, size = 'md', ring = false, className }: UserAvatarProps) {
+export function UserAvatar({ address, src, size = 'md', ring = false, className }: UserAvatarProps) {
+  if (src) {
+    return (
+      <img
+        aria-hidden
+        src={src}
+        alt=""
+        className={cn(
+          'rounded-full object-cover shrink-0 select-none',
+          sizeMap[size],
+          ring && 'ring-2 ring-background',
+          className,
+        )}
+      />
+    );
+  }
+
   return (
     <div
       aria-hidden

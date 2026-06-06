@@ -1,3 +1,4 @@
+from cloudinary.models import CloudinaryField
 from django.db import models
 from accounts.models import WalletUser
 
@@ -54,6 +55,7 @@ class Post(models.Model):
     author = models.ForeignKey(WalletUser, on_delete=models.CASCADE, related_name="posts")
     channel = models.ForeignKey(Channel, on_delete=models.CASCADE, related_name="posts", null=True, blank=True)
     content = models.TextField(max_length=500)
+    image = CloudinaryField("image", blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
