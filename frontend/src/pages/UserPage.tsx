@@ -76,6 +76,7 @@ export default function UserPage() {
   const [following, setFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [profileRefreshKey, setProfileRefreshKey] = useState(0);
 
   const isSelf = !!(myAddress && stats?.address && myAddress.toLowerCase() === stats.address.toLowerCase());
 
@@ -123,7 +124,13 @@ export default function UserPage() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [address]);
+  }, [address, profileRefreshKey]);
+
+  useEffect(() => {
+    const refreshProfile = () => setProfileRefreshKey((key) => key + 1);
+    window.addEventListener('energy-updated', refreshProfile);
+    return () => window.removeEventListener('energy-updated', refreshProfile);
+  }, []);
 
   async function handleFollow() {
     if (!address) return;
