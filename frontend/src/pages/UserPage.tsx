@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
-import { Settings as SettingsIcon, Copy, Check, Info } from 'lucide-react';
+import { Settings as SettingsIcon, Copy, Check, History } from 'lucide-react';
 import { HardClaimCard } from '@/components/HardClaimCard';
 import { UserAvatar } from '@/components/UserAvatar';
 import { EmptyState } from '@/components/EmptyState';
@@ -171,7 +171,7 @@ export default function UserPage() {
                   onClick={() => setUsernameHistoryOpen(true)}
                   aria-label="View username history"
                 >
-                  <Info className="size-3.5" />
+                  <History className="size-3.5" />
                 </Button>
               )}
             </div>
