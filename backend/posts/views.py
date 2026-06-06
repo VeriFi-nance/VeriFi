@@ -7,8 +7,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from accounts.models import WalletUser
-from .models import Post, Claim, HardClaim, Asset, Channel, ChannelMembership, AssetSubscription, ClaimMarket, ClaimStake
-from .serializers import PostSerializer, ClaimInputSerializer, HardClaimInputSerializer, HardClaimSerializer, AssetSerializer, ChannelSerializer, ChannelMembershipSerializer
+from .models import Post, HardClaim, Asset, Channel, ChannelMembership, AssetSubscription, ClaimMarket, ClaimStake
+from .serializers import PostSerializer, HardClaimInputSerializer, HardClaimSerializer, AssetSerializer, ChannelSerializer, ChannelMembershipSerializer
 from .claim_extraction import rule_based_claims_from_prompt
 from django.shortcuts import get_object_or_404
 from .resolution import (
@@ -39,7 +39,6 @@ def _posts_queryset():
     return (
         Post.objects.select_related("author", "author__profitability")
         .prefetch_related(
-            "claims",
             Prefetch(
                 "hard_claims",
                 HardClaim.objects.select_related("author", "author__profitability").prefetch_related(
@@ -210,24 +209,10 @@ class PostListCreateView(APIView):
             except Channel.DoesNotExist:
                 return Response({"detail": f"Channel {channel_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
 
-        claims_data = request.data.get("claims", [])
-        serializer = ClaimInputSerializer(data=claims_data, many=True)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
         hard_claims_data = request.data.get("hard_claims", [])
 
         with transaction.atomic():
             post = Post.objects.create(author=user, content=content, channel=channel_obj)
-            for claim in serializer.validated_data:
-                if claim.get("status") != "rejected":
-                    Claim.objects.create(
-                        post=post,
-                        text=claim["text"],
-                        asset=claim.get("asset", ""),
-                        direction=claim.get("direction", ""),
-                        status=Claim.Status.CONFIRMED,
-                    )
             
             for hc_data in hard_claims_data:
                 hc_serializer = HardClaimInputSerializer(data=hc_data)

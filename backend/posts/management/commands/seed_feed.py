@@ -12,7 +12,7 @@ Usage:
 from datetime import date, timedelta
 from django.core.management.base import BaseCommand
 from accounts.models import WalletUser
-from posts.models import Asset, Claim, HardClaim, Post
+from posts.models import Asset, HardClaim, Post
 
 
 ASSETS = [
@@ -35,9 +35,7 @@ SEED_DATA = [
             "The halving effect combined with institutional adoption will drive this rally. "
             "I'm putting my reputation on the line for this prediction."
         ),
-        "claims": [
-            {"text": "BTC price will exceed $150,000", "asset": "BTC", "direction": "Bullish", "status": "confirmed"},
-        ],
+
         "hard_claims": [
             {
                 "text": "BTC price will exceed $150,000 by 30 June 2026",
@@ -56,10 +54,7 @@ SEED_DATA = [
             "EIP-4844 blob fee reductions are making L2s significantly cheaper, "
             "bringing a wave of new users on-chain."
         ),
-        "claims": [
-            {"text": "ETH will surpass $5,000", "asset": "ETH", "direction": "Bullish", "status": "confirmed"},
-            {"text": "L2 daily transactions will hit 50M", "asset": "ETH", "direction": "Bullish", "status": "confirmed"},
-        ],
+
         "hard_claims": [
             {
                 "text": "ETH closes above $5,000 before 1 July 2026",
@@ -78,9 +73,7 @@ SEED_DATA = [
             "Network instability and increasing competition from cheaper L2s "
             "will drag the price back to $80 within 60 days."
         ),
-        "claims": [
-            {"text": "SOL will fall below $80", "asset": "SOL", "direction": "Bearish", "status": "confirmed"},
-        ],
+
         "hard_claims": [
             {
                 "text": "SOL drops below $80 by end of May 2026",
@@ -99,9 +92,7 @@ SEED_DATA = [
             "Halving supply shock is playing out exactly as modelled. "
             "Next target: $200k by year-end."
         ),
-        "claims": [
-            {"text": "BTC will reach $200,000 by December 2026", "asset": "BTC", "direction": "Bullish", "status": "confirmed"},
-        ],
+
         "hard_claims": [
             {
                 "text": "BTC closes at or above $200,000 on 31 Dec 2026",
@@ -152,14 +143,7 @@ class Command(BaseCommand):
             post = Post.objects.create(author=author, content=entry["content"])
             self.stdout.write(f"  Post #{post.pk} by {author.address[:10]}…")
 
-            for c in entry.get("claims", []):
-                Claim.objects.create(
-                    post=post,
-                    text=c["text"],
-                    asset=c["asset"],
-                    direction=c["direction"],
-                    status=c["status"],
-                )
+
 
             for hc in entry.get("hard_claims", []):
                 HardClaim.objects.create(
