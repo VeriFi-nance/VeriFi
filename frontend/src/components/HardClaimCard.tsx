@@ -8,7 +8,7 @@ import { getClaimWindowProgress, getFeedClaimTagLabel, isClaimPastDue } from '@/
 export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets: AssetItem[] }) {
   const asset = assets.find((a) => a.id === claim.asset);
   const assetSymbol = asset?.symbol ?? `#${claim.asset}`;
-  const tag = getFeedClaimTagLabel(claim);
+  const tag = getFeedClaimTagLabel(claim, asset);
   const isConfirmed = claim.status === 'confirmed';
   const isRejected = claim.status === 'rejected';
   const pastDue = isClaimPastDue(claim);

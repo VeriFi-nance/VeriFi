@@ -112,7 +112,7 @@ export function PostCard({ post, hardClaims = [], assets = [], onDelete }: PostC
                   {claimHints.map((hc, index) => {
                     const asset = assets.find((a) => a.id === hc.asset);
                     const symbol = asset?.symbol ?? `#${hc.asset}`;
-                    const tag = getFeedClaimTagLabel(hc);
+                    const tag = getFeedClaimTagLabel(hc, asset);
                     return (
                       <span key={hc.id} className="inline-flex items-center gap-1.5">
                         {index > 0 && (
