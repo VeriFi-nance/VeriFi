@@ -675,9 +675,15 @@ def _ensure_daily_cached(asset: Asset, start_time: datetime, end_time: datetime)
                 for row in fetched
                 if row["timestamp"] in missing_dts
             ]
+            # Collapse duplicate (asset, timestamp, interval) rows — some
+            # providers return a repeated candle. Postgres ON CONFLICT DO UPDATE
+            # cannot affect the same row twice in one statement, so dedupe first.
+            new_rows = list(
+                {(r.asset_id, r.timestamp, r.interval): r for r in new_rows}.values()
+            )
             if new_rows:
                 OHLCData.objects.bulk_create(
-                    new_rows, 
+                    new_rows,
                     update_conflicts=True,
                     unique_fields=["asset", "timestamp", "interval"],
                     update_fields=["open", "high", "low", "close"]
@@ -754,9 +760,15 @@ def _ensure_interval_cached(asset: Asset, start_time: datetime, end_time: dateti
                 for row in fetched
                 if row["timestamp"].replace(hour=0, minute=0, second=0, microsecond=0) in missing_dts
             ]
+            # Collapse duplicate (asset, timestamp, interval) rows — some
+            # providers return a repeated candle. Postgres ON CONFLICT DO UPDATE
+            # cannot affect the same row twice in one statement, so dedupe first.
+            new_rows = list(
+                {(r.asset_id, r.timestamp, r.interval): r for r in new_rows}.values()
+            )
             if new_rows:
                 OHLCData.objects.bulk_create(
-                    new_rows, 
+                    new_rows,
                     update_conflicts=True,
                     unique_fields=["asset", "timestamp", "interval"],
                     update_fields=["open", "high", "low", "close"]
@@ -827,9 +839,15 @@ def _ensure_sub_day_cached(asset: Asset, sub_start: R1mDateTime, sub_end: R1mDat
                 for row in fetched
                 if row["timestamp"] in missing_timestamps
             ]
+            # Collapse duplicate (asset, timestamp, interval) rows — some
+            # providers return a repeated candle. Postgres ON CONFLICT DO UPDATE
+            # cannot affect the same row twice in one statement, so dedupe first.
+            new_rows = list(
+                {(r.asset_id, r.timestamp, r.interval): r for r in new_rows}.values()
+            )
             if new_rows:
                 OHLCData.objects.bulk_create(
-                    new_rows, 
+                    new_rows,
                     update_conflicts=True,
                     unique_fields=["asset", "timestamp", "interval"],
                     update_fields=["open", "high", "low", "close"]

@@ -615,18 +615,15 @@ class AssetChartDataView(APIView):
     permission_classes = []
 
     def get(self, request, pk):
-        try:
-            asset = Asset.objects.get(pk=pk)
-        except Asset.DoesNotExist:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-
         from datetime import datetime, timedelta, timezone
+        from django.core.cache import cache
         from .ohlc_fetcher import (
             get_ohlc_data,
             OHLCFetchError,
             Interval,
             floor_align_datetime,
             CHART_INTERVAL_CHOICES,
+            get_cache_timeout,
         )
 
         # Default window: Last 30 days
@@ -644,6 +641,19 @@ class AssetChartDataView(APIView):
                 return Response({"detail": f"Invalid interval: {requested}"}, status=status.HTTP_400_BAD_REQUEST)
             if chart_interval not in CHART_INTERVAL_CHOICES:
                 return Response({"detail": f"Interval {requested} not supported for charts."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Serve the whole chart payload from cache when warm. Checked BEFORE any
+        # DB access (keyed on pk), so a warm hit does zero DB round-trips. Stale
+        # window matches the live-candle refresh cadence.
+        response_cache_key = f"asset_chart_payload_{pk}_{chart_interval.value}"
+        cached_payload = cache.get(response_cache_key)
+        if cached_payload is not None:
+            return Response(cached_payload)
+
+        try:
+            asset = Asset.objects.get(pk=pk)
+        except Asset.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
         start_time = floor_align_datetime(
             datetime.combine(chart_start, datetime.min.time(), tzinfo=timezone.utc),
@@ -674,14 +684,16 @@ class AssetChartDataView(APIView):
         if ohlc_data:
             current_price = ohlc_data[-1]["close"]
 
-        return Response({
+        payload = {
             "asset_symbol": asset.symbol,
             "interval": chart_interval.value,
             "default_interval": default_interval.value,
             "as_of": datetime.now(timezone.utc).isoformat(),
             "ohlc": ohlc_data,
             "current_price": current_price,
-        })
+        }
+        cache.set(response_cache_key, payload, timeout=get_cache_timeout(chart_interval))
+        return Response(payload)
 
 
 class HardClaimChartDataView(APIView):
