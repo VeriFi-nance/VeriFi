@@ -207,11 +207,25 @@ export async function getPostComments(postId: number): Promise<PostCommentItem[]
   return request(`/api/posts/${postId}/comments/`, { headers: authHeaders() });
 }
 
-export async function createPostComment(postId: number, content: string): Promise<PostCommentItem> {
+export async function createPostComment(postId: number, content: string, parentId?: number): Promise<PostCommentItem> {
   return request(`/api/posts/${postId}/comments/`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({ content, ...(parentId ? { parent_id: parentId } : {}) }),
+  });
+}
+
+export async function likePostComment(commentId: number): Promise<PostCommentItem> {
+  return request(`/api/posts/comments/${commentId}/like/`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+}
+
+export async function unlikePostComment(commentId: number): Promise<PostCommentItem> {
+  return request(`/api/posts/comments/${commentId}/like/`, {
+    method: 'DELETE',
+    headers: authHeaders(),
   });
 }
 

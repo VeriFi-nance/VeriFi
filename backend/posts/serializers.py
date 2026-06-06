@@ -162,11 +162,29 @@ class PostSerializer(serializers.ModelSerializer):
 class PostCommentSerializer(serializers.ModelSerializer):
     author_address = serializers.CharField(source="author.address", read_only=True)
     author_username = serializers.CharField(source="author.username", read_only=True)
+    like_count = serializers.SerializerMethodField()
+    liked_by_me = serializers.SerializerMethodField()
+    replies = serializers.SerializerMethodField()
 
     class Meta:
         model = PostComment
-        fields = ["id", "post", "author_address", "author_username", "content", "created_at"]
+        fields = [
+            "id", "post", "parent", "author_address", "author_username",
+            "content", "created_at", "like_count", "liked_by_me", "replies"
+        ]
         read_only_fields = ["id", "post", "author_address", "author_username", "created_at"]
+
+    def get_like_count(self, obj):
+        return getattr(obj, "like_count", obj.likes.count())
+
+    def get_liked_by_me(self, obj):
+        return bool(getattr(obj, "liked_by_me", False))
+
+    def get_replies(self, obj):
+        replies = getattr(obj, "prefetched_replies", None)
+        if replies is None:
+            replies = obj.replies.select_related("author").order_by("created_at")
+        return PostCommentSerializer(replies, many=True, context=self.context).data
 
 
 class OHLCDataSerializer(serializers.ModelSerializer):

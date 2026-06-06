@@ -93,6 +93,7 @@ class PostLike(models.Model):
 
 class PostComment(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="comments")
+    parent = models.ForeignKey("self", on_delete=models.CASCADE, related_name="replies", null=True, blank=True)
     author = models.ForeignKey(WalletUser, on_delete=models.CASCADE, related_name="post_comments")
     content = models.TextField(max_length=500)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -101,10 +102,24 @@ class PostComment(models.Model):
         ordering = ["created_at"]
         indexes = [
             models.Index(fields=["post", "created_at"], name="post_comment_thread_idx"),
+            models.Index(fields=["parent", "created_at"], name="post_comment_reply_idx"),
         ]
 
     def __str__(self):
         return f"Comment<post={self.post_id} author={self.author_id}>"
+
+
+class PostCommentLike(models.Model):
+    comment = models.ForeignKey(PostComment, on_delete=models.CASCADE, related_name="likes")
+    user = models.ForeignKey(WalletUser, on_delete=models.CASCADE, related_name="post_comment_likes")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("comment", "user")
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"CommentLike<comment={self.comment_id} user={self.user_id}>"
 
 
 class SavedProof(models.Model):

@@ -81,10 +81,14 @@ export interface PostItem {
 export interface PostCommentItem {
   id: number;
   post: number;
+  parent: number | null;
   author_address: string;
   author_username: string;
   content: string;
   created_at: string;
+  like_count: number;
+  liked_by_me: boolean;
+  replies: PostCommentItem[];
 }
 
 export interface HardClaimEvent {

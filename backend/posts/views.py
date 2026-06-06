@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from accounts.models import WalletUser, ProfileChangeLog
-from .models import Post, HardClaim, Asset, Channel, ChannelMembership, AssetSubscription, ClaimMarket, ClaimStake, PostLike, PostComment, SavedProof
+from .models import Post, HardClaim, Asset, Channel, ChannelMembership, AssetSubscription, ClaimMarket, ClaimStake, PostLike, PostComment, PostCommentLike, SavedProof
 from .serializers import PostSerializer, PostCommentSerializer, HardClaimInputSerializer, HardClaimSerializer, AssetSerializer, ChannelSerializer, ChannelMembershipSerializer
 from .claim_extraction import rule_based_claims_from_prompt
 from django.shortcuts import get_object_or_404
@@ -68,6 +68,29 @@ def _posts_with_social_annotations(qs, user=None):
         annotations["liked_by_me"] = Value(False, output_field=BooleanField())
         annotations["saved_proof_by_me"] = Value(False, output_field=BooleanField())
     return qs.annotate(**annotations)
+
+
+def _comments_with_social_annotations(qs, user=None):
+    annotations = {
+        "like_count": Count("likes", distinct=True),
+    }
+    if user:
+        annotations["liked_by_me"] = Exists(
+            PostCommentLike.objects.filter(comment_id=OuterRef("pk"), user=user)
+        )
+    else:
+        annotations["liked_by_me"] = Value(False, output_field=BooleanField())
+    return qs.annotate(**annotations)
+
+
+def _comment_tree(comments):
+    by_parent = {}
+    for comment in comments:
+        by_parent.setdefault(comment.parent_id, []).append(comment)
+        comment.prefetched_replies = []
+    for comment in comments:
+        comment.prefetched_replies = by_parent.get(comment.id, [])
+    return by_parent.get(None, [])
 
 
 def _filter_posts_queryset(qs, request):
@@ -156,6 +179,18 @@ def _get_viewable_post(request, pk):
     if isinstance(permission, Response):
         return None, permission
     return post, None
+
+
+def _get_viewable_comment(request, pk):
+    try:
+        comment = PostComment.objects.select_related("post", "post__channel", "author").get(pk=pk)
+    except PostComment.DoesNotExist:
+        return None, Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    permission = _can_view_post(comment.post, request)
+    if isinstance(permission, Response):
+        return None, permission
+    return comment, None
 
 
 def _get_wallet_user(request) -> WalletUser | None:
@@ -423,8 +458,13 @@ class PostCommentListCreateView(APIView):
         if error_response is not None:
             return error_response
 
-        comments = post.comments.select_related("author").order_by("created_at")
-        return Response(PostCommentSerializer(comments, many=True).data)
+        comments = list(
+            _comments_with_social_annotations(
+                post.comments.select_related("author").order_by("created_at"),
+                _get_wallet_user(request),
+            )
+        )
+        return Response(PostCommentSerializer(_comment_tree(comments), many=True).data)
 
     def post(self, request, pk):
         user = _get_wallet_user(request)
@@ -441,8 +481,48 @@ class PostCommentListCreateView(APIView):
         if len(content) > 500:
             return Response({"detail": "content exceeds 500 characters."}, status=status.HTTP_400_BAD_REQUEST)
 
-        comment = PostComment.objects.create(post=post, author=user, content=content)
+        parent_id = request.data.get("parent_id")
+        parent = None
+        if parent_id is not None:
+            try:
+                parent = PostComment.objects.get(pk=parent_id, post=post)
+            except PostComment.DoesNotExist:
+                return Response({"detail": "Invalid parent comment."}, status=status.HTTP_400_BAD_REQUEST)
+
+        comment = PostComment.objects.create(post=post, parent=parent, author=user, content=content)
+        comment = _comments_with_social_annotations(PostComment.objects.filter(pk=comment.pk), user).get()
         return Response(PostCommentSerializer(comment).data, status=status.HTTP_201_CREATED)
+
+
+class PostCommentLikeView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, pk):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        comment, error_response = _get_viewable_comment(request, pk)
+        if error_response is not None:
+            return error_response
+
+        PostCommentLike.objects.get_or_create(comment=comment, user=user)
+        comment = _comments_with_social_annotations(PostComment.objects.filter(pk=pk).select_related("author"), user).get()
+        return Response(PostCommentSerializer(comment).data, status=status.HTTP_200_OK)
+
+    def delete(self, request, pk):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        comment, error_response = _get_viewable_comment(request, pk)
+        if error_response is not None:
+            return error_response
+
+        PostCommentLike.objects.filter(comment=comment, user=user).delete()
+        comment = _comments_with_social_annotations(PostComment.objects.filter(pk=pk).select_related("author"), user).get()
+        return Response(PostCommentSerializer(comment).data, status=status.HTTP_200_OK)
 
 
 class PostSavedProofView(APIView):

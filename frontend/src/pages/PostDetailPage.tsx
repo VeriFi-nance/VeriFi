@@ -4,16 +4,197 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Heart, MessageCircle } from 'lucide-react';
 import { UserAvatar } from '@/components/UserAvatar';
 import { ClaimDetailView } from '@/components/feed/ClaimDetailView';
 import { PostActions } from '@/components/feed/PostActions';
 import { SkeletonPostCard } from '@/components/Skeleton';
 import { PageContent } from '@/components/PageContent';
-import { createPostComment, getPost, getAssets, getPostComments } from '@/lib/api';
+import { createPostComment, getPost, getAssets, getPostComments, likePostComment, unlikePostComment } from '@/lib/api';
 import { useAuthState, useOpenLogin } from '@/lib/auth';
 import { truncateAddress } from '@/lib/wallet';
 import type { PostItem, PostCommentItem, AssetItem } from '@/lib/types';
+
+function replaceComment(comments: PostCommentItem[], updated: PostCommentItem): PostCommentItem[] {
+  return comments.map((comment) => {
+    if (comment.id === updated.id) {
+      return { ...updated, replies: updated.replies?.length ? updated.replies : comment.replies };
+    }
+    return { ...comment, replies: replaceComment(comment.replies, updated) };
+  });
+}
+
+function appendReply(comments: PostCommentItem[], parentId: number, reply: PostCommentItem): PostCommentItem[] {
+  return comments.map((comment) => {
+    if (comment.id === parentId) {
+      return { ...comment, replies: [...comment.replies, reply] };
+    }
+    return { ...comment, replies: appendReply(comment.replies, parentId, reply) };
+  });
+}
+
+function CommentThreadItem({
+  comment,
+  postId,
+  depth = 0,
+  authenticated,
+  openLogin,
+  onCommentChange,
+  onReplyCreated,
+}: {
+  comment: PostCommentItem;
+  postId: number;
+  depth?: number;
+  authenticated: boolean;
+  openLogin: (returnTo?: string) => void;
+  onCommentChange: (comment: PostCommentItem) => void;
+  onReplyCreated: (parentId: number, reply: PostCommentItem) => void;
+}) {
+  const [replyOpen, setReplyOpen] = useState(false);
+  const [replyContent, setReplyContent] = useState('');
+  const [pendingLike, setPendingLike] = useState(false);
+  const [submittingReply, setSubmittingReply] = useState(false);
+  const [error, setError] = useState('');
+
+  const toggleLike = async () => {
+    if (!authenticated) {
+      openLogin(`/post/${postId}`);
+      return;
+    }
+    if (pendingLike) return;
+    const nextLiked = !comment.liked_by_me;
+    const optimistic = {
+      ...comment,
+      liked_by_me: nextLiked,
+      like_count: Math.max(0, comment.like_count + (nextLiked ? 1 : -1)),
+    };
+    setPendingLike(true);
+    setError('');
+    onCommentChange(optimistic);
+    try {
+      const updated = nextLiked ? await likePostComment(comment.id) : await unlikePostComment(comment.id);
+      onCommentChange(updated);
+    } catch (e) {
+      onCommentChange(comment);
+      setError(e instanceof Error ? e.message : 'Unable to update comment like.');
+    } finally {
+      setPendingLike(false);
+    }
+  };
+
+  const submitReply = async () => {
+    if (!authenticated) {
+      openLogin(`/post/${postId}`);
+      return;
+    }
+    const content = replyContent.trim();
+    if (!content) {
+      setError('Reply cannot be empty.');
+      return;
+    }
+
+    setSubmittingReply(true);
+    setError('');
+    try {
+      const reply = await createPostComment(postId, content, comment.id);
+      onReplyCreated(comment.id, reply);
+      setReplyContent('');
+      setReplyOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to post reply.');
+    } finally {
+      setSubmittingReply(false);
+    }
+  };
+
+  return (
+    <article className={depth > 0 ? 'border-l border-border pl-3 sm:pl-4' : ''}>
+      <div className="flex gap-3">
+        <UserAvatar address={comment.author_address} size="sm" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <Link
+              to={`/u/${comment.author_username || comment.author_address}`}
+              className="text-xs font-mono font-medium hover:underline truncate"
+            >
+              {comment.author_username ? `@${comment.author_username}` : truncateAddress(comment.author_address)}
+            </Link>
+            <time dateTime={comment.created_at} className="text-xs text-muted-foreground num">
+              {new Date(comment.created_at).toLocaleString()}
+            </time>
+          </div>
+          <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">{comment.content}</p>
+          <div className="mt-1 flex items-center gap-1 text-muted-foreground">
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              className={comment.liked_by_me ? 'text-red-500 hover:text-red-500' : ''}
+              disabled={pendingLike}
+              onClick={() => void toggleLike()}
+              aria-pressed={comment.liked_by_me}
+            >
+              <Heart className={comment.liked_by_me ? 'size-3 fill-current' : 'size-3'} />
+              <span className="num">{comment.like_count}</span>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={() => authenticated ? setReplyOpen((open) => !open) : openLogin(`/post/${postId}`)}
+            >
+              <MessageCircle className="size-3" />
+              Comment
+            </Button>
+          </div>
+
+          {replyOpen && (
+            <div className="mt-2 space-y-2">
+              <Textarea
+                value={replyContent}
+                onChange={(e) => setReplyContent(e.target.value)}
+                maxLength={500}
+                placeholder="Write a reply"
+                className="min-h-16 resize-none text-sm"
+              />
+              <div className="flex items-center justify-end gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setReplyOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={submittingReply || replyContent.trim().length === 0}
+                  onClick={() => void submitReply()}
+                >
+                  {submittingReply ? 'Posting...' : 'Reply'}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+
+          {comment.replies.length > 0 && (
+            <div className="mt-3 space-y-3">
+              {comment.replies.map((reply) => (
+                <CommentThreadItem
+                  key={reply.id}
+                  comment={reply}
+                  postId={postId}
+                  depth={depth + 1}
+                  authenticated={authenticated}
+                  openLogin={openLogin}
+                  onCommentChange={onCommentChange}
+                  onReplyCreated={onReplyCreated}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </article>
+  );
+}
 
 export default function PostDetailPage() {
   const { id } = useParams();
@@ -72,6 +253,15 @@ export default function PostDetailPage() {
     } finally {
       setSubmittingComment(false);
     }
+  };
+
+  const handleCommentChange = (updatedComment: PostCommentItem) => {
+    setComments((prev) => replaceComment(prev, updatedComment));
+  };
+
+  const handleReplyCreated = (parentId: number, reply: PostCommentItem) => {
+    setComments((prev) => appendReply(prev, parentId, reply));
+    setPost((prev) => prev ? { ...prev, comment_count: prev.comment_count + 1 } : prev);
   };
 
   if (loading) {
@@ -175,23 +365,15 @@ export default function PostDetailPage() {
               <p className="text-sm text-muted-foreground">No comments yet.</p>
             ) : (
               comments.map((comment) => (
-                <article key={comment.id} className="flex gap-3">
-                  <UserAvatar address={comment.author_address} size="sm" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <Link
-                        to={`/u/${comment.author_username || comment.author_address}`}
-                        className="text-xs font-mono font-medium hover:underline truncate"
-                      >
-                        {comment.author_username ? `@${comment.author_username}` : truncateAddress(comment.author_address)}
-                      </Link>
-                      <time dateTime={comment.created_at} className="text-xs text-muted-foreground num">
-                        {new Date(comment.created_at).toLocaleString()}
-                      </time>
-                    </div>
-                    <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">{comment.content}</p>
-                  </div>
-                </article>
+                <CommentThreadItem
+                  key={comment.id}
+                  comment={comment}
+                  postId={post.id}
+                  authenticated={auth.authenticated}
+                  openLogin={openLogin}
+                  onCommentChange={handleCommentChange}
+                  onReplyCreated={handleReplyCreated}
+                />
               ))
             )}
           </div>
