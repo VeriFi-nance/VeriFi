@@ -136,8 +136,8 @@ export function StepTarget({ value, onChange, onNext, onBack }: StepTargetProps)
             data={chartData}
             interval={interval}
             onIntervalChange={setInterval}
-            selectedPrice={chartTargetPrice}
-            selectedDate={value.until || null}
+            priceLines={chartTargetPrice !== null ? [{ price: chartTargetPrice, color: '#f59e0b', title: 'Target' }] : []}
+            dateLines={value.until ? [{ dateStr: value.until, color: 'rgba(245, 158, 11, 0.4)', title: 'Deadline' }] : []}
             onSelectTarget={handleSelectTarget}
             refetching={loading}
           />

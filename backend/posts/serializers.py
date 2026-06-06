@@ -1,7 +1,11 @@
 from datetime import date
 from rest_framework import serializers
 from accounts.serializers import avatar_delivery_url, post_image_delivery_url
-from .models import Asset, Post, HardClaim, HardClaimEvent, OHLCData, Channel, ChannelMembership
+from .models import Asset, Post, HardClaim, HardClaimEvent, OHLCData, Channel, ChannelMembership, Position, PositionEvent
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Asset
+# ─────────────────────────────────────────────────────────────────────────────
 
 class AssetSerializer(serializers.ModelSerializer):
     class Meta:
@@ -21,6 +25,11 @@ class AssetSerializer(serializers.ModelSerializer):
             "twelvedata_symbol",
         ]
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HardClaim
+# ─────────────────────────────────────────────────────────────────────────────
+
 class HardClaimInputSerializer(serializers.Serializer):
     asset_id = serializers.IntegerField()
     post_id = serializers.IntegerField(required=False, allow_null=True, default=None)
@@ -35,7 +44,6 @@ class HardClaimInputSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=["confirmed", "undetermined", "rejected"], default="undetermined")
     signature = serializers.CharField(required=True)
     claim_payload = serializers.JSONField(required=True)
-
 
     def validate(self, data):
         value_type = (data.get("value_type") or "PERCENTAGE_UP").upper()
@@ -63,10 +71,12 @@ class HardClaimInputSerializer(serializers.Serializer):
             raise serializers.ValidationError("'until' must be a future date.")
         return value
 
+
 class HardClaimEventSerializer(serializers.ModelSerializer):
     class Meta:
         model = HardClaimEvent
         fields = ["id", "event_type", "timestamp", "details"]
+
 
 class HardClaimSerializer(serializers.ModelSerializer):
     author_address = serializers.CharField(source="author.address", read_only=True, allow_null=True)
@@ -102,10 +112,10 @@ class HardClaimSerializer(serializers.ModelSerializer):
         target = claim_target_price(instance)
         if target is not None:
             data["target_price"] = target
-        
+
         # Inject nested asset object for UI rendering
         data["asset_obj"] = AssetSerializer(instance.asset).data
-        
+
         return data
 
     def get_profitability(self, obj):
@@ -119,17 +129,124 @@ class HardClaimSerializer(serializers.ModelSerializer):
         except Exception:
             return None
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Position (defined before PostSerializer to avoid forward-reference issues)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class PositionEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PositionEvent
+        fields = ["id", "event_type", "timestamp", "details"]
+
+
+class PositionSummarySerializer(serializers.ModelSerializer):
+    """Slim serializer for embedding inside PostSerializer (no events/heavy fields)."""
+    author_address = serializers.CharField(source="author.address", read_only=True)
+    author_username = serializers.CharField(source="author.username", read_only=True)
+    asset_obj = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Position
+        fields = [
+            "id", "author_address", "author_username", "post", "channel", "asset", "asset_obj",
+            "direction", "entry_price", "stop_loss", "take_profit",
+            "status", "pnl_percentage", "created_at", "lifetime",
+        ]
+
+    def get_asset_obj(self, obj):
+        return AssetSerializer(obj.asset).data
+
+
+class PositionSerializer(serializers.ModelSerializer):
+    author_address = serializers.CharField(source="author.address", read_only=True)
+    author_username = serializers.CharField(source="author.username", read_only=True)
+    events = PositionEventSerializer(many=True, read_only=True)
+    profitability = serializers.SerializerMethodField()
+    asset_obj = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Position
+        fields = [
+            "id", "author_address", "author_username", "post", "channel", "asset", "asset_obj", "direction",
+            "entry_price", "entry_interval", "stop_loss", "take_profit",
+            "lifetime", "exit_price", "pnl_percentage", "status", "created_at", "events", "profitability",
+            "signature", "position_payload"
+        ]
+
+    def get_profitability(self, obj):
+        try:
+            cache = obj.author.profitability
+            return {
+                "pnl_7d": cache.pnl_7d,
+                "pnl_30d": cache.pnl_30d,
+                "pnl_all": cache.pnl_all
+            }
+        except Exception:
+            return None
+
+    def get_asset_obj(self, obj):
+        return AssetSerializer(obj.asset).data
+
+
+from django.utils import timezone
+
+
+class PositionInputSerializer(serializers.Serializer):
+    channel_id = serializers.IntegerField(required=False, allow_null=True, default=None)
+    post_id = serializers.IntegerField(required=False, allow_null=True, default=None)
+    asset_id = serializers.IntegerField(required=True)
+    direction = serializers.ChoiceField(choices=Position.Direction.choices, required=True)
+    entry_price = serializers.FloatField(required=True)
+    entry_interval = serializers.DateTimeField(required=True)
+    stop_loss = serializers.FloatField(required=True)
+    take_profit = serializers.FloatField(required=True)
+    lifetime = serializers.DateTimeField(required=True)
+    signature = serializers.CharField(required=True)
+    position_payload = serializers.JSONField(required=True)
+
+    def validate(self, data):
+        now = timezone.now()
+
+        if data["entry_interval"] <= now:
+            raise serializers.ValidationError({"entry_interval": "entry_interval must be in the future."})
+
+        if data["lifetime"] <= data["entry_interval"]:
+            raise serializers.ValidationError({"lifetime": "lifetime must be after entry_interval."})
+
+        entry = data["entry_price"]
+        sl = data["stop_loss"]
+        tp = data["take_profit"]
+
+        if data["direction"] == Position.Direction.LONG:
+            if not (sl < entry < tp):
+                raise serializers.ValidationError("For LONG positions, stop_loss must be < entry_price < take_profit.")
+        elif data["direction"] == Position.Direction.SHORT:
+            if not (tp < entry < sl):
+                raise serializers.ValidationError("For SHORT positions, take_profit must be < entry_price < stop_loss.")
+
+        return data
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Post (defined after Position so get_positions has no forward-reference)
+# ─────────────────────────────────────────────────────────────────────────────
+
 class PostSerializer(serializers.ModelSerializer):
     author_address = serializers.CharField(source="author.address", read_only=True)
     author_username = serializers.CharField(source="author.username", read_only=True)
     author_avatar_url = serializers.SerializerMethodField()
     image_url = serializers.SerializerMethodField()
     hard_claims = HardClaimSerializer(many=True, read_only=True)
+    positions = serializers.SerializerMethodField()
     profitability = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
-        fields = ["id", "author_address", "author_username", "author_avatar_url", "content", "image_url", "channel", "created_at", "hard_claims", "profitability"]
+        fields = [
+            "id", "author_address", "author_username", "author_avatar_url", "content", "image_url", "channel",
+            "created_at", "hard_claims", "positions", "profitability",
+        ]
 
     def get_author_avatar_url(self, obj):
         avatar = getattr(obj.author, "avatar", None) if obj.author else None
@@ -149,11 +266,19 @@ class PostSerializer(serializers.ModelSerializer):
         except Exception:
             return None
 
+    def get_positions(self, obj):
+        return PositionSummarySerializer(obj.positions.all(), many=True).data
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Misc
+# ─────────────────────────────────────────────────────────────────────────────
 
 class OHLCDataSerializer(serializers.ModelSerializer):
     class Meta:
         model = OHLCData
         fields = ["date", "open", "high", "low", "close"]
+
 
 class ChannelSerializer(serializers.ModelSerializer):
     creator_address = serializers.CharField(source="creator.address", read_only=True)
@@ -166,6 +291,7 @@ class ChannelSerializer(serializers.ModelSerializer):
 
     def get_member_count(self, obj):
         return obj.memberships.filter(status="approved").count()
+
 
 class ChannelMembershipSerializer(serializers.ModelSerializer):
     user_address = serializers.CharField(source="user.address", read_only=True)
@@ -186,72 +312,3 @@ class ChannelMembershipSerializer(serializers.ModelSerializer):
             }
         except Exception:
             return None
-
-from .models import Position, PositionEvent
-
-class PositionEventSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = PositionEvent
-        fields = ["id", "event_type", "timestamp", "details"]
-
-class PositionSerializer(serializers.ModelSerializer):
-    author_address = serializers.CharField(source="author.address", read_only=True)
-    author_username = serializers.CharField(source="author.username", read_only=True)
-    events = PositionEventSerializer(many=True, read_only=True)
-    profitability = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Position
-        fields = [
-            "id", "author_address", "author_username", "channel", "asset", "direction",
-            "entry_price", "entry_interval", "stop_loss", "take_profit",
-            "lifetime", "exit_price", "pnl_percentage", "status", "created_at", "events", "profitability",
-            "signature", "position_payload"
-        ]
-
-    def get_profitability(self, obj):
-        try:
-            cache = obj.author.profitability
-            return {
-                "pnl_7d": cache.pnl_7d,
-                "pnl_30d": cache.pnl_30d,
-                "pnl_all": cache.pnl_all
-            }
-        except Exception:
-            return None
-
-from django.utils import timezone
-
-class PositionInputSerializer(serializers.Serializer):
-    channel_id = serializers.IntegerField(required=True)
-    asset_id = serializers.IntegerField(required=True)
-    direction = serializers.ChoiceField(choices=Position.Direction.choices, required=True)
-    entry_price = serializers.FloatField(required=True)
-    entry_interval = serializers.DateTimeField(required=True)
-    stop_loss = serializers.FloatField(required=True)
-    take_profit = serializers.FloatField(required=True)
-    lifetime = serializers.DateTimeField(required=True)
-    signature = serializers.CharField(required=True)
-    position_payload = serializers.JSONField(required=True)
-
-    def validate(self, data):
-        now = timezone.now()
-        
-        if data["entry_interval"] <= now:
-            raise serializers.ValidationError({"entry_interval": "entry_interval must be in the future."})
-            
-        if data["lifetime"] <= data["entry_interval"]:
-            raise serializers.ValidationError({"lifetime": "lifetime must be after entry_interval."})
-            
-        entry = data["entry_price"]
-        sl = data["stop_loss"]
-        tp = data["take_profit"]
-        
-        if data["direction"] == Position.Direction.LONG:
-            if not (sl < entry < tp):
-                raise serializers.ValidationError("For LONG positions, stop_loss must be < entry_price < take_profit.")
-        elif data["direction"] == Position.Direction.SHORT:
-            if not (tp < entry < sl):
-                raise serializers.ValidationError("For SHORT positions, take_profit must be < entry_price < stop_loss.")
-                
-        return data
