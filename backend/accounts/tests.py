@@ -1,6 +1,6 @@
 from django.test import TestCase
 from rest_framework.test import APIClient
-from accounts.models import WalletUser
+from accounts.models import WalletUser, ProfileChangeLog
 
 class UsernameTests(TestCase):
     def setUp(self):
@@ -61,6 +61,15 @@ class UsernameTests(TestCase):
         self.assertEqual(res.data["username"], "new_name")
         user.refresh_from_db()
         self.assertEqual(user.username, "new_name")
+        entry = ProfileChangeLog.objects.get(user=user)
+        self.assertEqual(entry.event_type, ProfileChangeLog.EventType.USERNAME_UPDATED)
+        self.assertEqual(entry.metadata["old_username"], "old_name")
+        self.assertEqual(entry.metadata["new_username"], "new_name")
+
+        profile = self.client.get(f"/api/auth/profile/{address}/")
+        self.assertEqual(profile.status_code, 200)
+        self.assertEqual(profile.data["changelog"][0]["event_type"], "username_updated")
+        self.assertIn("@old_name", profile.data["changelog"][0]["summary"])
 
     def test_profile_update_duplicate_username(self):
         # Create another user to take the name
@@ -158,5 +167,4 @@ class UsernameTests(TestCase):
         self.assertIsNotNone(res.data["channel_owned"])
         self.assertEqual(len(res.data["channels_member_of"]), 1)
         self.assertEqual(res.data["channels_member_of"][0]["id"], channel_joined.id)
-
 
