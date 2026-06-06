@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { AssetItem } from '@/lib/types';
 import { type ClaimDraft, emptyDraft } from './types';
 import { StepAsset } from './StepAsset';
-// import { StepTarget } from './StepTarget';
+import { StepTarget } from './StepTarget';
 // import { StepStake } from './StepStake';
 
 interface ClaimWizardProps {
@@ -57,19 +57,12 @@ export function ClaimWizard({
           />
         )}
         {step === 1 && (
-          <div className="p-4 border border-dashed rounded-lg text-center text-sm text-muted-foreground">
-            Step 2: Interactive Chart (Coming Soon)
-            <div className="flex gap-2 mt-4 justify-center">
-              <button onClick={prevStep} className="px-3 py-1 border rounded">Back</button>
-              <button onClick={nextStep} className="px-3 py-1 border rounded bg-primary text-primary-foreground">Next</button>
-            </div>
-          </div>
-          // <StepTarget
-          //   value={draft}
-          //   onChange={patchDraft}
-          //   onNext={nextStep}
-          //   onBack={prevStep}
-          // />
+          <StepTarget
+            value={draft}
+            onChange={patchDraft}
+            onNext={nextStep}
+            onBack={prevStep}
+          />
         )}
         {step === 2 && (
           <div className="p-4 border border-dashed rounded-lg text-center text-sm text-muted-foreground">
