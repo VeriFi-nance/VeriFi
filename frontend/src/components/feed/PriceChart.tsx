@@ -432,7 +432,7 @@ export function PriceChart({
       seriesRef.current = null;
       candlesRef.current = [];
     };
-  }, [data.claim_id, data.reference_price, data.target_price, interval, updateOverlay, windowStart, claimWindowEnd]);
+  }, [data, interval, updateOverlay, windowStart, claimWindowEnd]);
 
   useEffect(() => {
     const chart = chartRef.current;
