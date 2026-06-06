@@ -6,8 +6,9 @@ import { closePosition, getPositionResolveStatus, triggerPositionResolve, getPos
 import type { PositionItem, AssetItem } from '@/lib/types';
 import { useAuthState } from '@/lib/auth';
 import { Link } from 'react-router-dom';
-import { truncateAddress } from '@/lib/wallet';
-import { RefreshCw, Download } from 'lucide-react';
+import { RefreshCw, Download, ChevronDown, ChevronUp } from 'lucide-react';
+import { PriceChart } from './feed/PriceChart';
+import { usePositionChartData } from '@/hooks/usePositionChartData';
 
 interface PositionCardProps {
   position: PositionItem;
@@ -22,6 +23,14 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
   const [resolveMsg, setResolveMsg] = useState('');
   const [countdown, setCountdown] = useState(0);
   const [downloadingProof, setDownloadingProof] = useState(false);
+  const [showChart, setShowChart] = useState(false);
+
+  const { data: chartData, interval, setInterval, loading: chartLoading, refetching } = usePositionChartData(
+    showChart ? position.id : undefined,
+    position.created_at,
+    position.lifetime,
+    position.status,
+  );
 
   const handleDownloadProof = async () => {
     try {
@@ -177,6 +186,28 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
               <span className="text-xs opacity-80 font-mono">
                 Exit: ${position.exit_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}
               </span>
+            )}
+          </div>
+        )}
+
+        <Button variant="ghost" size="sm" onClick={() => setShowChart(!showChart)} className="w-full mt-2 h-8 text-xs text-muted-foreground flex items-center justify-center gap-1.5 hover:bg-muted/50 transition-colors">
+          {showChart ? <><ChevronUp className="size-3.5" /> Hide Chart</> : <><ChevronDown className="size-3.5" /> Show Chart</>}
+        </Button>
+
+        {showChart && (
+          <div className="mt-2 relative mb-3">
+            {chartLoading && !chartData && (
+              <div className="h-[320px] flex items-center justify-center text-sm text-muted-foreground rounded-lg border bg-muted/20">
+                Loading chart...
+              </div>
+            )}
+            {chartData && (
+              <PriceChart
+                data={chartData}
+                interval={interval}
+                onIntervalChange={setInterval}
+                refetching={refetching}
+              />
             )}
           </div>
         )}

@@ -13,12 +13,12 @@ import {
   type Time,
   type UTCTimestamp,
 } from 'lightweight-charts';
-import type { ClaimChartData, ChartCandleInterval } from '@/lib/types';
+import type { ClaimChartData, PositionChartData, ChartCandleInterval } from '@/lib/types';
 import { CHART_INTERVAL_OPTIONS, claimWindowForChart } from '@/lib/chart';
 import { cn } from '@/lib/utils';
 
 interface PriceChartProps {
-  data: ClaimChartData;
+  data: ClaimChartData | PositionChartData;
   interval: ChartCandleInterval;
   onIntervalChange: (interval: ChartCandleInterval) => void;
   refetching?: boolean;
@@ -170,7 +170,7 @@ function isInClaimWindow(
 }
 
 function toStyledCandles(
-  data: ClaimChartData,
+  data: ClaimChartData | PositionChartData,
   windowStart: UTCTimestamp,
   windowEnd: UTCTimestamp,
 ): CandlestickData<UTCTimestamp>[] {
@@ -193,7 +193,7 @@ function toStyledCandles(
 }
 
 function computeAutoscaleRange(
-  data: ClaimChartData,
+  data: ClaimChartData | PositionChartData,
   windowStart: UTCTimestamp,
   windowEnd: UTCTimestamp,
 ) {
@@ -205,11 +205,18 @@ function computeAutoscaleRange(
   const ohlcValues = rows.flatMap((c) => [c.open, c.high, c.low, c.close]);
 
   const anchors: number[] = [];
-  if (typeof data.reference_price === 'number' && !Number.isNaN(data.reference_price)) {
-    anchors.push(data.reference_price);
+  const refPrice = 'reference_price' in data ? data.reference_price : data.entry_price;
+  const tgtPrice = 'target_price' in data ? data.target_price : data.take_profit;
+  const slPrice = 'stop_loss' in data ? data.stop_loss : undefined;
+
+  if (typeof refPrice === 'number' && !Number.isNaN(refPrice)) {
+    anchors.push(refPrice);
   }
-  if (typeof data.target_price === 'number' && !Number.isNaN(data.target_price)) {
-    anchors.push(data.target_price);
+  if (typeof tgtPrice === 'number' && !Number.isNaN(tgtPrice)) {
+    anchors.push(tgtPrice);
+  }
+  if (typeof slPrice === 'number' && !Number.isNaN(slPrice)) {
+    anchors.push(slPrice);
   }
 
   // Always frame entry + target together; include in-window OHLC so candles aren't clipped.
@@ -385,9 +392,13 @@ export function PriceChart({
     });
     seriesRef.current = series;
 
-    if (data.reference_price != null && !Number.isNaN(data.reference_price)) {
+    const refPrice = 'reference_price' in data ? data.reference_price : data.entry_price;
+    const tgtPrice = 'target_price' in data ? data.target_price : data.take_profit;
+    const slPrice = 'stop_loss' in data ? data.stop_loss : undefined;
+
+    if (refPrice != null && !Number.isNaN(refPrice)) {
       series.createPriceLine({
-        price: data.reference_price,
+        price: refPrice,
         color: ANCHOR_LINE_COLOR,
         lineWidth: 1,
         lineStyle: LineStyle.Dashed,
@@ -396,14 +407,25 @@ export function PriceChart({
       });
     }
 
-    if (data.target_price != null && !Number.isNaN(data.target_price)) {
+    if (tgtPrice != null && !Number.isNaN(tgtPrice)) {
       series.createPriceLine({
-        price: data.target_price,
+        price: tgtPrice,
         color: ANCHOR_LINE_COLOR,
         lineWidth: 1,
         lineStyle: LineStyle.Dashed,
         axisLabelVisible: true,
-        title: 'Target',
+        title: 'Take Profit',
+      });
+    }
+
+    if (slPrice != null && !Number.isNaN(slPrice)) {
+      series.createPriceLine({
+        price: slPrice,
+        color: '#ef4444', // Red for stop loss
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: 'Stop Loss',
       });
     }
 
