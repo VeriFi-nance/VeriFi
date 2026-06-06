@@ -9,7 +9,7 @@ from django.utils import timezone
 DAILY_GRANT = 3
 ENERGY_CAP = None
 INITIAL_ENERGY = 4
-CLAIM_ENERGY_COST = 2
+CLAIM_ENERGY_COST = 1
 STAKE_ENERGY_COST = 1
 
 

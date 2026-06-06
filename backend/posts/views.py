@@ -6,7 +6,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from accounts.models import WalletUser
+from accounts.models import WalletUser, ProfileChangeLog
 from .models import Post, HardClaim, Asset, Channel, ChannelMembership, AssetSubscription, ClaimMarket, ClaimStake
 from .serializers import PostSerializer, HardClaimInputSerializer, HardClaimSerializer, AssetSerializer, ChannelSerializer, ChannelMembershipSerializer
 from .claim_extraction import rule_based_claims_from_prompt
@@ -311,6 +311,18 @@ class PostListCreateView(APIView):
                     transaction.set_rollback(True)
                     logger.exception("Unexpected error while creating hard claim.")
                     return Response({"detail": "An internal error has occurred."}, status=status.HTTP_400_BAD_REQUEST)
+
+            ProfileChangeLog.objects.create(
+                user=user,
+                actor=user,
+                event_type=ProfileChangeLog.EventType.POST_CREATED,
+                summary="Created a post",
+                metadata={
+                    "post_id": post.id,
+                    "channel_id": post.channel_id,
+                    "content_preview": post.content[:120],
+                },
+            )
 
         return Response(PostSerializer(post).data, status=status.HTTP_201_CREATED)
 
@@ -1645,7 +1657,22 @@ class PostDeleteView(APIView):
         if not is_channel_mod:
             return Response({"detail": "You do not have permission to delete this post."}, status=status.HTTP_403_FORBIDDEN)
 
-        post.delete()
+        author = post.author
+        metadata = {
+            "post_id": post.id,
+            "channel_id": post.channel_id,
+            "content_preview": post.content[:120],
+            "deleted_by": user.address,
+        }
+        with transaction.atomic():
+            post.delete()
+            ProfileChangeLog.objects.create(
+                user=author,
+                actor=user,
+                event_type=ProfileChangeLog.EventType.POST_DELETED,
+                summary="Deleted a post",
+                metadata=metadata,
+            )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

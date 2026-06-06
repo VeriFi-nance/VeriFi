@@ -29,7 +29,7 @@ export function MarketConfig({ value, onChange }: MarketConfigProps) {
         />
       </div>
       <p className="text-[10px] text-muted-foreground leading-snug">
-        Plus a 2-rep listing fee (burned) and 5% trade burn. Costs 2 energy.
+        Plus a 2-rep listing fee (burned) and 5% trade burn. Costs 1 energy.
       </p>
     </div>
   );
