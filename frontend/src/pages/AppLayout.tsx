@@ -11,6 +11,7 @@ import { UserAvatar } from '@/components/UserAvatar';
 import { truncateAddress } from '@/lib/wallet';
 import { MobileMenuButton, BottomTabBar } from '@/components/MobileNav';
 import { BrandLogo } from '@/components/BrandLogo';
+import { SearchBar } from '@/components/SearchBar';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -185,14 +186,12 @@ export default function AppLayout() {
               onLogin={goLogin}
             />
 
-            <h1 className="text-base sm:text-lg font-semibold tracking-tight flex-1 truncate">
-              {title}
-            </h1>
+            <div className="flex-1 flex justify-start lg:pl-4">
+              <SearchBar />
+            </div>
 
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="hidden sm:block">
-                <EnergyMeter />
-              </div>
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              <EnergyMeter />
 
               <Button
                 variant="ghost"
@@ -229,6 +228,17 @@ export default function AppLayout() {
             </div>
           </main>
         </div>
+
+        {/* Right Sidebar for future tools */}
+        <aside
+          className={cn(
+            'hidden lg:flex sticky top-0 h-dvh flex-col border-l border-border bg-background shrink-0 self-start',
+            'w-56 transition-[width] duration-200',
+          )}
+          aria-label="Secondary navigation / Tools"
+        >
+          {/* Placeholder for future tools */}
+        </aside>
       </div>
 
       <BottomTabBar />
