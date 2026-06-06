@@ -234,3 +234,7 @@ copilot-instructions.md
 .agents/
 .agent
 .cline
+# Local git worktrees and scratch clones (never commit)
+.claude/
+.worktrees/
+signance_wiki/

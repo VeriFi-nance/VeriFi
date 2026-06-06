@@ -51,6 +51,16 @@ export interface ProfitabilityData {
   updated_at?: string | null;
 }
 
+export interface ProfileChangeLogEntry {
+  id: number;
+  event_type: 'username_updated' | 'post_created' | 'post_deleted';
+  summary: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  actor_address?: string | null;
+  actor_username?: string | null;
+}
+
 export interface PostItem {
   id: number;
   author_address: string;
@@ -180,6 +190,7 @@ export interface ProfileStats {
   energy_cap?: number | null;
   channel_owned?: ChannelItem | null;
   channels_member_of?: ChannelItem[];
+  changelog?: ProfileChangeLogEntry[];
 }
 
 export interface MarketYourStake {

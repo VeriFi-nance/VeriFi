@@ -325,7 +325,7 @@ export async function getClaimChartData(
 }
 
 export async function getProfileStats(address: string): Promise<ProfileStats> {
-  return request(`/api/auth/profile/${encodeURIComponent(address)}/`, {
+  return request(`/api/auth/profile/${encodeURIComponent(address)}/?t=${Date.now()}`, {
     headers: authHeaders(),
   });
 }

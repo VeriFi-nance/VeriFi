@@ -4,9 +4,11 @@ from unittest.mock import patch
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.utils import timezone
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from posts.models import Asset, Post, HardClaim, HardClaimEvent, OHLCData
 from accounts.models import WalletUser
+from . import rep_market
 
 
 class HardClaimChartDataViewTests(TestCase):
@@ -227,19 +229,21 @@ class PostCreationAtomicTests(TestCase):
             quote_currency="USD",
             binance_symbol="ETHUSDT"
         )
-        from rest_framework_simplejwt.tokens import RefreshToken
         refresh = RefreshToken()
         refresh["address"] = self.author.address
         self.token = str(refresh.access_token)
 
     def test_post_with_hard_claims_insufficient_energy_rolls_back(self):
         """
-        If a user has 4 energy, creating 3 market-backed claims (costing 6 energy total)
+        If a user has 2 energy, creating 3 market-backed claims (costing 3 energy total)
         should fail entirely. The Post should NOT be created, no HardClaims should be created,
-        and energy should remain at 4.
+        and energy should remain at 2.
         """
         initial_post_count = Post.objects.count()
         initial_claim_count = HardClaim.objects.count()
+        self.author.energy = 2
+        self.author.last_energy_grant = timezone.now()
+        self.author.save(update_fields=["energy", "last_energy_grant"])
 
         payload = {
             "content": "Ethereum going to 10k!",
@@ -285,5 +289,39 @@ class PostCreationAtomicTests(TestCase):
         
         # Energy should be unmodified
         self.author.refresh_from_db()
-        self.assertEqual(self.author.energy, 4)
+        self.assertEqual(self.author.energy, 2)
 
+    def test_market_buy_does_not_spend_energy(self):
+        creator = WalletUser.objects.create(
+            address="0x00000000000000000000000000000000000c0dea",
+            energy=4,
+            rep=100,
+            last_energy_grant=timezone.now(),
+        )
+        trader = WalletUser.objects.create(
+            address="0x00000000000000000000000000000000000b0bba",
+            energy=3,
+            rep=100,
+            last_energy_grant=timezone.now(),
+        )
+        hard_claim = HardClaim.objects.create(
+            author=creator,
+            asset=self.asset,
+            direction="Bullish",
+            percentage=10.0,
+            until=(timezone.now() + timedelta(days=2)).date(),
+        )
+        rep_market.init_market(hard_claim, creator, "YES", 10)
+
+        refresh = RefreshToken()
+        refresh["address"] = trader.address
+        response = self.client.post(
+            reverse("hard-claim-market-buy", kwargs={"pk": hard_claim.pk}),
+            data=json.dumps({"side": "NO"}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {str(refresh.access_token)}",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        trader.refresh_from_db()
+        self.assertEqual(trader.energy, 3)

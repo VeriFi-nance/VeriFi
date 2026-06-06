@@ -6,8 +6,8 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
-from accounts.models import WalletUser
-from .models import Post, Asset, HardClaim, ChannelMembership
+from accounts.models import WalletUser, ProfileChangeLog
+from .models import Post, Asset, HardClaim, Channel, ChannelMembership
 from .resolution import ResolutionError, normalize_claim_for_resolution
 
 
@@ -137,6 +137,42 @@ class HardClaimAPITestCase(APITestCase):
         # Should return 401 Unauthorized
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertIn('detail', response.data)
+
+
+class PostChangeLogTests(APITestCase):
+    def setUp(self):
+        self.user = WalletUser.objects.create(
+            address="0x" + "9" * 40,
+            username="post_logger",
+        )
+        refresh = RefreshToken()
+        refresh["address"] = self.user.address
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {str(refresh.access_token)}")
+
+    def test_post_create_records_profile_changelog(self):
+        response = self.client.post(
+            reverse("post-list-create"),
+            {"content": "BTC is looking strong."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        entry = ProfileChangeLog.objects.get(user=self.user)
+        self.assertEqual(entry.event_type, ProfileChangeLog.EventType.POST_CREATED)
+        self.assertEqual(entry.metadata["post_id"], response.data["id"])
+        self.assertEqual(entry.metadata["content_preview"], "BTC is looking strong.")
+
+    def test_channel_post_delete_records_profile_changelog(self):
+        channel = Channel.objects.create(name="Signals", creator=self.user)
+        post = Post.objects.create(author=self.user, channel=channel, content="Remove this post.")
+
+        response = self.client.delete(reverse("post-delete", kwargs={"pk": post.pk}))
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        entry = ProfileChangeLog.objects.get(user=self.user)
+        self.assertEqual(entry.event_type, ProfileChangeLog.EventType.POST_DELETED)
+        self.assertEqual(entry.metadata["post_id"], post.pk)
+        self.assertEqual(entry.metadata["deleted_by"], self.user.address)
 
 
 class HardClaimUpdateStatusTestCase(APITestCase):
