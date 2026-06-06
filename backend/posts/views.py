@@ -2081,18 +2081,7 @@ class SearchAPIView(APIView):
         if not query:
             return Response([])
 
-        if search_type == "posts":
-            from django.db.models import Prefetch
-            from .models import Position
-            qs = Post.objects.select_related("author", "author__profitability") \
-                .prefetch_related(
-                    Prefetch("hard_claims", HardClaim.objects.select_related("author", "asset").prefetch_related("events")),
-                    Prefetch("positions", Position.objects.select_related("author", "asset"))
-                ) \
-                .filter(content__icontains=query).order_by("-created_at")[:10]
-            return Response(PostSerializer(qs, many=True).data)
-        
-        elif search_type == "people":
+        if search_type == "people":
             from django.db.models import Q
             from accounts.serializers import avatar_delivery_url
             qs = WalletUser.objects.filter(Q(username__icontains=query) | Q(address__icontains=query))[:10]
