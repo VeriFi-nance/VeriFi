@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Heart, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { likePost, savePostProof, unlikePost, unsavePostProof } from '@/lib/api';
+import { likePost, unlikePost } from '@/lib/api';
 import { useAuthState, useOpenLogin } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import type { PostItem } from '@/lib/types';
@@ -13,28 +13,19 @@ interface PostActionsProps {
   className?: string;
 }
 
-function optimisticPost(post: PostItem, action: 'like' | 'save', enabled: boolean): PostItem {
-  if (action === 'like') {
-    const delta = enabled === post.liked_by_me ? 0 : enabled ? 1 : -1;
-    return {
-      ...post,
-      liked_by_me: enabled,
-      like_count: Math.max(0, post.like_count + delta),
-    };
-  }
-
-  const delta = enabled === post.saved_proof_by_me ? 0 : enabled ? 1 : -1;
+function optimisticLike(post: PostItem, enabled: boolean): PostItem {
+  const delta = enabled === post.liked_by_me ? 0 : enabled ? 1 : -1;
   return {
     ...post,
-    saved_proof_by_me: enabled,
-    saved_proof_count: Math.max(0, post.saved_proof_count + delta),
+    liked_by_me: enabled,
+    like_count: Math.max(0, post.like_count + delta),
   };
 }
 
 export function PostActions({ post, onPostChange, className }: PostActionsProps) {
   const auth = useAuthState();
   const openLogin = useOpenLogin();
-  const [pending, setPending] = useState<'like' | 'save' | null>(null);
+  const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
 
   const requireAuth = () => {
@@ -48,8 +39,8 @@ export function PostActions({ post, onPostChange, className }: PostActionsProps)
     const nextLiked = !post.liked_by_me;
     const previous = post;
     setError('');
-    setPending('like');
-    onPostChange?.(optimisticPost(post, 'like', nextLiked));
+    setPending(true);
+    onPostChange?.(optimisticLike(post, nextLiked));
     try {
       const updated = nextLiked ? await likePost(post.id) : await unlikePost(post.id);
       onPostChange?.(updated);
@@ -57,25 +48,7 @@ export function PostActions({ post, onPostChange, className }: PostActionsProps)
       onPostChange?.(previous);
       setError(e instanceof Error ? e.message : 'Unable to update like.');
     } finally {
-      setPending(null);
-    }
-  };
-
-  const toggleSave = async () => {
-    if (!requireAuth() || pending) return;
-    const nextSaved = !post.saved_proof_by_me;
-    const previous = post;
-    setError('');
-    setPending('save');
-    onPostChange?.(optimisticPost(post, 'save', nextSaved));
-    try {
-      const updated = nextSaved ? await savePostProof(post.id) : await unsavePostProof(post.id);
-      onPostChange?.(updated);
-    } catch (e) {
-      onPostChange?.(previous);
-      setError(e instanceof Error ? e.message : 'Unable to update saved proof.');
-    } finally {
-      setPending(null);
+      setPending(false);
     }
   };
 
@@ -87,7 +60,7 @@ export function PostActions({ post, onPostChange, className }: PostActionsProps)
           variant="ghost"
           size="sm"
           className={cn('h-8 px-2.5', post.liked_by_me && 'text-red-500 hover:text-red-500')}
-          disabled={pending !== null}
+          disabled={pending}
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -118,23 +91,6 @@ export function PostActions({ post, onPostChange, className }: PostActionsProps)
           </Link>
         </Button>
 
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className={cn('h-8 px-2.5', post.saved_proof_by_me && 'text-blue-500 hover:text-blue-500')}
-          disabled={pending !== null}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            void toggleSave();
-          }}
-          aria-pressed={post.saved_proof_by_me}
-          aria-label={post.saved_proof_by_me ? 'Unsave proof' : 'Save proof'}
-        >
-          <span className="hidden sm:inline">Proof</span>
-          <span className="num">{post.saved_proof_count}</span>
-        </Button>
       </div>
 
       {error && <p className="px-2 text-xs text-destructive">{error}</p>}
