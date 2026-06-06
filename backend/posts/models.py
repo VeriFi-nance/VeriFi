@@ -76,6 +76,51 @@ class Post(models.Model):
 
     def __str__(self):
         return f"{self.author.address[:10]}… — {self.content[:40]}"
+
+
+class PostLike(models.Model):
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="likes")
+    user = models.ForeignKey(WalletUser, on_delete=models.CASCADE, related_name="post_likes")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("post", "user")
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Like<post={self.post_id} user={self.user_id}>"
+
+
+class PostComment(models.Model):
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="comments")
+    author = models.ForeignKey(WalletUser, on_delete=models.CASCADE, related_name="post_comments")
+    content = models.TextField(max_length=500)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        indexes = [
+            models.Index(fields=["post", "created_at"], name="post_comment_thread_idx"),
+        ]
+
+    def __str__(self):
+        return f"Comment<post={self.post_id} author={self.author_id}>"
+
+
+class SavedProof(models.Model):
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="saved_proofs")
+    user = models.ForeignKey(WalletUser, on_delete=models.CASCADE, related_name="saved_proofs")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("post", "user")
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "-created_at"], name="saved_proof_user_idx"),
+        ]
+
+    def __str__(self):
+        return f"SavedProof<post={self.post_id} user={self.user_id}>"
     
 
 class Asset(models.Model):

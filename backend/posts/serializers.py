@@ -1,6 +1,6 @@
 from datetime import date
 from rest_framework import serializers
-from .models import Asset, Post, HardClaim, HardClaimEvent, OHLCData, Channel, ChannelMembership
+from .models import Asset, Post, HardClaim, HardClaimEvent, OHLCData, Channel, ChannelMembership, PostComment
 
 class AssetSerializer(serializers.ModelSerializer):
     class Meta:
@@ -118,10 +118,19 @@ class PostSerializer(serializers.ModelSerializer):
     author_username = serializers.CharField(source="author.username", read_only=True)
     hard_claims = HardClaimSerializer(many=True, read_only=True)
     profitability = serializers.SerializerMethodField()
+    like_count = serializers.SerializerMethodField()
+    comment_count = serializers.SerializerMethodField()
+    saved_proof_count = serializers.SerializerMethodField()
+    liked_by_me = serializers.SerializerMethodField()
+    saved_proof_by_me = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
-        fields = ["id", "author_address", "author_username", "content", "channel", "created_at", "hard_claims", "profitability"]
+        fields = [
+            "id", "author_address", "author_username", "content", "channel", "created_at",
+            "hard_claims", "profitability", "like_count", "comment_count",
+            "saved_proof_count", "liked_by_me", "saved_proof_by_me"
+        ]
 
     def get_profitability(self, obj):
         try:
@@ -133,6 +142,31 @@ class PostSerializer(serializers.ModelSerializer):
             }
         except Exception:
             return None
+
+    def get_like_count(self, obj):
+        return getattr(obj, "like_count", obj.likes.count())
+
+    def get_comment_count(self, obj):
+        return getattr(obj, "comment_count", obj.comments.count())
+
+    def get_saved_proof_count(self, obj):
+        return getattr(obj, "saved_proof_count", obj.saved_proofs.count())
+
+    def get_liked_by_me(self, obj):
+        return bool(getattr(obj, "liked_by_me", False))
+
+    def get_saved_proof_by_me(self, obj):
+        return bool(getattr(obj, "saved_proof_by_me", False))
+
+
+class PostCommentSerializer(serializers.ModelSerializer):
+    author_address = serializers.CharField(source="author.address", read_only=True)
+    author_username = serializers.CharField(source="author.username", read_only=True)
+
+    class Meta:
+        model = PostComment
+        fields = ["id", "post", "author_address", "author_username", "content", "created_at"]
+        read_only_fields = ["id", "post", "author_address", "author_username", "created_at"]
 
 
 class OHLCDataSerializer(serializers.ModelSerializer):

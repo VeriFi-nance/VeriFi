@@ -2,34 +2,77 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, MessageCircle } from 'lucide-react';
 import { UserAvatar } from '@/components/UserAvatar';
 import { ClaimDetailView } from '@/components/feed/ClaimDetailView';
+import { PostActions } from '@/components/feed/PostActions';
 import { SkeletonPostCard } from '@/components/Skeleton';
 import { PageContent } from '@/components/PageContent';
-import { getPost, getAssets } from '@/lib/api';
+import { createPostComment, getPost, getAssets, getPostComments } from '@/lib/api';
+import { useAuthState, useOpenLogin } from '@/lib/auth';
 import { truncateAddress } from '@/lib/wallet';
-import type { PostItem, AssetItem } from '@/lib/types';
+import type { PostItem, PostCommentItem, AssetItem } from '@/lib/types';
 
 export default function PostDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const auth = useAuthState();
+  const openLogin = useOpenLogin();
   const [post, setPost] = useState<PostItem | null>(null);
+  const [comments, setComments] = useState<PostCommentItem[]>([]);
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [commentsLoading, setCommentsLoading] = useState(true);
+  const [commentContent, setCommentContent] = useState('');
+  const [submittingComment, setSubmittingComment] = useState(false);
   const [error, setError] = useState('');
+  const [commentsError, setCommentsError] = useState('');
 
   useEffect(() => {
     if (!id) return;
-    Promise.all([getPost(Number(id)), getAssets()])
-      .then(([found, a]) => {
+    const postId = Number(id);
+    Promise.all([getPost(postId), getAssets(), getPostComments(postId)])
+      .then(([found, a, loadedComments]) => {
         setPost(found);
         setAssets(a);
+        setComments(loadedComments);
+        setCommentsError('');
       })
       .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        setCommentsLoading(false);
+      });
   }, [id]);
+
+  const handleSubmitComment = async () => {
+    if (!post) return;
+    if (!auth.authenticated) {
+      openLogin(`/post/${post.id}`);
+      return;
+    }
+
+    const content = commentContent.trim();
+    if (!content) {
+      setCommentsError('Comment cannot be empty.');
+      return;
+    }
+
+    setSubmittingComment(true);
+    setCommentsError('');
+    try {
+      const comment = await createPostComment(post.id, content);
+      setComments((prev) => [...prev, comment]);
+      setCommentContent('');
+      setPost((prev) => prev ? { ...prev, comment_count: prev.comment_count + 1 } : prev);
+    } catch (e) {
+      setCommentsError(e instanceof Error ? e.message : 'Failed to post comment.');
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -79,9 +122,82 @@ export default function PostDetailPage() {
 
           <p className="text-sm whitespace-pre-wrap leading-relaxed">{post.content}</p>
 
-
+          <PostActions post={post} onPostChange={setPost} className="border-t border-border pt-2" />
         </CardContent>
       </Card>
+
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <MessageCircle className="size-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold">Comments</h2>
+          <span className="text-xs text-muted-foreground num">{post.comment_count}</span>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+          {auth.authenticated ? (
+            <div className="space-y-2">
+              <Textarea
+                value={commentContent}
+                onChange={(e) => setCommentContent(e.target.value)}
+                maxLength={500}
+                placeholder="Add a comment"
+                className="min-h-20 resize-none"
+              />
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs text-muted-foreground num">{commentContent.length}/500</span>
+                <Button
+                  size="sm"
+                  disabled={submittingComment || commentContent.trim().length === 0}
+                  onClick={() => void handleSubmitComment()}
+                >
+                  {submittingComment ? 'Posting…' : 'Comment'}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">Log in to join the discussion.</p>
+              <Button size="sm" variant="outline" onClick={() => openLogin(`/post/${post.id}`)}>
+                Log in
+              </Button>
+            </div>
+          )}
+
+          {commentsError && (
+            <Alert variant="destructive">
+              <AlertDescription>{commentsError}</AlertDescription>
+            </Alert>
+          )}
+
+          <div className="space-y-3 border-t border-border pt-3">
+            {commentsLoading ? (
+              <p className="text-sm text-muted-foreground">Loading comments…</p>
+            ) : comments.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No comments yet.</p>
+            ) : (
+              comments.map((comment) => (
+                <article key={comment.id} className="flex gap-3">
+                  <UserAvatar address={comment.author_address} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <Link
+                        to={`/u/${comment.author_username || comment.author_address}`}
+                        className="text-xs font-mono font-medium hover:underline truncate"
+                      >
+                        {comment.author_username ? `@${comment.author_username}` : truncateAddress(comment.author_address)}
+                      </Link>
+                      <time dateTime={comment.created_at} className="text-xs text-muted-foreground num">
+                        {new Date(comment.created_at).toLocaleString()}
+                      </time>
+                    </div>
+                    <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">{comment.content}</p>
+                  </div>
+                </article>
+              ))
+            )}
+          </div>
+        </div>
+      </section>
 
       {post.hard_claims.length > 0 && (
         <section className="mt-4 space-y-6">

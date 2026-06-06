@@ -71,6 +71,20 @@ export interface PostItem {
   hard_claims: HardClaimItem[];
   profitability?: ProfitabilityData | null;
   channel?: number | null;
+  like_count: number;
+  comment_count: number;
+  saved_proof_count: number;
+  liked_by_me: boolean;
+  saved_proof_by_me: boolean;
+}
+
+export interface PostCommentItem {
+  id: number;
+  post: number;
+  author_address: string;
+  author_username: string;
+  content: string;
+  created_at: string;
 }
 
 export interface HardClaimEvent {

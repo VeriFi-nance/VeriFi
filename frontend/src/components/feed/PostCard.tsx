@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { ChevronDown, Star } from 'lucide-react';
 import { HardClaimCard } from '@/components/HardClaimCard';
 import { UserAvatar } from '@/components/UserAvatar';
+import { PostActions } from '@/components/feed/PostActions';
 import { truncateAddress } from '@/lib/wallet';
 import { cn } from '@/lib/utils';
 import type { PostItem, HardClaimItem, AssetItem } from '@/lib/types';
@@ -16,9 +17,10 @@ interface PostCardProps {
   hardClaims?: HardClaimItem[];
   assets?: AssetItem[];
   onDelete?: () => void;
+  onPostChange?: (post: PostItem) => void;
 }
 
-export function PostCard({ post, hardClaims = [], assets = [], onDelete }: PostCardProps) {
+export function PostCard({ post, hardClaims = [], assets = [], onDelete, onPostChange }: PostCardProps) {
   const [claimsOpen, setClaimsOpen] = useState(false);
 
   const claimHints = post.hard_claims.length > 0 ? post.hard_claims : hardClaims;
@@ -82,11 +84,13 @@ export function PostCard({ post, hardClaims = [], assets = [], onDelete }: PostC
           </div>
         </div>
 
-        <CardContent className="px-4 sm:px-5 pb-4">
+        <CardContent className="px-4 sm:px-5 pb-3">
           <p className="text-sm leading-relaxed whitespace-pre-wrap">{post.content}</p>
-
-
         </CardContent>
+
+        <div className="pointer-events-auto border-t border-border px-3 sm:px-4 py-1">
+          <PostActions post={post} onPostChange={onPostChange} />
+        </div>
 
         {hasClaims && (
           <>

@@ -127,6 +127,10 @@ export function FeedList({ feed, channel, myRole, creatorAddress }: FeedListProp
     });
   };
 
+  const handlePostChange = (updatedPost: PostItem) => {
+    setPosts((prev) => prev.map((post) => (post.id === updatedPost.id ? updatedPost : post)));
+  };
+
   const isCreator = creatorAddress && myAddress && myAddress.toLowerCase() === creatorAddress.toLowerCase();
   const isMod = myRole === 'moderator' || myRole === 'owner' || isCreator;
 
@@ -141,6 +145,7 @@ export function FeedList({ feed, channel, myRole, creatorAddress }: FeedListProp
             hardClaims={post.hard_claims}
             assets={assets}
             onDelete={canDelete ? () => handleDeletePost(post.id) : undefined}
+            onPostChange={handlePostChange}
           />
         );
       })}
