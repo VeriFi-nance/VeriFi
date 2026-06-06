@@ -5,6 +5,7 @@ import {
   ColorType,
   CrosshairMode,
   LineStyle,
+  createSeriesMarkers,
   type IChartApi,
   type ISeriesApi,
   type MouseEventParams,
@@ -55,6 +56,7 @@ export function InteractiveChart({
   interval,
   onIntervalChange,
   selectedPrice,
+  selectedDate,
   onSelectTarget,
   refetching = false,
 }: InteractiveChartProps) {
@@ -227,6 +229,45 @@ export function InteractiveChart({
       }
     }
   }, [selectedPrice]);
+
+  // Manage time markers for Start and Deadline
+  const markersApiRef = useRef<any>(null);
+
+  useEffect(() => {
+    const series = seriesRef.current;
+    if (!series) return;
+
+    if (!markersApiRef.current) {
+      markersApiRef.current = createSeriesMarkers(series);
+    }
+
+    const markers: any[] = [];
+    
+    // Start marker (last known candle time)
+    if (data.ohlc.length > 0) {
+      const lastCandleTime = toUtcTimestamp(data.ohlc[data.ohlc.length - 1].date);
+      markers.push({
+        time: lastCandleTime,
+        position: 'aboveBar',
+        color: '#6366f1',
+        shape: 'arrowDown',
+        text: 'Start',
+      });
+    }
+
+    if (selectedDate) {
+      const targetTime = toUtcTimestamp(selectedDate);
+      markers.push({
+        time: targetTime,
+        position: 'belowBar',
+        color: '#f59e0b',
+        shape: 'arrowUp',
+        text: 'Deadline',
+      });
+    }
+
+    markersApiRef.current.setMarkers(markers);
+  }, [data.ohlc, selectedDate]);
 
   return (
     <div className="rounded-lg border bg-card p-3">
