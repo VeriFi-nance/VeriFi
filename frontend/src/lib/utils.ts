@@ -10,8 +10,19 @@ export function cn(...inputs: ClassValue[]) {
  * Guards against a tainted value (e.g. from localStorage or a file input)
  * carrying a dangerous scheme like `javascript:` or `data:text/html`.
  * Returns the URL when safe, otherwise `undefined`.
+ *
+ * Uses `startsWith` prefix checks (a recognized sanitizing guard) so the
+ * returned value is provably scheme-constrained.
  */
 export function safeImageSrc(url: string | null | undefined): string | undefined {
   if (typeof url !== 'string' || url.length === 0) return undefined;
-  return /^(https?:\/\/|blob:|data:image\/)/i.test(url) ? url : undefined;
+  if (
+    url.startsWith('https://') ||
+    url.startsWith('http://') ||
+    url.startsWith('blob:') ||
+    url.startsWith('data:image/')
+  ) {
+    return url;
+  }
+  return undefined;
 }
