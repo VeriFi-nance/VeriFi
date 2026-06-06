@@ -1,28 +1,95 @@
 import { getToken } from './auth';
 import type { PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, ChartCandleInterval, ProfileStats, ChannelItem, ChannelMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType, ProofBundle, OGMetadata } from './types';
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+/**
+ * Ordered list of backend base URLs to try, sourced from build-time env vars:
+ *   - VITE_API_URL          primary backend (custom domain)
+ *   - VITE_API_FALLBACK_URL fallback backend, tried when the primary is
+ *                           unreachable — e.g. networks (eduroam) whose firewall
+ *                           MITM-inspects the custom *.veri.finance domain but
+ *                           leaves the Render *.onrender.com domain untouched.
+ *
+ * Both are configured per environment in Vercel. When neither is set (local
+ * dev) we fall back to the local Django server.
+ *
+ * The first candidate that answers a request is cached in localStorage so later
+ * page loads skip the dead one.
+ */
+const CACHE_KEY = 'verifi_api_base';
+const DEFAULT_BASE_URL = 'http://localhost:8000';
+
+function candidateBaseUrls(): string[] {
+  const urls = [import.meta.env.VITE_API_URL, import.meta.env.VITE_API_FALLBACK_URL]
+    .filter((u): u is string => typeof u === 'string' && u.length > 0)
+    .map((u) => u.replace(/\/+$/, '')); // strip trailing slashes
+
+  return urls.length > 0 ? urls : [DEFAULT_BASE_URL];
+}
+
+/** Candidates ordered with a previously-working base (if any) tried first. */
+function orderedBaseUrls(): string[] {
+  const candidates = candidateBaseUrls();
+  let cached: string | null = null;
+  try {
+    cached = typeof window !== 'undefined' ? window.localStorage.getItem(CACHE_KEY) : null;
+  } catch {
+    cached = null;
+  }
+  if (cached && candidates.includes(cached)) {
+    return [cached, ...candidates.filter((c) => c !== cached)];
+  }
+  return candidates;
+}
+
+function rememberBaseUrl(base: string): void {
+  try {
+    if (typeof window !== 'undefined') window.localStorage.setItem(CACHE_KEY, base);
+  } catch {
+    /* localStorage unavailable — ignore */
+  }
+}
 
 async function request<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
   const { headers: optHeaders, ...rest } = options;
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...rest,
-    headers: { 'Content-Type': 'application/json', ...optHeaders },
-  });
+  const bases = orderedBaseUrls();
+  let lastNetworkError: unknown;
 
-  if (res.status === 204) {
-    return {} as T;
+  for (let i = 0; i < bases.length; i++) {
+    const base = bases[i];
+    let res: Response;
+    try {
+      res = await fetch(`${base}${path}`, {
+        ...rest,
+        headers: { 'Content-Type': 'application/json', ...optHeaders },
+      });
+    } catch (err) {
+      // Network-level failure (DNS, TLS/cert MITM, connection refused). The
+      // request never reached the server, so it's safe to retry the next base.
+      lastNetworkError = err;
+      continue;
+    }
+
+    // Got an HTTP response — this base works; remember it and stop falling back.
+    rememberBaseUrl(base);
+
+    if (res.status === 204) {
+      return {} as T;
+    }
+
+    const text = await res.text();
+    const data = text ? JSON.parse(text) : {};
+    if (!res.ok) {
+      throw new Error(data.detail ?? 'Request failed');
+    }
+    return data as T;
   }
 
-  const text = await res.text();
-  const data = text ? JSON.parse(text) : {};
-  if (!res.ok) {
-    throw new Error(data.detail ?? 'Request failed');
-  }
-  return data as T;
+  throw lastNetworkError instanceof Error
+    ? lastNetworkError
+    : new Error('Network request failed');
 }
 
 function authHeaders(): Record<string, string> {

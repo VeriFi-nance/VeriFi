@@ -14,7 +14,7 @@ import {
   type UTCTimestamp,
 } from 'lightweight-charts';
 import type { ClaimChartData, ChartCandleInterval } from '@/lib/types';
-import { CHART_INTERVAL_OPTIONS, claimWindowForChart, markerWindowEnd } from '@/lib/chart';
+import { CHART_INTERVAL_OPTIONS, claimWindowForChart } from '@/lib/chart';
 import { cn } from '@/lib/utils';
 
 interface PriceChartProps {
@@ -259,17 +259,23 @@ function focusClaimWindow(
   const windowFrom = Math.min(startIdx, endIdx);
   const windowTo = Math.max(startIdx, endIdx);
   const windowBars = Math.max(windowTo - windowFrom, 1);
-  const minSidePadding = chartInterval === '15m' ? 32 : chartInterval === '1d' ? 8 : 12;
-  const sidePadding = Math.max(windowBars * 0.32, minSidePadding);
-
-  const center = (windowFrom + windowTo) / 2;
-  const halfRange = windowBars / 2 + sidePadding;
+  
+  // To keep the start line at 1/10th of the screen, left padding is 10% of total visible bars.
+  // We cap total visible bars to 400 to prevent hitting the chart's max zoom out limit.
+  const minBars = chartInterval === '15m' ? 60 : chartInterval === '1d' ? 14 : 30;
+  const maxBars = 400; 
+  
+  let visibleBars = Math.max(windowBars / 0.8, minBars);
+  if (visibleBars > maxBars) {
+    visibleBars = maxBars;
+  }
+  
+  const leftPadding = visibleBars * 0.1;
+  const from = windowFrom - leftPadding;
+  const to = from + visibleBars;
 
   timeScale.applyOptions({ rightOffset: 0 });
-  timeScale.setVisibleLogicalRange({
-    from: center - halfRange,
-    to: center + halfRange,
-  });
+  timeScale.setVisibleLogicalRange({ from, to });
 }
 
 export function PriceChart({
@@ -300,15 +306,7 @@ export function PriceChart({
     const candles = candlesRef.current;
     if (!chart || !overlay || !startMarker || !endMarker) return;
 
-    const lastCandleTime =
-      candles.length > 0 ? (candles[candles.length - 1].time as number) : null;
-    const endForMarker = markerWindowEnd(
-      claimWindowEnd as number,
-      lastCandleTime,
-      Boolean(data.live),
-    );
-    const windowEnd =
-      endForMarker !== null ? (endForMarker as UTCTimestamp) : null;
+    const windowEnd = claimWindowEnd as UTCTimestamp;
 
     const timeScale = chart.timeScale();
     const startX = timeToPlotCoordinate(timeScale, windowStart, candles, interval);
@@ -331,7 +329,7 @@ export function PriceChart({
     endMarker.style.display = showAt(endX) ? 'block' : 'none';
     if (startX !== null && showAt(startX)) startMarker.style.left = `${startX}px`;
     if (endX !== null && showAt(endX)) endMarker.style.left = `${endX}px`;
-  }, [windowStart, claimWindowEnd, interval, data.live]);
+  }, [windowStart, claimWindowEnd, interval]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -448,12 +446,10 @@ export function PriceChart({
     const intervalChanged = prevDataIntervalRef.current !== data.interval;
 
     if ((shouldRefocusRef.current || intervalChanged) && styledCandles.length > 0) {
-      const lastTime = styledCandles[styledCandles.length - 1].time as number;
-      const focusEnd = markerWindowEnd(claimWindowEnd as number, lastTime, Boolean(data.live));
       focusClaimWindow(
         chart,
         windowStart,
-        focusEnd !== null ? (focusEnd as UTCTimestamp) : null,
+        claimWindowEnd as UTCTimestamp,
         styledCandles,
         interval,
       );
