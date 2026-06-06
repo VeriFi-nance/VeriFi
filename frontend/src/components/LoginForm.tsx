@@ -15,8 +15,10 @@ import {
 } from '@/lib/crypto';
 import { encryptPrivateKey, saveEncryptedKey } from '@/lib/keystore';
 import { register, getChallenge, login } from '@/lib/api';
-import { saveAuthSession } from '@/lib/auth';
+import { saveAuthSession, setAuthMethod } from '@/lib/auth';
 import { connectAndAuthenticateMetaMask } from '@/lib/walletAuth';
+import { isPrivyConfigured } from '@/lib/privyAuth';
+import { GoogleLoginButton } from '@/components/GoogleLoginButton';
 
 type Tab = 'create' | 'signin';
 
@@ -39,6 +41,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState('');
   const [metamaskLoading, setMetamaskLoading] = useState(false);
+  const privyEnabled = isPrivyConfigured();
 
   function resetTab(t: Tab) {
     setTab(t);
@@ -81,6 +84,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       const { access, username } = await register(address, createUsername.trim());
       saveEncryptedKey(encrypted);
       saveAuthSession(address, username, access);
+      setAuthMethod('native');
       onSuccess();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
@@ -107,6 +111,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       const encrypted = await encryptPrivateKey(privateKey, signinPassword);
       saveEncryptedKey(encrypted);
       saveAuthSession(address, username, access);
+      setAuthMethod('native');
       onSuccess();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
@@ -120,6 +125,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     setError('');
     try {
       await connectAndAuthenticateMetaMask();
+      setAuthMethod('metamask');
       onSuccess();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'MetaMask connection failed');
@@ -330,6 +336,22 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           <span className="text-xs text-muted-foreground px-1">or</span>
           <div className="flex-1 border-t" />
         </div>
+
+        {privyEnabled ? (
+          <GoogleLoginButton
+            disabled={metamaskLoading}
+            onError={setError}
+          />
+        ) : (
+          <Button
+            variant="outline"
+            className="w-full"
+            disabled
+            title="Set VITE_PRIVY_APP_ID to enable Google sign-in"
+          >
+            Continue with Google
+          </Button>
+        )}
 
         <Button
           variant="outline"

@@ -5,7 +5,10 @@ import type { Location, NavigateFunction } from 'react-router-dom';
 const TOKEN_KEY = 'verifi_jwt';
 const ADDRESS_STORAGE = 'verifi_address';
 const USERNAME_STORAGE = 'verifi_username';
+const AUTH_METHOD_KEY = 'verifi_auth_method';
 const AUTH_EVENT = 'verifi-auth-changed';
+
+export type AuthMethod = 'native' | 'metamask' | 'privy';
 
 export interface AuthState {
   token: string | null;
@@ -82,10 +85,23 @@ export function loadUsername(): string | null {
   return localStorage.getItem(USERNAME_STORAGE);
 }
 
+export function setAuthMethod(method: AuthMethod): void {
+  localStorage.setItem(AUTH_METHOD_KEY, method);
+}
+
+export function loadAuthMethod(): AuthMethod | null {
+  const value = localStorage.getItem(AUTH_METHOD_KEY);
+  if (value === 'native' || value === 'metamask' || value === 'privy') {
+    return value;
+  }
+  return null;
+}
+
 export function clearAuth(): void {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(ADDRESS_STORAGE);
   localStorage.removeItem(USERNAME_STORAGE);
+  localStorage.removeItem(AUTH_METHOD_KEY);
   notifyAuthChange();
 }
 
@@ -99,7 +115,12 @@ export function saveAuthSession(address: string, username: string, token: string
 function subscribeAuthStore(listener: () => void): () => void {
   const onAuthEvent = () => listener();
   const onStorageEvent = (event: StorageEvent) => {
-    if (event.key === TOKEN_KEY || event.key === ADDRESS_STORAGE || event.key === USERNAME_STORAGE) {
+    if (
+      event.key === TOKEN_KEY ||
+      event.key === ADDRESS_STORAGE ||
+      event.key === USERNAME_STORAGE ||
+      event.key === AUTH_METHOD_KEY
+    ) {
       listener();
     }
   };
