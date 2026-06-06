@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   createChart,
   CandlestickSeries,
   ColorType,
   CrosshairMode,
   LineStyle,
-  type CandlestickData,
   type IChartApi,
   type ISeriesApi,
   type MouseEventParams,
@@ -38,8 +37,6 @@ const CANDLE_DOWN = {
   wickColor: '#ef4444',
 } as const;
 
-const ANCHOR_LINE_COLOR = 'rgba(59, 130, 246, 0.95)';
-
 function toUtcTimestamp(iso: string): UTCTimestamp {
   return Math.floor(new Date(iso).getTime() / 1000) as UTCTimestamp;
 }
@@ -49,7 +46,6 @@ export function InteractiveChart({
   interval,
   onIntervalChange,
   selectedPrice,
-  selectedDate,
   onSelectTarget,
   refetching = false,
 }: InteractiveChartProps) {
