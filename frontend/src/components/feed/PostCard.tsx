@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Star } from 'lucide-react';
 import { HardClaimCard } from '@/components/HardClaimCard';
 import { UserAvatar } from '@/components/UserAvatar';
 import { truncateAddress } from '@/lib/wallet';
@@ -56,6 +56,12 @@ export function PostCard({ post, hardClaims = [], assets = [], onDelete }: PostC
             >
               {new Date(post.created_at).toLocaleDateString()}
             </time>
+            {post.channel && (
+              <span className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded ml-1 shrink-0">
+                <Star className="size-3 fill-amber-500" />
+                PREMIUM
+              </span>
+            )}
           </div>
 
           <div className="pointer-events-auto flex items-center gap-2">
