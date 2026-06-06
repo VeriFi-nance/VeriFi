@@ -6,6 +6,7 @@ import { closePosition, getPositionResolveStatus, triggerPositionResolve, getPos
 import type { PositionItem, AssetItem } from '@/lib/types';
 import { useAuthState } from '@/lib/auth';
 import { Link } from 'react-router-dom';
+import { truncateAddress } from '@/lib/wallet';
 import { RefreshCw, Download, ChevronDown, ChevronUp } from 'lucide-react';
 import { PositionPriceChart } from './feed/PositionPriceChart';
 import { usePositionChartData } from '@/hooks/usePositionChartData';
@@ -75,8 +76,8 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
   // Live ticker
   useEffect(() => {
     if (countdown <= 0) return;
-    const t = setInterval(() => setCountdown(c => Math.max(0, c - 1)), 1000);
-    return () => clearInterval(t);
+    const t = window.setInterval(() => setCountdown(c => Math.max(0, c - 1)), 1000);
+    return () => window.clearInterval(t);
   }, [countdown]);
 
   const fmtCountdown = (secs: number) => {
