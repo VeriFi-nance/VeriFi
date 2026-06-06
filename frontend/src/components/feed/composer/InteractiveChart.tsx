@@ -20,8 +20,8 @@ interface InteractiveChartProps {
   data: AssetChartData;
   interval: ChartCandleInterval;
   onIntervalChange: (interval: ChartCandleInterval) => void;
-  selectedPrice: number | null;
-  selectedDate: string | null;
+  priceLines?: { price: number; color: string; title: string }[];
+  dateLines?: { dateStr: string; color: string; title: string }[];
   onSelectTarget: (price: number, dateStr: string) => void;
   refetching?: boolean;
 }
@@ -54,8 +54,8 @@ export function InteractiveChart({
   data,
   interval,
   onIntervalChange,
-  selectedPrice,
-  selectedDate,
+  priceLines = [],
+  dateLines = [],
   onSelectTarget,
   refetching = false,
 }: InteractiveChartProps) {
@@ -67,7 +67,8 @@ export function InteractiveChart({
   const allTimesRef = useRef<number[]>([]);
   
   const startLineRef = useRef<HTMLDivElement>(null);
-  const targetLineRef = useRef<HTMLDivElement>(null);
+  // We will generate vertical lines dynamically
+  const dateLineElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // Sync refs so the click handler closure gets the latest values without recreating the chart
   useEffect(() => {
@@ -214,32 +215,35 @@ export function InteractiveChart({
     }
   }, [data, interval]);
 
-  // Manage target price line
-  const priceLineRef = useRef<any>(null);
+  // Manage target price lines
+  const priceLineRefs = useRef<any[]>([]);
 
   useEffect(() => {
     const series = seriesRef.current;
     if (!series) return;
 
-    if (selectedPrice !== null && !Number.isNaN(selectedPrice)) {
-      if (priceLineRef.current) {
-        series.removePriceLine(priceLineRef.current);
-      }
-      priceLineRef.current = series.createPriceLine({
-        price: selectedPrice,
-        color: '#f59e0b',
-        lineWidth: 2,
-        lineStyle: LineStyle.Solid,
-        axisLabelVisible: true,
-        title: 'Target',
+    // Remove existing lines
+    priceLineRefs.current.forEach(line => {
+      try { series.removePriceLine(line); } catch { /* ignore */ }
+    });
+    priceLineRefs.current = [];
+
+    if (priceLines && priceLines.length > 0) {
+      priceLines.forEach(pl => {
+        if (!Number.isNaN(pl.price)) {
+          const line = series.createPriceLine({
+            price: pl.price,
+            color: pl.color,
+            lineWidth: 2,
+            lineStyle: LineStyle.Solid,
+            axisLabelVisible: true,
+            title: pl.title,
+          });
+          priceLineRefs.current.push(line);
+        }
       });
-    } else {
-      if (priceLineRef.current) {
-        series.removePriceLine(priceLineRef.current);
-        priceLineRef.current = null;
-      }
     }
-  }, [selectedPrice]);
+  }, [priceLines]);
 
   // Manage time markers (vertical lines via DOM overlays)
   useEffect(() => {
@@ -262,25 +266,26 @@ export function InteractiveChart({
         }
       }
 
-      // Target Line
-      if (targetLineRef.current && selectedDate) {
-        let targetTime = toUtcTimestamp(selectedDate) as number;
-        const allTimes = allTimesRef.current;
-        if (allTimes.length > 0) {
-          targetTime = allTimes.reduce((prev, curr) => 
-            Math.abs(curr - targetTime) < Math.abs(prev - targetTime) ? curr : prev
-          );
+      // Target Lines (Dynamic)
+      dateLines.forEach((dl) => {
+        const el = dateLineElsRef.current.get(dl.title);
+        if (el) {
+          let targetTime = toUtcTimestamp(dl.dateStr) as number;
+          const allTimes = allTimesRef.current;
+          if (allTimes.length > 0) {
+            targetTime = allTimes.reduce((prev, curr) => 
+              Math.abs(curr - targetTime) < Math.abs(prev - targetTime) ? curr : prev
+            );
+          }
+          const x = timeScale.timeToCoordinate(targetTime as UTCTimestamp);
+          if (x !== null) {
+            el.style.left = `${x}px`;
+            el.style.display = 'block';
+          } else {
+            el.style.display = 'none';
+          }
         }
-        const x = timeScale.timeToCoordinate(targetTime as UTCTimestamp);
-        if (x !== null) {
-          targetLineRef.current.style.left = `${x}px`;
-          targetLineRef.current.style.display = 'block';
-        } else {
-          targetLineRef.current.style.display = 'none';
-        }
-      } else if (targetLineRef.current) {
-        targetLineRef.current.style.display = 'none';
-      }
+      });
     }
 
     chart.timeScale().subscribeVisibleTimeRangeChange(updateLines);
@@ -292,7 +297,7 @@ export function InteractiveChart({
       chart.timeScale().unsubscribeVisibleTimeRangeChange(updateLines);
       chart.timeScale().unsubscribeVisibleLogicalRangeChange(updateLines);
     };
-  }, [data.ohlc, selectedDate, interval]);
+  }, [data.ohlc, dateLines, interval]);
 
   return (
     <div className="rounded-lg border bg-card p-3">
@@ -343,16 +348,25 @@ export function InteractiveChart({
           </div>
         </div>
 
-        {/* Deadline Vertical Line Overlay */}
-        <div 
-          ref={targetLineRef} 
-          className="absolute top-0 bottom-0 w-[2px] bg-amber-500/40 pointer-events-none hidden z-10" 
-          style={{ transform: 'translateX(-50%)' }}
-        >
-          <div className="absolute top-8 left-2 text-[10px] font-bold text-amber-500 uppercase tracking-wider bg-background/90 px-1.5 py-0.5 rounded shadow-sm border border-amber-500/20 whitespace-nowrap">
-            Deadline
+        {/* Dynamic Vertical Line Overlays */}
+        {dateLines.map((dl) => (
+          <div 
+            key={dl.title}
+            ref={(el) => {
+              if (el) dateLineElsRef.current.set(dl.title, el);
+              else dateLineElsRef.current.delete(dl.title);
+            }}
+            className="absolute top-0 bottom-0 w-[2px] pointer-events-none hidden z-10" 
+            style={{ transform: 'translateX(-50%)', backgroundColor: dl.color }}
+          >
+            <div 
+               className="absolute top-8 left-2 text-[10px] font-bold uppercase tracking-wider bg-background/90 px-1.5 py-0.5 rounded shadow-sm border whitespace-nowrap"
+               style={{ color: dl.color.replace('/40', ''), borderColor: dl.color.replace('/40', '/20') }}
+            >
+              {dl.title}
+            </div>
           </div>
-        </div>
+        ))}
       </div>
     </div>
   );

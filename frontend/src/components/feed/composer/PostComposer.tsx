@@ -144,7 +144,7 @@ export function PostComposer({
 
   return (
     <div className="space-y-4">
-      <div className="space-y-1.5">
+      <div className="space-y-1.5 p-1">
         <div className="relative">
           <Textarea
             placeholder="What's your financial take?"
