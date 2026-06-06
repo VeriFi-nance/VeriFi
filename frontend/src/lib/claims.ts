@@ -122,7 +122,7 @@ export function getFeedClaimTagLabel(claim: {
 }
 
 export function getHardClaimParity(claim: HardClaimItem): string | undefined {
-  const p = claim.parity ?? claim.payda;
+  const p = claim.asset_obj?.quote_currency;
   return p?.trim() || undefined;
 }
 

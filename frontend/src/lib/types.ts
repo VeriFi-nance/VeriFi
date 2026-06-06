@@ -103,6 +103,7 @@ export interface AssetItem {
   name: string;
   symbol: string;
   description: string;
+  quote_currency?: string;
 }
 
 // OHLC chart data types

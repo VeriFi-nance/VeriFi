@@ -208,7 +208,6 @@ export function PostComposer({
                         onAddExtracted({
                           asset_id: asset.id.toString(),
                           assetSymbol: asset.symbol,
-                          parity: c.parity || '',
                           claim_type: c.claim_type || 'PERCENTAGE_UP',
                           direction:
                             c.claim_type === 'PERCENTAGE_DOWN' ||
