@@ -116,9 +116,10 @@ export default function UserPage() {
         </div>
 
         {stats && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5">
+          <div className="flex flex-wrap gap-x-8 gap-y-4 mt-5">
             <StatBlock label="Followers" value={String(stats.followers_count)} />
             <StatBlock label="Following" value={String(stats.following_count)} />
+            <StatBlock label="Subscribed" value={String(stats.channels_member_of?.length || 0)} />
             {stats.rep != null && <StatBlock label="Rep" value={stats.rep.toFixed(0)} />}
             {stats.energy != null && (
               <StatBlock label="Energy" value={String(Math.floor(stats.energy))} />
@@ -127,51 +128,23 @@ export default function UserPage() {
         )}
 
         {stats && (
-          <div className="mt-5 pt-4 border-t border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="text-sm">
-              {stats.channel_owned ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground font-medium">Channel:</span>
-                  <Link
-                    to={`/channels/${stats.channel_owned.id}`}
-                    className="inline-flex items-center gap-1.5 text-primary hover:text-primary/80 font-semibold hover:underline"
-                  >
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 bg-primary/20 text-primary border border-primary/25 rounded uppercase tracking-wider shrink-0">
-                      Live
-                    </span>
-                    {stats.channel_owned.name}
-                  </Link>
-                </div>
-              ) : isSelf ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground text-xs">No channel created yet.</span>
-                  <Link to="/channels" className="text-xs text-primary hover:underline font-semibold">
-                    Create Channel
-                  </Link>
-                </div>
-              ) : (
-                <span className="text-muted-foreground text-xs">No channel created.</span>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-2">
-              {isSelf ? (
-                <Button asChild variant="outline" size="sm" className="gap-2">
-                  <Link to="/settings">
-                    <SettingsIcon className="size-4" />
-                    Settings
-                  </Link>
-                </Button>
-              ) : (
-                <Button
-                  variant={following ? 'outline' : 'default'}
-                  size="sm"
-                  onClick={handleFollow}
-                >
-                  {following ? 'Unfollow' : 'Follow'}
-                </Button>
-              )}
-            </div>
+          <div className="mt-5 pt-4 border-t border-border flex justify-end gap-2">
+            {isSelf ? (
+              <Button asChild variant="outline" size="sm" className="gap-2">
+                <Link to="/settings">
+                  <SettingsIcon className="size-4" />
+                  Settings
+                </Link>
+              </Button>
+            ) : (
+              <Button
+                variant={following ? 'outline' : 'default'}
+                size="sm"
+                onClick={handleFollow}
+              >
+                {following ? 'Unfollow' : 'Follow'}
+              </Button>
+            )}
           </div>
         )}
       </Card>
@@ -182,23 +155,23 @@ export default function UserPage() {
         </Alert>
       )}
 
-      <Tabs defaultValue="claims" className="mt-6 w-full">
+      <Tabs defaultValue="public" className="mt-6 w-full">
         <TabsList className="bg-transparent border-none p-0 flex gap-2 h-auto justify-start w-full">
           <TabsTrigger
-            value="claims"
+            value="public"
             className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground data-[state=active]:bg-foreground/5 dark:data-[state=active]:bg-foreground/5 data-[state=active]:text-foreground data-[state=active]:border-transparent dark:data-[state=active]:border-transparent data-[state=active]:shadow-none cursor-pointer transition-colors border-0"
           >
-            Hard Claims
+            Public
           </TabsTrigger>
           <TabsTrigger
-            value="channels"
-            className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground data-[state=active]:bg-foreground/5 dark:data-[state=active]:bg-foreground/5 data-[state=active]:text-foreground data-[state=active]:border-transparent dark:data-[state=active]:border-transparent data-[state=active]:shadow-none cursor-pointer transition-colors border-0"
+            value="premium"
+            className="rounded-md px-3 py-1.5 text-sm font-medium text-amber-500/70 hover:text-amber-500 hover:bg-amber-500/10 data-[state=active]:bg-amber-500/15 data-[state=active]:text-amber-500 data-[state=active]:border-transparent data-[state=active]:shadow-none cursor-pointer transition-colors border-0 flex items-center gap-1.5"
           >
-            Channels
+            Premium
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="claims" className="space-y-2 mt-4 animate-in fade-in-50 duration-200">
+        <TabsContent value="public" className="space-y-2 mt-4 animate-in fade-in-50 duration-200">
           {loading ? (
             <div className="space-y-2">
               <SkeletonRow />
@@ -223,48 +196,8 @@ export default function UserPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="channels" className="space-y-6 mt-4 animate-in fade-in-50 duration-200">
-          {loading ? (
-            <div className="space-y-2">
-              <SkeletonRow />
-              <SkeletonRow />
-            </div>
-          ) : (
-            <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                Joined Channels ({stats?.channels_member_of?.length ?? 0})
-              </h3>
-              {!stats?.channels_member_of || stats.channels_member_of.length === 0 ? (
-                <p className="text-sm text-muted-foreground bg-muted/20 p-4 rounded-lg border border-dashed text-center">No joined channels.</p>
-              ) : (
-                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
-                  {stats.channels_member_of.map((c) => (
-                    <Link key={c.id} to={`/channels/${c.id}`} className="block group">
-                      <Card className="bg-card hover:bg-muted/50 hover:border-primary/20 transition-all duration-200 h-full">
-                        <div className="p-4 space-y-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-semibold text-sm group-hover:text-primary transition-colors truncate">{c.name}</span>
-                            <span className="text-[9px] font-normal px-2 py-0.5 bg-secondary text-secondary-foreground rounded-full uppercase tracking-wider shrink-0">
-                              {c.privacy_type}
-                            </span>
-                          </div>
-                          <p className="text-xs text-muted-foreground line-clamp-2 min-h-8">
-                            {c.description || 'No description'}
-                          </p>
-                          <div className="text-[10px] text-muted-foreground pt-1 flex items-center justify-between">
-                            <span><strong>{c.member_count}</strong> subscriber{c.member_count !== 1 ? 's' : ''}</span>
-                            {c.post_permission === 'creator_only' && (
-                              <span className="text-[9px] text-primary/80 font-medium uppercase tracking-wider">Broadcast</span>
-                            )}
-                          </div>
-                        </div>
-                      </Card>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+        <TabsContent value="premium" className="space-y-6 mt-4 animate-in fade-in-50 duration-200">
+          <div className="text-center text-muted-foreground py-10">Premium content loading...</div>
         </TabsContent>
       </Tabs>
     </PageContent>
