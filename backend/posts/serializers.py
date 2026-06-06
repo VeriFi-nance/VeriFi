@@ -187,7 +187,7 @@ from django.utils import timezone
 
 
 class PositionInputSerializer(serializers.Serializer):
-    channel_id = serializers.IntegerField(required=True)
+    channel_id = serializers.IntegerField(required=False, allow_null=True, default=None)
     post_id = serializers.IntegerField(required=False, allow_null=True, default=None)
     asset_id = serializers.IntegerField(required=True)
     direction = serializers.ChoiceField(choices=Position.Direction.choices, required=True)

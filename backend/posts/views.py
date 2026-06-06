@@ -250,10 +250,10 @@ class PostListCreateView(APIView):
         hard_claims_data = request.data.get("hard_claims", [])
         positions_data = request.data.get("positions", [])
 
-        # Positions may only be attached by the channel creator
-        if positions_data and (not channel_obj or channel_obj.creator != user):
+        # In channels, positions may only be attached by the channel creator
+        if positions_data and channel_obj and channel_obj.creator != user:
             return Response(
-                {"detail": "Only channel creators can attach positions to posts."},
+                {"detail": "In channels, only the channel creator can attach positions to posts."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -365,7 +365,7 @@ class PostListCreateView(APIView):
             # ── Attached positions (channel-creator only) ──────────────────────────────
             for pos_data in positions_data:
                 pos_data_with_channel = dict(pos_data)
-                pos_data_with_channel["channel_id"] = channel_obj.id
+                pos_data_with_channel["channel_id"] = channel_obj.id if channel_obj else None
                 pos_serializer = PositionInputSerializer(data=pos_data_with_channel)
                 if not pos_serializer.is_valid():
                     transaction.set_rollback(True)
