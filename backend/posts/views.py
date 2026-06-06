@@ -708,6 +708,107 @@ class HardClaimChartDataView(APIView):
         })
 
 
+class PositionChartDataView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        try:
+            position = Position.objects.select_related("asset").get(pk=pk)
+        except Position.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        asset = position.asset
+        from datetime import datetime, timedelta, timezone
+        from .ohlc_fetcher import (
+            get_ohlc_data,
+            OHLCFetchError,
+            Interval,
+            floor_align_datetime,
+            CHART_INTERVAL_CHOICES,
+        )
+
+        chart_start = position.created_at.date() - timedelta(days=3)
+        chart_end = position.lifetime.date() + timedelta(days=3)
+
+        window_sec = (position.lifetime - position.created_at).total_seconds()
+        if window_sec < 7 * 86400:
+            default_interval = Interval.FIFTEEN_MIN
+        elif window_sec < 30 * 86400:
+            default_interval = Interval.FOUR_HOUR
+        else:
+            default_interval = Interval.ONE_DAY
+
+        requested = request.query_params.get("interval")
+        if not requested:
+            chart_interval = default_interval
+        else:
+            try:
+                chart_interval = Interval(requested)
+            except ValueError as exc:
+                return Response({"detail": f"Invalid interval: {requested}"}, status=status.HTTP_400_BAD_REQUEST)
+            if chart_interval not in CHART_INTERVAL_CHOICES:
+                return Response({"detail": f"Interval {requested} not supported for charts."}, status=status.HTTP_400_BAD_REQUEST)
+
+        start_time = floor_align_datetime(
+            datetime.combine(chart_start, datetime.min.time(), tzinfo=timezone.utc),
+            chart_interval,
+        )
+        end_time = floor_align_datetime(
+            datetime.combine(chart_end, datetime.min.time(), tzinfo=timezone.utc),
+            chart_interval,
+        )
+        
+        if position.status in [Position.Status.PENDING, Position.Status.ACTIVE]:
+            end_time = floor_align_datetime(
+                max(end_time, datetime.now(timezone.utc)),
+                chart_interval,
+            )
+
+        try:
+            ohlc_rows = get_ohlc_data(asset, start_time, end_time, interval=chart_interval)
+        except OHLCFetchError:
+            logger.exception(
+                "Failed to fetch OHLC data",
+                extra={
+                    "asset_symbol": asset.symbol,
+                    "position_id": position.id,
+                    "interval": chart_interval.value,
+                },
+            )
+            return Response(
+                {"detail": "Unable to fetch chart data at this time."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        ohlc_data = [
+            {
+                "date": row.timestamp.isoformat(),
+                "open": row.open,
+                "high": row.high,
+                "low": row.low,
+                "close": row.close,
+            }
+            for row in ohlc_rows
+        ]
+
+        return Response({
+            "position_id": position.id,
+            "asset_symbol": asset.symbol,
+            "direction": position.direction,
+            "entry_price": float(position.entry_price),
+            "take_profit": float(position.take_profit),
+            "stop_loss": float(position.stop_loss),
+            "created_at": position.created_at.isoformat(),
+            "until": position.lifetime.isoformat(),
+            "interval": chart_interval.value,
+            "default_interval": default_interval.value,
+            "as_of": datetime.now(timezone.utc).isoformat(),
+            "live": position.status in [Position.Status.PENDING, Position.Status.ACTIVE],
+            "ohlc": ohlc_data,
+        })
+
+
 class ChannelListView(APIView):
     authentication_classes = []
     permission_classes = []

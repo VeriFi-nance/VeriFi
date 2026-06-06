@@ -9,7 +9,6 @@ import { UserAvatar } from '@/components/UserAvatar';
 import { EmptyState } from '@/components/EmptyState';
 import { PageContent } from '@/components/PageContent';
 import { SkeletonRow } from '@/components/Skeleton';
-import ProfitabilityBadge from '@/components/ProfitabilityBadge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getHardClaimsByAddress, getAssets, getProfileStats, toggleFollow } from '@/lib/api';
 import type { HardClaimItem, AssetItem, ProfileStats } from '@/lib/types';
@@ -113,9 +112,6 @@ export default function UserPage() {
               <code className="text-sm font-mono text-muted-foreground truncate">{truncateAddress(stats?.address || address)}</code>
               <CopyAddressButton text={stats?.address || address} />
             </div>
-            {stats?.profitability && (
-              <ProfitabilityBadge data={stats.profitability} className="text-xs" />
-            )}
           </div>
         </div>
 
