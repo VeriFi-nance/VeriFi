@@ -22,7 +22,10 @@ export function safeImageSrc(url: string | null | undefined): string | undefined
     url.startsWith('blob:') ||
     url.startsWith('data:image/')
   ) {
-    return url;
+    // Contextual output encoding: percent-encode HTML meta-characters
+    // (e.g. < > "). Harmless for our URL shapes (Cloudinary/blob/data:image
+    // contain no such characters) but neutralizes any injected markup.
+    return encodeURI(url);
   }
   return undefined;
 }
