@@ -130,6 +130,11 @@ def _filter_posts_queryset(qs, request):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
+    # ── Text search ───────────────────────────────────────────────────────────
+    query = request.query_params.get("q", "").strip()
+    if query:
+        qs = qs.filter(content__icontains=query)
+
     # ── Asset + type filtering ────────────────────────────────────────────────
     raw_asset_ids = request.query_params.get("asset_ids", "").strip()
     asset_ids = []
@@ -2063,3 +2068,31 @@ class PositionProofView(APIView):
             "payload": position.position_payload,
             "server_timestamp": position.created_at.isoformat()
         })
+
+
+class SearchAPIView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        query = request.query_params.get("q", "").strip()
+        search_type = request.query_params.get("type", "posts").lower()
+
+        if not query:
+            return Response([])
+
+        if search_type == "people":
+            from django.db.models import Q
+            from accounts.serializers import avatar_delivery_url
+            qs = WalletUser.objects.filter(Q(username__icontains=query) | Q(address__icontains=query))[:10]
+            data = [{"address": u.address, "username": u.username, "avatar_url": avatar_delivery_url(u.avatar)} for u in qs]
+            return Response(data)
+        
+        elif search_type == "channels":
+            from django.db.models import Count, Q
+            qs = Channel.objects.filter(name__icontains=query, is_active=True).select_related("creator").annotate(
+                member_count_annotated=Count('memberships', filter=Q(memberships__status='approved'))
+            )[:10]
+            return Response(ChannelSerializer(qs, many=True).data)
+        
+        return Response([])
