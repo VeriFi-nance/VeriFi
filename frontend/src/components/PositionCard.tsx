@@ -178,12 +178,12 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
         </div>
 
         {(['confirmed', 'rejected', 'closed_early', 'expired'] as const).includes(position.status as any) && position.pnl_percentage !== null && (
-          <div className={`mt-3 p-3 rounded-lg border flex items-center justify-between text-sm ${position.pnl_percentage > 0 ? 'bg-success/10 border-success/30 text-success-foreground' : 'bg-destructive/10 border-destructive/30 text-destructive-foreground'}`}>
+          <div className={`mt-3 p-3 rounded-lg border flex items-center justify-between text-sm ${position.pnl_percentage > 0 ? 'bg-emerald-500/10 border-emerald-500/30 text-foreground' : 'bg-red-500/10 border-red-500/30 text-foreground'}`}>
             <span className="font-medium">
-              {position.author_username ? `@${position.author_username}` : 'User'} {position.pnl_percentage > 0 ? 'gained' : 'lost'} {Math.abs(position.pnl_percentage).toFixed(2)}% with this position.
+              {position.author_username ? `@${position.author_username}` : 'User'} <span className={position.pnl_percentage > 0 ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-red-600 dark:text-red-400 font-semibold'}>{position.pnl_percentage > 0 ? 'gained' : 'lost'} {Math.abs(position.pnl_percentage).toFixed(2)}%</span> with this position.
             </span>
             {position.exit_price && (
-              <span className="text-xs opacity-80 font-mono">
+              <span className="text-xs text-muted-foreground font-mono">
                 Exit: ${position.exit_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}
               </span>
             )}
