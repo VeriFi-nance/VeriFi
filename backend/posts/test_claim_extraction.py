@@ -98,11 +98,11 @@ class ClaimExtractionTests(TestCase):
         self.assertEqual(c.status, "INCOMPLETE_CLAIM")
 
     def test_quarter_and_half_deadlines(self):
-        q_prompt = "Solana will pump to 200 USD in Q3 2026"
+        q_prompt = "Bitcoin will pump to 200 USD in Q3 2026"
         claims = rule_based_claims_from_prompt(q_prompt, base_date=self.base_date)
         self.assertEqual(claims[0].deadline, "2026-09-30")
 
-        h_prompt = "Apple will drop 5% by first half of 2027"
+        h_prompt = "Ethereum will drop 5% by first half of 2027"
         claims = rule_based_claims_from_prompt(h_prompt, base_date=self.base_date)
         self.assertEqual(claims[0].deadline, "2027-06-30")
 

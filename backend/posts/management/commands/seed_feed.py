@@ -18,9 +18,6 @@ from posts.models import Asset, HardClaim, Post
 ASSETS = [
     {"name": "Bitcoin", "symbol": "BTC", "description": "Peer-to-peer digital currency", "provider_symbol": "bitcoin", "quote_currency": "USD", "binance_symbol": "BTCUSDT"},
     {"name": "Ethereum", "symbol": "ETH", "description": "Smart contract platform", "provider_symbol": "ethereum", "quote_currency": "USD", "binance_symbol": "ETHUSDT"},
-    {"name": "Solana", "symbol": "SOL", "description": "High-throughput blockchain", "provider_symbol": "solana", "quote_currency": "USD", "binance_symbol": "SOLUSDT"},
-    {"name": "Ethereum against Bitcoin", "symbol": "ETH/BTC", "description": "Ethereum priced in Bitcoin", "provider_symbol": "ethereum", "quote_currency": "BTC", "binance_symbol": "ETHBTC"},
-    {"name": "Solana against TRY", "symbol": "SOL/TRY", "description": "Solana priced in Turkish Lira", "provider_symbol": "solana", "quote_currency": "TRY", "binance_symbol": "SOLTRY"},
 ]
 
 USERS = [
