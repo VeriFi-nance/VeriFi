@@ -7,8 +7,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from accounts.models import WalletUser
-from .models import Post, HardClaim, Asset, Channel, ChannelMembership, AssetSubscription, ClaimMarket, ClaimStake
-from .serializers import PostSerializer, HardClaimInputSerializer, HardClaimSerializer, AssetSerializer, ChannelSerializer, ChannelMembershipSerializer
+from .models import Post, HardClaim, Asset, Channel, ChannelMembership, AssetSubscription, ClaimMarket, ClaimStake, Position, PositionEvent
+from .serializers import PostSerializer, HardClaimInputSerializer, HardClaimSerializer, AssetSerializer, ChannelSerializer, ChannelMembershipSerializer, PositionInputSerializer, PositionSerializer
 from .claim_extraction import rule_based_claims_from_prompt
 from django.shortcuts import get_object_or_404
 from .resolution import (
@@ -36,6 +36,7 @@ def _normalized_claim_fields(direction: str, value_type: str) -> tuple[str, str]
 
 
 def _posts_queryset():
+    from .models import Position
     return (
         Post.objects.select_related("author", "author__profitability")
         .prefetch_related(
@@ -45,12 +46,18 @@ def _posts_queryset():
                     "events"
                 ),
             ),
+            Prefetch(
+                "positions",
+                Position.objects.select_related("author", "asset"),
+            ),
         )
         .order_by("-created_at")
     )
 
 
 def _filter_posts_queryset(qs, request):
+    from django.db.models import Q
+
     channel_id = request.query_params.get("channel")
     if channel_id:
         qs = qs.filter(channel_id=channel_id)
@@ -77,6 +84,41 @@ def _filter_posts_queryset(qs, request):
                 {"detail": "Authentication required for following feed."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+
+    # ── Asset + type filtering ────────────────────────────────────────────────
+    raw_asset_ids = request.query_params.get("asset_ids", "").strip()
+    asset_ids = []
+    if raw_asset_ids:
+        try:
+            asset_ids = [int(x) for x in raw_asset_ids.split(",") if x.strip()]
+        except ValueError:
+            pass
+
+    has_claims_param = request.query_params.get("has_claims", "").lower()
+    has_positions_param = request.query_params.get("has_positions", "").lower()
+    # Only apply type filter when at least one type flag is explicitly provided
+    filter_types = has_claims_param in ("true", "1") or has_positions_param in ("true", "1")
+
+    if asset_ids or filter_types:
+        type_filter = Q()
+        if has_claims_param in ("true", "1"):
+            claim_q = Q(hard_claims__isnull=False)
+            if asset_ids:
+                claim_q &= Q(hard_claims__asset_id__in=asset_ids)
+            type_filter |= claim_q
+        if has_positions_param in ("true", "1"):
+            pos_q = Q(positions__isnull=False)
+            if asset_ids:
+                pos_q &= Q(positions__asset_id__in=asset_ids)
+            type_filter |= pos_q
+        # If only asset_ids given with no type flag, filter posts having any claim/position with those assets
+        if asset_ids and not filter_types:
+            type_filter = (
+                Q(hard_claims__asset_id__in=asset_ids) |
+                Q(positions__asset_id__in=asset_ids)
+            )
+        if type_filter:
+            qs = qs.filter(type_filter).distinct()
 
     return qs, None
 
@@ -206,6 +248,14 @@ class PostListCreateView(APIView):
                 return Response({"detail": f"Channel {channel_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
 
         hard_claims_data = request.data.get("hard_claims", [])
+        positions_data = request.data.get("positions", [])
+
+        # Positions may only be attached by the channel creator
+        if positions_data and (not channel_obj or channel_obj.creator != user):
+            return Response(
+                {"detail": "Only channel creators can attach positions to posts."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         with transaction.atomic():
             post = Post.objects.create(author=user, content=content, channel=channel_obj)
@@ -311,6 +361,62 @@ class PostListCreateView(APIView):
                     transaction.set_rollback(True)
                     logger.exception("Unexpected error while creating hard claim.")
                     return Response({"detail": "An internal error has occurred."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # ── Attached positions (channel-creator only) ──────────────────────────────
+            for pos_data in positions_data:
+                pos_data_with_channel = dict(pos_data)
+                pos_data_with_channel["channel_id"] = channel_obj.id
+                pos_serializer = PositionInputSerializer(data=pos_data_with_channel)
+                if not pos_serializer.is_valid():
+                    transaction.set_rollback(True)
+                    return Response(pos_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                valid_pos = pos_serializer.validated_data
+
+                try:
+                    pos_asset = Asset.objects.get(id=valid_pos["asset_id"])
+                except Asset.DoesNotExist:
+                    transaction.set_rollback(True)
+                    return Response({"detail": "Invalid asset reference for position."}, status=status.HTTP_400_BAD_REQUEST)
+
+                pos_sig = valid_pos.get("signature", "")
+                pos_payload = valid_pos.get("position_payload", {})
+                try:
+                    verify_position_signature(
+                        user_address=user.address,
+                        user_username=user.username,
+                        signature=pos_sig,
+                        position_payload=pos_payload,
+                        asset_symbol=pos_asset.symbol,
+                    )
+                except Exception as sig_exc:
+                    transaction.set_rollback(True)
+                    from rest_framework.exceptions import ValidationError as DRFValidationError
+                    if isinstance(sig_exc, DRFValidationError):
+                        return Response(sig_exc.detail, status=status.HTTP_400_BAD_REQUEST)
+                    logger.exception("Unexpected error during position signature verification")
+                    return Response({"detail": "Invalid position signature."}, status=status.HTTP_400_BAD_REQUEST)
+
+                position = Position.objects.create(
+                    author=user,
+                    channel=channel_obj,
+                    post=post,
+                    asset=pos_asset,
+                    direction=valid_pos["direction"],
+                    entry_price=valid_pos["entry_price"],
+                    entry_interval=valid_pos["entry_interval"],
+                    stop_loss=valid_pos["stop_loss"],
+                    take_profit=valid_pos["take_profit"],
+                    lifetime=valid_pos["lifetime"],
+                    signature=pos_sig,
+                    position_payload=pos_payload,
+                    status=Position.Status.PENDING,
+                )
+                PositionEvent.objects.create(
+                    position=position,
+                    event_type=PositionEvent.EventType.CREATION,
+                    details={"message": "Position created with post"},
+                )
+                AssetSubscription.objects.create(asset=pos_asset, position=position)
 
         return Response(PostSerializer(post).data, status=status.HTTP_201_CREATED)
 
@@ -1170,8 +1276,6 @@ class PositionResolveView(APIView):
             "remaining_seconds": RESOLVE_COOLDOWN_SECONDS,
         })
 
-from .models import Position, PositionEvent
-from .serializers import PositionSerializer, PositionInputSerializer
 from .resolution import fetch_current_price
 from django.utils import timezone
 
@@ -1242,9 +1346,19 @@ class PositionListCreateView(APIView):
             logger.exception("Unexpected error while verifying position signature")
             return Response({"detail": "Unable to verify position signature."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Resolve optional post link
+        post_obj = None
+        post_id = data.get("post_id")
+        if post_id is not None:
+            try:
+                post_obj = Post.objects.get(id=post_id)
+            except Post.DoesNotExist:
+                return Response({"detail": f"Post {post_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
+
         position = Position.objects.create(
             author=user,
             channel=channel,
+            post=post_obj,
             asset=asset,
             direction=data["direction"],
             entry_price=data["entry_price"],
