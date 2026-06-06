@@ -50,7 +50,7 @@ export default function ChannelDetailPage() {
       const chan = await getChannel(Number(id));
       setChannel(chan);
       
-      const canView = chan.privacy_type === 'public' || chan.my_membership_status === 'approved' || chan.creator_address === myAddress;
+      const canView = chan.my_membership_status === 'approved' || chan.creator_address === myAddress;
       
       if (canView) {
         const [a, m, pos] = await Promise.all([
@@ -198,7 +198,7 @@ export default function ChannelDetailPage() {
   const isOwner = isCreator;
   const isModerator = channel.my_role === 'moderator';
   const canModerate = isOwner || isModerator;
-  const canViewPosts = channel.privacy_type === 'public' || channel.my_membership_status === 'approved' || isCreator;
+  const canViewPosts = channel.my_membership_status === 'approved' || isCreator;
   const canPost = isCreator || (channel.my_membership_status === 'approved' && channel.post_permission === 'all');
 
   return (
@@ -210,8 +210,8 @@ export default function ChannelDetailPage() {
         <div className="flex-1 min-w-0">
           <h1 className="text-xl md:text-2xl font-bold flex flex-wrap items-center gap-2">
             <span className="truncate">{channel.name}</span>
-            <span className="text-[10px] font-normal px-2 py-0.5 bg-secondary text-secondary-foreground rounded-full uppercase tracking-wider shrink-0">
-              {channel.privacy_type}
+            <span className="text-[10px] font-normal px-2 py-0.5 bg-amber-500/10 text-amber-500 rounded-full uppercase tracking-wider shrink-0">
+              Premium
             </span>
             {channel.post_permission === 'creator_only' && (
               <span className="text-[10px] font-normal px-2 py-0.5 bg-primary/10 text-primary rounded-full uppercase tracking-wider shrink-0">

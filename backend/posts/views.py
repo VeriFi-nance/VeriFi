@@ -55,15 +55,14 @@ def _filter_posts_queryset(qs, request):
     if channel_id:
         qs = qs.filter(channel_id=channel_id)
         channel = get_object_or_404(Channel, id=channel_id)
-        if channel.privacy_type == Channel.PrivacyType.PRIVATE:
-            user = _get_wallet_user(request)
-            if not user or not ChannelMembership.objects.filter(
-                channel=channel, user=user, status=ChannelMembership.Status.APPROVED
-            ).exists():
-                return None, Response(
-                    {"detail": "You must be an approved member to view this channel's posts."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
+        user = _get_wallet_user(request)
+        if not user or (channel.creator != user and not ChannelMembership.objects.filter(
+            channel=channel, user=user, status=ChannelMembership.Status.APPROVED
+        ).exists()):
+            return None, Response(
+                {"detail": "You must be an approved member to view this channel's posts."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
     else:
         qs = qs.filter(channel__isnull=True)
 
@@ -114,13 +113,11 @@ def _can_view_post(post, request) -> bool | Response:
         return True
 
     channel = post.channel
-    if channel.privacy_type != Channel.PrivacyType.PRIVATE:
-        return True
 
     user = _get_wallet_user(request)
-    if user and ChannelMembership.objects.filter(
+    if user and (channel.creator == user or ChannelMembership.objects.filter(
         channel=channel, user=user, status=ChannelMembership.Status.APPROVED
-    ).exists():
+    ).exists()):
         return True
 
     return Response(
@@ -200,9 +197,8 @@ class PostListCreateView(APIView):
                 if membership and membership.status == ChannelMembership.Status.BANNED:
                     return Response({"detail": "You are banned from this channel."}, status=status.HTTP_403_FORBIDDEN)
                 
-                if channel_obj.privacy_type == Channel.PrivacyType.PRIVATE:
-                    if not membership or membership.status != ChannelMembership.Status.APPROVED:
-                        return Response({"detail": "You must be an approved member to post in this private channel."}, status=status.HTTP_403_FORBIDDEN)
+                if channel_obj.creator != user and (not membership or membership.status != ChannelMembership.Status.APPROVED):
+                    return Response({"detail": "You must be an approved member to post in this private channel."}, status=status.HTTP_403_FORBIDDEN)
                 
                 if channel_obj.post_permission == Channel.PostPermission.CREATOR_ONLY and user != channel_obj.creator:
                     return Response({"detail": "Only the channel creator can post in this channel."}, status=status.HTTP_403_FORBIDDEN)
@@ -371,10 +367,9 @@ class HardClaimView(APIView):
         if channel_id:
             qs = qs.filter(channel_id=channel_id)
             channel = get_object_or_404(Channel, id=channel_id)
-            if channel.privacy_type == Channel.PrivacyType.PRIVATE:
-                user = _get_wallet_user(request)
-                if not user or not ChannelMembership.objects.filter(channel=channel, user=user, status=ChannelMembership.Status.APPROVED).exists():
-                    return Response({"detail": "You must be an approved member to view this channel's claims."}, status=status.HTTP_403_FORBIDDEN)
+            user = _get_wallet_user(request)
+            if not user or (channel.creator != user and not ChannelMembership.objects.filter(channel=channel, user=user, status=ChannelMembership.Status.APPROVED).exists()):
+                return Response({"detail": "You must be an approved member to view this channel's claims."}, status=status.HTTP_403_FORBIDDEN)
         else:
             qs = qs.filter(channel__isnull=True)
 
@@ -432,9 +427,8 @@ class HardClaimView(APIView):
                 if membership and membership.status == ChannelMembership.Status.BANNED:
                     return Response({"detail": "You are banned from this channel."}, status=status.HTTP_403_FORBIDDEN)
 
-                if channel_obj.privacy_type == Channel.PrivacyType.PRIVATE:
-                    if not membership or membership.status != ChannelMembership.Status.APPROVED:
-                        return Response({"detail": "You must be an approved member to post in this private channel."}, status=status.HTTP_403_FORBIDDEN)
+                if channel_obj.creator != user and (not membership or membership.status != ChannelMembership.Status.APPROVED):
+                    return Response({"detail": "You must be an approved member to post in this private channel."}, status=status.HTTP_403_FORBIDDEN)
                 
                 if channel_obj.post_permission == Channel.PostPermission.CREATOR_ONLY and user != channel_obj.creator:
                     return Response({"detail": "Only the channel creator can post claims in this channel."}, status=status.HTTP_403_FORBIDDEN)
@@ -558,17 +552,16 @@ class HardClaimDetailView(APIView):
 
         if hard_claim.channel_id:
             channel = hard_claim.channel
-            if channel.privacy_type == Channel.PrivacyType.PRIVATE:
-                user = _get_wallet_user(request)
-                if not user or not ChannelMembership.objects.filter(
-                    channel=channel,
-                    user=user,
-                    status=ChannelMembership.Status.APPROVED,
-                ).exists():
-                    return Response(
-                        {"detail": "You must be an approved member to view this claim."},
-                        status=status.HTTP_403_FORBIDDEN,
-                    )
+            user = _get_wallet_user(request)
+            if not user or (channel.creator != user and not ChannelMembership.objects.filter(
+                channel=channel,
+                user=user,
+                status=ChannelMembership.Status.APPROVED,
+            ).exists()):
+                return Response(
+                    {"detail": "You must be an approved member to view this claim."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
         return Response(HardClaimSerializer(hard_claim).data)
 
@@ -843,7 +836,6 @@ class ChannelListView(APIView):
 
         name = request.data.get("name")
         description = request.data.get("description", "")
-        privacy_type = request.data.get("privacy_type", Channel.PrivacyType.PUBLIC)
         post_permission = request.data.get("post_permission", Channel.PostPermission.ALL)
         
         if not name:
@@ -853,7 +845,6 @@ class ChannelListView(APIView):
             name=name,
             description=description,
             creator=user,
-            privacy_type=privacy_type,
             post_permission=post_permission
         )
         
@@ -935,7 +926,7 @@ class ChannelJoinView(APIView):
         membership = ChannelMembership.objects.create(
             channel=channel,
             user=user,
-            status=ChannelMembership.Status.APPROVED if channel.privacy_type == Channel.PrivacyType.PUBLIC else ChannelMembership.Status.PENDING
+            status=ChannelMembership.Status.PENDING
         )
             
         return Response(ChannelMembershipSerializer(membership).data, status=status.HTTP_201_CREATED)
@@ -1026,10 +1017,9 @@ class ChannelMemberListView(APIView):
     def get(self, request, pk):
         channel = get_object_or_404(Channel, pk=pk)
         
-        if channel.privacy_type == Channel.PrivacyType.PRIVATE:
-            user = _get_wallet_user(request)
-            if not user or (channel.creator != user and not ChannelMembership.objects.filter(channel=channel, user=user, status=ChannelMembership.Status.APPROVED).exists()):
-                return Response({"detail": "You must be a member to view this list."}, status=status.HTTP_403_FORBIDDEN)
+        user = _get_wallet_user(request)
+        if not user or (channel.creator != user and not ChannelMembership.objects.filter(channel=channel, user=user, status=ChannelMembership.Status.APPROVED).exists()):
+            return Response({"detail": "You must be a member to view this list."}, status=status.HTTP_403_FORBIDDEN)
                 
         memberships = ChannelMembership.objects.filter(channel=channel, status=ChannelMembership.Status.APPROVED).order_by('created_at')
         return Response(ChannelMembershipSerializer(memberships, many=True).data)
@@ -1163,10 +1153,9 @@ class PositionListCreateView(APIView):
         channel = get_object_or_404(Channel, pk=channel_id)
         
         # Privacy check
-        if channel.privacy_type == Channel.PrivacyType.PRIVATE:
-            user = _get_wallet_user(request)
-            if not user or (channel.creator != user and not ChannelMembership.objects.filter(channel=channel, user=user, status=ChannelMembership.Status.APPROVED).exists()):
-                return Response({"detail": "You must be an approved member to view positions in this private channel."}, status=status.HTTP_403_FORBIDDEN)
+        user = _get_wallet_user(request)
+        if not user or (channel.creator != user and not ChannelMembership.objects.filter(channel=channel, user=user, status=ChannelMembership.Status.APPROVED).exists()):
+            return Response({"detail": "You must be an approved member to view positions in this private channel."}, status=status.HTTP_403_FORBIDDEN)
                 
         positions = Position.objects.filter(channel=channel).order_by("-created_at")
         return Response(PositionSerializer(positions, many=True).data)
@@ -1188,9 +1177,8 @@ class PositionListCreateView(APIView):
         if membership and membership.status == ChannelMembership.Status.BANNED:
             return Response({"detail": "You are banned from this channel."}, status=status.HTTP_403_FORBIDDEN)
 
-        if channel.privacy_type == Channel.PrivacyType.PRIVATE:
-            if not membership or membership.status != ChannelMembership.Status.APPROVED:
-                return Response({"detail": "You must be an approved member to post positions in this private channel."}, status=status.HTTP_403_FORBIDDEN)
+        if channel.creator != user and (not membership or membership.status != ChannelMembership.Status.APPROVED):
+            return Response({"detail": "You must be an approved member to post positions in this private channel."}, status=status.HTTP_403_FORBIDDEN)
                 
         if channel.creator != user:
             return Response({"detail": "Only the channel owner can share positions."}, status=status.HTTP_403_FORBIDDEN)

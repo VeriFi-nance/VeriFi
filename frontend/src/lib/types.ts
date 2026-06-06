@@ -229,7 +229,6 @@ export interface ChannelItem {
   description: string;
   creator_address: string;
   creator_username: string;
-  privacy_type: 'public' | 'private';
   post_permission: 'all' | 'creator_only';
   created_at: string;
   member_count: number;

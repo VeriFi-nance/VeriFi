@@ -328,11 +328,11 @@ export async function getChannel(id: number): Promise<ChannelItem> {
   });
 }
 
-export async function createChannel(name: string, description: string, privacy_type: 'public' | 'private', post_permission: 'all' | 'creator_only' = 'all'): Promise<ChannelItem> {
+export async function createChannel(name: string, description: string, post_permission: 'all' | 'creator_only' = 'all'): Promise<ChannelItem> {
   return request('/api/posts/channels/', {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ name, description, privacy_type, post_permission }),
+    body: JSON.stringify({ name, description, post_permission }),
   });
 }
 

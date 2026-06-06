@@ -73,7 +73,6 @@ export default function UserPage() {
   // Channel Creation State
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [privacy, setPrivacy] = useState<'public' | 'private'>('public');
   const [postPermission, setPostPermission] = useState<'all' | 'creator_only'>('all');
   const [createOpen, setCreateOpen] = useState(false);
   const [createError, setCreateError] = useState('');
@@ -82,7 +81,7 @@ export default function UserPage() {
 
   async function handleCreateChannel() {
     try {
-      const chan = await createChannel(name, description, privacy, postPermission);
+      const chan = await createChannel(name, description, postPermission);
       setCreateOpen(false);
       setName('');
       setDescription('');
@@ -254,8 +253,7 @@ export default function UserPage() {
                    ...prev,
                    channel_owned: { 
                      ...prev.channel_owned, 
-                     member_count: prev.channel_owned.member_count + 1, 
-                     my_membership_status: prev.channel_owned.privacy_type === 'public' ? 'approved' : 'pending' 
+                     my_membership_status: 'pending' 
                    }
                  } : prev);
               }} 
@@ -324,22 +322,7 @@ export default function UserPage() {
                 className="bg-muted/30 focus-visible:ring-primary"
               />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="channel-privacy" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Privacy</Label>
-                <Select
-                  value={privacy}
-                  onValueChange={(v: 'public' | 'private') => setPrivacy(v)}
-                >
-                  <SelectTrigger id="channel-privacy" className="bg-muted/30">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="public">Public (Anyone can view)</SelectItem>
-                    <SelectItem value="private">Private (Requires approval)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="grid grid-cols-1 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="channel-post" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Post Permission</Label>
                 <Select

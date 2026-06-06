@@ -131,12 +131,11 @@ class UsernameTests(TestCase):
         address = "0x" + "f" * 40
         user = WalletUser.objects.create(address=address, username="channel_user")
         
-        # Create channel owned by user
-        channel_owned = Channel.objects.create(name="Owned Comm", creator=user, privacy_type="public")
-        
-        # Create another channel and join it
+        channel_owned = Channel.objects.create(name="Owned Comm", creator=user)
+        ChannelMembership.objects.create(channel=channel_owned, user=user, status="approved", role="owner")
+
         other_user = WalletUser.objects.create(address="0x" + "e" * 40, username="other_user")
-        channel_joined = Channel.objects.create(name="Joined Comm", creator=other_user, privacy_type="public")
+        channel_joined = Channel.objects.create(name="Joined Comm", creator=other_user)
         
         # User is not approved member yet
         ChannelMembership.objects.create(channel=channel_joined, user=user, status="pending")

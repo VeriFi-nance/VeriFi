@@ -147,7 +147,7 @@ class ChannelSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Channel
-        fields = ["id", "name", "description", "creator_address", "creator_username", "privacy_type", "post_permission", "created_at", "member_count"]
+        fields = ["id", "name", "description", "creator_address", "creator_username", "post_permission", "created_at", "member_count"]
 
     def get_member_count(self, obj):
         return obj.memberships.filter(status="approved").count()
