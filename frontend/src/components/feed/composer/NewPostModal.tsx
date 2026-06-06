@@ -73,8 +73,8 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
     setAttached((prev) => [
       ...prev,
       {
-        asset_id: draft.asset_id,
-        assetSymbol: draft.assetSymbol,
+        asset_id: d.asset_id,
+        assetSymbol: d.assetSymbol,
         claim_type: result.value.claim_type,
         direction: result.value.direction,
         percentage: d.percentage,
