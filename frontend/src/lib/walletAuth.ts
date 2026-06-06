@@ -35,8 +35,8 @@ export async function authenticateWalletAddress(
 ): Promise<string> {
   const address = normalizeAddress(rawAddress);
   try {
-    const { access, username } = await register(address);
-    saveAuthSession(address, username, access);
+    const { access, username, avatar_url } = await register(address);
+    saveAuthSession(address, username, access, avatar_url);
     return address;
   } catch (regErr) {
     if (!(regErr instanceof Error && regErr.message === 'Address already registered.')) {
@@ -46,8 +46,8 @@ export async function authenticateWalletAddress(
 
   const { nonce } = await getChallenge(address);
   const signature = await signNonce(nonce, address);
-  const { access, username } = await login(address, signature, nonce);
-  saveAuthSession(address, username, access);
+  const { access, username, avatar_url } = await login(address, signature, nonce);
+  saveAuthSession(address, username, access, avatar_url);
   return address;
 }
 

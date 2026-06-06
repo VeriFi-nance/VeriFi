@@ -1,14 +1,16 @@
+import json
 import logging
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Prefetch
+from django.db.models import Count, Exists, OuterRef, Prefetch, Value
+from django.db.models import BooleanField
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from accounts.models import WalletUser, ProfileChangeLog
-from .models import Post, HardClaim, Asset, Channel, ChannelMembership, AssetSubscription, ClaimMarket, ClaimStake
-from .serializers import PostSerializer, HardClaimInputSerializer, HardClaimSerializer, AssetSerializer, ChannelSerializer, ChannelMembershipSerializer
+from .models import Post, HardClaim, Asset, Channel, ChannelMembership, AssetSubscription, ClaimMarket, ClaimStake, PostLike, PostComment, PostCommentLike, SavedProof, Position, PositionEvent
+from .serializers import PostSerializer, PostCommentSerializer, HardClaimInputSerializer, HardClaimSerializer, AssetSerializer, ChannelSerializer, ChannelMembershipSerializer, PositionInputSerializer, PositionSerializer
 from .claim_extraction import rule_based_claims_from_prompt
 from django.shortcuts import get_object_or_404
 from .resolution import (
@@ -24,6 +26,7 @@ from .resolution import (
 from . import rep_market
 from .signature_verification import verify_claim_signature, verify_position_signature
 from accounts.energy import grant_energy, spend, CLAIM_ENERGY_COST
+from accounts.serializers import validate_image_upload
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +39,7 @@ def _normalized_claim_fields(direction: str, value_type: str) -> tuple[str, str]
 
 
 def _posts_queryset():
+    from .models import Position
     return (
         Post.objects.select_related("author", "author__profitability")
         .prefetch_related(
@@ -45,12 +49,60 @@ def _posts_queryset():
                     "events"
                 ),
             ),
+            Prefetch(
+                "positions",
+                Position.objects.select_related("author", "asset"),
+            ),
         )
         .order_by("-created_at")
     )
 
 
+def _posts_with_social_annotations(qs, user=None):
+    annotations = {
+        "like_count": Count("likes", distinct=True),
+        "comment_count": Count("comments", distinct=True),
+        "saved_proof_count": Count("saved_proofs", distinct=True),
+    }
+    if user:
+        annotations["liked_by_me"] = Exists(
+            PostLike.objects.filter(post_id=OuterRef("pk"), user=user)
+        )
+        annotations["saved_proof_by_me"] = Exists(
+            SavedProof.objects.filter(post_id=OuterRef("pk"), user=user)
+        )
+    else:
+        annotations["liked_by_me"] = Value(False, output_field=BooleanField())
+        annotations["saved_proof_by_me"] = Value(False, output_field=BooleanField())
+    return qs.annotate(**annotations)
+
+
+def _comments_with_social_annotations(qs, user=None):
+    annotations = {
+        "like_count": Count("likes", distinct=True),
+    }
+    if user:
+        annotations["liked_by_me"] = Exists(
+            PostCommentLike.objects.filter(comment_id=OuterRef("pk"), user=user)
+        )
+    else:
+        annotations["liked_by_me"] = Value(False, output_field=BooleanField())
+    return qs.annotate(**annotations)
+
+
+def _comment_tree(comments):
+    by_parent = {}
+    for comment in comments:
+        by_parent.setdefault(comment.parent_id, []).append(comment)
+        comment.prefetched_replies = []
+    for comment in comments:
+        comment.prefetched_replies = by_parent.get(comment.id, [])
+    return by_parent.get(None, [])
+
+
 def _filter_posts_queryset(qs, request):
+    from django.db.models import Q
+
     channel_id = request.query_params.get("channel")
     if channel_id:
         qs = qs.filter(channel_id=channel_id)
@@ -77,6 +129,41 @@ def _filter_posts_queryset(qs, request):
                 {"detail": "Authentication required for following feed."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+
+    # ── Asset + type filtering ────────────────────────────────────────────────
+    raw_asset_ids = request.query_params.get("asset_ids", "").strip()
+    asset_ids = []
+    if raw_asset_ids:
+        try:
+            asset_ids = [int(x) for x in raw_asset_ids.split(",") if x.strip()]
+        except ValueError:
+            pass
+
+    has_claims_param = request.query_params.get("has_claims", "").lower()
+    has_positions_param = request.query_params.get("has_positions", "").lower()
+    # Only apply type filter when at least one type flag is explicitly provided
+    filter_types = has_claims_param in ("true", "1") or has_positions_param in ("true", "1")
+
+    if asset_ids or filter_types:
+        type_filter = Q()
+        if has_claims_param in ("true", "1"):
+            claim_q = Q(hard_claims__isnull=False)
+            if asset_ids:
+                claim_q &= Q(hard_claims__asset_id__in=asset_ids)
+            type_filter |= claim_q
+        if has_positions_param in ("true", "1"):
+            pos_q = Q(positions__isnull=False)
+            if asset_ids:
+                pos_q &= Q(positions__asset_id__in=asset_ids)
+            type_filter |= pos_q
+        # If only asset_ids given with no type flag, filter posts having any claim/position with those assets
+        if asset_ids and not filter_types:
+            type_filter = (
+                Q(hard_claims__asset_id__in=asset_ids) |
+                Q(positions__asset_id__in=asset_ids)
+            )
+        if type_filter:
+            qs = qs.filter(type_filter).distinct()
 
     return qs, None
 
@@ -126,6 +213,30 @@ def _can_view_post(post, request) -> bool | Response:
     )
 
 
+def _get_viewable_post(request, pk):
+    try:
+        post = _posts_with_social_annotations(_posts_queryset(), _get_wallet_user(request)).get(pk=pk)
+    except Post.DoesNotExist:
+        return None, Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    permission = _can_view_post(post, request)
+    if isinstance(permission, Response):
+        return None, permission
+    return post, None
+
+
+def _get_viewable_comment(request, pk):
+    try:
+        comment = PostComment.objects.select_related("post", "post__channel", "author").get(pk=pk)
+    except PostComment.DoesNotExist:
+        return None, Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    permission = _can_view_post(comment.post, request)
+    if isinstance(permission, Response):
+        return None, permission
+    return comment, None
+
+
 def _get_wallet_user(request) -> WalletUser | None:
     auth = JWTAuthentication()
     try:
@@ -165,6 +276,7 @@ class PostListCreateView(APIView):
         qs, error_response = _filter_posts_queryset(_posts_queryset(), request)
         if error_response is not None:
             return error_response
+        qs = _posts_with_social_annotations(qs, _get_wallet_user(request))
 
         page = _paginate_queryset(qs, request)
         return Response(
@@ -205,10 +317,43 @@ class PostListCreateView(APIView):
             except Channel.DoesNotExist:
                 return Response({"detail": f"Channel {channel_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
 
-        hard_claims_data = request.data.get("hard_claims", [])
+        # Under multipart/form-data (image uploads), nested arrays arrive as a
+        # JSON-encoded string rather than a parsed list. Decode them here so both
+        # JSON and multipart requests reach the same code path.
+        def _parse_array_field(raw, label):
+            if isinstance(raw, str):
+                if not raw.strip():
+                    return [], None
+                try:
+                    raw = json.loads(raw)
+                except json.JSONDecodeError:
+                    return None, f"{label} must be valid JSON."
+            if not isinstance(raw, list):
+                return None, f"{label} must be a list."
+            return raw, None
+
+        hard_claims_data, hc_err = _parse_array_field(request.data.get("hard_claims", []), "hard_claims")
+        if hc_err:
+            return Response({"detail": hc_err}, status=status.HTTP_400_BAD_REQUEST)
+        positions_data, pos_err = _parse_array_field(request.data.get("positions", []), "positions")
+        if pos_err:
+            return Response({"detail": pos_err}, status=status.HTTP_400_BAD_REQUEST)
+
+        # In channels, positions may only be attached by the channel creator
+        if positions_data and channel_obj and channel_obj.creator != user:
+            return Response(
+                {"detail": "In channels, only the channel creator can attach positions to posts."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        image_file = request.FILES.get("image")
+        if image_file is not None:
+            img_error = validate_image_upload(image_file)
+            if img_error:
+                return Response({"detail": img_error}, status=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
-            post = Post.objects.create(author=user, content=content, channel=channel_obj)
+            post = Post.objects.create(author=user, content=content, channel=channel_obj, image=image_file)
             
             for hc_data in hard_claims_data:
                 hc_serializer = HardClaimInputSerializer(data=hc_data)
@@ -312,6 +457,62 @@ class PostListCreateView(APIView):
                     logger.exception("Unexpected error while creating hard claim.")
                     return Response({"detail": "An internal error has occurred."}, status=status.HTTP_400_BAD_REQUEST)
 
+            # ── Attached positions (channel-creator only) ──────────────────────────────
+            for pos_data in positions_data:
+                pos_data_with_channel = dict(pos_data)
+                pos_data_with_channel["channel_id"] = channel_obj.id if channel_obj else None
+                pos_serializer = PositionInputSerializer(data=pos_data_with_channel)
+                if not pos_serializer.is_valid():
+                    transaction.set_rollback(True)
+                    return Response(pos_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                valid_pos = pos_serializer.validated_data
+
+                try:
+                    pos_asset = Asset.objects.get(id=valid_pos["asset_id"])
+                except Asset.DoesNotExist:
+                    transaction.set_rollback(True)
+                    return Response({"detail": "Invalid asset reference for position."}, status=status.HTTP_400_BAD_REQUEST)
+
+                pos_sig = valid_pos.get("signature", "")
+                pos_payload = valid_pos.get("position_payload", {})
+                try:
+                    verify_position_signature(
+                        user_address=user.address,
+                        user_username=user.username,
+                        signature=pos_sig,
+                        position_payload=pos_payload,
+                        asset_symbol=pos_asset.symbol,
+                    )
+                except Exception as sig_exc:
+                    transaction.set_rollback(True)
+                    from rest_framework.exceptions import ValidationError as DRFValidationError
+                    if isinstance(sig_exc, DRFValidationError):
+                        return Response(sig_exc.detail, status=status.HTTP_400_BAD_REQUEST)
+                    logger.exception("Unexpected error during position signature verification")
+                    return Response({"detail": "Invalid position signature."}, status=status.HTTP_400_BAD_REQUEST)
+
+                position = Position.objects.create(
+                    author=user,
+                    channel=channel_obj,
+                    post=post,
+                    asset=pos_asset,
+                    direction=valid_pos["direction"],
+                    entry_price=valid_pos["entry_price"],
+                    entry_interval=valid_pos["entry_interval"],
+                    stop_loss=valid_pos["stop_loss"],
+                    take_profit=valid_pos["take_profit"],
+                    lifetime=valid_pos["lifetime"],
+                    signature=pos_sig,
+                    position_payload=pos_payload,
+                    status=Position.Status.PENDING,
+                )
+                PositionEvent.objects.create(
+                    position=position,
+                    event_type=PositionEvent.EventType.CREATION,
+                    details={"message": "Position created with post"},
+                )
+                AssetSubscription.objects.create(asset=pos_asset, position=position)
+
             ProfileChangeLog.objects.create(
                 user=user,
                 actor=user,
@@ -332,14 +533,9 @@ class PostDetailView(APIView):
     permission_classes = []
 
     def get(self, request, pk):
-        try:
-            post = _posts_queryset().get(pk=pk)
-        except Post.DoesNotExist:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        permission = _can_view_post(post, request)
-        if isinstance(permission, Response):
-            return permission
+        post, error_response = _get_viewable_post(request, pk)
+        if error_response is not None:
+            return error_response
 
         from datetime import date
         from django.utils import timezone as django_timezone
@@ -353,6 +549,151 @@ class PostDetailView(APIView):
                     pass
 
         return Response(PostSerializer(post).data)
+
+
+class PostLikeView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, pk):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        post, error_response = _get_viewable_post(request, pk)
+        if error_response is not None:
+            return error_response
+
+        PostLike.objects.get_or_create(post=post, user=user)
+        post = _posts_with_social_annotations(_posts_queryset(), user).get(pk=pk)
+        return Response(PostSerializer(post).data, status=status.HTTP_200_OK)
+
+    def delete(self, request, pk):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        post, error_response = _get_viewable_post(request, pk)
+        if error_response is not None:
+            return error_response
+
+        PostLike.objects.filter(post=post, user=user).delete()
+        post = _posts_with_social_annotations(_posts_queryset(), user).get(pk=pk)
+        return Response(PostSerializer(post).data, status=status.HTTP_200_OK)
+
+
+class PostCommentListCreateView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        post, error_response = _get_viewable_post(request, pk)
+        if error_response is not None:
+            return error_response
+
+        comments = list(
+            _comments_with_social_annotations(
+                post.comments.select_related("author").order_by("created_at"),
+                _get_wallet_user(request),
+            )
+        )
+        return Response(PostCommentSerializer(_comment_tree(comments), many=True).data)
+
+    def post(self, request, pk):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        post, error_response = _get_viewable_post(request, pk)
+        if error_response is not None:
+            return error_response
+
+        content = request.data.get("content", "").strip()
+        if len(content) > 500:
+            return Response({"detail": "content exceeds 500 characters."}, status=status.HTTP_400_BAD_REQUEST)
+
+        image_file = request.FILES.get("image")
+        if image_file is not None:
+            img_error = validate_image_upload(image_file)
+            if img_error:
+                return Response({"detail": img_error}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not content and image_file is None:
+            return Response({"detail": "content or image is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        parent_id = request.data.get("parent_id")
+        parent = None
+        if parent_id is not None:
+            try:
+                parent = PostComment.objects.get(pk=parent_id, post=post)
+            except PostComment.DoesNotExist:
+                return Response({"detail": "Invalid parent comment."}, status=status.HTTP_400_BAD_REQUEST)
+
+        comment = PostComment.objects.create(post=post, parent=parent, author=user, content=content, image=image_file)
+        comment = _comments_with_social_annotations(PostComment.objects.filter(pk=comment.pk), user).get()
+        return Response(PostCommentSerializer(comment).data, status=status.HTTP_201_CREATED)
+
+
+class PostCommentLikeView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, pk):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        comment, error_response = _get_viewable_comment(request, pk)
+        if error_response is not None:
+            return error_response
+
+        PostCommentLike.objects.get_or_create(comment=comment, user=user)
+        comment = _comments_with_social_annotations(PostComment.objects.filter(pk=pk).select_related("author"), user).get()
+        return Response(PostCommentSerializer(comment).data, status=status.HTTP_200_OK)
+
+    def delete(self, request, pk):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        comment, error_response = _get_viewable_comment(request, pk)
+        if error_response is not None:
+            return error_response
+
+        PostCommentLike.objects.filter(comment=comment, user=user).delete()
+        comment = _comments_with_social_annotations(PostComment.objects.filter(pk=pk).select_related("author"), user).get()
+        return Response(PostCommentSerializer(comment).data, status=status.HTTP_200_OK)
+
+
+class PostSavedProofView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, pk):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        post, error_response = _get_viewable_post(request, pk)
+        if error_response is not None:
+            return error_response
+
+        SavedProof.objects.get_or_create(post=post, user=user)
+        post = _posts_with_social_annotations(_posts_queryset(), user).get(pk=pk)
+        return Response(PostSerializer(post).data, status=status.HTTP_200_OK)
+
+    def delete(self, request, pk):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        post, error_response = _get_viewable_post(request, pk)
+        if error_response is not None:
+            return error_response
+
+        SavedProof.objects.filter(post=post, user=user).delete()
+        post = _posts_with_social_annotations(_posts_queryset(), user).get(pk=pk)
+        return Response(PostSerializer(post).data, status=status.HTTP_200_OK)
 
 
 class ExtractClaimsView(APIView):
@@ -1268,8 +1609,6 @@ class PositionResolveView(APIView):
             "remaining_seconds": RESOLVE_COOLDOWN_SECONDS,
         })
 
-from .models import Position, PositionEvent
-from .serializers import PositionSerializer, PositionInputSerializer
 from .resolution import fetch_current_price
 from django.utils import timezone
 
@@ -1340,9 +1679,19 @@ class PositionListCreateView(APIView):
             logger.exception("Unexpected error while verifying position signature")
             return Response({"detail": "Unable to verify position signature."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Resolve optional post link
+        post_obj = None
+        post_id = data.get("post_id")
+        if post_id is not None:
+            try:
+                post_obj = Post.objects.get(id=post_id)
+            except Post.DoesNotExist:
+                return Response({"detail": f"Post {post_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
+
         position = Position.objects.create(
             author=user,
             channel=channel,
+            post=post_obj,
             asset=asset,
             direction=data["direction"],
             entry_price=data["entry_price"],

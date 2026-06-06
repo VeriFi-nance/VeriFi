@@ -65,12 +65,35 @@ export interface PostItem {
   id: number;
   author_address: string;
   author_username: string;
+  author_avatar_url?: string | null;
   content: string;
+  image_url?: string | null;
   created_at: string;
 
   hard_claims: HardClaimItem[];
+  positions: PositionSummaryItem[];
   profitability?: ProfitabilityData | null;
   channel?: number | null;
+  like_count: number;
+  comment_count: number;
+  saved_proof_count: number;
+  liked_by_me: boolean;
+  saved_proof_by_me: boolean;
+}
+
+export interface PostCommentItem {
+  id: number;
+  post: number;
+  parent: number | null;
+  author_address: string;
+  author_username: string;
+  author_avatar_url?: string | null;
+  content: string;
+  image_url?: string | null;
+  created_at: string;
+  like_count: number;
+  liked_by_me: boolean;
+  replies: PostCommentItem[];
 }
 
 export interface HardClaimEvent {
@@ -84,6 +107,7 @@ export interface HardClaimItem {
   id: number;
   author_address: string | null;
   author_username: string | null;
+  author_avatar_url?: string | null;
   post_id: number | null;
   asset: number;
   direction: string;
@@ -114,6 +138,28 @@ export interface AssetItem {
   symbol: string;
   description: string;
   quote_currency?: string;
+}
+
+/**
+ * Slim position shape embedded in PostItem (no events, no full profitability).
+ * Mirrors PositionSummarySerializer on the backend.
+ */
+export interface PositionSummaryItem {
+  id: number;
+  author_address: string;
+  author_username: string;
+  post: number | null;
+  channel: number | null;
+  asset: number;
+  asset_obj?: AssetItem;
+  direction: 'long' | 'short';
+  entry_price: number;
+  stop_loss: number;
+  take_profit: number;
+  status: 'pending' | 'active' | 'confirmed' | 'rejected' | 'missed' | 'closed_early' | 'expired';
+  pnl_percentage: number | null;
+  created_at: string;
+  lifetime: string;
 }
 
 // OHLC chart data types
@@ -175,6 +221,7 @@ export interface PositionChartData {
 export interface ProfileStats {
   address: string;
   username: string;
+  avatar_url?: string | null;
   followers_count: number;
   following_count: number;
   followers: string[];
@@ -279,8 +326,10 @@ export interface PositionItem {
   id: number;
   author_address: string;
   author_username: string;
+  post?: number | null;
   channel: number;
   asset: number;
+  asset_obj?: AssetItem;
   direction: 'long' | 'short';
   entry_price: number;
   entry_interval: string;

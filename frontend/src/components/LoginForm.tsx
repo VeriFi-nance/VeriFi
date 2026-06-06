@@ -81,9 +81,9 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     try {
       const { privateKey, address } = deriveKeyPair(mnemonic);
       const encrypted = await encryptPrivateKey(privateKey, createPassword);
-      const { access, username } = await register(address, createUsername.trim());
+      const { access, username, avatar_url } = await register(address, createUsername.trim());
       saveEncryptedKey(encrypted);
-      saveAuthSession(address, username, access);
+      saveAuthSession(address, username, access, avatar_url);
       setAuthMethod('native');
       onSuccess();
     } catch (e) {
@@ -107,10 +107,10 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           : privateKeyToKeyPair(inputPrivateKey.trim());
       const { nonce } = await getChallenge(address);
       const signature = await signMessage(privateKey, nonce);
-      const { access, username } = await login(address, signature, nonce);
+      const { access, username, avatar_url } = await login(address, signature, nonce);
       const encrypted = await encryptPrivateKey(privateKey, signinPassword);
       saveEncryptedKey(encrypted);
-      saveAuthSession(address, username, access);
+      saveAuthSession(address, username, access, avatar_url);
       setAuthMethod('native');
       onSuccess();
     } catch (e) {
