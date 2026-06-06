@@ -6,7 +6,7 @@ from .views import (
     ChannelMemberListView, PositionListCreateView, PositionCloseView, PositionResolveView,
     HardClaimMarketView, HardClaimMarketCreateView, HardClaimMarketBuyView, HardClaimMarketPreviewView,
     HardClaimProofView, PositionProofView, ChannelModeratorView, PostDeleteView,
-    PositionChartDataView,
+    PositionChartDataView, AssetChartDataView,
 )
 from .og import HardClaimOGView, PositionOGView
 
@@ -27,6 +27,7 @@ urlpatterns = [
     path("hard-claims/<int:pk>/market/buy/", HardClaimMarketBuyView.as_view(), name="hard-claim-market-buy"),
     path("hard-claims/<int:pk>/market/preview/", HardClaimMarketPreviewView.as_view(), name="hard-claim-market-preview"),
     path("assets/", AssetListView.as_view(), name="assets-list"),
+    path("assets/<int:pk>/chart-data/", AssetChartDataView.as_view(), name="asset-chart-data"),
     path("channels/", ChannelListView.as_view(), name="channel-list"),
     path("channels/<int:pk>/", ChannelDetailView.as_view(), name="channel-detail"),
     path("channels/<int:pk>/join/", ChannelJoinView.as_view(), name="channel-join"),
