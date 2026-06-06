@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useLoginWithOAuth, usePrivy } from '@privy-io/react-auth';
 import { Button } from '@/components/ui/button';
+import { GoogleIcon } from '@/components/BrandIcons';
 import { useAuthState } from '@/lib/auth';
 import { clearPrivySyncState, usePrivySyncState } from '@/lib/privySyncState';
 
@@ -45,6 +46,7 @@ export function GoogleLoginButton({ disabled, onError }: GoogleLoginButtonProps)
       disabled={disabled || loading || !ready}
       onClick={handleGoogle}
     >
+      <GoogleIcon className="size-4" />
       {loading ? 'Signing in…' : 'Continue with Google'}
     </Button>
   );
