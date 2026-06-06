@@ -531,13 +531,11 @@ class ChannelPostPermissionTestCase(APITestCase):
         self.channel_all = Channel.objects.create(
             name="All Can Post",
             creator=self.creator_user,
-            privacy_type=Channel.PrivacyType.PUBLIC,
             post_permission=Channel.PostPermission.ALL
         )
         self.channel_creator = Channel.objects.create(
             name="Creator Only Post",
             creator=self.creator_user,
-            privacy_type=Channel.PrivacyType.PUBLIC,
             post_permission=Channel.PostPermission.CREATOR_ONLY
         )
 
@@ -576,8 +574,7 @@ class ChannelBanTestCase(APITestCase):
         from .models import Channel, ChannelMembership
         self.channel = Channel.objects.create(
             name="Ban Test",
-            creator=self.creator_user,
-            privacy_type=Channel.PrivacyType.PUBLIC
+            creator=self.creator_user
         )
         ChannelMembership.objects.create(channel=self.channel, user=self.member_user, status=ChannelMembership.Status.APPROVED)
 
@@ -632,52 +629,38 @@ class ChannelMemberListTestCase(APITestCase):
         self.other_user = WalletUser.objects.create(address="0xother000000000000000000000000000000000")
 
         from .models import Channel, ChannelMembership
-        self.public_channel = Channel.objects.create(
-            name="Public Channel",
-            creator=self.creator_user,
-            privacy_type=Channel.PrivacyType.PUBLIC
-        )
-        self.private_channel = Channel.objects.create(
+        self.channel = Channel.objects.create(
             name="Private Channel",
-            creator=self.creator_user,
-            privacy_type=Channel.PrivacyType.PRIVATE
+            creator=self.creator_user
         )
-        ChannelMembership.objects.create(channel=self.public_channel, user=self.member_user, status=ChannelMembership.Status.APPROVED)
-        ChannelMembership.objects.create(channel=self.private_channel, user=self.member_user, status=ChannelMembership.Status.APPROVED)
+        ChannelMembership.objects.create(channel=self.channel, user=self.member_user, status=ChannelMembership.Status.APPROVED)
 
     def _auth(self, user):
         refresh = RefreshToken()
         refresh["address"] = user.address
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {str(refresh.access_token)}')
 
-    def test_public_member_list(self):
-        url = reverse('channel-members', kwargs={"pk": self.public_channel.id})
-        response = self.client.get(url, format="json")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["user_address"], self.member_user.address)
-
     def test_private_member_list_unauthenticated(self):
-        url = reverse('channel-members', kwargs={"pk": self.private_channel.id})
+        url = reverse('channel-members', kwargs={"pk": self.channel.id})
         response = self.client.get(url, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_private_member_list_non_member(self):
         self._auth(self.other_user)
-        url = reverse('channel-members', kwargs={"pk": self.private_channel.id})
+        url = reverse('channel-members', kwargs={"pk": self.channel.id})
         response = self.client.get(url, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_private_member_list_member(self):
         self._auth(self.member_user)
-        url = reverse('channel-members', kwargs={"pk": self.private_channel.id})
+        url = reverse('channel-members', kwargs={"pk": self.channel.id})
         response = self.client.get(url, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
 
     def test_private_member_list_creator(self):
         self._auth(self.creator_user)
-        url = reverse('channel-members', kwargs={"pk": self.private_channel.id})
+        url = reverse('channel-members', kwargs={"pk": self.channel.id})
         response = self.client.get(url, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
@@ -695,8 +678,7 @@ class PositionTestCase(APITestCase):
         from .models import Channel, ChannelMembership, Asset, Position
         self.channel = Channel.objects.create(
             name="Test Channel",
-            creator=self.creator_user,
-            privacy_type=Channel.PrivacyType.PUBLIC
+            creator=self.creator_user
         )
         ChannelMembership.objects.create(channel=self.channel, user=self.member_user, status=ChannelMembership.Status.APPROVED)
         
@@ -936,8 +918,7 @@ class ChannelRolesTestCase(APITestCase):
         from .models import Channel, ChannelMembership
         self.channel = Channel.objects.create(
             name="Role Test Channel",
-            creator=self.owner_user,
-            privacy_type=Channel.PrivacyType.PUBLIC
+            creator=self.owner_user
         )
         
         self.owner_membership = ChannelMembership.objects.create(

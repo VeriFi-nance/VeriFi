@@ -10,10 +10,17 @@ import { EmptyState } from '@/components/EmptyState';
 import { PageContent } from '@/components/PageContent';
 import { SkeletonRow } from '@/components/Skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getHardClaimsByAddress, getAssets, getProfileStats, toggleFollow } from '@/lib/api';
+import { getHardClaimsByAddress, getAssets, getProfileStats, toggleFollow, createChannel } from '@/lib/api';
 import type { HardClaimItem, AssetItem, ProfileStats } from '@/lib/types';
 import { loadAddress } from '@/lib/auth';
 import { truncateAddress } from '@/lib/wallet';
+import { Sparkles, Plus } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
+import { PremiumChannelView } from '@/components/PremiumChannelView';
+import { ChannelCard } from '@/components/ChannelCard';
 
 function CopyAddressButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -29,11 +36,23 @@ function CopyAddressButton({ text }: { text: string }) {
   );
 }
 
-function StatBlock({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col">
+function StatBlock({ label, value, onClick }: { label: string; value: string; onClick?: () => void }) {
+  const content = (
+    <>
       <span className="text-base font-semibold num">{value}</span>
       <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</span>
+    </>
+  );
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className="flex flex-col text-left hover:opacity-80 transition-opacity">
+        {content}
+      </button>
+    );
+  }
+  return (
+    <div className="flex flex-col">
+      {content}
     </div>
   );
 }
@@ -50,6 +69,27 @@ export default function UserPage() {
   const [error, setError] = useState('');
 
   const isSelf = !!(myAddress && stats?.address && myAddress.toLowerCase() === stats.address.toLowerCase());
+
+  // Channel Creation State
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [postPermission, setPostPermission] = useState<'all' | 'creator_only'>('all');
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createError, setCreateError] = useState('');
+  
+  const [subscriptionsOpen, setSubscriptionsOpen] = useState(false);
+
+  async function handleCreateChannel() {
+    try {
+      const chan = await createChannel(name, description, postPermission);
+      setCreateOpen(false);
+      setName('');
+      setDescription('');
+      setStats(prev => prev ? { ...prev, channel_owned: chan } : prev);
+    } catch (e: unknown) {
+      setCreateError(e instanceof Error ? e.message : 'Failed to create channel');
+    }
+  }
 
   useEffect(() => {
     if (!address) return;
@@ -116,9 +156,18 @@ export default function UserPage() {
         </div>
 
         {stats && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5">
+          <div className="flex flex-wrap gap-x-8 gap-y-4 mt-5">
             <StatBlock label="Followers" value={String(stats.followers_count)} />
             <StatBlock label="Following" value={String(stats.following_count)} />
+            <StatBlock 
+              label="Subscribed" 
+              value={String(stats.channels_member_of?.length || 0)} 
+              onClick={() => {
+                if (stats.channels_member_of && stats.channels_member_of.length > 0) {
+                  setSubscriptionsOpen(true);
+                }
+              }}
+            />
             {stats.rep != null && <StatBlock label="Rep" value={stats.rep.toFixed(0)} />}
             {stats.energy != null && (
               <StatBlock label="Energy" value={String(Math.floor(stats.energy))} />
@@ -127,51 +176,23 @@ export default function UserPage() {
         )}
 
         {stats && (
-          <div className="mt-5 pt-4 border-t border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="text-sm">
-              {stats.channel_owned ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground font-medium">Channel:</span>
-                  <Link
-                    to={`/channels/${stats.channel_owned.id}`}
-                    className="inline-flex items-center gap-1.5 text-primary hover:text-primary/80 font-semibold hover:underline"
-                  >
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 bg-primary/20 text-primary border border-primary/25 rounded uppercase tracking-wider shrink-0">
-                      Live
-                    </span>
-                    {stats.channel_owned.name}
-                  </Link>
-                </div>
-              ) : isSelf ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground text-xs">No channel created yet.</span>
-                  <Link to="/channels" className="text-xs text-primary hover:underline font-semibold">
-                    Create Channel
-                  </Link>
-                </div>
-              ) : (
-                <span className="text-muted-foreground text-xs">No channel created.</span>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-2">
-              {isSelf ? (
-                <Button asChild variant="outline" size="sm" className="gap-2">
-                  <Link to="/settings">
-                    <SettingsIcon className="size-4" />
-                    Settings
-                  </Link>
-                </Button>
-              ) : (
-                <Button
-                  variant={following ? 'outline' : 'default'}
-                  size="sm"
-                  onClick={handleFollow}
-                >
-                  {following ? 'Unfollow' : 'Follow'}
-                </Button>
-              )}
-            </div>
+          <div className="mt-5 pt-4 border-t border-border flex justify-end gap-2">
+            {isSelf ? (
+              <Button asChild variant="outline" size="sm" className="gap-2">
+                <Link to="/settings">
+                  <SettingsIcon className="size-4" />
+                  Settings
+                </Link>
+              </Button>
+            ) : (
+              <Button
+                variant={following ? 'outline' : 'default'}
+                size="sm"
+                onClick={handleFollow}
+              >
+                {following ? 'Unfollow' : 'Follow'}
+              </Button>
+            )}
           </div>
         )}
       </Card>
@@ -182,23 +203,23 @@ export default function UserPage() {
         </Alert>
       )}
 
-      <Tabs defaultValue="claims" className="mt-6 w-full">
+      <Tabs defaultValue="public" className="mt-6 w-full">
         <TabsList className="bg-transparent border-none p-0 flex gap-2 h-auto justify-start w-full">
           <TabsTrigger
-            value="claims"
+            value="public"
             className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground data-[state=active]:bg-foreground/5 dark:data-[state=active]:bg-foreground/5 data-[state=active]:text-foreground data-[state=active]:border-transparent dark:data-[state=active]:border-transparent data-[state=active]:shadow-none cursor-pointer transition-colors border-0"
           >
-            Hard Claims
+            Public
           </TabsTrigger>
           <TabsTrigger
-            value="channels"
-            className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground data-[state=active]:bg-foreground/5 dark:data-[state=active]:bg-foreground/5 data-[state=active]:text-foreground data-[state=active]:border-transparent dark:data-[state=active]:border-transparent data-[state=active]:shadow-none cursor-pointer transition-colors border-0"
+            value="premium"
+            className="rounded-md px-3 py-1.5 text-sm font-medium text-amber-500/70 hover:text-amber-500 hover:bg-amber-500/10 data-[state=active]:bg-amber-500/15 data-[state=active]:text-amber-500 data-[state=active]:border-transparent data-[state=active]:shadow-none cursor-pointer transition-colors border-0 flex items-center gap-1.5"
           >
-            Channels
+            Premium
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="claims" className="space-y-2 mt-4 animate-in fade-in-50 duration-200">
+        <TabsContent value="public" className="space-y-2 mt-4 animate-in fade-in-50 duration-200">
           {loading ? (
             <div className="space-y-2">
               <SkeletonRow />
@@ -223,50 +244,127 @@ export default function UserPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="channels" className="space-y-6 mt-4 animate-in fade-in-50 duration-200">
-          {loading ? (
-            <div className="space-y-2">
-              <SkeletonRow />
-              <SkeletonRow />
+        <TabsContent value="premium" className="space-y-6 mt-4 animate-in fade-in-50 duration-200">
+          {stats?.channel_owned ? (
+            <PremiumChannelView 
+              channelId={stats.channel_owned.id} 
+              onSubscribed={() => {
+                 setStats(prev => prev && prev.channel_owned ? {
+                   ...prev,
+                   channel_owned: { 
+                     ...prev.channel_owned, 
+                     my_membership_status: 'pending' 
+                   }
+                 } : prev);
+              }} 
+            />
+          ) : isSelf ? (
+            <div className="py-8">
+              <button
+                type="button"
+                onClick={() => setCreateOpen(true)}
+                className="group flex w-full min-h-32 flex-col items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed border-border/80 bg-card/35 p-6 text-muted-foreground transition-all duration-300 hover:border-primary/50 hover:bg-primary/5 hover:text-foreground hover:shadow-[0_0_20px_rgba(59,130,246,0.06)]"
+              >
+                <div className="p-3 rounded-full bg-muted/65 group-hover:bg-primary/10 group-hover:text-primary transition-colors duration-300">
+                  <Plus className="size-5" />
+                </div>
+                <div className="text-center space-y-1">
+                  <span className="text-sm font-semibold tracking-wide block">Create Premium Channel</span>
+                  <span className="text-xs text-muted-foreground max-w-sm block">
+                    Start sharing exclusive content, positions, and predictions with your subscribers.
+                  </span>
+                </div>
+              </button>
             </div>
           ) : (
-            <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                Joined Channels ({stats?.channels_member_of?.length ?? 0})
-              </h3>
-              {!stats?.channels_member_of || stats.channels_member_of.length === 0 ? (
-                <p className="text-sm text-muted-foreground bg-muted/20 p-4 rounded-lg border border-dashed text-center">No joined channels.</p>
-              ) : (
-                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
-                  {stats.channels_member_of.map((c) => (
-                    <Link key={c.id} to={`/channels/${c.id}`} className="block group">
-                      <Card className="bg-card hover:bg-muted/50 hover:border-primary/20 transition-all duration-200 h-full">
-                        <div className="p-4 space-y-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-semibold text-sm group-hover:text-primary transition-colors truncate">{c.name}</span>
-                            <span className="text-[9px] font-normal px-2 py-0.5 bg-secondary text-secondary-foreground rounded-full uppercase tracking-wider shrink-0">
-                              {c.privacy_type}
-                            </span>
-                          </div>
-                          <p className="text-xs text-muted-foreground line-clamp-2 min-h-8">
-                            {c.description || 'No description'}
-                          </p>
-                          <div className="text-[10px] text-muted-foreground pt-1 flex items-center justify-between">
-                            <span><strong>{c.member_count}</strong> subscriber{c.member_count !== 1 ? 's' : ''}</span>
-                            {c.post_permission === 'creator_only' && (
-                              <span className="text-[9px] text-primary/80 font-medium uppercase tracking-wider">Broadcast</span>
-                            )}
-                          </div>
-                        </div>
-                      </Card>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
+            <EmptyState
+              title="No Premium Content"
+              description="This user hasn't created a premium channel yet."
+            />
           )}
         </TabsContent>
       </Tabs>
+
+      <RD.Root open={createOpen} onOpenChange={setCreateOpen}>
+        <RD.Content>
+          <RD.Header>
+            <RD.Title className="text-xl font-semibold flex items-center gap-2">
+              <Sparkles className="size-5 text-primary animate-pulse" />
+              Create Premium Channel
+            </RD.Title>
+            <RD.Description>
+              Set up your exclusive reputation channel. You can adjust settings later.
+            </RD.Description>
+          </RD.Header>
+          <div className="space-y-4 pt-3">
+            {createError && (
+              <Alert variant="destructive">
+                <AlertDescription>{createError}</AlertDescription>
+              </Alert>
+            )}
+            <div className="space-y-1.5">
+              <Label htmlFor="channel-name" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Name</Label>
+              <Input
+                id="channel-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Alpha Trades Only"
+                className="bg-muted/30 focus-visible:ring-primary"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="channel-desc" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Description</Label>
+              <Input
+                id="channel-desc"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="What predictions and positions will you share?"
+                className="bg-muted/30 focus-visible:ring-primary"
+              />
+            </div>
+            <div className="grid grid-cols-1 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="channel-post" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Post Permission</Label>
+                <Select
+                  value={postPermission}
+                  onValueChange={(v: 'all' | 'creator_only') => setPostPermission(v)}
+                >
+                  <SelectTrigger id="channel-post" className="bg-muted/30">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Members can post</SelectItem>
+                    <SelectItem value="creator_only">Only me (Creator only)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Button className="w-full mt-2 font-medium tracking-wide shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all duration-300" onClick={handleCreateChannel} disabled={!name.trim()}>
+              Launch Channel
+            </Button>
+          </div>
+        </RD.Content>
+      </RD.Root>
+
+      <RD.Root open={subscriptionsOpen} onOpenChange={setSubscriptionsOpen}>
+        <RD.Content className="max-w-xl">
+          <RD.Header>
+            <RD.Title className="text-xl font-semibold">Subscribed Channels</RD.Title>
+          </RD.Header>
+          <div className="space-y-3 pt-3 max-h-[60vh] overflow-y-auto">
+            {stats?.channels_member_of?.map(c => (
+              <ChannelCard 
+                key={c.id} 
+                channel={c} 
+                onClick={() => {
+                  setSubscriptionsOpen(false);
+                  window.location.href = `/u/${c.creator_username || c.creator_address}?tab=premium`;
+                }} 
+              />
+            ))}
+          </div>
+        </RD.Content>
+      </RD.Root>
     </PageContent>
   );
 }

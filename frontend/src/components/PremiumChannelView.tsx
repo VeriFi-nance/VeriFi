@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -12,13 +11,15 @@ import { FeedList } from '@/components/feed/FeedList';
 import { NewPostButton } from '@/components/feed/NewPostModal';
 import { PositionCard } from '@/components/PositionCard';
 import { NewPositionModal } from '@/components/NewPositionModal';
-import { Settings, ArrowLeft, Lock, Users } from 'lucide-react';
-import { PageContent } from '@/components/PageContent';
+import { Settings, Lock, Users } from 'lucide-react';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 
-export default function ChannelDetailPage() {
-  const { id } = useParams();
-  const navigate = useNavigate();
+interface PremiumChannelViewProps {
+  channelId: number;
+  onSubscribed?: () => void;
+}
+
+export function PremiumChannelView({ channelId, onSubscribed }: PremiumChannelViewProps) {
   const openLogin = useOpenLogin();
   const auth = useAuthState();
   const myAddress = auth.address;
@@ -44,10 +45,10 @@ export default function ChannelDetailPage() {
   });
 
   const fetchChannelAndPosts = useCallback(async () => {
-    if (!id) return;
+    if (!channelId) return;
     setLoading(true);
     try {
-      const chan = await getChannel(Number(id));
+      const chan = await getChannel(channelId);
       setChannel(chan);
       
       const canView = chan.my_membership_status === 'approved' || chan.creator_address === myAddress;
@@ -55,8 +56,8 @@ export default function ChannelDetailPage() {
       if (canView) {
         const [a, m, pos] = await Promise.all([
           getAssets(),
-          getChannelMembers(Number(id)),
-          getPositions(Number(id)),
+          getChannelMembers(channelId),
+          getPositions(channelId),
         ]);
         setAssets(a);
         setMembers(m);
@@ -64,7 +65,7 @@ export default function ChannelDetailPage() {
         
         if (chan.creator_address.toLowerCase() === myAddress?.toLowerCase()) {
           try {
-            const banned = await getBannedChannelMembers(Number(id));
+            const banned = await getBannedChannelMembers(channelId);
             setBannedMembers(banned);
           } catch (e) {
             console.error("Failed to load banned members", e);
@@ -76,7 +77,7 @@ export default function ChannelDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [id, myAddress]);
+  }, [channelId, myAddress]);
 
   useEffect(() => {
     fetchChannelAndPosts();
@@ -93,23 +94,24 @@ export default function ChannelDetailPage() {
   }, [fetchChannelAndPosts]);
 
   const handleJoin = async () => {
-    if (!id) return;
+    if (!channelId) return;
     if (!auth.authenticated) {
-      openLogin(`/channels/${id}`);
+      openLogin(`/u/${channel?.creator_username || channel?.creator_address}`);
       return;
     }
     try {
-      await joinChannel(Number(id));
+      await joinChannel(channelId);
       await fetchChannelAndPosts();
+      if (onSubscribed) onSubscribed();
     } catch (e: any) {
       alert(e.message);
     }
   };
 
   const handleApprove = async (userAddress: string, action: 'approve' | 'reject') => {
-    if (!id) return;
+    if (!channelId) return;
     try {
-      await approveChannelMember(Number(id), userAddress, action);
+      await approveChannelMember(channelId, userAddress, action);
       await fetchChannelAndPosts();
     } catch (e: any) {
       alert(e.message);
@@ -117,14 +119,14 @@ export default function ChannelDetailPage() {
   };
 
   const handleBan = (userAddress: string) => {
-    if (!id) return;
+    if (!channelId) return;
     setConfirmDialog({
       open: true,
       title: 'Ban Member',
       description: `Are you sure you want to ban ${userAddress}?`,
       onConfirm: async () => {
         try {
-          await banChannelMember(Number(id), userAddress);
+          await banChannelMember(channelId, userAddress);
           await fetchChannelAndPosts();
         } catch (e: any) {
           alert(e.message);
@@ -134,14 +136,14 @@ export default function ChannelDetailPage() {
   };
 
   const handleUnban = (userAddress: string) => {
-    if (!id) return;
+    if (!channelId) return;
     setConfirmDialog({
       open: true,
       title: 'Unban Member',
       description: `Are you sure you want to unban ${userAddress}?`,
       onConfirm: async () => {
         try {
-          await unbanChannelMember(Number(id), userAddress);
+          await unbanChannelMember(channelId, userAddress);
           await fetchChannelAndPosts();
         } catch (e: any) {
           alert(e.message);
@@ -151,9 +153,9 @@ export default function ChannelDetailPage() {
   };
 
   const handlePromote = async (userAddress: string) => {
-    if (!id) return;
+    if (!channelId) return;
     try {
-      await promoteModerator(Number(id), userAddress);
+      await promoteModerator(channelId, userAddress);
       await fetchChannelAndPosts();
     } catch (e: any) {
       alert(e.message);
@@ -161,9 +163,9 @@ export default function ChannelDetailPage() {
   };
 
   const handleDemote = async (userAddress: string) => {
-    if (!id) return;
+    if (!channelId) return;
     try {
-      await demoteModerator(Number(id), userAddress);
+      await demoteModerator(channelId, userAddress);
       await fetchChannelAndPosts();
     } catch (e: any) {
       alert(e.message);
@@ -175,11 +177,11 @@ export default function ChannelDetailPage() {
   };
 
   const handlePostPermissionChange = async (value: 'all' | 'creator_only') => {
-    if (!id || !channel) return;
+    if (!channelId || !channel) return;
     // Optimistic update
     setChannel(prev => prev ? { ...prev, post_permission: value } : prev);
     try {
-      const updated = await updateChannel(Number(id), { post_permission: value });
+      const updated = await updateChannel(channelId, { post_permission: value });
       setChannel(updated);
       setSettingsSaved('Settings saved.');
       setTimeout(() => setSettingsSaved(''), 3000);
@@ -191,8 +193,8 @@ export default function ChannelDetailPage() {
   };
 
   if (error) return <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>;
-  if (loading && !channel) return <p className="text-center py-10">Loading...</p>;
-  if (!channel) return <p className="text-center py-10">Channel not found.</p>;
+  if (loading && !channel) return <p className="text-center py-10 text-muted-foreground text-sm">Loading Premium Content...</p>;
+  if (!channel) return <p className="text-center py-10 text-muted-foreground text-sm">Channel not found.</p>;
 
   const isCreator = myAddress && myAddress.toLowerCase() === channel.creator_address.toLowerCase();
   const isOwner = isCreator;
@@ -202,13 +204,10 @@ export default function ChannelDetailPage() {
   const canPost = isCreator || (channel.my_membership_status === 'approved' && channel.post_permission === 'all');
 
   return (
-    <PageContent className="space-y-6 max-w-5xl mx-auto pb-12">
+    <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/channels')} className="rounded-full shrink-0">
-          <ArrowLeft className="size-4" />
-        </Button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-xl md:text-2xl font-bold flex flex-wrap items-center gap-2">
+          <h2 className="text-xl font-bold flex flex-wrap items-center gap-2">
             <span className="truncate">{channel.name}</span>
             <span className="text-[10px] font-normal px-2 py-0.5 bg-amber-500/10 text-amber-500 rounded-full uppercase tracking-wider shrink-0">
               Premium
@@ -218,11 +217,11 @@ export default function ChannelDetailPage() {
                 Broadcast Only
               </span>
             )}
-          </h1>
+          </h2>
           <p className="text-xs md:text-sm text-muted-foreground mt-0.5 line-clamp-2">{channel.description}</p>
         </div>
         {!isCreator && !channel.my_membership_status && (
-          <Button size="sm" onClick={handleJoin} className="shrink-0">Subscribe</Button>
+          <Button size="sm" onClick={handleJoin} className="shrink-0 bg-amber-500 hover:bg-amber-600 text-white border-0 shadow-lg shadow-amber-500/20">Subscribe</Button>
         )}
         {!isCreator && channel.my_membership_status === 'pending' && (
           <Button size="sm" variant="secondary" disabled className="shrink-0">Request Pending</Button>
@@ -230,9 +229,9 @@ export default function ChannelDetailPage() {
         {canPost && (
           <div className="shrink-0 flex items-center gap-2">
             {isCreator && (
-              <NewPositionModal channelId={Number(id)} assets={assets} onCreated={fetchChannelAndPosts} />
+              <NewPositionModal channelId={channelId} assets={assets} onCreated={fetchChannelAndPosts} />
             )}
-            <NewPostButton onPosted={fetchChannelAndPosts} channelId={Number(id)} />
+            <NewPostButton onPosted={fetchChannelAndPosts} channelId={channelId} />
           </div>
         )}
       </div>
@@ -241,10 +240,6 @@ export default function ChannelDetailPage() {
         <Users className="size-3.5" />
         <span>
           <strong className="text-foreground num">{channel.member_count}</strong> subscriber{channel.member_count !== 1 ? 's' : ''}
-        </span>
-        <span>&middot;</span>
-        <span>
-          Created by {channel.creator_username ? `@${channel.creator_username}` : `${channel.creator_address.slice(0,6)}...${channel.creator_address.slice(-4)}`}
         </span>
       </div>
 
@@ -278,7 +273,7 @@ export default function ChannelDetailPage() {
           </TabsList>
           
           <TabsContent value="posts" className="space-y-4 mt-4">
-            <FeedList channel={Number(id)} myRole={channel.my_role} creatorAddress={channel.creator_address} />
+            <FeedList channel={channelId} myRole={channel.my_role} creatorAddress={channel.creator_address} />
           </TabsContent>
           
           <TabsContent value="positions" className="space-y-4 mt-4">
@@ -397,20 +392,26 @@ export default function ChannelDetailPage() {
           )}
         </Tabs>
       ) : (
-        <Card className="border border-border/40 bg-muted/15 p-6 rounded-2xl text-center space-y-3">
-          <div className="p-3 bg-secondary/50 rounded-full text-muted-foreground w-12 h-12 flex items-center justify-center mx-auto">
-            <Lock className="size-5" />
-          </div>
-          <div className="space-y-1">
-            <h3 className="font-semibold text-sm">Private Channel</h3>
-            <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-              This is a private channel. You must be an approved subscriber to view posts and positions.
+        <div className="relative overflow-hidden rounded-xl border border-border/40 bg-muted/5">
+          <div className="absolute inset-0 z-10 bg-background/60 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center">
+            <div className="p-4 bg-amber-500/10 rounded-full text-amber-500 mb-4 shadow-xl shadow-amber-500/10">
+              <Lock className="size-6" />
+            </div>
+            <h3 className="font-bold text-lg mb-2">Subscribe to Unlock</h3>
+            <p className="text-sm text-muted-foreground max-w-sm mb-6">
+              Join {channel.name} to see their premium predictions, posts, and real-time positions.
             </p>
+            <Button size="lg" onClick={handleJoin} className="bg-amber-500 hover:bg-amber-600 text-white shadow-lg shadow-amber-500/20 font-semibold px-8">
+              Join Premium Channel
+            </Button>
           </div>
-          <Button size="sm" onClick={handleJoin}>
-            Subscribe
-          </Button>
-        </Card>
+          
+          <div className="opacity-40 p-6 pointer-events-none select-none blur-sm space-y-4">
+            <div className="h-20 bg-muted rounded-lg w-full" />
+            <div className="h-32 bg-muted rounded-lg w-full" />
+            <div className="h-24 bg-muted rounded-lg w-3/4" />
+          </div>
+        </div>
       )}
 
       <RD.Root open={confirmDialog.open} onOpenChange={(val) => setConfirmDialog(prev => ({ ...prev, open: val }))}>
@@ -433,6 +434,6 @@ export default function ChannelDetailPage() {
           </RD.Footer>
         </RD.Content>
       </RD.Root>
-    </PageContent>
+    </div>
   );
 }

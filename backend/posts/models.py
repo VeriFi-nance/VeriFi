@@ -3,10 +3,6 @@ from accounts.models import WalletUser
 
 
 class Channel(models.Model):
-    class PrivacyType(models.TextChoices):
-        PUBLIC = "public"
-        PRIVATE = "private"
-
     class PostPermission(models.TextChoices):
         ALL = "all"
         CREATOR_ONLY = "creator_only"
@@ -14,7 +10,6 @@ class Channel(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
     creator = models.ForeignKey(WalletUser, on_delete=models.SET_NULL, null=True, related_name="created_channels")
-    privacy_type = models.CharField(max_length=10, choices=PrivacyType.choices, default=PrivacyType.PUBLIC)
     post_permission = models.CharField(max_length=15, choices=PostPermission.choices, default=PostPermission.ALL)
     created_at = models.DateTimeField(auto_now_add=True)
 

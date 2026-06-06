@@ -1,5 +1,5 @@
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Lock, Unlock } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import type { ChannelItem } from '@/lib/types';
 
 interface ChannelCardProps {
@@ -19,9 +19,9 @@ export function ChannelCard({ channel, onClick, isOwned }: ChannelCardProps) {
           <div className="flex items-center gap-2 truncate">
             <span className="truncate group-hover:text-primary transition-colors">{channel.name}</span>
           </div>
-          <span className="text-[10px] font-normal px-2 py-0.5 bg-secondary text-secondary-foreground rounded-md uppercase tracking-wider flex items-center gap-1 shrink-0">
-            {channel.privacy_type === 'private' ? <Lock className="size-2.5" /> : <Unlock className="size-2.5" />}
-            {channel.privacy_type}
+          <span className="text-[10px] font-normal px-2 py-0.5 bg-amber-500/10 text-amber-500 rounded-md uppercase tracking-wider flex items-center gap-1 shrink-0">
+            <Lock className="size-2.5" />
+            Premium
           </span>
         </CardTitle>
         <CardDescription className="line-clamp-2 text-xs h-8">

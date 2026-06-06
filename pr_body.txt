@@ -1,0 +1,27 @@
+## Summary
+This PR refactors the channels architecture to be profile-centric and strictly enforces private (premium) channels. The global `ChannelsPage` has been completely removed. Users can now host and manage their premium channel directly from their profile. In addition, the `privacy_type` logic has been entirely stripped from the database, backend views, and frontend components, making all channels private by default (only visible to the creator and approved members).
+
+## Changes Included
+- **Backend:** 
+  - Dropped `privacy_type` column from `Channel` model (migration included).
+  - Enforced strict privacy access across all posts/positions views.
+  - Refactored tests to support private-by-default logic.
+- **Frontend:**
+  - Removed global `ChannelsPage.tsx` and related navigations.
+  - Added "Premium" and "Public" tabs to the User Profile (`UserPage.tsx`).
+  - Added an interactive "Subscribed" stat on profiles to list joined channels.
+  - Removed "Privacy" dropdown from the "Create Channel" modal.
+  - Updated UI components (`ChannelCard`, `PremiumChannelView`) to feature "Premium" badges instead of public/private badges.
+  - Updated API typings.
+
+## Verification Steps
+Follow these steps to manually verify the changes:
+1. **Login & Profile Tab:** Log in using a wallet. Navigate to your own profile by clicking the profile icon.
+2. **Create Premium Channel:** In the "Premium" tab, you should see a prompt to create a channel. Notice that there is no longer a "Privacy" dropdown menu. Create the channel.
+3. **Manage Channel:** Once created, you should see the embedded premium channel interface (`PremiumChannelView`) right inside your profile tab. You can post and manage subscribers here.
+4. **Subscribe to Another User:** Log out and log in with a different wallet. Navigate to the first user's profile. You should see their public stats, but their Premium tab content will be blurred out with a "Subscribe to Unlock" button.
+5. **Subscription Flow:** Click the "Subscribe" button. Because it's private, it sends a pending request.
+6. **Approval & Access:** Log back into the creator account, go to your profile -> Premium tab, and approve the subscription request.
+7. **View Content:** Log into the subscriber account again. Go to the creator's profile -> Premium tab, and you should now be able to see and interact with their premium posts.
+8. **Check Global Navigation:** Ensure that the generic "Channels" link is no longer present in the global app navigation (sidebar/navbar).
+9. **Check Subscriptions Modal:** Go to your own profile. Click the "Subscribed" metric at the top of your profile to open the modal and verify that your newly joined premium channel is listed there.

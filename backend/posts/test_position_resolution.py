@@ -13,7 +13,6 @@ class PositionResolutionTestCase(TestCase):
         self.channel = Channel.objects.create(
             name="Test Channel",
             creator=self.creator_user,
-            privacy_type=Channel.PrivacyType.PUBLIC
         )
         self.asset = Asset.objects.create(
             symbol="BTC",

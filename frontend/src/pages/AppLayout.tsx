@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Home, LogOut, Moon, Settings, Sun, User, Tv, ShieldCheck } from 'lucide-react';
+import { Home, LogOut, Moon, Settings, Sun, User, ShieldCheck } from 'lucide-react';
 import { clearAuth, useAuthState, useOpenLogin } from '@/lib/auth';
 import { clearPrivateKey } from '@/lib/keystore';
 import { loadTheme, toggleTheme, type Theme } from '@/lib/theme';
@@ -29,12 +29,6 @@ export function buildNavItems(): NavItem[] {
       matches: (p) => p === '/feed' || p === '/' || p.startsWith('/post/') || p.startsWith('/claim/'),
     },
     {
-      to: '/channels',
-      icon: <Tv className="size-5" />,
-      label: 'Channels',
-      matches: (p) => p.startsWith('/channels') || p.startsWith('/c'),
-    },
-    {
       to: '/verify',
       icon: <ShieldCheck className="size-5" />,
       label: 'Verify Proof',
@@ -57,10 +51,6 @@ function pageTitle(pathname: string): string {
   if (pathname.startsWith('/post/')) return 'Post';
   if (pathname.startsWith('/claim/')) return 'Claim';
   if (pathname.startsWith('/u/')) return 'Profile';
-  if (pathname.startsWith('/channels/')) return 'Channel';
-  if (pathname === '/channels') return 'Channels';
-  if (pathname.startsWith('/c/')) return 'Channel';
-  if (pathname === '/c') return 'Channels';
   return 'VeriFi';
 }
 
