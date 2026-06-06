@@ -222,7 +222,11 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
         }];
       }
 
+      const shouldRefreshEnergy = hardClaimsPayload.some((claim) => claim.market);
       await createPost(content.trim(), channelId, hardClaimsPayload, positionsPayload.length > 0 ? positionsPayload as any : undefined);
+      if (shouldRefreshEnergy) {
+        window.dispatchEvent(new Event('energy-updated'));
+      }
       reset();
       onOpenChange(false);
       onPosted();

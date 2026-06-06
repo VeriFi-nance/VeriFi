@@ -23,6 +23,35 @@ class WalletUser(models.Model):
         return self.username
 
 
+class ProfileChangeLog(models.Model):
+    class EventType(models.TextChoices):
+        USERNAME_UPDATED = "username_updated", "Username updated"
+        POST_CREATED = "post_created", "Post created"
+        POST_DELETED = "post_deleted", "Post deleted"
+
+    user = models.ForeignKey(WalletUser, related_name="changelog_entries", on_delete=models.CASCADE)
+    actor = models.ForeignKey(
+        WalletUser,
+        related_name="profile_changelog_actions",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    event_type = models.CharField(max_length=32, choices=EventType.choices)
+    summary = models.CharField(max_length=160)
+    metadata = models.JSONField(blank=True, default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "-created_at"], name="profile_changelog_user_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username}: {self.summary}"
+
+
 class Follow(models.Model):
     follower = models.ForeignKey(WalletUser, related_name="following_set", on_delete=models.CASCADE)
     following = models.ForeignKey(WalletUser, related_name="follower_set", on_delete=models.CASCADE)

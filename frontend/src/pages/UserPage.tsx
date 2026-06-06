@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
-import { Settings as SettingsIcon, Copy, Check } from 'lucide-react';
+import { Settings as SettingsIcon, Copy, Check, History } from 'lucide-react';
 import { HardClaimCard } from '@/components/HardClaimCard';
 import { UserAvatar } from '@/components/UserAvatar';
 import { EmptyState } from '@/components/EmptyState';
@@ -14,7 +14,7 @@ import { getHardClaimsByAddress, getAssets, getProfileStats, toggleFollow, creat
 import type { HardClaimItem, AssetItem, ProfileStats } from '@/lib/types';
 import { loadAddress } from '@/lib/auth';
 import { truncateAddress } from '@/lib/wallet';
-import { Sparkles, Plus } from 'lucide-react';
+import { Plus, Sparkles } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -57,6 +57,15 @@ function StatBlock({ label, value, onClick }: { label: string; value: string; on
   );
 }
 
+function formatChangeDate(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(value));
+}
+
 export default function UserPage() {
   const { address } = useParams();
   const myAddress = loadAddress();
@@ -67,6 +76,7 @@ export default function UserPage() {
   const [following, setFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [profileRefreshKey, setProfileRefreshKey] = useState(0);
 
   const isSelf = !!(myAddress && stats?.address && myAddress.toLowerCase() === stats.address.toLowerCase());
 
@@ -78,6 +88,11 @@ export default function UserPage() {
   const [createError, setCreateError] = useState('');
   
   const [subscriptionsOpen, setSubscriptionsOpen] = useState(false);
+  const [usernameHistoryOpen, setUsernameHistoryOpen] = useState(false);
+
+  const usernameChanges = (stats?.changelog ?? []).filter(
+    (entry) => entry.event_type === 'username_updated',
+  );
 
   async function handleCreateChannel() {
     try {
@@ -109,7 +124,13 @@ export default function UserPage() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [address]);
+  }, [address, profileRefreshKey]);
+
+  useEffect(() => {
+    const refreshProfile = () => setProfileRefreshKey((key) => key + 1);
+    window.addEventListener('energy-updated', refreshProfile);
+    return () => window.removeEventListener('energy-updated', refreshProfile);
+  }, []);
 
   async function handleFollow() {
     if (!address) return;
@@ -145,9 +166,22 @@ export default function UserPage() {
         <div className="flex items-center gap-4">
           <UserAvatar address={stats?.address || address} size="lg" />
           <div className="min-w-0 flex-1 space-y-1">
-            <h1 className="text-xl font-bold truncate">
-              {stats?.username ? `@${stats.username}` : truncateAddress(stats?.address || address)}
-            </h1>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <h1 className="text-xl font-bold truncate">
+                {stats?.username ? `@${stats.username}` : truncateAddress(stats?.address || address)}
+              </h1>
+              {usernameChanges.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="shrink-0 text-muted-foreground hover:text-foreground"
+                  onClick={() => setUsernameHistoryOpen(true)}
+                  aria-label="View username history"
+                >
+                  <History className="size-3.5" />
+                </Button>
+              )}
+            </div>
             <div className="flex items-center gap-1 min-w-0">
               <code className="text-sm font-mono text-muted-foreground truncate">{truncateAddress(stats?.address || address)}</code>
               <CopyAddressButton text={stats?.address || address} />
@@ -283,6 +317,7 @@ export default function UserPage() {
             />
           )}
         </TabsContent>
+
       </Tabs>
 
       <RD.Root open={createOpen} onOpenChange={setCreateOpen}>
@@ -362,6 +397,40 @@ export default function UserPage() {
                 }} 
               />
             ))}
+          </div>
+        </RD.Content>
+      </RD.Root>
+
+      <RD.Root open={usernameHistoryOpen} onOpenChange={setUsernameHistoryOpen}>
+        <RD.Content className="max-w-md">
+          <RD.Header>
+            <RD.Title className="text-xl font-semibold">Username history</RD.Title>
+            <RD.Description>
+              Previous username changes for this profile.
+            </RD.Description>
+          </RD.Header>
+          <div className="space-y-3 pt-2 max-h-[60vh] overflow-y-auto">
+            {usernameChanges.map((entry) => {
+              const oldUsername = typeof entry.metadata.old_username === 'string'
+                ? entry.metadata.old_username
+                : null;
+              const newUsername = typeof entry.metadata.new_username === 'string'
+                ? entry.metadata.new_username
+                : null;
+
+              return (
+                <div key={entry.id} className="rounded-xl border border-border bg-card/50 p-4">
+                  <p className="text-sm font-medium">
+                    {oldUsername && newUsername
+                      ? `@${oldUsername} -> @${newUsername}`
+                      : entry.summary}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {formatChangeDate(entry.created_at)}
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </RD.Content>
       </RD.Root>

@@ -6,7 +6,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from accounts.models import WalletUser
+from accounts.models import WalletUser, ProfileChangeLog
 from .models import Post, HardClaim, Asset, Channel, ChannelMembership, AssetSubscription, ClaimMarket, ClaimStake, Position, PositionEvent
 from .serializers import PostSerializer, HardClaimInputSerializer, HardClaimSerializer, AssetSerializer, ChannelSerializer, ChannelMembershipSerializer, PositionInputSerializer, PositionSerializer
 from .claim_extraction import rule_based_claims_from_prompt
@@ -418,6 +418,18 @@ class PostListCreateView(APIView):
                 )
                 AssetSubscription.objects.create(asset=pos_asset, position=position)
 
+            ProfileChangeLog.objects.create(
+                user=user,
+                actor=user,
+                event_type=ProfileChangeLog.EventType.POST_CREATED,
+                summary="Created a post",
+                metadata={
+                    "post_id": post.id,
+                    "channel_id": post.channel_id,
+                    "content_preview": post.content[:120],
+                },
+            )
+
         return Response(PostSerializer(post).data, status=status.HTTP_201_CREATED)
 
 
@@ -721,18 +733,15 @@ class AssetChartDataView(APIView):
     permission_classes = []
 
     def get(self, request, pk):
-        try:
-            asset = Asset.objects.get(pk=pk)
-        except Asset.DoesNotExist:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-
         from datetime import datetime, timedelta, timezone
+        from django.core.cache import cache
         from .ohlc_fetcher import (
             get_ohlc_data,
             OHLCFetchError,
             Interval,
             floor_align_datetime,
             CHART_INTERVAL_CHOICES,
+            get_cache_timeout,
         )
 
         # Default window: Last 30 days
@@ -750,6 +759,19 @@ class AssetChartDataView(APIView):
                 return Response({"detail": f"Invalid interval: {requested}"}, status=status.HTTP_400_BAD_REQUEST)
             if chart_interval not in CHART_INTERVAL_CHOICES:
                 return Response({"detail": f"Interval {requested} not supported for charts."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Serve the whole chart payload from cache when warm. Checked BEFORE any
+        # DB access (keyed on pk), so a warm hit does zero DB round-trips. Stale
+        # window matches the live-candle refresh cadence.
+        response_cache_key = f"asset_chart_payload_{pk}_{chart_interval.value}"
+        cached_payload = cache.get(response_cache_key)
+        if cached_payload is not None:
+            return Response(cached_payload)
+
+        try:
+            asset = Asset.objects.get(pk=pk)
+        except Asset.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
         start_time = floor_align_datetime(
             datetime.combine(chart_start, datetime.min.time(), tzinfo=timezone.utc),
@@ -780,14 +802,16 @@ class AssetChartDataView(APIView):
         if ohlc_data:
             current_price = ohlc_data[-1]["close"]
 
-        return Response({
+        payload = {
             "asset_symbol": asset.symbol,
             "interval": chart_interval.value,
             "default_interval": default_interval.value,
             "as_of": datetime.now(timezone.utc).isoformat(),
             "ohlc": ohlc_data,
             "current_price": current_price,
-        })
+        }
+        cache.set(response_cache_key, payload, timeout=get_cache_timeout(chart_interval))
+        return Response(payload)
 
 
 class HardClaimChartDataView(APIView):
@@ -1747,7 +1771,22 @@ class PostDeleteView(APIView):
         if not is_channel_mod:
             return Response({"detail": "You do not have permission to delete this post."}, status=status.HTTP_403_FORBIDDEN)
 
-        post.delete()
+        author = post.author
+        metadata = {
+            "post_id": post.id,
+            "channel_id": post.channel_id,
+            "content_preview": post.content[:120],
+            "deleted_by": user.address,
+        }
+        with transaction.atomic():
+            post.delete()
+            ProfileChangeLog.objects.create(
+                user=author,
+                actor=user,
+                event_type=ProfileChangeLog.EventType.POST_DELETED,
+                summary="Deleted a post",
+                metadata=metadata,
+            )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
