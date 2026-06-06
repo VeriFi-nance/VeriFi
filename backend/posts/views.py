@@ -329,6 +329,17 @@ class PostDetailView(APIView):
         if isinstance(permission, Response):
             return permission
 
+        from datetime import date
+        from django.utils import timezone as django_timezone
+        from .resolution import resolve_hard_claim, ResolutionError
+
+        for claim in post.hard_claims.all():
+            if claim.status == HardClaim.Status.UNDETERMINED and claim.until < date.today():
+                try:
+                    resolve_hard_claim(claim)
+                except ResolutionError:
+                    pass
+
         return Response(PostSerializer(post).data)
 
 
@@ -546,7 +557,7 @@ class HardClaimDetailView(APIView):
 
     def get(self, request, pk):
         try:
-            hard_claim = HardClaim.objects.get(pk=pk)
+            hard_claim = HardClaim.objects.select_related("asset").get(pk=pk)
         except HardClaim.DoesNotExist:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -562,6 +573,14 @@ class HardClaimDetailView(APIView):
                     {"detail": "You must be an approved member to view this claim."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
+
+        from datetime import date
+        from .resolution import resolve_hard_claim, ResolutionError
+        if hard_claim.status == HardClaim.Status.UNDETERMINED and hard_claim.until < date.today():
+            try:
+                resolve_hard_claim(hard_claim)
+            except ResolutionError:
+                pass
 
         return Response(HardClaimSerializer(hard_claim).data)
 
@@ -637,6 +656,15 @@ class HardClaimChartDataView(APIView):
             datetime.combine(chart_end, datetime.min.time(), tzinfo=timezone.utc),
             chart_interval,
         )
+
+        from datetime import date
+        from .resolution import resolve_hard_claim, ResolutionError
+        if hard_claim.status == HardClaim.Status.UNDETERMINED and hard_claim.until < date.today():
+            try:
+                resolve_hard_claim(hard_claim)
+            except ResolutionError:
+                pass
+
         if hard_claim.status == HardClaim.Status.UNDETERMINED:
             end_time = floor_align_datetime(
                 max(end_time, datetime.now(timezone.utc)),
@@ -752,6 +780,18 @@ class PositionChartDataView(APIView):
             chart_interval,
         )
         
+        if position.status in [Position.Status.PENDING, Position.Status.ACTIVE]:
+            from django.utils import timezone as django_timezone
+            from .position_resolution import _resolve_pending, _resolve_active
+            now = django_timezone.now()
+            try:
+                if position.status == Position.Status.PENDING:
+                    _resolve_pending(position, now)
+                if position.status == Position.Status.ACTIVE:
+                    _resolve_active(position, now)
+            except Exception:
+                pass
+
         if position.status in [Position.Status.PENDING, Position.Status.ACTIVE]:
             end_time = floor_align_datetime(
                 max(end_time, datetime.now(timezone.utc)),
