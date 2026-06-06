@@ -210,7 +210,7 @@ export default function AppLayout() {
                   className="flex items-center gap-2 hover:opacity-80 transition-opacity"
                   aria-label="Your profile"
                 >
-                  <UserAvatar address={address} size="sm" ring />
+                  <UserAvatar address={address} src={auth.avatar} size="sm" ring />
                   <span className="hidden sm:inline text-sm font-mono text-muted-foreground">
                     {username ? `@${username}` : truncateAddress(address)}
                   </span>

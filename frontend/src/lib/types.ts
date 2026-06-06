@@ -65,7 +65,9 @@ export interface PostItem {
   id: number;
   author_address: string;
   author_username: string;
+  author_avatar_url?: string | null;
   content: string;
+  image_url?: string | null;
   created_at: string;
 
   hard_claims: HardClaimItem[];
@@ -84,6 +86,7 @@ export interface HardClaimItem {
   id: number;
   author_address: string | null;
   author_username: string | null;
+  author_avatar_url?: string | null;
   post_id: number | null;
   asset: number;
   direction: string;
@@ -175,6 +178,7 @@ export interface PositionChartData {
 export interface ProfileStats {
   address: string;
   username: string;
+  avatar_url?: string | null;
   followers_count: number;
   following_count: number;
   followers: string[];

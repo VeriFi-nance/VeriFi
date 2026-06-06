@@ -1,3 +1,4 @@
+import json
 import logging
 from django.conf import settings
 from django.db import transaction
@@ -24,6 +25,7 @@ from .resolution import (
 from . import rep_market
 from .signature_verification import verify_claim_signature, verify_position_signature
 from accounts.energy import grant_energy, spend, CLAIM_ENERGY_COST
+from accounts.serializers import validate_image_upload
 
 logger = logging.getLogger(__name__)
 
@@ -206,9 +208,28 @@ class PostListCreateView(APIView):
                 return Response({"detail": f"Channel {channel_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
 
         hard_claims_data = request.data.get("hard_claims", [])
+        # Under multipart/form-data (image uploads), nested arrays arrive as a
+        # JSON-encoded string rather than a parsed list. Decode it here so both
+        # JSON and multipart requests reach the same code path.
+        if isinstance(hard_claims_data, str):
+            if hard_claims_data.strip():
+                try:
+                    hard_claims_data = json.loads(hard_claims_data)
+                except json.JSONDecodeError:
+                    return Response({"detail": "hard_claims must be valid JSON."}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                hard_claims_data = []
+        if not isinstance(hard_claims_data, list):
+            return Response({"detail": "hard_claims must be a list."}, status=status.HTTP_400_BAD_REQUEST)
+
+        image_file = request.FILES.get("image")
+        if image_file is not None:
+            img_error = validate_image_upload(image_file)
+            if img_error:
+                return Response({"detail": img_error}, status=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
-            post = Post.objects.create(author=user, content=content, channel=channel_obj)
+            post = Post.objects.create(author=user, content=content, channel=channel_obj, image=image_file)
             
             for hc_data in hard_claims_data:
                 hc_serializer = HardClaimInputSerializer(data=hc_data)

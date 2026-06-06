@@ -115,7 +115,7 @@ export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
           to={`/u/${claim.author_username || claim.author_address}`}
           className="flex items-center gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted/50"
         >
-          <UserAvatar address={claim.author_address} size="md" />
+          <UserAvatar address={claim.author_address ?? ''} src={claim.author_avatar_url} size="md" />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium">Posted by</p>
             <p className="text-sm font-mono truncate">{claim.author_username ? `@${claim.author_username}` : truncateAddress(claim.author_address)}</p>
