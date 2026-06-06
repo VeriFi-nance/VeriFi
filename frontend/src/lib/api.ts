@@ -1,5 +1,5 @@
 import { getToken } from './auth';
-import type { PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, PositionChartData, ChartCandleInterval, ProfileStats, ChannelItem, ChannelMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType, ProofBundle, OGMetadata } from './types';
+import type { PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, PositionChartData, AssetChartData, ChartCandleInterval, ProfileStats, ChannelItem, ChannelMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType, ProofBundle, OGMetadata } from './types';
 
 /**
  * Ordered list of backend base URLs to try, sourced from build-time env vars:
@@ -304,6 +304,14 @@ export async function updateHardClaimStatus(
 
 export async function getAssets(): Promise<AssetItem[]> {
   return request('/api/posts/assets/');
+}
+
+export async function getAssetChartData(
+  assetId: number,
+  interval?: ChartCandleInterval,
+): Promise<AssetChartData> {
+  const qs = interval ? `?interval=${encodeURIComponent(interval)}` : '';
+  return request(`/api/posts/assets/${assetId}/chart-data/${qs}`);
 }
 
 export async function getClaimChartData(

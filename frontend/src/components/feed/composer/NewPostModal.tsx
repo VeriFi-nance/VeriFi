@@ -12,6 +12,7 @@ import type { AssetItem, ReviewClaim } from '@/lib/types';
 import { getClaimType } from '@/lib/claims';
 import { PostComposer, MAX_CHARS } from './PostComposer';
 import { ClaimForm } from './ClaimForm';
+import { ClaimWizard } from './ClaimWizard';
 import { ClaimRow } from './ClaimRow';
 import {
   emptyDraft,
@@ -65,6 +66,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId, channelC
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [draft, setDraft] = useState<ClaimDraft>(emptyDraft());
   const [showDraft, setShowDraft] = useState(false);
+  const [wizardMode, setWizardMode] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   // Position draft state
@@ -106,8 +108,9 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId, channelC
     setDraft((d) => ({ ...d, ...patch }));
   }
 
-  function addDraft() {
-    const result = validateDraft(draft, assets);
+  function addDraft(customDraft?: ClaimDraft) {
+    const d = customDraft || draft;
+    const result = validateDraft(d, assets);
     if (!result.ok) {
       setError(result.error);
       return;
@@ -116,13 +119,13 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId, channelC
     setAttached((prev) => [
       ...prev,
       {
-        asset_id: draft.asset_id,
-        assetSymbol: draft.assetSymbol,
+        asset_id: d.asset_id,
+        assetSymbol: d.assetSymbol,
         claim_type: result.value.claim_type,
         direction: result.value.direction,
-        percentage: draft.percentage,
-        until: draft.until,
-        stakeRep: draft.stakeRep,
+        percentage: d.percentage,
+        until: d.until,
+        stakeRep: d.stakeRep,
       },
     ]);
     setDraft(emptyDraft());
@@ -147,6 +150,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId, channelC
     });
     setAttached((prev) => prev.filter((_, i) => i !== idx));
     setShowDraft(true);
+    setWizardMode(true);
     setError('');
   }
 
@@ -167,6 +171,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId, channelC
       stakeRep: '10',
     });
     setShowDraft(true);
+    setWizardMode(true);
   }
 
   async function submit() {
@@ -461,17 +466,31 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId, channelC
           )}
 
           {showDraft ? (
-            <ClaimForm
-              value={draft}
-              assets={assets}
-              onChange={patchDraft}
-              onSubmit={addDraft}
-              onCancel={() => {
-                setShowDraft(false);
-                setDraft(emptyDraft());
-                setError('');
-              }}
-            />
+            wizardMode ? (
+              <ClaimWizard
+                assets={assets}
+                initialDraft={draft}
+                onComplete={(d) => addDraft(d)}
+                onCancel={() => {
+                  setShowDraft(false);
+                  setDraft(emptyDraft());
+                  setError('');
+                }}
+                onFillManually={() => setWizardMode(false)}
+              />
+            ) : (
+              <ClaimForm
+                value={draft}
+                assets={assets}
+                onChange={patchDraft}
+                onSubmit={() => addDraft()}
+                onCancel={() => {
+                  setShowDraft(false);
+                  setDraft(emptyDraft());
+                  setError('');
+                }}
+              />
+            )
           ) : (
             <Button
               variant="outline"
@@ -479,6 +498,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId, channelC
               className="w-full gap-2 border-dashed text-muted-foreground hover:text-foreground"
               onClick={() => {
                 setShowDraft(true);
+                setWizardMode(true);
                 setError('');
               }}
             >
