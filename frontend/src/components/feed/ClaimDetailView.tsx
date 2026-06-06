@@ -8,7 +8,7 @@ import type { HardClaimItem, AssetItem } from '@/lib/types';
 import { truncateAddress } from '@/lib/wallet';
 import { getClaimProof } from '@/lib/api';
 import { useClaimChartData } from '@/hooks/useClaimChartData';
-import { isClaimPastDue, formatClaimUntil, getHardClaimDisplay, getHardClaimType, getHardClaimParity } from '@/lib/claims';
+import { isClaimPastDue, formatClaimUntil, getHardClaimDisplay, getHardClaimType } from '@/lib/claims';
 import { MarketPanel } from '../MarketPanel';
 
         // Lazy so the lightweight-charts bundle is fetched only when a claim
@@ -85,7 +85,7 @@ export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
       percentage: claim.percentage,
       until: claim.until,
       claim_type: getHardClaimType(claim),
-      parity: getHardClaimParity(claim),
+      asset_obj: claim.asset_obj,
     },
     assetSymbol,
   );

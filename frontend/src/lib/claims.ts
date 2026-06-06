@@ -44,8 +44,7 @@ export interface HardClaimDisplayInput {
   until?: string;
   claim_type?: ClaimType;
   value_type?: ClaimType;
-  parity?: string;
-  payda?: string;
+  asset_obj?: import('./types').AssetItem;
 }
 
 export interface HardClaimDisplay {
@@ -64,15 +63,14 @@ export function getHardClaimDisplay(
   const claimType = claim.claim_type ?? claim.value_type ?? 'PERCENTAGE_UP';
   const isPrice = claimType === 'PRICE';
   const isBullish = claim.direction.toLowerCase() === 'bullish';
-  const parity = (claim.parity ?? claim.payda)?.trim();
-  const pair = parity ? `${assetSymbol}/${parity}` : assetSymbol;
+  const pair = claim.asset_obj ? claim.asset_obj.symbol : assetSymbol;
+  const currency = claim.asset_obj ? claim.asset_obj.quote_currency : 'USD';
   const untilLabel = claim.until ? formatClaimUntil(claim.until) : '';
 
   if (isPrice) {
     const priceStr = claim.percentage.toLocaleString(undefined, {
       maximumFractionDigits: 2,
     });
-    const currency = parity || 'USD';
     const verb = isBullish ? 'rise to' : 'fall to';
     const targetLabel = `${isBullish ? '▲' : '▼'} ${currency} ${priceStr}`;
     return {

@@ -140,16 +140,14 @@ class FinancialClaim:
             value_str = str(self.value)
 
         pay_str = self.pay if self.pay else "Unknown Asset"
+        asset_str = f"{self.pay}/{self.payda}" if self.payda else pay_str
 
-        parts = [pay_str, "→", value_str]
-        if self.payda:
-            parts.append(self.payda)
+        parts = [asset_str, "→", value_str]
         if self.deadline:
             parts += ["by", self.deadline]
 
         return {
-            "pay": self.pay,
-            "payda": self.payda,
+            "asset": asset_str,
             "value": self.value,
             "value_type": self.value_type,
             "deadline": self.deadline,
