@@ -231,6 +231,7 @@ class PositionInputSerializer(serializers.Serializer):
 class PostCommentSerializer(serializers.ModelSerializer):
     author_address = serializers.CharField(source="author.address", read_only=True)
     author_username = serializers.CharField(source="author.username", read_only=True)
+    image_url = serializers.SerializerMethodField()
     like_count = serializers.SerializerMethodField()
     liked_by_me = serializers.SerializerMethodField()
     replies = serializers.SerializerMethodField()
@@ -239,9 +240,12 @@ class PostCommentSerializer(serializers.ModelSerializer):
         model = PostComment
         fields = [
             "id", "post", "parent", "author_address", "author_username",
-            "content", "created_at", "like_count", "liked_by_me", "replies"
+            "content", "image_url", "created_at", "like_count", "liked_by_me", "replies"
         ]
         read_only_fields = ["id", "post", "author_address", "author_username", "created_at"]
+
+    def get_image_url(self, obj):
+        return post_image_delivery_url(obj.image)
 
     def get_like_count(self, obj):
         return getattr(obj, "like_count", obj.likes.count())

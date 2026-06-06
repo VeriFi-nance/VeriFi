@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ChevronLeft, Heart, MessageCircle } from 'lucide-react';
+import { ChevronLeft, Heart, MessageCircle, ImagePlus, X } from 'lucide-react';
 import { UserAvatar } from '@/components/UserAvatar';
 import { ClaimDetailView } from '@/components/feed/ClaimDetailView';
 import { PostActions } from '@/components/feed/PostActions';
@@ -53,9 +53,27 @@ function CommentThreadItem({
 }) {
   const [replyOpen, setReplyOpen] = useState(false);
   const [replyContent, setReplyContent] = useState('');
+  const [replyImage, setReplyImage] = useState<File | null>(null);
+  const [replyImagePreview, setReplyImagePreview] = useState<string | null>(null);
+  const replyFileRef = useRef<HTMLInputElement>(null);
   const [pendingLike, setPendingLike] = useState(false);
   const [submittingReply, setSubmittingReply] = useState(false);
   const [error, setError] = useState('');
+
+  const pickReplyImage = (file: File | null) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { setError('Please choose an image file.'); return; }
+    if (file.size > 10 * 1024 * 1024) { setError('Image must be 10 MB or smaller.'); return; }
+    setError('');
+    setReplyImage(file);
+    setReplyImagePreview((prev) => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(file); });
+  };
+
+  const clearReplyImage = () => {
+    setReplyImage(null);
+    setReplyImagePreview((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+    if (replyFileRef.current) replyFileRef.current.value = '';
+  };
 
   const toggleLike = async () => {
     if (!authenticated) {
@@ -89,7 +107,7 @@ function CommentThreadItem({
       return;
     }
     const content = replyContent.trim();
-    if (!content) {
+    if (!content && !replyImage) {
       setError('Reply cannot be empty.');
       return;
     }
@@ -97,9 +115,10 @@ function CommentThreadItem({
     setSubmittingReply(true);
     setError('');
     try {
-      const reply = await createPostComment(postId, content, comment.id);
+      const reply = await createPostComment(postId, content, comment.id, replyImage);
       onReplyCreated(comment.id, reply);
       setReplyContent('');
+      clearReplyImage();
       setReplyOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to post reply.');
@@ -124,7 +143,17 @@ function CommentThreadItem({
               {new Date(comment.created_at).toLocaleString()}
             </time>
           </div>
-          <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">{comment.content}</p>
+          {comment.content && (
+            <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">{comment.content}</p>
+          )}
+          {comment.image_url && (
+            <img
+              src={safeImageSrc(comment.image_url)}
+              alt=""
+              loading="lazy"
+              className="mt-2 max-h-80 rounded-lg border border-border object-cover"
+            />
+          )}
           <div className="mt-1 flex items-center gap-1 text-muted-foreground">
             <Button
               type="button"
@@ -158,13 +187,43 @@ function CommentThreadItem({
                 placeholder="Write a reply"
                 className="min-h-16 resize-none text-sm"
               />
+              <input
+                ref={replyFileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => pickReplyImage(e.target.files?.[0] ?? null)}
+              />
+              {replyImagePreview && (
+                <div className="relative w-fit">
+                  <img src={replyImagePreview} alt="" className="max-h-40 rounded-lg border border-border object-cover" />
+                  <button
+                    type="button"
+                    onClick={clearReplyImage}
+                    aria-label="Remove image"
+                    className="absolute top-1 right-1 size-6 flex items-center justify-center rounded-full bg-background/80 hover:bg-background"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              )}
               <div className="flex items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="mr-auto text-primary hover:bg-primary/10 hover:text-primary"
+                  aria-label="Add image"
+                  onClick={() => replyFileRef.current?.click()}
+                >
+                  <ImagePlus className="size-4" />
+                </Button>
                 <Button variant="ghost" size="sm" onClick={() => setReplyOpen(false)}>
                   Cancel
                 </Button>
                 <Button
                   size="sm"
-                  disabled={submittingReply || replyContent.trim().length === 0}
+                  disabled={submittingReply || (replyContent.trim().length === 0 && !replyImage)}
                   onClick={() => void submitReply()}
                 >
                   {submittingReply ? 'Posting...' : 'Reply'}
@@ -208,9 +267,27 @@ export default function PostDetailPage() {
   const [loading, setLoading] = useState(true);
   const [commentsLoading, setCommentsLoading] = useState(true);
   const [commentContent, setCommentContent] = useState('');
+  const [commentImage, setCommentImage] = useState<File | null>(null);
+  const [commentImagePreview, setCommentImagePreview] = useState<string | null>(null);
+  const commentFileRef = useRef<HTMLInputElement>(null);
   const [submittingComment, setSubmittingComment] = useState(false);
   const [error, setError] = useState('');
   const [commentsError, setCommentsError] = useState('');
+
+  const pickCommentImage = (file: File | null) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { setCommentsError('Please choose an image file.'); return; }
+    if (file.size > 10 * 1024 * 1024) { setCommentsError('Image must be 10 MB or smaller.'); return; }
+    setCommentsError('');
+    setCommentImage(file);
+    setCommentImagePreview((prev) => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(file); });
+  };
+
+  const clearCommentImage = () => {
+    setCommentImage(null);
+    setCommentImagePreview((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+    if (commentFileRef.current) commentFileRef.current.value = '';
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -237,7 +314,7 @@ export default function PostDetailPage() {
     }
 
     const content = commentContent.trim();
-    if (!content) {
+    if (!content && !commentImage) {
       setCommentsError('Comment cannot be empty.');
       return;
     }
@@ -245,9 +322,10 @@ export default function PostDetailPage() {
     setSubmittingComment(true);
     setCommentsError('');
     try {
-      const comment = await createPostComment(post.id, content);
+      const comment = await createPostComment(post.id, content, undefined, commentImage);
       setComments((prev) => [...prev, comment]);
       setCommentContent('');
+      clearCommentImage();
       setPost((prev) => prev ? { ...prev, comment_count: prev.comment_count + 1 } : prev);
     } catch (e) {
       setCommentsError(e instanceof Error ? e.message : 'Failed to post comment.');
@@ -341,11 +419,43 @@ export default function PostDetailPage() {
                 placeholder="Add a comment"
                 className="min-h-20 resize-none"
               />
+              <input
+                ref={commentFileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => pickCommentImage(e.target.files?.[0] ?? null)}
+              />
+              {commentImagePreview && (
+                <div className="relative w-fit">
+                  <img src={commentImagePreview} alt="" className="max-h-48 rounded-lg border border-border object-cover" />
+                  <button
+                    type="button"
+                    onClick={clearCommentImage}
+                    aria-label="Remove image"
+                    className="absolute top-1 right-1 size-6 flex items-center justify-center rounded-full bg-background/80 hover:bg-background"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              )}
               <div className="flex items-center justify-between gap-3">
-                <span className="text-xs text-muted-foreground num">{commentContent.length}/500</span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="text-primary hover:bg-primary/10 hover:text-primary"
+                    aria-label="Add image"
+                    onClick={() => commentFileRef.current?.click()}
+                  >
+                    <ImagePlus className="size-4" />
+                  </Button>
+                  <span className="text-xs text-muted-foreground num">{commentContent.length}/500</span>
+                </div>
                 <Button
                   size="sm"
-                  disabled={submittingComment || commentContent.trim().length === 0}
+                  disabled={submittingComment || (commentContent.trim().length === 0 && !commentImage)}
                   onClick={() => void handleSubmitComment()}
                 >
                   {submittingComment ? 'Posting…' : 'Comment'}

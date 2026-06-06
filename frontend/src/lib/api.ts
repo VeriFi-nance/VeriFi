@@ -252,7 +252,18 @@ export async function getPostComments(postId: number): Promise<PostCommentItem[]
   return request(`/api/posts/${postId}/comments/`, { headers: authHeaders() });
 }
 
-export async function createPostComment(postId: number, content: string, parentId?: number): Promise<PostCommentItem> {
+export async function createPostComment(postId: number, content: string, parentId?: number, image?: File | null): Promise<PostCommentItem> {
+  if (image) {
+    const form = new FormData();
+    form.append('content', content);
+    if (parentId) form.append('parent_id', String(parentId));
+    form.append('image', image);
+    return request(`/api/posts/${postId}/comments/`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: form,
+    });
+  }
   return request(`/api/posts/${postId}/comments/`, {
     method: 'POST',
     headers: authHeaders(),

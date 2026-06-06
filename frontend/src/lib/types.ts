@@ -88,6 +88,7 @@ export interface PostCommentItem {
   author_address: string;
   author_username: string;
   content: string;
+  image_url?: string | null;
   created_at: string;
   like_count: number;
   liked_by_me: boolean;

@@ -609,10 +609,17 @@ class PostCommentListCreateView(APIView):
             return error_response
 
         content = request.data.get("content", "").strip()
-        if not content:
-            return Response({"detail": "content is required."}, status=status.HTTP_400_BAD_REQUEST)
         if len(content) > 500:
             return Response({"detail": "content exceeds 500 characters."}, status=status.HTTP_400_BAD_REQUEST)
+
+        image_file = request.FILES.get("image")
+        if image_file is not None:
+            img_error = validate_image_upload(image_file)
+            if img_error:
+                return Response({"detail": img_error}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not content and image_file is None:
+            return Response({"detail": "content or image is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         parent_id = request.data.get("parent_id")
         parent = None
@@ -622,7 +629,7 @@ class PostCommentListCreateView(APIView):
             except PostComment.DoesNotExist:
                 return Response({"detail": "Invalid parent comment."}, status=status.HTTP_400_BAD_REQUEST)
 
-        comment = PostComment.objects.create(post=post, parent=parent, author=user, content=content)
+        comment = PostComment.objects.create(post=post, parent=parent, author=user, content=content, image=image_file)
         comment = _comments_with_social_annotations(PostComment.objects.filter(pk=comment.pk), user).get()
         return Response(PostCommentSerializer(comment).data, status=status.HTTP_201_CREATED)
 
