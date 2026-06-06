@@ -20,6 +20,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from django.conf import settings
+from django.core.cache import cache
 
 from .models import Asset, OHLCData
 
@@ -101,6 +102,14 @@ def chart_interval_for_claim(hard_claim) -> Interval:
 CHART_INTERVAL_CHOICES = frozenset(
     {Interval.FIFTEEN_MIN, Interval.FOUR_HOUR, Interval.ONE_DAY}
 )
+
+def get_cache_timeout(interval: Interval) -> int:
+    """Returns the cache timeout in seconds for a given interval."""
+    if interval in (Interval.ONE_DAY, Interval.FOUR_HOUR):
+        return 15 * 60  # 15 minutes
+    if interval in (Interval.ONE_HOUR, Interval.FIFTEEN_MIN):
+        return 5 * 60   # 5 minutes
+    return 60           # 1 minute
 
 
 def resolve_chart_interval(hard_claim, requested: str | None) -> tuple[Interval, Interval]:
@@ -637,8 +646,15 @@ def _ensure_daily_cached(asset: Asset, start_time: datetime, end_time: datetime)
         
     today_dt = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     missing_dts = set()
+    
+    cache_key = f"ohlc_live_fetch_{asset.id}_{Interval.ONE_DAY.value}"
+    recently_fetched = cache.get(cache_key)
+
     for dt in all_dts:
-        if dt == today_dt or date_counts[dt] == 0:
+        if dt == today_dt:
+            if not recently_fetched:
+                missing_dts.add(dt)
+        elif date_counts[dt] == 0:
             missing_dts.add(dt)
             
     if missing_dts:
@@ -659,8 +675,21 @@ def _ensure_daily_cached(asset: Asset, start_time: datetime, end_time: datetime)
                 for row in fetched
                 if row["timestamp"] in missing_dts
             ]
+            # Collapse duplicate (asset, timestamp, interval) rows — some
+            # providers return a repeated candle. Postgres ON CONFLICT DO UPDATE
+            # cannot affect the same row twice in one statement, so dedupe first.
+            new_rows = list(
+                {(r.asset_id, r.timestamp, r.interval): r for r in new_rows}.values()
+            )
             if new_rows:
-                OHLCData.objects.bulk_create(new_rows, ignore_conflicts=True)
+                OHLCData.objects.bulk_create(
+                    new_rows,
+                    update_conflicts=True,
+                    unique_fields=["asset", "timestamp", "interval"],
+                    update_fields=["open", "high", "low", "close"]
+                )
+            if today_dt in missing_dts:
+                cache.set(cache_key, True, timeout=get_cache_timeout(Interval.ONE_DAY))
         except OHLCFetchError:
             logger.warning("Could not fetch missing daily OHLC data for %s (%s -> %s)", asset.symbol, min_dt, max_dt)
             raise
@@ -700,9 +729,13 @@ def _ensure_interval_cached(asset: Asset, start_time: datetime, end_time: dateti
         Interval.ONE_MIN.value: 1440
     }
     
+    cache_key = f"ohlc_live_fetch_{asset.id}_{interval.value}"
+    recently_fetched = cache.get(cache_key)
+
     for dt in all_dts:
         if dt == today_dt:
-            missing_dts.add(dt)
+            if not recently_fetched:
+                missing_dts.add(dt)
         elif asset.market_type == Asset.MarketType.CRYPTO and interval.value != Interval.ONE_DAY.value:
             if date_counts[dt] < expected_crypto_counts.get(interval.value, 1):
                 missing_dts.add(dt)
@@ -727,8 +760,21 @@ def _ensure_interval_cached(asset: Asset, start_time: datetime, end_time: dateti
                 for row in fetched
                 if row["timestamp"].replace(hour=0, minute=0, second=0, microsecond=0) in missing_dts
             ]
+            # Collapse duplicate (asset, timestamp, interval) rows — some
+            # providers return a repeated candle. Postgres ON CONFLICT DO UPDATE
+            # cannot affect the same row twice in one statement, so dedupe first.
+            new_rows = list(
+                {(r.asset_id, r.timestamp, r.interval): r for r in new_rows}.values()
+            )
             if new_rows:
-                OHLCData.objects.bulk_create(new_rows, ignore_conflicts=True)
+                OHLCData.objects.bulk_create(
+                    new_rows,
+                    update_conflicts=True,
+                    unique_fields=["asset", "timestamp", "interval"],
+                    update_fields=["open", "high", "low", "close"]
+                )
+            if today_dt in missing_dts:
+                cache.set(cache_key, True, timeout=get_cache_timeout(interval))
         except OHLCFetchError:
             logger.warning("Could not fetch missing OHLC data for %s (%s -> %s) at interval %s", asset.symbol, min_dt, max_dt, interval.name)
             raise
@@ -764,7 +810,16 @@ def _ensure_sub_day_cached(asset: Asset, sub_start: R1mDateTime, sub_end: R1mDat
         interval=interval.value
     ).values_list('timestamp', flat=True))
     
-    missing_timestamps = [ts for ts in expected_timestamps if ts not in existing_timestamps]
+    current_live_candle = floor_align_datetime(datetime.now(timezone.utc), interval)
+    cache_key = f"ohlc_live_fetch_{asset.id}_{interval.value}"
+    recently_fetched = cache.get(cache_key)
+
+    missing_timestamps = []
+    for ts in expected_timestamps:
+        if ts not in existing_timestamps:
+            missing_timestamps.append(ts)
+        elif ts == current_live_candle and not recently_fetched:
+            missing_timestamps.append(ts)
     
     if missing_timestamps:
         min_missing = min(missing_timestamps)
@@ -784,8 +839,21 @@ def _ensure_sub_day_cached(asset: Asset, sub_start: R1mDateTime, sub_end: R1mDat
                 for row in fetched
                 if row["timestamp"] in missing_timestamps
             ]
+            # Collapse duplicate (asset, timestamp, interval) rows — some
+            # providers return a repeated candle. Postgres ON CONFLICT DO UPDATE
+            # cannot affect the same row twice in one statement, so dedupe first.
+            new_rows = list(
+                {(r.asset_id, r.timestamp, r.interval): r for r in new_rows}.values()
+            )
             if new_rows:
-                OHLCData.objects.bulk_create(new_rows, ignore_conflicts=True)
+                OHLCData.objects.bulk_create(
+                    new_rows,
+                    update_conflicts=True,
+                    unique_fields=["asset", "timestamp", "interval"],
+                    update_fields=["open", "high", "low", "close"]
+                )
+            if current_live_candle in missing_timestamps:
+                cache.set(cache_key, True, timeout=get_cache_timeout(interval))
         except OHLCFetchError:
             logger.warning("Could not fetch missing sub-day OHLC data for %s (%s -> %s) at interval %s", asset.symbol, min_missing, max_missing, interval.name)
             raise
