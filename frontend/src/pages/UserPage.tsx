@@ -10,10 +10,16 @@ import { EmptyState } from '@/components/EmptyState';
 import { PageContent } from '@/components/PageContent';
 import { SkeletonRow } from '@/components/Skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getHardClaimsByAddress, getAssets, getProfileStats, toggleFollow } from '@/lib/api';
+import { getHardClaimsByAddress, getAssets, getProfileStats, toggleFollow, createChannel } from '@/lib/api';
 import type { HardClaimItem, AssetItem, ProfileStats } from '@/lib/types';
 import { loadAddress } from '@/lib/auth';
 import { truncateAddress } from '@/lib/wallet';
+import { Sparkles, Plus } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
+import { PremiumChannelView } from '@/components/PremiumChannelView';
 
 function CopyAddressButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -50,6 +56,26 @@ export default function UserPage() {
   const [error, setError] = useState('');
 
   const isSelf = !!(myAddress && stats?.address && myAddress.toLowerCase() === stats.address.toLowerCase());
+
+  // Channel Creation State
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [privacy, setPrivacy] = useState<'public' | 'private'>('public');
+  const [postPermission, setPostPermission] = useState<'all' | 'creator_only'>('all');
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createError, setCreateError] = useState('');
+
+  async function handleCreateChannel() {
+    try {
+      const chan = await createChannel(name, description, privacy, postPermission);
+      setCreateOpen(false);
+      setName('');
+      setDescription('');
+      setStats(prev => prev ? { ...prev, channel_owned: chan } : prev);
+    } catch (e: unknown) {
+      setCreateError(e instanceof Error ? e.message : 'Failed to create channel');
+    }
+  }
 
   useEffect(() => {
     if (!address) return;
@@ -197,9 +223,122 @@ export default function UserPage() {
         </TabsContent>
 
         <TabsContent value="premium" className="space-y-6 mt-4 animate-in fade-in-50 duration-200">
-          <div className="text-center text-muted-foreground py-10">Premium content loading...</div>
+          {stats?.channel_owned ? (
+            <PremiumChannelView 
+              channelId={stats.channel_owned.id} 
+              onSubscribed={() => {
+                 setStats(prev => prev && prev.channel_owned ? {
+                   ...prev,
+                   channel_owned: { 
+                     ...prev.channel_owned, 
+                     member_count: prev.channel_owned.member_count + 1, 
+                     my_membership_status: prev.channel_owned.privacy_type === 'public' ? 'approved' : 'pending' 
+                   }
+                 } : prev);
+              }} 
+            />
+          ) : isSelf ? (
+            <div className="py-8">
+              <button
+                type="button"
+                onClick={() => setCreateOpen(true)}
+                className="group flex w-full min-h-32 flex-col items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed border-border/80 bg-card/35 p-6 text-muted-foreground transition-all duration-300 hover:border-primary/50 hover:bg-primary/5 hover:text-foreground hover:shadow-[0_0_20px_rgba(59,130,246,0.06)]"
+              >
+                <div className="p-3 rounded-full bg-muted/65 group-hover:bg-primary/10 group-hover:text-primary transition-colors duration-300">
+                  <Plus className="size-5" />
+                </div>
+                <div className="text-center space-y-1">
+                  <span className="text-sm font-semibold tracking-wide block">Create Premium Channel</span>
+                  <span className="text-xs text-muted-foreground max-w-sm block">
+                    Start sharing exclusive content, positions, and predictions with your subscribers.
+                  </span>
+                </div>
+              </button>
+            </div>
+          ) : (
+            <EmptyState
+              title="No Premium Content"
+              description="This user hasn't created a premium channel yet."
+            />
+          )}
         </TabsContent>
       </Tabs>
+
+      <RD.Root open={createOpen} onOpenChange={setCreateOpen}>
+        <RD.Content>
+          <RD.Header>
+            <RD.Title className="text-xl font-semibold flex items-center gap-2">
+              <Sparkles className="size-5 text-primary animate-pulse" />
+              Create Premium Channel
+            </RD.Title>
+            <RD.Description>
+              Set up your exclusive reputation channel. You can adjust settings later.
+            </RD.Description>
+          </RD.Header>
+          <div className="space-y-4 pt-3">
+            {createError && (
+              <Alert variant="destructive">
+                <AlertDescription>{createError}</AlertDescription>
+              </Alert>
+            )}
+            <div className="space-y-1.5">
+              <Label htmlFor="channel-name" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Name</Label>
+              <Input
+                id="channel-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Alpha Trades Only"
+                className="bg-muted/30 focus-visible:ring-primary"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="channel-desc" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Description</Label>
+              <Input
+                id="channel-desc"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="What predictions and positions will you share?"
+                className="bg-muted/30 focus-visible:ring-primary"
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="channel-privacy" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Privacy</Label>
+                <Select
+                  value={privacy}
+                  onValueChange={(v: 'public' | 'private') => setPrivacy(v)}
+                >
+                  <SelectTrigger id="channel-privacy" className="bg-muted/30">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="public">Public (Anyone can view)</SelectItem>
+                    <SelectItem value="private">Private (Requires approval)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="channel-post" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Post Permission</Label>
+                <Select
+                  value={postPermission}
+                  onValueChange={(v: 'all' | 'creator_only') => setPostPermission(v)}
+                >
+                  <SelectTrigger id="channel-post" className="bg-muted/30">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Members can post</SelectItem>
+                    <SelectItem value="creator_only">Only me (Creator only)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Button className="w-full mt-2 font-medium tracking-wide shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all duration-300" onClick={handleCreateChannel} disabled={!name.trim()}>
+              Launch Channel
+            </Button>
+          </div>
+        </RD.Content>
+      </RD.Root>
     </PageContent>
   );
 }
