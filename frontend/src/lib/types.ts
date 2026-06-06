@@ -81,10 +81,8 @@ export interface HardClaimItem {
   claim_type?: ClaimType;
   /** API field — mapped to `claim_type` in UI helpers. */
   value_type?: ClaimType;
-  /** Frontend name; API may send `payda` instead. */
-  parity?: string;
-  /** API field — mapped to `parity` in UI helpers. */
-  payda?: string;
+  /** Full asset object from API for rendering */
+  asset_obj?: AssetItem;
   percentage: number;
   /** Compact UI magnitude (%); absolute PRICE targets converted server-side. */
   display_percentage?: number;
@@ -105,6 +103,7 @@ export interface AssetItem {
   name: string;
   symbol: string;
   description: string;
+  quote_currency?: string;
 }
 
 // OHLC chart data types

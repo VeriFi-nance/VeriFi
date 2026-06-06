@@ -138,7 +138,6 @@ class HardClaim(models.Model):
     # value_type distinguishes an absolute price target from a percentage move;
     # `percentage` stores the magnitude (a price when value_type == "PRICE").
     value_type = models.CharField(max_length=20, default="PERCENTAGE_UP")
-    payda = models.CharField(max_length=10, blank=True, default="")  # denominator ticker
     percentage = models.FloatField(blank=False, null=False) # magnitude: percentage move, or absolute price when value_type == PRICE
     until = models.DateField(blank=False, null=False)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -3,12 +3,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { ArrowLeftRight, DollarSign, TrendingDown, TrendingUp } from 'lucide-react';
+import { DollarSign, TrendingDown, TrendingUp } from 'lucide-react';
 import { MarketConfig } from './MarketConfig';
 import { cn } from '@/lib/utils';
 import type { AssetItem } from '@/lib/types';
 import { CLAIM_TYPE_OPTIONS } from '@/lib/claims';
-import { NO_PARITY, type ClaimDraft } from './types';
+import { type ClaimDraft } from './types';
 
 interface ClaimFormProps {
   value: ClaimDraft;
@@ -34,16 +34,7 @@ export function ClaimForm({
     setMinDate(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
   }, []);
 
-  function swapAssets() {
-    const newSymbol = value.parity || '';
-    const newParity = value.assetSymbol || '';
-    const newAsset = assets.find((a) => a.symbol === newSymbol);
-    onChange({
-      asset_id: newAsset ? newAsset.id.toString() : '',
-      assetSymbol: newSymbol,
-      parity: newParity,
-    });
-  }
+
 
   function setClaimType(next: ClaimDraft['claim_type']) {
     onChange({
@@ -65,9 +56,8 @@ export function ClaimForm({
         Claim
       </p>
 
-      <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-end">
-        <div className="space-y-1">
-          <Label className="text-xs">Asset (numerator)</Label>
+      <div className="space-y-1">
+        <Label className="text-xs">Asset</Label>
           <Select
             value={value.asset_id}
             onValueChange={(v) => {
@@ -81,43 +71,12 @@ export function ClaimForm({
             <SelectContent>
               {assets.map((a) => (
                 <SelectItem key={a.id} value={a.id.toString()}>
-                  {a.symbol} — {a.name}
+                  {a.symbol.includes('/') ? a.symbol : `${a.symbol}/${a.quote_currency}`} — {a.name}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="h-8 w-8 shrink-0"
-          title="Swap asset and parity"
-          disabled={!value.assetSymbol && !value.parity}
-          onClick={swapAssets}
-        >
-          <ArrowLeftRight className="size-3.5" />
-        </Button>
-        <div className="space-y-1">
-          <Label className="text-xs">Parity (denominator)</Label>
-          <Select
-            value={value.parity || NO_PARITY}
-            onValueChange={(v) => onChange({ parity: v === NO_PARITY ? '' : v })}
-          >
-            <SelectTrigger className="h-8 text-sm">
-              <SelectValue placeholder="Select parity" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NO_PARITY}>— None —</SelectItem>
-              {assets.map((a) => (
-                <SelectItem key={a.id} value={a.symbol}>
-                  {a.symbol} — {a.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
 
       <div className="space-y-1">
         <Label className="text-xs">Claim type</Label>

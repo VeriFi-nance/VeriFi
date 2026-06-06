@@ -33,40 +33,20 @@ _CONFIG_FILENAME = "whitelist_config.json"
 _CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), _CONFIG_FILENAME)
 
 # --- Embedded fallback (used ONLY when whitelist_config.json cannot be read) -
-_FALLBACK_CURRENCIES = ["USD", "EUR", "GBP", "JPY", "CHF", "TRY", "AUD", "CAD", "NZD", "CNY"]
-_FALLBACK_CRYPTO = ["BTC", "ETH", "SOL", "BNB", "XRP", "ADA", "AVAX", "DOGE", "DOT", "LINK"]
-_FALLBACK_STOCKS = [
-    "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META",
-    "NFLX", "AMD", "INTC", "COIN", "PYPL", "PLTR", "UBER", "DIS",
-]
+_FALLBACK_CURRENCIES = ["USD", "TRY"]
+_FALLBACK_CRYPTO = ["BTC", "ETH"]
+_FALLBACK_STOCKS = []
 _FALLBACK_ALIASES = {
     # Fiat currencies
     "dolar": "USD", "doları": "USD", "dolari": "USD", "amerikan doları": "USD",
     "abd doları": "USD", "us dollar": "USD", "u.s. dollar": "USD", "dollar": "USD",
     "dolr": "USD", "doller": "USD", "dolarrr": "USD",
-    "avro": "EUR", "euro": "EUR", "euor": "EUR",
-    "sterlin": "GBP", "ingiliz sterlini": "GBP", "pound": "GBP", "british pound": "GBP",
-    "yen": "JPY", "japon yeni": "JPY",
-    "frank": "CHF", "swiss franc": "CHF", "isvicre frangi": "CHF", "isviçre frangı": "CHF",
     "lira": "TRY", "turkish lira": "TRY", "turk lirasi": "TRY", "türk lirası": "TRY",
-    "kanada doları": "CAD", "avustralya doları": "AUD", "yeni zelanda doları": "NZD",
-    "çin yuanı": "CNY", "australian dollar": "AUD", "canadian dollar": "CAD",
-    "new zealand dollar": "NZD", "yuan": "CNY", "renminbi": "CNY",
+    "tl": "TRY",
     # Crypto
     "bitcoin": "BTC", "bitcoın": "BTC", "bitcon": "BTC", "btcoin": "BTC",
     "ethereum": "ETH", "ether": "ETH", "etherium": "ETH", "etheriyum": "ETH",
     "etheryum": "ETH", "ethirium": "ETH",
-    "solana": "SOL", "solona": "SOL",
-    "binance coin": "BNB", "bnb coin": "BNB",
-    "ripple": "XRP", "cardano": "ADA", "avalanche": "AVAX", "dogecoin": "DOGE",
-    "polkadot": "DOT", "chainlink": "LINK",
-    # Stocks / companies
-    "apple": "AAPL", "microsoft": "MSFT", "google": "GOOGL", "alphabet": "GOOGL",
-    "amazon": "AMZN", "nvidia": "NVDA", "tesla": "TSLA", "meta": "META",
-    "netflix": "NFLX", "amd": "AMD", "intel": "INTC", "coinbase": "COIN",
-    "paypal": "PYPL", "palantir": "PLTR", "uber": "UBER", "disney": "DIS",
-    "walt disney": "DIS", "microsof": "MSFT", "gogle": "GOOGL", "amazn": "AMZN",
-    "nvida": "NVDA", "tesl": "TSLA", "netfliix": "NFLX",
 }
 
 

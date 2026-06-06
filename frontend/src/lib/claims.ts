@@ -44,8 +44,7 @@ export interface HardClaimDisplayInput {
   until?: string;
   claim_type?: ClaimType;
   value_type?: ClaimType;
-  parity?: string;
-  payda?: string;
+  asset_obj?: import('./types').AssetItem;
 }
 
 export interface HardClaimDisplay {
@@ -64,15 +63,17 @@ export function getHardClaimDisplay(
   const claimType = claim.claim_type ?? claim.value_type ?? 'PERCENTAGE_UP';
   const isPrice = claimType === 'PRICE';
   const isBullish = claim.direction.toLowerCase() === 'bullish';
-  const parity = (claim.parity ?? claim.payda)?.trim();
-  const pair = parity ? `${assetSymbol}/${parity}` : assetSymbol;
+  
+  const baseSymbol = claim.asset_obj ? claim.asset_obj.symbol : assetSymbol;
+  const currency = claim.asset_obj ? claim.asset_obj.quote_currency : 'USD';
+  const pair = baseSymbol.includes('/') ? baseSymbol : `${baseSymbol}/${currency}`;
+  
   const untilLabel = claim.until ? formatClaimUntil(claim.until) : '';
 
   if (isPrice) {
     const priceStr = claim.percentage.toLocaleString(undefined, {
       maximumFractionDigits: 2,
     });
-    const currency = parity || 'USD';
     const verb = isBullish ? 'rise to' : 'fall to';
     const targetLabel = `${isBullish ? '▲' : '▼'} ${currency} ${priceStr}`;
     return {
@@ -93,15 +94,15 @@ export function getHardClaimDisplay(
     isPrice: false,
     isBullish,
     badgeVariant: isBullish ? 'success' : 'destructive',
-    badgeText: `${assetSymbol} ${targetLabel}`,
+    badgeText: `${pair} ${targetLabel}`,
     targetLabel,
     summary: untilLabel
       ? isBullish
-        ? `Predicts ${assetSymbol} rises ${pct}% by ${untilLabel}`
-        : `Predicts ${assetSymbol} falls ${pct}% by ${untilLabel}`
+        ? `Predicts ${pair} rises ${pct}% by ${untilLabel}`
+        : `Predicts ${pair} falls ${pct}% by ${untilLabel}`
       : isBullish
-        ? `Predicts ${assetSymbol} rises ${pct}%`
-        : `Predicts ${assetSymbol} falls ${pct}%`,
+        ? `Predicts ${pair} rises ${pct}%`
+        : `Predicts ${pair} falls ${pct}%`,
   };
 }
 
@@ -121,7 +122,7 @@ export function getFeedClaimTagLabel(claim: {
 }
 
 export function getHardClaimParity(claim: HardClaimItem): string | undefined {
-  const p = claim.parity ?? claim.payda;
+  const p = claim.asset_obj?.quote_currency;
   return p?.trim() || undefined;
 }
 

@@ -7,7 +7,6 @@ export const NO_PARITY = '__none__';
 export interface ClaimDraft {
   asset_id: string;
   assetSymbol: string;
-  parity: string;
   claim_type: ClaimType;
   direction: ClaimDirection | '';
   percentage: string;
@@ -18,7 +17,6 @@ export interface ClaimDraft {
 export interface AttachedClaim {
   asset_id: string;
   assetSymbol: string;
-  parity: string;
   claim_type: ClaimType;
   direction: ClaimDirection;
   percentage: string;
@@ -30,7 +28,6 @@ export function emptyDraft(): ClaimDraft {
   return {
     asset_id: '',
     assetSymbol: '',
-    parity: '',
     claim_type: 'PERCENTAGE_UP',
     direction: '',
     percentage: '',
@@ -42,7 +39,6 @@ export function emptyDraft(): ClaimDraft {
 export interface ValidatedDraft {
   asset: AssetItem;
   claim_type: ClaimType;
-  parity: string;
   direction: ClaimDirection;
   percentage: number;
   until: string;
@@ -60,9 +56,6 @@ export function validateDraft(
   if (!asset) return { ok: false, error: 'Pick a valid asset.' };
 
   const claimType = draft.claim_type || 'PERCENTAGE_UP';
-  if (claimType === 'PRICE' && !draft.parity?.trim()) {
-    return { ok: false, error: 'Select a parity (denominator) for price targets.' };
-  }
 
   const pct = parseFloat(draft.percentage);
   if (claimType === 'PRICE') {
@@ -101,7 +94,6 @@ export function validateDraft(
     value: {
       asset,
       claim_type: claimType,
-      parity: draft.parity?.trim() ?? '',
       direction,
       percentage: pct,
       until: draft.until,

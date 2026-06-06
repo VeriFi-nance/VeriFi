@@ -16,9 +16,8 @@ from posts.models import Asset, HardClaim, Post
 
 
 ASSETS = [
-    {"name": "Bitcoin", "symbol": "BTC", "description": "Peer-to-peer digital currency"},
-    {"name": "Ethereum", "symbol": "ETH", "description": "Smart contract platform"},
-    {"name": "Solana", "symbol": "SOL", "description": "High-throughput blockchain"},
+    {"name": "Bitcoin", "symbol": "BTC", "description": "Peer-to-peer digital currency", "provider_symbol": "bitcoin", "quote_currency": "USD", "binance_symbol": "BTCUSDT"},
+    {"name": "Ethereum", "symbol": "ETH", "description": "Smart contract platform", "provider_symbol": "ethereum", "quote_currency": "USD", "binance_symbol": "ETHUSDT"},
 ]
 
 USERS = [
@@ -155,7 +154,6 @@ class Command(BaseCommand):
                     until=hc["until"],
                     status=hc["status"],
                     value_type=hc.get("value_type", "PERCENTAGE_UP"),
-                    payda=hc.get("payda", ""),
                 )
 
         self.stdout.write(self.style.SUCCESS("Feed seeded successfully."))
