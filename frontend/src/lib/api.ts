@@ -1,5 +1,5 @@
 import { getToken } from './auth';
-import type { PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, ChartCandleInterval, ProfileStats, ChannelItem, ChannelMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType, ProofBundle, OGMetadata } from './types';
+import type { PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, PositionChartData, ChartCandleInterval, ProfileStats, ChannelItem, ChannelMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType, ProofBundle, OGMetadata } from './types';
 
 /**
  * Ordered list of backend base URLs to try, sourced from build-time env vars:
@@ -464,4 +464,12 @@ export async function getPositionProof(positionId: number): Promise<ProofBundle>
 
 export async function getPositionOG(positionId: number): Promise<OGMetadata> {
   return request(`/api/posts/positions/${positionId}/og/`);
+}
+
+export async function getPositionChartData(
+  positionId: number,
+  interval?: ChartCandleInterval,
+): Promise<PositionChartData> {
+  const qs = interval ? `?interval=${encodeURIComponent(interval)}` : '';
+  return request(`/api/posts/positions/${positionId}/chart-data/${qs}`);
 }

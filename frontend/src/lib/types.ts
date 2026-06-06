@@ -137,6 +137,22 @@ export interface ClaimChartData {
   target_reached_at: string | null;
 }
 
+export interface PositionChartData {
+  position_id: number;
+  asset_symbol: string;
+  direction: 'long' | 'short';
+  entry_price: number;
+  take_profit: number;
+  stop_loss: number;
+  created_at: string;
+  until: string;
+  interval?: ChartCandleInterval;
+  default_interval?: ChartCandleInterval;
+  as_of?: string;
+  live?: boolean;
+  ohlc: OHLCRow[];
+}
+
 export interface ProfileStats {
   address: string;
   username: string;
