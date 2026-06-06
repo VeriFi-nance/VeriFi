@@ -59,8 +59,8 @@ export function StepAsset({ value, assets, onChange, onNext }: StepAssetProps) {
             className={cn(
               'flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all',
               !isPrice
-                ? 'border-primary bg-primary/10 text-primary'
-                : 'border-border text-muted-foreground hover:border-primary/50'
+                ? 'border-foreground bg-foreground text-background'
+                : 'border-border text-muted-foreground hover:border-foreground/50'
             )}
           >
             <TrendingUp className="size-6 mb-2" />
@@ -74,8 +74,8 @@ export function StepAsset({ value, assets, onChange, onNext }: StepAssetProps) {
             className={cn(
               'flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all',
               isPrice
-                ? 'border-primary bg-primary/10 text-primary'
-                : 'border-border text-muted-foreground hover:border-primary/50'
+                ? 'border-foreground bg-foreground text-background'
+                : 'border-border text-muted-foreground hover:border-foreground/50'
             )}
           >
             <DollarSign className="size-6 mb-2" />
