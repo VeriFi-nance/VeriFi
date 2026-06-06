@@ -164,7 +164,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
         });
       }
 
-      await createPost(content.trim(), [], channelId, hardClaimsPayload);
+      await createPost(content.trim(), channelId, hardClaimsPayload);
       reset();
       onOpenChange(false);
       onPosted();

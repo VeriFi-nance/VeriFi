@@ -85,14 +85,13 @@ export interface HardClaimPayload {
 
 export async function createPost(
   content: string,
-  claims: ReviewClaim[],
   channel_id?: number,
   hard_claims?: HardClaimPayload[],
 ): Promise<PostItem> {
   return request('/api/posts/', {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ content, claims, channel_id, hard_claims }),
+    body: JSON.stringify({ content, channel_id, hard_claims }),
   });
 }
 

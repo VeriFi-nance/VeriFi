@@ -54,7 +54,7 @@ export default function PostDetailPage() {
     );
   }
 
-  const confirmedClaims = post.claims.filter((c) => c.status === 'confirmed');
+
 
   return (
     <PageContent className="space-y-4">
@@ -80,24 +80,7 @@ export default function PostDetailPage() {
 
           <p className="text-sm whitespace-pre-wrap leading-relaxed">{post.content}</p>
 
-          {confirmedClaims.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {confirmedClaims.map((c) => (
-                <div key={c.id} className="flex gap-1">
-                  {c.asset && <Badge variant="secondary">{c.asset}</Badge>}
-                  {c.direction && (
-                    <Badge
-                      variant={
-                        c.direction.toLowerCase() === 'bullish' ? 'success' : 'destructive'
-                      }
-                    >
-                      {c.direction}
-                    </Badge>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+
         </CardContent>
       </Card>
 

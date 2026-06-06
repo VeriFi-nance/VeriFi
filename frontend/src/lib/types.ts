@@ -42,13 +42,7 @@ export interface ExtractClaimsResponse {
   claims: ExtractedClaimContract[];
 }
 
-export interface ClaimItem {
-  id: number;
-  text: string;
-  asset: string;
-  direction: string;
-  status: 'confirmed' | 'rejected';
-}
+
 
 export interface ProfitabilityData {
   pnl_7d: number;
@@ -63,7 +57,7 @@ export interface PostItem {
   author_username: string;
   content: string;
   created_at: string;
-  claims: ClaimItem[];
+
   hard_claims: HardClaimItem[];
   profitability?: ProfitabilityData | null;
   channel?: number | null;

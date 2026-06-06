@@ -21,7 +21,7 @@ interface PostCardProps {
 
 export function PostCard({ post, hardClaims = [], assets = [], onDelete }: PostCardProps) {
   const [claimsOpen, setClaimsOpen] = useState(false);
-  const confirmedClaims = post.claims.filter((c) => c.status === 'confirmed');
+
   const claimHints = post.hard_claims.length > 0 ? post.hard_claims : hardClaims;
   const hasClaims = claimHints.length > 0;
 
@@ -81,36 +81,7 @@ export function PostCard({ post, hardClaims = [], assets = [], onDelete }: PostC
         <CardContent className="px-4 sm:px-5 pb-4">
           <p className="text-sm leading-relaxed whitespace-pre-wrap">{post.content}</p>
 
-          {confirmedClaims.length > 0 && (() => {
-            const seen = new Set<string>();
-            const unique = confirmedClaims.filter((c) => {
-              const key = `${c.asset}|${c.direction}`.toLowerCase();
-              if (seen.has(key)) return false;
-              seen.add(key);
-              return true;
-            });
-            return (
-              <div className="flex flex-wrap gap-1.5 mt-3">
-                {unique.map((c) => (
-                  <div key={c.id} className="flex gap-1">
-                    {c.asset && (
-                      <Badge variant="secondary" className="text-xs">
-                        {c.asset}
-                      </Badge>
-                    )}
-                    {c.direction && (
-                      <Badge
-                        variant={c.direction.toLowerCase() === 'bullish' ? 'success' : 'destructive'}
-                        className="text-xs"
-                      >
-                        {c.direction}
-                      </Badge>
-                    )}
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
+
         </CardContent>
 
         {hasClaims && (
