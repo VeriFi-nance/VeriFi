@@ -11,10 +11,10 @@ import { PageContent } from '@/components/PageContent';
 import { SkeletonRow } from '@/components/Skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getHardClaimsByAddress, getAssets, getProfileStats, toggleFollow, createChannel } from '@/lib/api';
-import type { HardClaimItem, AssetItem, ProfileStats } from '@/lib/types';
+import type { HardClaimItem, AssetItem, ProfileStats, ProfileChangeLogEntry } from '@/lib/types';
 import { loadAddress } from '@/lib/auth';
 import { truncateAddress } from '@/lib/wallet';
-import { Sparkles, Plus } from 'lucide-react';
+import { Clock, Plus, Sparkles } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -53,6 +53,42 @@ function StatBlock({ label, value, onClick }: { label: string; value: string; on
   return (
     <div className="flex flex-col">
       {content}
+    </div>
+  );
+}
+
+function formatChangeDate(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(value));
+}
+
+function ChangelogEntry({ entry }: { entry: ProfileChangeLogEntry }) {
+  const preview = typeof entry.metadata.content_preview === 'string'
+    ? entry.metadata.content_preview
+    : '';
+
+  return (
+    <div className="rounded-xl border border-border bg-card/50 p-4">
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 rounded-full bg-muted p-2 text-muted-foreground">
+          <Clock className="size-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <p className="text-sm font-medium">{entry.summary}</p>
+            <span className="text-xs text-muted-foreground">{formatChangeDate(entry.created_at)}</span>
+          </div>
+          {preview && (
+            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+              "{preview}"
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -217,6 +253,12 @@ export default function UserPage() {
           >
             Premium
           </TabsTrigger>
+          <TabsTrigger
+            value="changelog"
+            className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground data-[state=active]:bg-foreground/5 dark:data-[state=active]:bg-foreground/5 data-[state=active]:text-foreground data-[state=active]:border-transparent dark:data-[state=active]:border-transparent data-[state=active]:shadow-none cursor-pointer transition-colors border-0"
+          >
+            Changelog
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="public" className="space-y-2 mt-4 animate-in fade-in-50 duration-200">
@@ -280,6 +322,24 @@ export default function UserPage() {
             <EmptyState
               title="No Premium Content"
               description="This user hasn't created a premium channel yet."
+            />
+          )}
+        </TabsContent>
+
+        <TabsContent value="changelog" className="space-y-3 mt-4 animate-in fade-in-50 duration-200">
+          {loading ? (
+            <div className="space-y-2">
+              <SkeletonRow />
+              <SkeletonRow />
+            </div>
+          ) : stats?.changelog && stats.changelog.length > 0 ? (
+            stats.changelog.map((entry) => (
+              <ChangelogEntry key={entry.id} entry={entry} />
+            ))
+          ) : (
+            <EmptyState
+              title="No changelog yet"
+              description="Profile and post changes will show up here."
             />
           )}
         </TabsContent>
