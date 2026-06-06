@@ -1,20 +1,6 @@
 from datetime import date
 from rest_framework import serializers
-from .models import Asset, Post, Claim, HardClaim, HardClaimEvent, OHLCData, Channel, ChannelMembership
-
-
-class ClaimSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Claim
-        fields = ["id", "text", "asset", "direction", "status"]
-
-
-
-class ClaimInputSerializer(serializers.Serializer):
-    text = serializers.CharField()
-    asset = serializers.CharField(allow_blank=True, default="")
-    direction = serializers.CharField(allow_blank=True, default="")
-    status = serializers.ChoiceField(choices=["confirmed", "rejected"], default="confirmed")
+from .models import Asset, Post, HardClaim, HardClaimEvent, OHLCData, Channel, ChannelMembership
 
 class AssetSerializer(serializers.ModelSerializer):
     class Meta:
@@ -131,13 +117,12 @@ class HardClaimSerializer(serializers.ModelSerializer):
 class PostSerializer(serializers.ModelSerializer):
     author_address = serializers.CharField(source="author.address", read_only=True)
     author_username = serializers.CharField(source="author.username", read_only=True)
-    claims = ClaimSerializer(many=True, read_only=True)
     hard_claims = HardClaimSerializer(many=True, read_only=True)
     profitability = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
-        fields = ["id", "author_address", "author_username", "content", "channel", "created_at", "claims", "hard_claims", "profitability"]
+        fields = ["id", "author_address", "author_username", "content", "channel", "created_at", "hard_claims", "profitability"]
 
     def get_profitability(self, obj):
         try:
