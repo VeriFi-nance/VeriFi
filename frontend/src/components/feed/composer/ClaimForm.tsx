@@ -3,12 +3,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { ArrowLeftRight, DollarSign, TrendingDown, TrendingUp } from 'lucide-react';
+import { DollarSign, TrendingDown, TrendingUp } from 'lucide-react';
 import { MarketConfig } from './MarketConfig';
 import { cn } from '@/lib/utils';
 import type { AssetItem } from '@/lib/types';
 import { CLAIM_TYPE_OPTIONS } from '@/lib/claims';
-import { NO_PARITY, type ClaimDraft } from './types';
+import { type ClaimDraft } from './types';
 
 interface ClaimFormProps {
   value: ClaimDraft;
