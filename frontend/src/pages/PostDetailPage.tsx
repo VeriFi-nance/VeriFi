@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ChevronLeft, MessageCircle } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 import { UserAvatar } from '@/components/UserAvatar';
 import { ClaimDetailView } from '@/components/feed/ClaimDetailView';
 import { PostActions } from '@/components/feed/PostActions';
@@ -128,7 +128,6 @@ export default function PostDetailPage() {
 
       <section className="space-y-3">
         <div className="flex items-center gap-2">
-          <MessageCircle className="size-4 text-muted-foreground" />
           <h2 className="text-sm font-semibold">Comments</h2>
           <span className="text-xs text-muted-foreground num">{post.comment_count}</span>
         </div>
