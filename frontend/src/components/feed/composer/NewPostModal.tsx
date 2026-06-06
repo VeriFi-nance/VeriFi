@@ -19,6 +19,7 @@ import {
 } from './types';
 import { buildClaimPayload } from '@/lib/payloads';
 import { signPayload, resolveUsername } from '@/lib/signing';
+import { safeImageSrc } from '@/lib/utils';
 
 interface NewPostModalProps {
   open: boolean;
@@ -257,7 +258,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
           />
           {imagePreview && (
             <div className="relative w-full overflow-hidden rounded-lg border border-border">
-              <img src={imagePreview} alt="" className="w-full max-h-72 object-cover" />
+              <img src={safeImageSrc(imagePreview)} alt="" className="w-full max-h-72 object-cover" />
               <button
                 type="button"
                 onClick={clearImage}

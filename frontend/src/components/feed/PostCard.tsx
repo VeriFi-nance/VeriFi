@@ -7,7 +7,7 @@ import { ChevronDown, Star } from 'lucide-react';
 import { HardClaimCard } from '@/components/HardClaimCard';
 import { UserAvatar } from '@/components/UserAvatar';
 import { truncateAddress } from '@/lib/wallet';
-import { cn } from '@/lib/utils';
+import { cn, safeImageSrc } from '@/lib/utils';
 import type { PostItem, HardClaimItem, AssetItem } from '@/lib/types';
 import { getFeedClaimTagLabel } from '@/lib/claims';
 
@@ -87,7 +87,7 @@ export function PostCard({ post, hardClaims = [], assets = [], onDelete }: PostC
 
           {post.image_url && (
             <img
-              src={post.image_url}
+              src={safeImageSrc(post.image_url)}
               alt=""
               loading="lazy"
               className="mt-3 w-full max-h-[28rem] rounded-lg border border-border object-cover"

@@ -9,6 +9,7 @@ import { ClaimDetailView } from '@/components/feed/ClaimDetailView';
 import { SkeletonPostCard } from '@/components/Skeleton';
 import { PageContent } from '@/components/PageContent';
 import { getPost, getAssets } from '@/lib/api';
+import { safeImageSrc } from '@/lib/utils';
 import { truncateAddress } from '@/lib/wallet';
 import type { PostItem, AssetItem } from '@/lib/types';
 
@@ -81,7 +82,7 @@ export default function PostDetailPage() {
 
           {post.image_url && (
             <img
-              src={post.image_url}
+              src={safeImageSrc(post.image_url)}
               alt=""
               className="w-full max-h-[32rem] rounded-lg border border-border object-cover"
             />

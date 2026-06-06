@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils';
+import { cn, safeImageSrc } from '@/lib/utils';
 import { avatarColor, avatarLabel } from '@/lib/wallet';
 
 type Size = 'xs' | 'sm' | 'md' | 'lg';
@@ -20,11 +20,12 @@ interface UserAvatarProps {
 }
 
 export function UserAvatar({ address, src, size = 'md', ring = false, className }: UserAvatarProps) {
-  if (src) {
+  const safeSrc = safeImageSrc(src);
+  if (safeSrc) {
     return (
       <img
         aria-hidden
-        src={src}
+        src={safeSrc}
         alt=""
         className={cn(
           'rounded-full object-cover shrink-0 select-none',
