@@ -6,6 +6,7 @@ from .views import (
     ChannelMemberListView, PositionListCreateView, PositionCloseView, PositionResolveView,
     HardClaimMarketView, HardClaimMarketCreateView, HardClaimMarketBuyView, HardClaimMarketPreviewView,
     HardClaimProofView, PositionProofView, ChannelModeratorView, PostDeleteView,
+    PositionChartDataView,
 )
 from .og import HardClaimOGView, PositionOGView
 
@@ -39,4 +40,5 @@ urlpatterns = [
     path("positions/<int:pk>/resolve/", PositionResolveView.as_view(), name="position-resolve"),
     path("positions/<int:pk>/proof/", PositionProofView.as_view(), name="position-proof"),
     path("positions/<int:pk>/og/", PositionOGView.as_view(), name="position-og"),
+    path("positions/<int:pk>/chart-data/", PositionChartDataView.as_view(), name="position-chart-data"),
 ]
