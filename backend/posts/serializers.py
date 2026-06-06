@@ -29,7 +29,6 @@ class HardClaimInputSerializer(serializers.Serializer):
         choices=["PRICE", "PERCENTAGE_UP", "PERCENTAGE_DOWN"],
         default="PERCENTAGE_UP",
     )
-    payda = serializers.CharField(allow_blank=True, default="", required=False)
     percentage = serializers.FloatField(min_value=0)
     until = serializers.DateField()
     status = serializers.ChoiceField(choices=["confirmed", "undetermined", "rejected"], default="undetermined")
@@ -46,10 +45,6 @@ class HardClaimInputSerializer(serializers.Serializer):
             if direction not in {"bullish", "bearish"}:
                 raise serializers.ValidationError(
                     {"direction": "PRICE claims require direction (bullish or bearish)."}
-                )
-            if not (data.get("payda") or "").strip():
-                raise serializers.ValidationError(
-                    {"payda": "PRICE claims require a parity (payda)."}
                 )
         elif pct > 150:
             raise serializers.ValidationError(
@@ -82,7 +77,7 @@ class HardClaimSerializer(serializers.ModelSerializer):
         model = HardClaim
         fields = [
             "id", "author_address", "author_username", "post_id", "channel",
-            "asset", "direction", "value_type", "payda", "percentage",
+            "asset", "direction", "value_type", "percentage",
             "until", "created_at", "reference_price", "reference_price_url",
             "status", "events", "profitability",
             "signature", "claim_payload"
@@ -101,6 +96,10 @@ class HardClaimSerializer(serializers.ModelSerializer):
         target = claim_target_price(instance)
         if target is not None:
             data["target_price"] = target
+        
+        # Inject nested asset object for UI rendering
+        data["asset_obj"] = AssetSerializer(instance.asset).data
+        
         return data
 
     def get_profitability(self, obj):
