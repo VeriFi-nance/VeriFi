@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
-import { Settings as SettingsIcon, Copy, Check } from 'lucide-react';
+import { Settings as SettingsIcon, Copy, Check, Info } from 'lucide-react';
 import { HardClaimCard } from '@/components/HardClaimCard';
 import { UserAvatar } from '@/components/UserAvatar';
 import { EmptyState } from '@/components/EmptyState';
@@ -11,10 +11,10 @@ import { PageContent } from '@/components/PageContent';
 import { SkeletonRow } from '@/components/Skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getHardClaimsByAddress, getAssets, getProfileStats, toggleFollow, createChannel } from '@/lib/api';
-import type { HardClaimItem, AssetItem, ProfileStats, ProfileChangeLogEntry } from '@/lib/types';
+import type { HardClaimItem, AssetItem, ProfileStats } from '@/lib/types';
 import { loadAddress } from '@/lib/auth';
 import { truncateAddress } from '@/lib/wallet';
-import { Clock, Plus, Sparkles } from 'lucide-react';
+import { Plus, Sparkles } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -66,33 +66,6 @@ function formatChangeDate(value: string) {
   }).format(new Date(value));
 }
 
-function ChangelogEntry({ entry }: { entry: ProfileChangeLogEntry }) {
-  const preview = typeof entry.metadata.content_preview === 'string'
-    ? entry.metadata.content_preview
-    : '';
-
-  return (
-    <div className="rounded-xl border border-border bg-card/50 p-4">
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 rounded-full bg-muted p-2 text-muted-foreground">
-          <Clock className="size-4" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <p className="text-sm font-medium">{entry.summary}</p>
-            <span className="text-xs text-muted-foreground">{formatChangeDate(entry.created_at)}</span>
-          </div>
-          {preview && (
-            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-              "{preview}"
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function UserPage() {
   const { address } = useParams();
   const myAddress = loadAddress();
@@ -114,6 +87,11 @@ export default function UserPage() {
   const [createError, setCreateError] = useState('');
   
   const [subscriptionsOpen, setSubscriptionsOpen] = useState(false);
+  const [usernameHistoryOpen, setUsernameHistoryOpen] = useState(false);
+
+  const usernameChanges = (stats?.changelog ?? []).filter(
+    (entry) => entry.event_type === 'username_updated',
+  );
 
   async function handleCreateChannel() {
     try {
@@ -181,9 +159,22 @@ export default function UserPage() {
         <div className="flex items-center gap-4">
           <UserAvatar address={stats?.address || address} size="lg" />
           <div className="min-w-0 flex-1 space-y-1">
-            <h1 className="text-xl font-bold truncate">
-              {stats?.username ? `@${stats.username}` : truncateAddress(stats?.address || address)}
-            </h1>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <h1 className="text-xl font-bold truncate">
+                {stats?.username ? `@${stats.username}` : truncateAddress(stats?.address || address)}
+              </h1>
+              {usernameChanges.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="shrink-0 text-muted-foreground hover:text-foreground"
+                  onClick={() => setUsernameHistoryOpen(true)}
+                  aria-label="View username history"
+                >
+                  <Info className="size-3.5" />
+                </Button>
+              )}
+            </div>
             <div className="flex items-center gap-1 min-w-0">
               <code className="text-sm font-mono text-muted-foreground truncate">{truncateAddress(stats?.address || address)}</code>
               <CopyAddressButton text={stats?.address || address} />
@@ -253,12 +244,6 @@ export default function UserPage() {
           >
             Premium
           </TabsTrigger>
-          <TabsTrigger
-            value="changelog"
-            className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground data-[state=active]:bg-foreground/5 dark:data-[state=active]:bg-foreground/5 data-[state=active]:text-foreground data-[state=active]:border-transparent dark:data-[state=active]:border-transparent data-[state=active]:shadow-none cursor-pointer transition-colors border-0"
-          >
-            Changelog
-          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="public" className="space-y-2 mt-4 animate-in fade-in-50 duration-200">
@@ -326,23 +311,6 @@ export default function UserPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="changelog" className="space-y-3 mt-4 animate-in fade-in-50 duration-200">
-          {loading ? (
-            <div className="space-y-2">
-              <SkeletonRow />
-              <SkeletonRow />
-            </div>
-          ) : stats?.changelog && stats.changelog.length > 0 ? (
-            stats.changelog.map((entry) => (
-              <ChangelogEntry key={entry.id} entry={entry} />
-            ))
-          ) : (
-            <EmptyState
-              title="No changelog yet"
-              description="Profile and post changes will show up here."
-            />
-          )}
-        </TabsContent>
       </Tabs>
 
       <RD.Root open={createOpen} onOpenChange={setCreateOpen}>
@@ -422,6 +390,40 @@ export default function UserPage() {
                 }} 
               />
             ))}
+          </div>
+        </RD.Content>
+      </RD.Root>
+
+      <RD.Root open={usernameHistoryOpen} onOpenChange={setUsernameHistoryOpen}>
+        <RD.Content className="max-w-md">
+          <RD.Header>
+            <RD.Title className="text-xl font-semibold">Username history</RD.Title>
+            <RD.Description>
+              Previous username changes for this profile.
+            </RD.Description>
+          </RD.Header>
+          <div className="space-y-3 pt-2 max-h-[60vh] overflow-y-auto">
+            {usernameChanges.map((entry) => {
+              const oldUsername = typeof entry.metadata.old_username === 'string'
+                ? entry.metadata.old_username
+                : null;
+              const newUsername = typeof entry.metadata.new_username === 'string'
+                ? entry.metadata.new_username
+                : null;
+
+              return (
+                <div key={entry.id} className="rounded-xl border border-border bg-card/50 p-4">
+                  <p className="text-sm font-medium">
+                    {oldUsername && newUsername
+                      ? `@${oldUsername} -> @${newUsername}`
+                      : entry.summary}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {formatChangeDate(entry.created_at)}
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </RD.Content>
       </RD.Root>
