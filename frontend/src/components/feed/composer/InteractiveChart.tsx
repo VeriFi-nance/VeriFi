@@ -111,12 +111,24 @@ export function InteractiveChart({
     // Click to select
     chart.subscribeClick((param: MouseEventParams) => {
       if (!selectModeRef.current) return;
-      if (param.point && param.time) {
+      if (param.point) {
         const price = series.coordinateToPrice(param.point.y);
-        if (price !== null) {
+        
+        let logicalTime: number | null = null;
+        if (param.time) {
+          logicalTime = param.time as number;
+        } else {
+          const timeScale = chart.timeScale();
+          const time = timeScale.coordinateToTime(param.point.x);
+          if (time !== null) {
+            logicalTime = time as number;
+          }
+        }
+
+        if (price !== null && logicalTime !== null) {
           // Convert lightweight-charts timestamp back to ISO date string
-          // param.time is seconds since epoch for UTCTimestamp
-          const dateStr = new Date((param.time as number) * 1000).toISOString().split('T')[0];
+          // logicalTime is seconds since epoch for UTCTimestamp
+          const dateStr = new Date(logicalTime * 1000).toISOString().split('T')[0];
           onSelectTarget(price, dateStr);
           // Auto-disable select mode after a successful tap for a better mobile experience
           setSelectMode(false);
