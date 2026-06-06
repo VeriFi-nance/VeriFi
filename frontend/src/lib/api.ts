@@ -57,13 +57,19 @@ async function request<T>(
   const bases = orderedBaseUrls();
   let lastNetworkError: unknown;
 
+  // For FormData bodies, let the browser set Content-Type (incl. the multipart
+  // boundary). Setting it manually breaks the upload.
+  const isFormData = typeof FormData !== 'undefined' && rest.body instanceof FormData;
+
   for (let i = 0; i < bases.length; i++) {
     const base = bases[i];
     let res: Response;
     try {
       res = await fetch(`${base}${path}`, {
         ...rest,
-        headers: { 'Content-Type': 'application/json', ...optHeaders },
+        headers: isFormData
+          ? { ...optHeaders }
+          : { 'Content-Type': 'application/json', ...optHeaders },
       });
     } catch (err) {
       // Network-level failure (DNS, TLS/cert MITM, connection refused). The
@@ -97,7 +103,7 @@ function authHeaders(): Record<string, string> {
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
-export async function register(address: string, username?: string): Promise<{ access: string, username: string }> {
+export async function register(address: string, username?: string): Promise<{ access: string, username: string, avatar_url?: string | null }> {
   return request('/api/auth/register/', {
     method: 'POST',
     body: JSON.stringify({ address, ...(username ? { username } : {}) }),
@@ -116,7 +122,7 @@ export async function login(
   address: string,
   signature: string,
   nonce: string
-): Promise<{ access: string, username: string }> {
+): Promise<{ access: string, username: string, avatar_url?: string | null }> {
   return request('/api/auth/login/', {
     method: 'POST',
     body: JSON.stringify({ address, signature, nonce }),
@@ -150,15 +156,47 @@ export interface HardClaimPayload {
   market?: { side: 'YES' | 'NO'; stake_rep: number };
 }
 
+export interface PositionPayload {
+  asset_id: number;
+  direction: 'long' | 'short';
+  entry_price: number;
+  entry_interval: string;
+  stop_loss: number;
+  take_profit: number;
+  lifetime: string;
+  signature: string;
+  position_payload: Record<string, unknown>;
+}
+
 export async function createPost(
   content: string,
   channel_id?: number,
   hard_claims?: HardClaimPayload[],
+  positions?: PositionPayload[],
+  image?: File | null,
 ): Promise<PostItem> {
+  if (image) {
+    // Multipart upload: image as a file part, nested arrays as JSON strings.
+    const form = new FormData();
+    form.append('content', content);
+    if (channel_id != null) form.append('channel_id', String(channel_id));
+    if (hard_claims && hard_claims.length > 0) {
+      form.append('hard_claims', JSON.stringify(hard_claims));
+    }
+    if (positions && positions.length > 0) {
+      form.append('positions', JSON.stringify(positions));
+    }
+    form.append('image', image);
+    return request('/api/posts/', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: form,
+    });
+  }
   return request('/api/posts/', {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ content, channel_id, hard_claims }),
+    body: JSON.stringify({ content, channel_id, hard_claims, positions }),
   });
 }
 
@@ -175,12 +213,19 @@ export async function getFeed(params?: {
   channel?: number;
   page?: number;
   page_size?: number;
+  asset_ids?: number[];
+  has_claims?: boolean;
+  has_positions?: boolean;
 }): Promise<PaginatedResponse<PostItem>> {
   const query = new URLSearchParams();
   if (params?.feed) query.append('feed', params.feed);
   if (params?.channel) query.append('channel', params.channel.toString());
   if (params?.page) query.append('page', params.page.toString());
   if (params?.page_size) query.append('page_size', params.page_size.toString());
+  if (params?.asset_ids && params.asset_ids.length > 0)
+    query.append('asset_ids', params.asset_ids.join(','));
+  if (params?.has_claims !== undefined) query.append('has_claims', String(params.has_claims));
+  if (params?.has_positions !== undefined) query.append('has_positions', String(params.has_positions));
   const qs = query.toString() ? `?${query.toString()}` : '';
   return request(`/api/posts/${qs}`, { headers: authHeaders() });
 }
@@ -370,6 +415,19 @@ export async function updateUsername(username: string): Promise<{ username: stri
   });
 }
 
+export async function updateProfile(
+  fields: { username?: string; avatar?: File },
+): Promise<{ username: string; avatar_url: string | null }> {
+  const form = new FormData();
+  if (fields.username) form.append('username', fields.username);
+  if (fields.avatar) form.append('avatar', fields.avatar);
+  return request('/api/auth/profile/update/', {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: form,
+  });
+}
+
 export async function toggleFollow(target_address: string): Promise<{ following: boolean }> {
   return request('/api/auth/follow/', {
     method: 'POST',
@@ -475,6 +533,7 @@ export async function getPositions(channelId?: number): Promise<PositionItem[]> 
 
 export async function createPosition(data: {
   channel_id: number;
+  post_id?: number;
   asset_id: number;
   direction: 'long' | 'short';
   entry_price: number;

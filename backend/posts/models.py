@@ -1,3 +1,4 @@
+from cloudinary.models import CloudinaryField
 from django.db import models
 from accounts.models import WalletUser
 
@@ -54,6 +55,7 @@ class Post(models.Model):
     author = models.ForeignKey(WalletUser, on_delete=models.CASCADE, related_name="posts")
     channel = models.ForeignKey(Channel, on_delete=models.CASCADE, related_name="posts", null=True, blank=True)
     content = models.TextField(max_length=500)
+    image = CloudinaryField("image", blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -280,7 +282,14 @@ class Position(models.Model):
         CLOSED_EARLY = "closed_early"
 
     author = models.ForeignKey(WalletUser, on_delete=models.CASCADE, related_name="positions")
-    channel = models.ForeignKey(Channel, on_delete=models.CASCADE, related_name="positions")
+    channel = models.ForeignKey(Channel, on_delete=models.CASCADE, related_name="positions", null=True, blank=True)
+    post = models.ForeignKey(
+        "Post",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="positions",
+    )
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE)
     direction = models.CharField(max_length=10, choices=Direction.choices)
     entry_price = models.FloatField()

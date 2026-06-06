@@ -12,6 +12,7 @@ import { SkeletonPostCard } from '@/components/Skeleton';
 import { PageContent } from '@/components/PageContent';
 import { createPostComment, getPost, getAssets, getPostComments, likePostComment, unlikePostComment } from '@/lib/api';
 import { useAuthState, useOpenLogin } from '@/lib/auth';
+import { safeImageSrc } from '@/lib/utils';
 import { truncateAddress } from '@/lib/wallet';
 import type { PostItem, PostCommentItem, AssetItem } from '@/lib/types';
 
@@ -298,7 +299,7 @@ export default function PostDetailPage() {
       <Card>
         <CardContent className="p-5 space-y-4">
           <div className="flex items-center gap-3">
-            <UserAvatar address={post.author_address} size="md" />
+            <UserAvatar address={post.author_address} src={post.author_avatar_url} size="md" />
             <Link
               to={`/u/${post.author_username || post.author_address}`}
               className="text-sm font-mono font-medium hover:underline truncate"
@@ -311,6 +312,14 @@ export default function PostDetailPage() {
           </div>
 
           <p className="text-sm whitespace-pre-wrap leading-relaxed">{post.content}</p>
+
+          {post.image_url && (
+            <img
+              src={safeImageSrc(post.image_url)}
+              alt=""
+              className="w-full max-h-[32rem] rounded-lg border border-border object-cover"
+            />
+          )}
 
           <PostActions post={post} onPostChange={setPost} className="border-t border-border pt-2" />
         </CardContent>
