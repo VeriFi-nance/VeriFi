@@ -14,6 +14,21 @@ export function cn(...inputs: ClassValue[]) {
  * Uses `startsWith` prefix checks (a recognized sanitizing guard) so the
  * returned value is provably scheme-constrained.
  */
+/**
+ * Extract the first image file from a clipboard paste, if any. Lets users paste
+ * an image (e.g. a screenshot) into a composer and have it treated as an upload.
+ */
+export function imageFileFromClipboard(data: DataTransfer | null): File | null {
+  if (!data) return null;
+  for (const item of Array.from(data.items)) {
+    if (item.kind === 'file' && item.type.startsWith('image/')) {
+      const file = item.getAsFile();
+      if (file) return file;
+    }
+  }
+  return null;
+}
+
 export function safeImageSrc(url: string | null | undefined): string | undefined {
   if (typeof url !== 'string' || url.length === 0) return undefined;
   if (
