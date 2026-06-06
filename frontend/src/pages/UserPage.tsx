@@ -20,6 +20,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 import { PremiumChannelView } from '@/components/PremiumChannelView';
+import { ChannelCard } from '@/components/ChannelCard';
 
 function CopyAddressButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -35,11 +36,23 @@ function CopyAddressButton({ text }: { text: string }) {
   );
 }
 
-function StatBlock({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col">
+function StatBlock({ label, value, onClick }: { label: string; value: string; onClick?: () => void }) {
+  const content = (
+    <>
       <span className="text-base font-semibold num">{value}</span>
       <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</span>
+    </>
+  );
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className="flex flex-col text-left hover:opacity-80 transition-opacity">
+        {content}
+      </button>
+    );
+  }
+  return (
+    <div className="flex flex-col">
+      {content}
     </div>
   );
 }
@@ -64,6 +77,8 @@ export default function UserPage() {
   const [postPermission, setPostPermission] = useState<'all' | 'creator_only'>('all');
   const [createOpen, setCreateOpen] = useState(false);
   const [createError, setCreateError] = useState('');
+  
+  const [subscriptionsOpen, setSubscriptionsOpen] = useState(false);
 
   async function handleCreateChannel() {
     try {
@@ -145,7 +160,15 @@ export default function UserPage() {
           <div className="flex flex-wrap gap-x-8 gap-y-4 mt-5">
             <StatBlock label="Followers" value={String(stats.followers_count)} />
             <StatBlock label="Following" value={String(stats.following_count)} />
-            <StatBlock label="Subscribed" value={String(stats.channels_member_of?.length || 0)} />
+            <StatBlock 
+              label="Subscribed" 
+              value={String(stats.channels_member_of?.length || 0)} 
+              onClick={() => {
+                if (stats.channels_member_of && stats.channels_member_of.length > 0) {
+                  setSubscriptionsOpen(true);
+                }
+              }}
+            />
             {stats.rep != null && <StatBlock label="Rep" value={stats.rep.toFixed(0)} />}
             {stats.energy != null && (
               <StatBlock label="Energy" value={String(Math.floor(stats.energy))} />
@@ -336,6 +359,26 @@ export default function UserPage() {
             <Button className="w-full mt-2 font-medium tracking-wide shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all duration-300" onClick={handleCreateChannel} disabled={!name.trim()}>
               Launch Channel
             </Button>
+          </div>
+        </RD.Content>
+      </RD.Root>
+
+      <RD.Root open={subscriptionsOpen} onOpenChange={setSubscriptionsOpen}>
+        <RD.Content className="max-w-xl">
+          <RD.Header>
+            <RD.Title className="text-xl font-semibold">Subscribed Channels</RD.Title>
+          </RD.Header>
+          <div className="space-y-3 pt-3 max-h-[60vh] overflow-y-auto">
+            {stats?.channels_member_of?.map(c => (
+              <ChannelCard 
+                key={c.id} 
+                channel={c} 
+                onClick={() => {
+                  setSubscriptionsOpen(false);
+                  window.location.href = `/u/${c.creator_username || c.creator_address}?tab=premium`;
+                }} 
+              />
+            ))}
           </div>
         </RD.Content>
       </RD.Root>
