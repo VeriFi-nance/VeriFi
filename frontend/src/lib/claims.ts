@@ -63,8 +63,11 @@ export function getHardClaimDisplay(
   const claimType = claim.claim_type ?? claim.value_type ?? 'PERCENTAGE_UP';
   const isPrice = claimType === 'PRICE';
   const isBullish = claim.direction.toLowerCase() === 'bullish';
-  const pair = claim.asset_obj ? claim.asset_obj.symbol : assetSymbol;
+  
+  const baseSymbol = claim.asset_obj ? claim.asset_obj.symbol : assetSymbol;
   const currency = claim.asset_obj ? claim.asset_obj.quote_currency : 'USD';
+  const pair = baseSymbol.includes('/') ? baseSymbol : `${baseSymbol}/${currency}`;
+  
   const untilLabel = claim.until ? formatClaimUntil(claim.until) : '';
 
   if (isPrice) {
@@ -91,15 +94,15 @@ export function getHardClaimDisplay(
     isPrice: false,
     isBullish,
     badgeVariant: isBullish ? 'success' : 'destructive',
-    badgeText: `${assetSymbol} ${targetLabel}`,
+    badgeText: `${pair} ${targetLabel}`,
     targetLabel,
     summary: untilLabel
       ? isBullish
-        ? `Predicts ${assetSymbol} rises ${pct}% by ${untilLabel}`
-        : `Predicts ${assetSymbol} falls ${pct}% by ${untilLabel}`
+        ? `Predicts ${pair} rises ${pct}% by ${untilLabel}`
+        : `Predicts ${pair} falls ${pct}% by ${untilLabel}`
       : isBullish
-        ? `Predicts ${assetSymbol} rises ${pct}%`
-        : `Predicts ${assetSymbol} falls ${pct}%`,
+        ? `Predicts ${pair} rises ${pct}%`
+        : `Predicts ${pair} falls ${pct}%`,
   };
 }
 

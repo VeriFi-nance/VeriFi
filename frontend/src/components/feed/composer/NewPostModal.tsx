@@ -219,6 +219,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
                         percentage={c.percentage}
                         until={c.until}
                         claim_type={c.claim_type}
+                        parity={assets.find(a => a.id.toString() === c.asset_id)?.quote_currency}
                       />
                     </div>
                     <button

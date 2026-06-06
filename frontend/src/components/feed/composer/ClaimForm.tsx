@@ -71,7 +71,7 @@ export function ClaimForm({
             <SelectContent>
               {assets.map((a) => (
                 <SelectItem key={a.id} value={a.id.toString()}>
-                  {a.symbol} — {a.name}
+                  {a.symbol.includes('/') ? a.symbol : `${a.symbol}/${a.quote_currency}`} — {a.name}
                 </SelectItem>
               ))}
             </SelectContent>
