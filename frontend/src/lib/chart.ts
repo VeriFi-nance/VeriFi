@@ -88,13 +88,4 @@ export function claimWindowForChart(
   };
 }
 
-/** For open claims, don't plot End in empty future beyond the last candle. */
-export function markerWindowEnd(
-  alignedEnd: number,
-  lastCandleTime: number | null,
-  live: boolean,
-): number | null {
-  if (lastCandleTime == null) return alignedEnd;
-  if (live && alignedEnd > lastCandleTime) return null;
-  return alignedEnd;
-}
+
