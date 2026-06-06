@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Search, Loader2, User, Hash, FileText, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -26,6 +26,7 @@ export function SearchBar() {
   const [isOpen, setIsOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const location = useLocation();
   
   const debouncedQuery = useDebounce(query, 300);
 
@@ -42,13 +43,16 @@ export function SearchBar() {
   useEffect(() => {
     if (type === 'posts') {
       setIsOpen(false);
-      if (debouncedQuery.trim()) {
-        navigate(`/feed?q=${encodeURIComponent(debouncedQuery.trim())}`, { replace: true });
-      } else {
-        const params = new URLSearchParams(window.location.search);
-        if (params.has('q')) {
-          params.delete('q');
-          navigate(`${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`, { replace: true });
+      // Only auto-navigate on debounce if we are already on the feed page
+      if (location.pathname === '/feed' || location.pathname === '/') {
+        if (debouncedQuery.trim()) {
+          navigate(`/feed?q=${encodeURIComponent(debouncedQuery.trim())}`, { replace: true });
+        } else {
+          const params = new URLSearchParams(window.location.search);
+          if (params.has('q')) {
+            params.delete('q');
+            navigate(`${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`, { replace: true });
+          }
         }
       }
       return;
@@ -98,6 +102,12 @@ export function SearchBar() {
           onChange={(e) => {
             setQuery(e.target.value);
             if (!isOpen && e.target.value.trim() && type !== 'posts') setIsOpen(true);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && type === 'posts' && query.trim()) {
+              navigate(`/feed?q=${encodeURIComponent(query.trim())}`);
+              setIsOpen(false);
+            }
           }}
           className="pl-9 pr-[130px] w-full"
         />
