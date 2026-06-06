@@ -89,24 +89,6 @@ export function StepTarget({ value, onChange, onNext, onBack }: StepTargetProps)
         </p>
       </div>
 
-      <div className="relative">
-        {chartData ? (
-          <InteractiveChart
-            data={chartData}
-            interval={interval}
-            onIntervalChange={setInterval}
-            selectedPrice={chartTargetPrice}
-            selectedDate={value.until || null}
-            onSelectTarget={handleSelectTarget}
-            refetching={loading}
-          />
-        ) : (
-          <div className="h-[320px] flex items-center justify-center border rounded-lg bg-muted/20">
-            <span className="text-sm text-muted-foreground animate-pulse">Loading chart...</span>
-          </div>
-        )}
-      </div>
-
       <div className="grid grid-cols-2 gap-3 pt-2">
         <div className="space-y-1.5">
           <Label className="text-xs">
@@ -146,6 +128,24 @@ export function StepTarget({ value, onChange, onNext, onBack }: StepTargetProps)
             className="h-9 text-sm num"
           />
         </div>
+      </div>
+
+      <div className="relative pt-2">
+        {chartData ? (
+          <InteractiveChart
+            data={chartData}
+            interval={interval}
+            onIntervalChange={setInterval}
+            selectedPrice={chartTargetPrice}
+            selectedDate={value.until || null}
+            onSelectTarget={handleSelectTarget}
+            refetching={loading}
+          />
+        ) : (
+          <div className="h-[320px] flex items-center justify-center border rounded-lg bg-muted/20">
+            <span className="text-sm text-muted-foreground animate-pulse">Loading chart...</span>
+          </div>
+        )}
       </div>
 
       <div className="flex gap-2 pt-4">
