@@ -9,6 +9,7 @@ import {
   type ISeriesApi,
   type MouseEventParams,
   type UTCTimestamp,
+  type WhitespaceData,
 } from 'lightweight-charts';
 import type { AssetChartData, ChartCandleInterval } from '@/lib/types';
 import { CHART_INTERVAL_OPTIONS } from '@/lib/chart';
@@ -39,6 +40,14 @@ const CANDLE_DOWN = {
 
 function toUtcTimestamp(iso: string): UTCTimestamp {
   return Math.floor(new Date(iso).getTime() / 1000) as UTCTimestamp;
+}
+
+function getIntervalSeconds(interval: string): number {
+  if (interval === '15m') return 15 * 60;
+  if (interval === '1h') return 3600;
+  if (interval === '4h') return 4 * 3600;
+  if (interval === '1d') return 24 * 3600;
+  return 24 * 3600;
 }
 
 export function InteractiveChart({
@@ -169,11 +178,23 @@ export function InteractiveChart({
       };
     });
 
+    const futureWhitespace: WhitespaceData<UTCTimestamp>[] = [];
     if (styledCandles.length > 0) {
-      series.setData(styledCandles);
+      const lastTime = styledCandles[styledCandles.length - 1].time as number;
+      const intervalSecs = getIntervalSeconds(interval);
+      // Add 180 days of future data
+      const futureBars = Math.floor((180 * 24 * 3600) / intervalSecs);
+      
+      for (let i = 1; i <= futureBars; i++) {
+        futureWhitespace.push({ time: (lastTime + i * intervalSecs) as UTCTimestamp });
+      }
+    }
+
+    if (styledCandles.length > 0) {
+      series.setData([...styledCandles, ...futureWhitespace]);
       chart.timeScale().fitContent();
     }
-  }, [data]);
+  }, [data, interval]);
 
   // Manage target price line
   const priceLineRef = useRef<any>(null);
