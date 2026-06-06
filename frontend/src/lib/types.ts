@@ -74,6 +74,26 @@ export interface PostItem {
   positions: PositionSummaryItem[];
   profitability?: ProfitabilityData | null;
   channel?: number | null;
+  like_count: number;
+  comment_count: number;
+  saved_proof_count: number;
+  liked_by_me: boolean;
+  saved_proof_by_me: boolean;
+}
+
+export interface PostCommentItem {
+  id: number;
+  post: number;
+  parent: number | null;
+  author_address: string;
+  author_username: string;
+  author_avatar_url?: string | null;
+  content: string;
+  image_url?: string | null;
+  created_at: string;
+  like_count: number;
+  liked_by_me: boolean;
+  replies: PostCommentItem[];
 }
 
 export interface HardClaimEvent {
