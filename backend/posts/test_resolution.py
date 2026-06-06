@@ -93,14 +93,13 @@ class ResolutionTests(TestCase):
         self.assertEqual(direction, "bearish")
         self.assertEqual(value_type, "PERCENTAGE_DOWN")
 
-    @patch("posts.resolution.fetch_reference_price")
-    def test_price_claim_infers_bearish_when_target_below_reference(self, mock_ref):
+    def test_price_claim_infers_bearish_when_target_below_reference(self):
         self.claim.value_type = "PRICE"
         self.claim.direction = "bullish"
         self.claim.percentage = 50000.0
         self.claim.payda = "USD"
+        self.claim.reference_price = 100000.0
         self.claim.save()
-        mock_ref.return_value = (100000.0, "http://mock.ref")
         direction, value_type = reconcile_claim_fields(self.claim)
         self.assertEqual(value_type, "PRICE")
         self.assertEqual(direction, "bearish")
