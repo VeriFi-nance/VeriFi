@@ -106,13 +106,35 @@ export function getHardClaimDisplay(
   };
 }
 
-/** Compact feed tag: always ▲/▼ with green/red, percentage only. */
-export function getFeedClaimTagLabel(claim: {
-  direction: string;
-  percentage: number;
-  display_percentage?: number;
-}): { label: string; variant: 'success' | 'destructive' } {
+/** Compact feed tag: always ▲/▼ with green/red, percentage only. For PRICE claims, shows target price. */
+export function getFeedClaimTagLabel(
+  claim: {
+    direction: string;
+    percentage: number;
+    display_percentage?: number;
+    claim_type?: ClaimType;
+    value_type?: ClaimType;
+    asset_obj?: import('./types').AssetItem;
+  },
+  asset?: import('./types').AssetItem,
+): { label: string; variant: 'success' | 'destructive' | 'secondary' } {
   const isBullish = claim.direction.toLowerCase() === 'bullish';
+  const claimType = claim.claim_type ?? claim.value_type ?? 'PERCENTAGE_UP';
+  const isPrice = claimType === 'PRICE';
+
+  if (isPrice) {
+    const assetObj = asset ?? claim.asset_obj;
+    const currency = assetObj?.quote_currency || 'USD';
+    const val = claim.percentage;
+    const priceStr = val.toLocaleString(undefined, {
+      maximumFractionDigits: 2,
+    });
+    return {
+      label: `${isBullish ? '▲' : '▼'} ${currency} ${priceStr}`,
+      variant: 'secondary',
+    };
+  }
+
   const pct = claim.display_percentage ?? claim.percentage;
   const pctStr = Number.isInteger(pct) ? pct.toFixed(0) : pct.toFixed(1);
   return {
