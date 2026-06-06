@@ -259,17 +259,23 @@ function focusClaimWindow(
   const windowFrom = Math.min(startIdx, endIdx);
   const windowTo = Math.max(startIdx, endIdx);
   const windowBars = Math.max(windowTo - windowFrom, 1);
-  const minSidePadding = chartInterval === '15m' ? 32 : chartInterval === '1d' ? 8 : 12;
-  const sidePadding = Math.max(windowBars * 0.32, minSidePadding);
-
-  const center = (windowFrom + windowTo) / 2;
-  const halfRange = windowBars / 2 + sidePadding;
+  
+  // To keep the start line at 1/10th of the screen, left padding is 10% of total visible bars.
+  // We cap total visible bars to 400 to prevent hitting the chart's max zoom out limit.
+  const minBars = chartInterval === '15m' ? 60 : chartInterval === '1d' ? 14 : 30;
+  const maxBars = 400; 
+  
+  let visibleBars = Math.max(windowBars / 0.8, minBars);
+  if (visibleBars > maxBars) {
+    visibleBars = maxBars;
+  }
+  
+  const leftPadding = visibleBars * 0.1;
+  const from = windowFrom - leftPadding;
+  const to = from + visibleBars;
 
   timeScale.applyOptions({ rightOffset: 0 });
-  timeScale.setVisibleLogicalRange({
-    from: center - halfRange,
-    to: center + halfRange,
-  });
+  timeScale.setVisibleLogicalRange({ from, to });
 }
 
 export function PriceChart({
