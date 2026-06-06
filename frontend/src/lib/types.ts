@@ -118,6 +118,15 @@ export interface OHLCRow {
 
 export type ChartCandleInterval = '15m' | '4h' | '1d';
 
+export interface AssetChartData {
+  asset_symbol: string;
+  interval: ChartCandleInterval;
+  default_interval: ChartCandleInterval;
+  as_of: string;
+  ohlc: OHLCRow[];
+  current_price: number | null;
+}
+
 export interface ClaimChartData {
   claim_id: number;
   asset_symbol: string;
