@@ -72,7 +72,6 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
       {
         asset_id: draft.asset_id,
         assetSymbol: draft.assetSymbol,
-        parity: draft.parity,
         claim_type: result.value.claim_type,
         direction: result.value.direction,
         percentage: draft.percentage,
@@ -94,7 +93,6 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
     setDraft({
       asset_id: c.asset_id,
       assetSymbol: c.assetSymbol,
-      parity: c.parity,
       claim_type: c.claim_type,
       direction: c.direction,
       percentage: c.percentage,
@@ -107,12 +105,15 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
   }
 
   function loadExtractedIntoDraft(c: ReviewClaim) {
-    const asset = assets.find((a) => a.symbol === c.asset);
+    let combinedSymbol = c.asset;
+    if (c.parity) {
+      combinedSymbol = `${c.asset}/${c.parity}`;
+    }
+    const asset = assets.find((a) => a.symbol === combinedSymbol) || assets.find((a) => a.symbol === c.asset);
     const claimType = getClaimType(c);
     setDraft({
       asset_id: asset ? asset.id.toString() : '',
-      assetSymbol: asset?.symbol ?? c.asset,
-      parity: c.parity || '',
+      assetSymbol: asset?.symbol ?? combinedSymbol,
       claim_type: claimType,
       direction: claimType === 'PERCENTAGE_DOWN' ? 'Bearish' : 'Bullish',
       percentage: c.percentage ?? '',
@@ -155,7 +156,6 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
           channel_id: channelId,
           direction: c.direction,
           value_type: c.claim_type,
-          payda: c.parity || undefined,
           percentage: parseFloat(c.percentage),
           until: c.until,
           signature,
@@ -218,7 +218,6 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
                         direction={c.direction}
                         percentage={c.percentage}
                         until={c.until}
-                        parity={c.parity}
                         claim_type={c.claim_type}
                       />
                     </div>
