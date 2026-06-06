@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -7,7 +7,7 @@ import type { PositionItem, AssetItem } from '@/lib/types';
 import { useAuthState } from '@/lib/auth';
 import { Link } from 'react-router-dom';
 import { truncateAddress } from '@/lib/wallet';
-import { RefreshCw, Download, ChevronDown, ChevronUp } from 'lucide-react';
+import { Download, ChevronUp } from 'lucide-react';
 import { PositionPriceChart } from './feed/PositionPriceChart';
 import { usePositionChartData } from '@/hooks/usePositionChartData';
 
@@ -15,10 +15,9 @@ interface PositionCardProps {
   position: PositionItem;
   assets: AssetItem[];
   onClosed?: () => void;
-  onResolved?: (updated: PositionItem) => void;
 }
 
-export function PositionCard({ position, assets, onClosed, onResolved }: PositionCardProps) {
+export function PositionCard({ position, assets, onClosed }: PositionCardProps) {
   const [closing, setClosing] = useState(false);
   const [downloadingProof, setDownloadingProof] = useState(false);
   const [showChart, setShowChart] = useState(false);

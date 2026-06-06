@@ -224,7 +224,7 @@ export function InteractiveChart({
 
     // Remove existing lines
     priceLineRefs.current.forEach(line => {
-      try { series.removePriceLine(line); } catch (e) {}
+      try { series.removePriceLine(line); } catch { /* ignore */ }
     });
     priceLineRefs.current = [];
 

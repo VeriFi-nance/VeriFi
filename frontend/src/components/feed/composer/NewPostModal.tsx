@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { PenSquare, Plus, Pencil, X, TrendingUp, ChevronDown } from 'lucide-react';
+import { PenSquare, Plus, Pencil, X, TrendingUp } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 import { useAuthState, useOpenLogin } from '@/lib/auth';

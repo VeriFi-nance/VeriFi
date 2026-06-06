@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { useState } from 'react';
 import type { AssetItem } from '@/lib/types';
 import { PositionStepAsset } from './PositionStepAsset';

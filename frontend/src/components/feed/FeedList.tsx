@@ -84,7 +84,6 @@ export function FeedList({ feed, channel, myRole, creatorAddress, filter: propFi
         setLoadingMore(false);
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [feed, channel, activeFilter, propFilter],
   );
 
