@@ -40,11 +40,6 @@ export default function FeedPage() {
 
   return (
     <PageContent className="space-y-5">
-      {q && (
-        <div className="mb-6 text-sm text-muted-foreground bg-muted/50 p-4 rounded-lg border border-border">
-          Showing search results for: <span className="font-semibold text-foreground">"{q}"</span>
-        </div>
-      )}
       <Tabs value={feedType} onValueChange={handleFeedChange}>
         <div className="flex items-center gap-3">
           <FeedFilterPopover
