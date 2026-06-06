@@ -3,7 +3,7 @@ import type { AssetItem } from '@/lib/types';
 import { type ClaimDraft, emptyDraft } from './types';
 import { StepAsset } from './StepAsset';
 import { StepTarget } from './StepTarget';
-// import { StepStake } from './StepStake';
+import { StepStake } from './StepStake';
 
 interface ClaimWizardProps {
   assets: AssetItem[];
@@ -65,19 +65,12 @@ export function ClaimWizard({
           />
         )}
         {step === 2 && (
-          <div className="p-4 border border-dashed rounded-lg text-center text-sm text-muted-foreground">
-            Step 3: Reputation Stake (Coming Soon)
-            <div className="flex gap-2 mt-4 justify-center">
-              <button onClick={prevStep} className="px-3 py-1 border rounded">Back</button>
-              <button onClick={() => onComplete(draft)} className="px-3 py-1 border rounded bg-primary text-primary-foreground">Attach</button>
-            </div>
-          </div>
-          // <StepStake
-          //   value={draft}
-          //   onChange={patchDraft}
-          //   onComplete={() => onComplete(draft)}
-          //   onBack={prevStep}
-          // />
+          <StepStake
+            value={draft}
+            onChange={patchDraft}
+            onComplete={() => onComplete(draft)}
+            onBack={prevStep}
+          />
         )}
       </div>
 
