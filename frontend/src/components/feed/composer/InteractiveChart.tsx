@@ -5,7 +5,6 @@ import {
   ColorType,
   CrosshairMode,
   LineStyle,
-  createSeriesMarkers,
   type IChartApi,
   type ISeriesApi,
   type MouseEventParams,
@@ -66,6 +65,9 @@ export function InteractiveChart({
   const [selectMode, setSelectMode] = useState(false);
   const selectModeRef = useRef(selectMode);
   const allTimesRef = useRef<number[]>([]);
+  
+  const startLineRef = useRef<HTMLDivElement>(null);
+  const targetLineRef = useRef<HTMLDivElement>(null);
 
   // Sync refs so the click handler closure gets the latest values without recreating the chart
   useEffect(() => {
@@ -132,12 +134,16 @@ export function InteractiveChart({
         const price = series.coordinateToPrice(param.point.y);
         
         let logicalTime: number | null = null;
-        if (param.time) {
-          logicalTime = param.time as number;
-        } else {
-          const timeScale = chart.timeScale();
-          const time = timeScale.coordinateToTime(param.point.x);
-          if (time !== null) {
+        const timeScale = chart.timeScale();
+        const time = timeScale.coordinateToTime(param.point.x);
+        
+        if (time !== null) {
+          if (typeof time === 'object') {
+            const b = time as any;
+            logicalTime = new Date(Date.UTC(b.year, b.month - 1, b.day)).getTime() / 1000;
+          } else if (typeof time === 'string') {
+            logicalTime = new Date(time).getTime() / 1000;
+          } else {
             logicalTime = time as number;
           }
         }
@@ -235,51 +241,58 @@ export function InteractiveChart({
     }
   }, [selectedPrice]);
 
-  // Manage time markers for Start and Deadline
-  const markersApiRef = useRef<any>(null);
-
+  // Manage time markers (vertical lines via DOM overlays)
   useEffect(() => {
-    const series = seriesRef.current;
-    if (!series) return;
+    const chart = chartRef.current;
+    if (!chart) return;
 
-    if (!markersApiRef.current) {
-      markersApiRef.current = createSeriesMarkers(series);
-    }
-
-    const markers: any[] = [];
-    
-    // Start marker (last known candle time)
-    if (data.ohlc.length > 0) {
-      const lastCandleTime = toUtcTimestamp(data.ohlc[data.ohlc.length - 1].date);
-      markers.push({
-        time: lastCandleTime,
-        position: 'aboveBar',
-        color: '#6366f1',
-        shape: 'arrowDown',
-        text: 'Start',
-      });
-    }
-
-    if (selectedDate) {
-      let targetTime = toUtcTimestamp(selectedDate) as number;
-      const allTimes = allTimesRef.current;
-      if (allTimes.length > 0) {
-        targetTime = allTimes.reduce((prev, curr) => 
-          Math.abs(curr - targetTime) < Math.abs(prev - targetTime) ? curr : prev
-        );
+    function updateLines() {
+      if (!chart) return;
+      const timeScale = chart.timeScale();
+      
+      // Start Line
+      if (startLineRef.current && data.ohlc.length > 0) {
+        const lastCandleTime = toUtcTimestamp(data.ohlc[data.ohlc.length - 1].date);
+        const x = timeScale.timeToCoordinate(lastCandleTime);
+        if (x !== null) {
+          startLineRef.current.style.left = `${x}px`;
+          startLineRef.current.style.display = 'block';
+        } else {
+          startLineRef.current.style.display = 'none';
+        }
       }
 
-      markers.push({
-        time: targetTime as UTCTimestamp,
-        position: 'belowBar',
-        color: '#f59e0b',
-        shape: 'arrowUp',
-        text: 'Deadline',
-      });
+      // Target Line
+      if (targetLineRef.current && selectedDate) {
+        let targetTime = toUtcTimestamp(selectedDate) as number;
+        const allTimes = allTimesRef.current;
+        if (allTimes.length > 0) {
+          targetTime = allTimes.reduce((prev, curr) => 
+            Math.abs(curr - targetTime) < Math.abs(prev - targetTime) ? curr : prev
+          );
+        }
+        const x = timeScale.timeToCoordinate(targetTime as UTCTimestamp);
+        if (x !== null) {
+          targetLineRef.current.style.left = `${x}px`;
+          targetLineRef.current.style.display = 'block';
+        } else {
+          targetLineRef.current.style.display = 'none';
+        }
+      } else if (targetLineRef.current) {
+        targetLineRef.current.style.display = 'none';
+      }
     }
 
-    markersApiRef.current.setMarkers(markers);
-  }, [data.ohlc, selectedDate]);
+    chart.timeScale().subscribeVisibleTimeRangeChange(updateLines);
+    chart.timeScale().subscribeVisibleLogicalRangeChange(updateLines);
+    // initial render update
+    updateLines();
+
+    return () => {
+      chart.timeScale().unsubscribeVisibleTimeRangeChange(updateLines);
+      chart.timeScale().unsubscribeVisibleLogicalRangeChange(updateLines);
+    };
+  }, [data.ohlc, selectedDate, interval]);
 
   return (
     <div className="rounded-lg border bg-card p-3">
@@ -318,6 +331,28 @@ export function InteractiveChart({
       </div>
       <div className={cn('relative h-[320px] overflow-hidden', refetching && 'opacity-90', selectMode && 'cursor-crosshair')}>
         <div ref={containerRef} className="absolute inset-0" />
+        
+        {/* Start Vertical Line Overlay */}
+        <div 
+          ref={startLineRef} 
+          className="absolute top-0 bottom-0 w-[2px] bg-indigo-500/40 pointer-events-none hidden z-10" 
+          style={{ transform: 'translateX(-50%)' }}
+        >
+          <div className="absolute top-2 left-2 text-[10px] font-bold text-indigo-500 uppercase tracking-wider bg-background/90 px-1.5 py-0.5 rounded shadow-sm border border-indigo-500/20 whitespace-nowrap">
+            Start
+          </div>
+        </div>
+
+        {/* Deadline Vertical Line Overlay */}
+        <div 
+          ref={targetLineRef} 
+          className="absolute top-0 bottom-0 w-[2px] bg-amber-500/40 pointer-events-none hidden z-10" 
+          style={{ transform: 'translateX(-50%)' }}
+        >
+          <div className="absolute top-8 left-2 text-[10px] font-bold text-amber-500 uppercase tracking-wider bg-background/90 px-1.5 py-0.5 rounded shadow-sm border border-amber-500/20 whitespace-nowrap">
+            Deadline
+          </div>
+        </div>
       </div>
     </div>
   );
