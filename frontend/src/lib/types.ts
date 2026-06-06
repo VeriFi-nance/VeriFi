@@ -87,6 +87,7 @@ export interface PostCommentItem {
   parent: number | null;
   author_address: string;
   author_username: string;
+  author_avatar_url?: string | null;
   content: string;
   image_url?: string | null;
   created_at: string;

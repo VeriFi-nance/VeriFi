@@ -130,7 +130,7 @@ function CommentThreadItem({
   return (
     <article className={depth > 0 ? 'border-l border-border pl-3 sm:pl-4' : ''}>
       <div className="flex gap-3">
-        <UserAvatar address={comment.author_address} size="sm" />
+        <UserAvatar address={comment.author_address} src={comment.author_avatar_url} size="sm" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <Link
