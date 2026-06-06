@@ -67,7 +67,7 @@ export function StepStake({ value, onChange, onComplete, onBack }: StepStakeProp
           <AlertCircle className="size-4 shrink-0 mt-0.5" />
           <div className="leading-snug">
             Creator side is auto-set to <span className="font-semibold text-success">YES</span>.<br/>
-            There is a 2-rep listing fee (burned) and a 5% trade burn. This action costs 2 energy.
+            There is a 2-rep listing fee (burned) and a 5% trade burn. This action costs 1 energy.
           </div>
         </div>
       </div>
