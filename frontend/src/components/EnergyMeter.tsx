@@ -11,7 +11,14 @@ interface Props {
 export function EnergyMeter({ refreshKey }: Props) {
   const [energy, setEnergy] = useState<number | null>(null);
   const [rep, setRep] = useState<number | null>(null);
+  const [localRefreshKey, setLocalRefreshKey] = useState(0);
   const { address } = useAuthState();
+
+  useEffect(() => {
+    const refresh = () => setLocalRefreshKey((key) => key + 1);
+    window.addEventListener('energy-updated', refresh);
+    return () => window.removeEventListener('energy-updated', refresh);
+  }, []);
 
   useEffect(() => {
     if (!address) return;
@@ -26,7 +33,7 @@ export function EnergyMeter({ refreshKey }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [address, refreshKey]);
+  }, [address, refreshKey, localRefreshKey]);
 
   if (!address || energy == null) return null;
 
