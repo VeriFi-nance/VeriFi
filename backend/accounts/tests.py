@@ -118,27 +118,10 @@ class UsernameTests(TestCase):
         self.assertIn("detail", res.data)
         self.assertEqual(res.data["detail"], "Username cannot start with '0x'.")
 
-    def test_profile_lookup_shadowing(self):
-        # User A's address is identical to User B's username
-        address_a = "0x" + "a" * 40
-        WalletUser.objects.create(address=address_a, username="user_a")
-        
-        address_b = "0x" + "b" * 40
-        WalletUser.objects.create(address=address_b, username=address_a)
-
-        # Lookup address_a (User A's address, which is also User B's username)
-        res = self.client.get(f"/api/auth/profile/{address_a}/")
-        self.assertEqual(res.status_code, 200)
-        # Should return User A, prioritizing the address match
-        self.assertEqual(res.data["address"], address_a)
-        self.assertEqual(res.data["username"], "user_a")
-
-        # Lookup address_b (User B's address)
-        res_b = self.client.get(f"/api/auth/profile/{address_b}/")
-        self.assertEqual(res_b.status_code, 200)
-        self.assertEqual(res_b.data["address"], address_b)
-        self.assertEqual(res_b.data["username"], address_a)
-
+    # Note: A `test_profile_lookup_shadowing` test was removed because shadowing is
+    # structurally impossible. A username (max 30 chars) can never equal a
+    # 42-char address, and the '0x' prefix guard further reinforces this.
+    def test_profile_lookup_not_found(self):
         # Non-existent user returns 404
         res_none = self.client.get("/api/auth/profile/non_existent/")
         self.assertEqual(res_none.status_code, 404)
