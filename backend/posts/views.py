@@ -610,6 +610,80 @@ class HardClaimResolveView(APIView):
         return Response(result)
 
 
+class AssetChartDataView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        try:
+            asset = Asset.objects.get(pk=pk)
+        except Asset.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        from datetime import datetime, timedelta, timezone
+        from .ohlc_fetcher import (
+            get_ohlc_data,
+            OHLCFetchError,
+            Interval,
+            floor_align_datetime,
+            CHART_INTERVAL_CHOICES,
+        )
+
+        # Default window: Last 30 days
+        chart_end = datetime.now(timezone.utc).date()
+        chart_start = chart_end - timedelta(days=30)
+        default_interval = Interval.FOUR_HOUR
+
+        requested = request.query_params.get("interval")
+        if not requested:
+            chart_interval = default_interval
+        else:
+            try:
+                chart_interval = Interval(requested)
+            except ValueError as exc:
+                return Response({"detail": f"Invalid interval: {requested}"}, status=status.HTTP_400_BAD_REQUEST)
+            if chart_interval not in CHART_INTERVAL_CHOICES:
+                return Response({"detail": f"Interval {requested} not supported for charts."}, status=status.HTTP_400_BAD_REQUEST)
+
+        start_time = floor_align_datetime(
+            datetime.combine(chart_start, datetime.min.time(), tzinfo=timezone.utc),
+            chart_interval,
+        )
+        end_time = floor_align_datetime(
+            datetime.now(timezone.utc),
+            chart_interval,
+        )
+
+        try:
+            ohlc_rows = get_ohlc_data(asset, start_time, end_time, interval=chart_interval)
+        except OHLCFetchError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        ohlc_data = [
+            {
+                "date": row.timestamp.isoformat(),
+                "open": row.open,
+                "high": row.high,
+                "low": row.low,
+                "close": row.close,
+            }
+            for row in ohlc_rows
+        ]
+        
+        current_price = None
+        if ohlc_data:
+            current_price = ohlc_data[-1]["close"]
+
+        return Response({
+            "asset_symbol": asset.symbol,
+            "interval": chart_interval.value,
+            "default_interval": default_interval.value,
+            "as_of": datetime.now(timezone.utc).isoformat(),
+            "ohlc": ohlc_data,
+            "current_price": current_price,
+        })
+
+
 class HardClaimChartDataView(APIView):
     authentication_classes = []
     permission_classes = []
