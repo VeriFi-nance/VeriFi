@@ -217,7 +217,6 @@ export default function ChannelDetailPage() {
             <NewPostButton
               onPosted={fetchChannelAndPosts}
               channelId={Number(id)}
-              channelCreatorAddress={channel.creator_address}
             />
           </div>
         )}

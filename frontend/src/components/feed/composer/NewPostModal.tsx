@@ -22,43 +22,18 @@ import {
 } from './types';
 import { buildClaimPayload, buildPositionPayload } from '@/lib/payloads';
 import { signPayload, resolveUsername } from '@/lib/signing';
+import { PositionWizard, defaultPositionDraft, type PositionDraft } from './PositionWizard';
 
-interface PositionDraft {
-  assetId: string;
-  direction: 'long' | 'short';
-  entryPrice: string;
-  stopLoss: string;
-  takeProfit: string;
-  entryInterval: string;
-  lifetime: string;
-}
 
-function defaultPositionDraft(): PositionDraft {
-  const entry = new Date();
-  entry.setDate(entry.getDate() + 2);
-  const life = new Date();
-  life.setDate(life.getDate() + 7);
-  return {
-    assetId: '',
-    direction: 'long',
-    entryPrice: '',
-    stopLoss: '',
-    takeProfit: '',
-    entryInterval: entry.toISOString().slice(0, 16),
-    lifetime: life.toISOString().slice(0, 16),
-  };
-}
 
 interface NewPostModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onPosted: () => void;
   channelId?: number;
-  /** Pre-fetched channel creator address to enable position attachment UI */
-  channelCreatorAddress?: string;
 }
 
-export function NewPostModal({ open, onOpenChange, onPosted, channelId, channelCreatorAddress }: NewPostModalProps) {
+export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPostModalProps) {
   const openLogin = useOpenLogin();
   const auth = useAuthState();
   const [content, setContent] = useState('');
@@ -71,15 +46,12 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId, channelC
   const [error, setError] = useState('');
   // Position draft state
   const [showPositionForm, setShowPositionForm] = useState(false);
+  const [posWizardMode, setPosWizardMode] = useState(true);
   const [posDraft, setPosDraft] = useState<PositionDraft>(defaultPositionDraft());
   const [posError, setPosError] = useState('');
   const [posAttached, setPosAttached] = useState<PositionDraft | null>(null);
 
-  const isChannelCreator =
-    !!channelId &&
-    !!channelCreatorAddress &&
-    !!auth.address &&
-    auth.address.toLowerCase() === channelCreatorAddress.toLowerCase();
+
 
   useEffect(() => {
     if (open) {
@@ -94,6 +66,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId, channelC
     setShowDraft(false);
     setError('');
     setShowPositionForm(false);
+    setPosWizardMode(true);
     setPosDraft(defaultPositionDraft());
     setPosError('');
     setPosAttached(null);
@@ -217,7 +190,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId, channelC
 
       // Build positions payload
       let positionsPayload: Record<string, unknown>[] = [];
-      if (posAttached && channelId && isChannelCreator) {
+      if (posAttached) {
         const pd = posAttached;
         const selectedAsset = assets.find((a) => a.id.toString() === pd.assetId);
         const entry = parseFloat(pd.entryPrice);
@@ -273,7 +246,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId, channelC
           </RD.Description>
         </RD.Header>
 
-        <div className="space-y-4 max-h-[60dvh] md:max-h-[65vh] overflow-y-auto -mx-5 px-5 md:-mx-6 md:px-6">
+        <div className="space-y-4 max-h-[60dvh] md:max-h-[65vh] overflow-y-auto -mx-5 px-5 md:-mx-6 md:px-6 pt-2">
           {error && (
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>
@@ -328,23 +301,71 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId, channelC
             </div>
           )}
 
-          {/* ── Position attachment (channel creator only) ──────────────── */}
-          {isChannelCreator && (
-            <div className="border border-dashed border-indigo-500/20 rounded-lg">
-              <button
-                type="button"
-                onClick={() => setShowPositionForm((s) => !s)}
-                className="w-full flex items-center justify-between gap-2 px-3 py-2 text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition-colors"
-              >
-                <span className="flex items-center gap-1.5">
-                  <TrendingUp className="size-3.5" />
-                  {posAttached ? 'Position attached ✓' : 'Attach a position'}
-                </span>
-                <ChevronDown className={`size-3.5 transition-transform ${showPositionForm ? 'rotate-180' : ''}`} />
-              </button>
+          {/* ── Attached Position Display ──────────────── */}
+          {posAttached && !showPositionForm && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-widest text-position-badge">
+                Attached position
+              </p>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 min-w-0 flex items-center justify-between border border-position-badge/20 bg-position-badge/5 rounded-md px-3 py-2">
+                  <div className="flex items-center gap-2 text-xs">
+                    <TrendingUp className="size-3.5 text-position-badge" />
+                    <span className="font-semibold text-position-badge">
+                      {assets.find((a) => a.id.toString() === posAttached.assetId)?.symbol || 'Asset'}
+                    </span>
+                    <span className="text-muted-foreground uppercase font-medium">
+                      {posAttached.direction}
+                    </span>
+                    <span className="text-muted-foreground ml-2">Entry: <span className="text-foreground">{posAttached.entryPrice}</span></span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setPosDraft(posAttached);
+                    setPosAttached(null);
+                    setShowPositionForm(true);
+                    setPosWizardMode(false);
+                  }}
+                  title="Edit position"
+                  className="size-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  aria-label="Edit position"
+                >
+                  <Pencil className="size-3.5" />
+                </button>
+                <button
+                  onClick={() => setPosAttached(null)}
+                  title="Remove position"
+                  className="size-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                  aria-label="Remove position"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
 
-              {showPositionForm && (
-                <div className="px-3 pb-3 space-y-3 border-t border-indigo-500/10 pt-3">
+          {/* ── Position Form ──────────────── */}
+          {showPositionForm && (
+            <div className="space-y-3">
+              {posWizardMode ? (
+                <PositionWizard
+                  assets={assets}
+                  initialDraft={posDraft}
+                  onComplete={(pd) => {
+                    setPosAttached(pd);
+                    setShowPositionForm(false);
+                    setPosError('');
+                  }}
+                  onCancel={() => {
+                    setShowPositionForm(false);
+                    setPosDraft(defaultPositionDraft());
+                    setPosError('');
+                  }}
+                  onFillManually={() => setPosWizardMode(false)}
+                />
+              ) : (
+                <div className="p-3 border border-position-badge/20 rounded-lg space-y-3 bg-position-badge/5">
                   {posError && (
                     <p className="text-[11px] text-destructive">{posError}</p>
                   )}
@@ -430,7 +451,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId, channelC
                     <Button
                       type="button"
                       size="sm"
-                      className="flex-1 text-xs h-7"
+                      className="flex-1 text-xs h-7 bg-indigo-500 hover:bg-indigo-600 text-white"
                       onClick={() => {
                         setPosError('');
                         if (!posDraft.assetId) { setPosError('Select an asset.'); return; }
@@ -448,24 +469,23 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId, channelC
                     >
                       Attach Position
                     </Button>
-                    {posAttached && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 text-xs text-destructive hover:bg-destructive/10"
-                        onClick={() => { setPosAttached(null); }}
-                      >
-                        Remove
-                      </Button>
-                    )}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs text-muted-foreground hover:bg-muted"
+                      onClick={() => { setShowPositionForm(false); setPosDraft(defaultPositionDraft()); }}
+                    >
+                      Cancel
+                    </Button>
                   </div>
                 </div>
               )}
             </div>
           )}
 
-          {showDraft ? (
+          {/* ── Claim Form ──────────────── */}
+          {showDraft && (
             wizardMode ? (
               <ClaimWizard
                 assets={assets}
@@ -491,29 +511,48 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId, channelC
                 }}
               />
             )
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full gap-2 border-dashed text-muted-foreground hover:text-foreground"
-              onClick={() => {
-                setShowDraft(true);
-                setWizardMode(true);
-                setError('');
-              }}
-            >
-              <Plus className="size-3.5" />
-              Add claim
-            </Button>
+          )}
+
+          {/* ── Buttons ──────────────── */}
+          {(!showDraft && !showPositionForm) && (
+            <div className="flex gap-2">
+              {!posAttached && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 gap-2 border-dashed border-claim-badge/30 text-claim-badge hover:text-claim-badge/80 hover:border-claim-badge/50 hover:bg-claim-badge/10"
+                  onClick={() => {
+                    setShowDraft(true);
+                    setWizardMode(true);
+                    setError('');
+                  }}
+                >
+                  <Plus className="size-3.5" />
+                  {attached.length > 0 ? 'Add another claim' : 'Add claim'}
+                </Button>
+              )}
+
+              {attached.length === 0 && !posAttached && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 gap-2 border-dashed border-position-badge/30 text-position-badge hover:text-position-badge/80 hover:border-position-badge/50 hover:bg-position-badge/10"
+                  onClick={() => {
+                    setShowPositionForm(true);
+                    setPosWizardMode(true);
+                    setPosError('');
+                  }}
+                >
+                  <TrendingUp className="size-3.5" />
+                  Add position
+                </Button>
+              )}
+            </div>
           )}
         </div>
 
-        <RD.Footer className="border-t border-border pt-3 -mx-5 px-5 md:-mx-6 md:px-6">
-          <p className="text-xs text-muted-foreground sm:mr-auto">
-            {attached.length > 0
-              ? `${attached.length} claim${attached.length !== 1 ? 's' : ''} attached`
-              : 'No claims yet'}
-          </p>
+        <RD.Footer className="border-t border-border pt-4 md:pt-5 -mx-5 px-5 md:-mx-6 md:px-6 sm:items-center">
+          <div className="sm:mr-auto" />
           <Button variant="outline" size="sm" onClick={() => handleOpenChange(false)}>
             Cancel
           </Button>
@@ -531,11 +570,9 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId, channelC
 export function NewPostButton({
   onPosted,
   channelId,
-  channelCreatorAddress,
 }: {
   onPosted: () => void;
   channelId?: number;
-  channelCreatorAddress?: string;
 }) {
   const openLogin = useOpenLogin();
   const auth = useAuthState();
@@ -560,7 +597,6 @@ export function NewPostButton({
         onOpenChange={setOpen}
         onPosted={onPosted}
         channelId={channelId}
-        channelCreatorAddress={channelCreatorAddress}
       />
     </>
   );

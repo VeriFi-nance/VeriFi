@@ -217,8 +217,7 @@ export function PremiumChannelView({ channelId, onSubscribed }: PremiumChannelVi
           <div className="shrink-0">
             <NewPostButton
               onPosted={fetchChannelAndPosts}
-              channelId={channelId}
-              channelCreatorAddress={channel.creator_address}
+              channelId={channel.id}
             />
           </div>
         )}
