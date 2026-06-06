@@ -6,7 +6,19 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from posts.models import Asset, Post, HardClaim, HardClaimEvent, OHLCData
+from posts.models import (
+    Asset,
+    Post,
+    HardClaim,
+    HardClaimEvent,
+    OHLCData,
+    Channel,
+    ChannelMembership,
+    PostLike,
+    PostComment,
+    PostCommentLike,
+    SavedProof,
+)
 from accounts.models import WalletUser
 from . import rep_market
 
@@ -325,3 +337,194 @@ class PostCreationAtomicTests(TestCase):
         self.assertEqual(response.status_code, 201)
         trader.refresh_from_db()
         self.assertEqual(trader.energy, 3)
+
+
+class PostSocialActionTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.author = WalletUser.objects.create(address="0xauthor")
+        self.viewer = WalletUser.objects.create(address="0xviewer")
+        self.other = WalletUser.objects.create(address="0xother")
+        self.post = Post.objects.create(author=self.author, content="Social proof")
+        self.viewer_token = self._token(self.viewer)
+        self.other_token = self._token(self.other)
+
+    def _token(self, user):
+        refresh = RefreshToken()
+        refresh["address"] = user.address
+        return str(refresh.access_token)
+
+    def _auth(self, token=None):
+        return {"HTTP_AUTHORIZATION": f"Bearer {token or self.viewer_token}"}
+
+    def test_public_feed_includes_social_counts_for_anonymous_users(self):
+        PostLike.objects.create(post=self.post, user=self.viewer)
+        PostComment.objects.create(post=self.post, author=self.viewer, content="I agree")
+        SavedProof.objects.create(post=self.post, user=self.viewer)
+
+        response = self.client.get(reverse("post-list-create"))
+
+        self.assertEqual(response.status_code, 200)
+        post = response.json()["results"][0]
+        self.assertEqual(post["like_count"], 1)
+        self.assertEqual(post["comment_count"], 1)
+        self.assertEqual(post["saved_proof_count"], 1)
+        self.assertFalse(post["liked_by_me"])
+        self.assertFalse(post["saved_proof_by_me"])
+
+    def test_post_detail_includes_current_user_social_state(self):
+        PostLike.objects.create(post=self.post, user=self.viewer)
+        SavedProof.objects.create(post=self.post, user=self.viewer)
+
+        response = self.client.get(reverse("post-detail", kwargs={"pk": self.post.pk}), **self._auth())
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["like_count"], 1)
+        self.assertEqual(data["saved_proof_count"], 1)
+        self.assertTrue(data["liked_by_me"])
+        self.assertTrue(data["saved_proof_by_me"])
+
+    def test_like_requires_auth_and_is_idempotent(self):
+        url = reverse("post-like", kwargs={"pk": self.post.pk})
+
+        self.assertEqual(self.client.post(url).status_code, 401)
+        first = self.client.post(url, **self._auth())
+        second = self.client.post(url, **self._auth())
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(PostLike.objects.filter(post=self.post, user=self.viewer).count(), 1)
+        self.assertEqual(second.json()["like_count"], 1)
+        self.assertTrue(second.json()["liked_by_me"])
+
+        deleted = self.client.delete(url, **self._auth())
+        self.assertEqual(deleted.status_code, 200)
+        self.assertEqual(PostLike.objects.filter(post=self.post, user=self.viewer).count(), 0)
+        self.assertFalse(deleted.json()["liked_by_me"])
+
+    def test_saved_proof_requires_auth_and_is_idempotent(self):
+        url = reverse("post-save-proof", kwargs={"pk": self.post.pk})
+
+        self.assertEqual(self.client.post(url).status_code, 401)
+        first = self.client.post(url, **self._auth())
+        second = self.client.post(url, **self._auth())
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(SavedProof.objects.filter(post=self.post, user=self.viewer).count(), 1)
+        self.assertEqual(second.json()["saved_proof_count"], 1)
+        self.assertTrue(second.json()["saved_proof_by_me"])
+
+        deleted = self.client.delete(url, **self._auth())
+        self.assertEqual(deleted.status_code, 200)
+        self.assertEqual(SavedProof.objects.filter(post=self.post, user=self.viewer).count(), 0)
+        self.assertFalse(deleted.json()["saved_proof_by_me"])
+
+    def test_comments_require_auth_for_creation_and_validate_content(self):
+        url = reverse("post-comments", kwargs={"pk": self.post.pk})
+
+        self.assertEqual(self.client.get(url).status_code, 200)
+        self.assertEqual(self.client.post(url, data=json.dumps({"content": "Hi"}), content_type="application/json").status_code, 401)
+
+        blank = self.client.post(
+            url,
+            data=json.dumps({"content": "   "}),
+            content_type="application/json",
+            **self._auth(),
+        )
+        too_long = self.client.post(
+            url,
+            data=json.dumps({"content": "x" * 501}),
+            content_type="application/json",
+            **self._auth(),
+        )
+        created = self.client.post(
+            url,
+            data=json.dumps({"content": "First comment"}),
+            content_type="application/json",
+            **self._auth(),
+        )
+
+        self.assertEqual(blank.status_code, 400)
+        self.assertEqual(too_long.status_code, 400)
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(created.json()["content"], "First comment")
+        self.assertEqual(PostComment.objects.filter(post=self.post).count(), 1)
+
+    def test_comments_support_nested_replies(self):
+        url = reverse("post-comments", kwargs={"pk": self.post.pk})
+        parent = PostComment.objects.create(post=self.post, author=self.other, content="Parent")
+
+        created = self.client.post(
+            url,
+            data=json.dumps({"content": "Nested reply", "parent_id": parent.pk}),
+            content_type="application/json",
+            **self._auth(),
+        )
+        invalid = self.client.post(
+            url,
+            data=json.dumps({"content": "Bad reply", "parent_id": 9999}),
+            content_type="application/json",
+            **self._auth(),
+        )
+        listed = self.client.get(url, **self._auth())
+
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(created.json()["parent"], parent.pk)
+        self.assertEqual(invalid.status_code, 400)
+        self.assertEqual(listed.status_code, 200)
+        data = listed.json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["content"], "Parent")
+        self.assertEqual(data[0]["replies"][0]["content"], "Nested reply")
+
+    def test_comment_like_requires_auth_and_is_idempotent(self):
+        comment = PostComment.objects.create(post=self.post, author=self.other, content="Parent")
+        url = reverse("post-comment-like", kwargs={"pk": comment.pk})
+
+        self.assertEqual(self.client.post(url).status_code, 401)
+        first = self.client.post(url, **self._auth())
+        second = self.client.post(url, **self._auth())
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(PostCommentLike.objects.filter(comment=comment, user=self.viewer).count(), 1)
+        self.assertEqual(second.json()["like_count"], 1)
+        self.assertTrue(second.json()["liked_by_me"])
+
+        deleted = self.client.delete(url, **self._auth())
+        self.assertEqual(deleted.status_code, 200)
+        self.assertEqual(PostCommentLike.objects.filter(comment=comment, user=self.viewer).count(), 0)
+        self.assertFalse(deleted.json()["liked_by_me"])
+
+    def test_private_channel_social_endpoints_require_membership(self):
+        channel = Channel.objects.create(name="Alpha", creator=self.author)
+        private_post = Post.objects.create(author=self.author, content="Members only", channel=channel)
+
+        like_url = reverse("post-like", kwargs={"pk": private_post.pk})
+        comments_url = reverse("post-comments", kwargs={"pk": private_post.pk})
+        save_url = reverse("post-save-proof", kwargs={"pk": private_post.pk})
+
+        self.assertEqual(self.client.post(like_url, **self._auth()).status_code, 403)
+        self.assertEqual(self.client.get(comments_url, **self._auth()).status_code, 403)
+        self.assertEqual(
+            self.client.post(
+                comments_url,
+                data=json.dumps({"content": "Nope"}),
+                content_type="application/json",
+                **self._auth(),
+            ).status_code,
+            403,
+        )
+        self.assertEqual(self.client.post(save_url, **self._auth()).status_code, 403)
+
+        ChannelMembership.objects.create(
+            channel=channel,
+            user=self.viewer,
+            status=ChannelMembership.Status.APPROVED,
+        )
+
+        self.assertEqual(self.client.post(like_url, **self._auth()).status_code, 200)
+        self.assertEqual(self.client.get(comments_url, **self._auth()).status_code, 200)
+        self.assertEqual(self.client.post(save_url, **self._auth()).status_code, 200)

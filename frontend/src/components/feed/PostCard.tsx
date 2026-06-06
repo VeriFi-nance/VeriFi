@@ -7,6 +7,7 @@ import { ChevronDown, Star } from 'lucide-react';
 import { HardClaimCard } from '@/components/HardClaimCard';
 import { PositionAttachmentCard } from '@/components/PositionAttachmentCard';
 import { UserAvatar } from '@/components/UserAvatar';
+import { PostActions } from '@/components/feed/PostActions';
 import { truncateAddress } from '@/lib/wallet';
 import { cn, safeImageSrc } from '@/lib/utils';
 import type { PostItem, HardClaimItem, AssetItem } from '@/lib/types';
@@ -19,9 +20,10 @@ interface PostCardProps {
   hardClaims?: HardClaimItem[];
   assets?: AssetItem[];
   onDelete?: () => void;
+  onPostChange?: (post: PostItem) => void;
 }
 
-export function PostCard({ post, hardClaims = [], assets = [], onDelete }: PostCardProps) {
+export function PostCard({ post, hardClaims = [], assets = [], onDelete, onPostChange }: PostCardProps) {
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   // Claim detail modal state
   const [claimModal, setClaimModal] = useState<HardClaimItem | null>(null);
@@ -102,7 +104,7 @@ export function PostCard({ post, hardClaims = [], assets = [], onDelete }: PostC
           </div>
         </div>
 
-        <CardContent className="px-4 sm:px-5 pb-4">
+        <CardContent className="px-4 sm:px-5 pb-3">
           <p className="text-sm leading-relaxed whitespace-pre-wrap">{post.content}</p>
 
           {post.image_url && (
@@ -114,6 +116,10 @@ export function PostCard({ post, hardClaims = [], assets = [], onDelete }: PostC
             />
           )}
         </CardContent>
+
+        <div className="pointer-events-auto border-t border-border px-3 sm:px-4 py-1">
+          <PostActions post={post} onPostChange={onPostChange} />
+        </div>
 
         {hasAttachments && (
           <>

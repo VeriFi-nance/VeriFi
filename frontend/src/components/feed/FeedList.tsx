@@ -157,6 +157,7 @@ export function FeedList({ feed, channel, myRole, creatorAddress, filter: propFi
                 hardClaims={post.hard_claims}
                 assets={assets}
                 onDelete={canDelete ? () => handleDeletePost(post.id) : undefined}
+                onPostChange={handlePostChange}
               />
             );
           })}
@@ -213,5 +214,9 @@ export function FeedList({ feed, channel, myRole, creatorAddress, filter: propFi
         }
       }
     });
+  }
+
+  function handlePostChange(updatedPost: PostItem) {
+    setPosts((prev) => prev.map((post) => (post.id === updatedPost.id ? updatedPost : post)));
   }
 }

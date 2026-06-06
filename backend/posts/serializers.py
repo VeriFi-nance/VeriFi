@@ -1,7 +1,7 @@
 from datetime import date
 from rest_framework import serializers
 from accounts.serializers import avatar_delivery_url, post_image_delivery_url
-from .models import Asset, Post, HardClaim, HardClaimEvent, OHLCData, Channel, ChannelMembership, Position, PositionEvent
+from .models import Asset, Post, HardClaim, HardClaimEvent, OHLCData, Channel, ChannelMembership, Position, PositionEvent, PostComment
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Asset
@@ -228,6 +228,43 @@ class PositionInputSerializer(serializers.Serializer):
         return data
 
 
+class PostCommentSerializer(serializers.ModelSerializer):
+    author_address = serializers.CharField(source="author.address", read_only=True)
+    author_username = serializers.CharField(source="author.username", read_only=True)
+    author_avatar_url = serializers.SerializerMethodField()
+    image_url = serializers.SerializerMethodField()
+    like_count = serializers.SerializerMethodField()
+    liked_by_me = serializers.SerializerMethodField()
+    replies = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PostComment
+        fields = [
+            "id", "post", "parent", "author_address", "author_username", "author_avatar_url",
+            "content", "image_url", "created_at", "like_count", "liked_by_me", "replies"
+        ]
+        read_only_fields = ["id", "post", "author_address", "author_username", "created_at"]
+
+    def get_author_avatar_url(self, obj):
+        avatar = getattr(obj.author, "avatar", None) if obj.author else None
+        return avatar_delivery_url(avatar)
+
+    def get_image_url(self, obj):
+        return post_image_delivery_url(obj.image)
+
+    def get_like_count(self, obj):
+        return getattr(obj, "like_count", obj.likes.count())
+
+    def get_liked_by_me(self, obj):
+        return bool(getattr(obj, "liked_by_me", False))
+
+    def get_replies(self, obj):
+        replies = getattr(obj, "prefetched_replies", None)
+        if replies is None:
+            replies = obj.replies.select_related("author").order_by("created_at")
+        return PostCommentSerializer(replies, many=True, context=self.context).data
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Post (defined after Position so get_positions has no forward-reference)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -240,12 +277,18 @@ class PostSerializer(serializers.ModelSerializer):
     hard_claims = HardClaimSerializer(many=True, read_only=True)
     positions = serializers.SerializerMethodField()
     profitability = serializers.SerializerMethodField()
+    like_count = serializers.SerializerMethodField()
+    comment_count = serializers.SerializerMethodField()
+    saved_proof_count = serializers.SerializerMethodField()
+    liked_by_me = serializers.SerializerMethodField()
+    saved_proof_by_me = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
         fields = [
             "id", "author_address", "author_username", "author_avatar_url", "content", "image_url", "channel",
             "created_at", "hard_claims", "positions", "profitability",
+            "like_count", "comment_count", "saved_proof_count", "liked_by_me", "saved_proof_by_me",
         ]
 
     def get_author_avatar_url(self, obj):
@@ -268,6 +311,21 @@ class PostSerializer(serializers.ModelSerializer):
 
     def get_positions(self, obj):
         return PositionSummarySerializer(obj.positions.all(), many=True).data
+
+    def get_like_count(self, obj):
+        return getattr(obj, "like_count", obj.likes.count())
+
+    def get_comment_count(self, obj):
+        return getattr(obj, "comment_count", obj.comments.count())
+
+    def get_saved_proof_count(self, obj):
+        return getattr(obj, "saved_proof_count", obj.saved_proofs.count())
+
+    def get_liked_by_me(self, obj):
+        return bool(getattr(obj, "liked_by_me", False))
+
+    def get_saved_proof_by_me(self, obj):
+        return bool(getattr(obj, "saved_proof_by_me", False))
 
 
 # ─────────────────────────────────────────────────────────────────────────────

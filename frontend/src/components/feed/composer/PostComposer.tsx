@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { AlertTriangle, RotateCcw, ImagePlus } from 'lucide-react';
 import { ClaimRow } from './ClaimRow';
 import { extractClaims } from '@/lib/api';
-import { cn } from '@/lib/utils';
+import { cn, imageFileFromClipboard } from '@/lib/utils';
 import type { AssetItem, ReviewClaim } from '@/lib/types';
 import {
   dismissKey,
@@ -26,6 +26,8 @@ interface PostComposerProps {
   onEditExtracted: (claim: ReviewClaim) => void;
   /** Opens the image file picker. Rendered as an icon inside the input area. */
   onAttachImage?: () => void;
+  /** Receives an image pasted into the textarea, treated as an upload. */
+  onPasteImage?: (file: File) => void;
 }
 
 /**
@@ -41,6 +43,7 @@ export function PostComposer({
   onAddExtracted,
   onEditExtracted,
   onAttachImage,
+  onPasteImage,
 }: PostComposerProps) {
   const [extracted, setExtracted] = useState<ReviewClaim[]>([]);
   const [extracting, setExtracting] = useState(false);
@@ -150,6 +153,13 @@ export function PostComposer({
             placeholder="What's your financial take?"
             value={content}
             onChange={(e) => onContentChange(e.target.value)}
+            onPaste={(e) => {
+              const file = imageFileFromClipboard(e.clipboardData);
+              if (file && onPasteImage) {
+                e.preventDefault();
+                onPasteImage(file);
+              }
+            }}
             rows={4}
             className="resize-none text-sm pb-11"
             maxLength={MAX_CHARS + 50}

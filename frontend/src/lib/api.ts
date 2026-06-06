@@ -1,5 +1,5 @@
 import { getToken } from './auth';
-import type { PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, PositionChartData, AssetChartData, ChartCandleInterval, ProfileStats, ChannelItem, ChannelMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType, ProofBundle, OGMetadata } from './types';
+import type { PostItem, PostCommentItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, PositionChartData, AssetChartData, ChartCandleInterval, ProfileStats, ChannelItem, ChannelMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType, ProofBundle, OGMetadata } from './types';
 
 /**
  * Ordered list of backend base URLs to try, sourced from build-time env vars:
@@ -234,6 +234,71 @@ export async function getFeed(params?: {
 
 export async function getPost(id: number): Promise<PostItem> {
   return request(`/api/posts/${id}/`, { headers: authHeaders() });
+}
+
+export async function likePost(postId: number): Promise<PostItem> {
+  return request(`/api/posts/${postId}/like/`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+}
+
+export async function unlikePost(postId: number): Promise<PostItem> {
+  return request(`/api/posts/${postId}/like/`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+}
+
+export async function getPostComments(postId: number): Promise<PostCommentItem[]> {
+  return request(`/api/posts/${postId}/comments/`, { headers: authHeaders() });
+}
+
+export async function createPostComment(postId: number, content: string, parentId?: number, image?: File | null): Promise<PostCommentItem> {
+  if (image) {
+    const form = new FormData();
+    form.append('content', content);
+    if (parentId) form.append('parent_id', String(parentId));
+    form.append('image', image);
+    return request(`/api/posts/${postId}/comments/`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: form,
+    });
+  }
+  return request(`/api/posts/${postId}/comments/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ content, ...(parentId ? { parent_id: parentId } : {}) }),
+  });
+}
+
+export async function likePostComment(commentId: number): Promise<PostCommentItem> {
+  return request(`/api/posts/comments/${commentId}/like/`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+}
+
+export async function unlikePostComment(commentId: number): Promise<PostCommentItem> {
+  return request(`/api/posts/comments/${commentId}/like/`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+}
+
+export async function savePostProof(postId: number): Promise<PostItem> {
+  return request(`/api/posts/${postId}/save-proof/`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+}
+
+export async function unsavePostProof(postId: number): Promise<PostItem> {
+  return request(`/api/posts/${postId}/save-proof/`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
 }
 
 export async function getHardClaims(params?: { feed?: string, channel?: number }): Promise<HardClaimItem[]> {
