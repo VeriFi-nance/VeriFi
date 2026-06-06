@@ -126,7 +126,7 @@ export default function PostDetailPage() {
         </CardContent>
       </Card>
 
-      <section className="space-y-3">
+      <section className="mt-4 space-y-3">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold">Comments</h2>
           <span className="text-xs text-muted-foreground num">{post.comment_count}</span>
