@@ -7,7 +7,7 @@ import type { PositionItem, AssetItem } from '@/lib/types';
 import { useAuthState } from '@/lib/auth';
 import { Link } from 'react-router-dom';
 import { RefreshCw, Download, ChevronDown, ChevronUp } from 'lucide-react';
-import { PriceChart } from './feed/PriceChart';
+import { PositionPriceChart } from './feed/PositionPriceChart';
 import { usePositionChartData } from '@/hooks/usePositionChartData';
 
 interface PositionCardProps {
@@ -202,7 +202,7 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
               </div>
             )}
             {chartData && (
-              <PriceChart
+              <PositionPriceChart
                 data={chartData}
                 interval={interval}
                 onIntervalChange={setInterval}

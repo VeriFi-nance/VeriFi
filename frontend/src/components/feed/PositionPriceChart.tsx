@@ -13,12 +13,12 @@ import {
   type Time,
   type UTCTimestamp,
 } from 'lightweight-charts';
-import type { ClaimChartData, ChartCandleInterval } from '@/lib/types';
+import type { PositionChartData, ChartCandleInterval } from '@/lib/types';
 import { CHART_INTERVAL_OPTIONS, claimWindowForChart } from '@/lib/chart';
 import { cn } from '@/lib/utils';
 
-interface PriceChartProps {
-  data: ClaimChartData;
+interface PositionPriceChartProps {
+  data: PositionChartData;
   interval: ChartCandleInterval;
   onIntervalChange: (interval: ChartCandleInterval) => void;
   refetching?: boolean;
@@ -170,7 +170,7 @@ function isInClaimWindow(
 }
 
 function toStyledCandles(
-  data: ClaimChartData,
+  data: PositionChartData,
   windowStart: UTCTimestamp,
   windowEnd: UTCTimestamp,
 ): CandlestickData<UTCTimestamp>[] {
@@ -193,7 +193,7 @@ function toStyledCandles(
 }
 
 function computeAutoscaleRange(
-  data: ClaimChartData,
+  data: PositionChartData,
   windowStart: UTCTimestamp,
   windowEnd: UTCTimestamp,
 ) {
@@ -202,24 +202,21 @@ function computeAutoscaleRange(
     return t >= (windowStart as number) && t <= (windowEnd as number);
   });
   const rows = windowRows.length > 0 ? windowRows : data.ohlc;
-  const ohlcValues = rows.flatMap((c) => [c.open, c.high, c.low, c.close]);
 
-  const anchors: number[] = [];
-  if (typeof data.reference_price === 'number' && !Number.isNaN(data.reference_price)) {
-    anchors.push(data.reference_price);
+  // Auto-scale based strictly on the bounds of the trade (Entry, TP, SL).
+  // This prevents extreme historical OHLC wicks from squishing TP and SL together.
+  let min = Math.min(data.stop_loss, data.take_profit, data.entry_price);
+  let max = Math.max(data.stop_loss, data.take_profit, data.entry_price);
+
+  // Ensure the most recent price is visible in case it gapped outside the SL/TP bounds
+  if (rows.length > 0) {
+    const lastPrice = rows[rows.length - 1].close;
+    min = Math.min(min, lastPrice);
+    max = Math.max(max, lastPrice);
   }
-  if (typeof data.target_price === 'number' && !Number.isNaN(data.target_price)) {
-    anchors.push(data.target_price);
-  }
 
-  // Always frame entry + target together; include in-window OHLC so candles aren't clipped.
-  const all = [...ohlcValues, ...anchors];
-  if (all.length === 0) return null;
-
-  const min = Math.min(...all);
-  const max = Math.max(...all);
   const span = max - min || max * 0.02;
-  const padding = span * 0.12;
+  const padding = span * 0.2;
 
   return {
     priceRange: {
@@ -278,12 +275,12 @@ function focusClaimWindow(
   timeScale.setVisibleLogicalRange({ from, to });
 }
 
-export function PriceChart({
+export function PositionPriceChart({
   data,
   interval,
   onIntervalChange,
   refetching = false,
-}: PriceChartProps) {
+}: PositionPriceChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const startMarkerRef = useRef<HTMLDivElement>(null);
@@ -385,9 +382,9 @@ export function PriceChart({
     });
     seriesRef.current = series;
 
-    if (data.reference_price != null && !Number.isNaN(data.reference_price)) {
+    if (data.entry_price != null && !Number.isNaN(data.entry_price)) {
       series.createPriceLine({
-        price: data.reference_price,
+        price: data.entry_price,
         color: ANCHOR_LINE_COLOR,
         lineWidth: 1,
         lineStyle: LineStyle.Dashed,
@@ -396,14 +393,25 @@ export function PriceChart({
       });
     }
 
-    if (data.target_price != null && !Number.isNaN(data.target_price)) {
+    if (data.take_profit != null && !Number.isNaN(data.take_profit)) {
       series.createPriceLine({
-        price: data.target_price,
+        price: data.take_profit,
         color: ANCHOR_LINE_COLOR,
         lineWidth: 1,
         lineStyle: LineStyle.Dashed,
         axisLabelVisible: true,
-        title: 'Target',
+        title: 'Take Profit',
+      });
+    }
+
+    if (data.stop_loss != null && !Number.isNaN(data.stop_loss)) {
+      series.createPriceLine({
+        price: data.stop_loss,
+        color: '#ef4444', // Red for stop loss
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: 'Stop Loss',
       });
     }
 
