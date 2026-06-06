@@ -41,7 +41,7 @@ def _posts_queryset():
         .prefetch_related(
             Prefetch(
                 "hard_claims",
-                HardClaim.objects.select_related("author", "author__profitability").prefetch_related(
+                HardClaim.objects.select_related("author", "author__profitability", "asset").prefetch_related(
                     "events"
                 ),
             ),
@@ -372,7 +372,7 @@ class HardClaimView(APIView):
     permission_classes = []
 
     def get(self, request):
-        qs = HardClaim.objects.all().order_by("-id")
+        qs = HardClaim.objects.select_related("author", "author__profitability", "asset").order_by("-id")
         
         channel_id = request.query_params.get("channel")
         if channel_id:
@@ -1197,7 +1197,7 @@ class PositionListCreateView(APIView):
         if not user or (channel.creator != user and not ChannelMembership.objects.filter(channel=channel, user=user, status=ChannelMembership.Status.APPROVED).exists()):
             return Response({"detail": "You must be an approved member to view positions in this private channel."}, status=status.HTTP_403_FORBIDDEN)
                 
-        positions = Position.objects.filter(channel=channel).order_by("-created_at")
+        positions = Position.objects.filter(channel=channel).select_related("author", "author__profitability", "asset").order_by("-created_at")
         return Response(PositionSerializer(positions, many=True).data)
 
     def post(self, request):

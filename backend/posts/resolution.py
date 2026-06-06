@@ -174,16 +174,18 @@ def claim_entry_price(hard_claim: HardClaim) -> float | None:
     if hard_claim.reference_price is not None:
         return float(hard_claim.reference_price)
 
-    creation = hard_claim.events.filter(event_type=HardClaimEvent.EventType.CREATION).first()
+    creation = next(
+        (e for e in hard_claim.events.all() if e.event_type == HardClaimEvent.EventType.CREATION),
+        None
+    )
     if creation and creation.details:
         stored = creation.details.get("reference_price")
         if stored is not None:
             return float(stored)
 
-    try:
-        return float(fetch_current_price(hard_claim.asset, hard_claim.created_at)[0])
-    except ResolutionError:
-        return None
+    # Do not make synchronous network requests during serialization.
+    # Legacy claims that lack a reference_price will just return None.
+    return None
 
 
 def claim_target_price(hard_claim: HardClaim, entry: float | None = None) -> float | None:
