@@ -65,6 +65,7 @@ export function InteractiveChart({
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const selectModeRef = useRef(selectMode);
+  const allTimesRef = useRef<number[]>([]);
 
   // Sync refs so the click handler closure gets the latest values without recreating the chart
   useEffect(() => {
@@ -198,6 +199,10 @@ export function InteractiveChart({
     }
 
     if (styledCandles.length > 0) {
+      allTimesRef.current = [
+        ...styledCandles.map(c => c.time as number),
+        ...futureWhitespace.map(w => w.time as number)
+      ];
       series.setData([...styledCandles, ...futureWhitespace]);
       chart.timeScale().fitContent();
     }
@@ -256,9 +261,16 @@ export function InteractiveChart({
     }
 
     if (selectedDate) {
-      const targetTime = toUtcTimestamp(selectedDate);
+      let targetTime = toUtcTimestamp(selectedDate) as number;
+      const allTimes = allTimesRef.current;
+      if (allTimes.length > 0) {
+        targetTime = allTimes.reduce((prev, curr) => 
+          Math.abs(curr - targetTime) < Math.abs(prev - targetTime) ? curr : prev
+        );
+      }
+
       markers.push({
-        time: targetTime,
+        time: targetTime as UTCTimestamp,
         position: 'belowBar',
         color: '#f59e0b',
         shape: 'arrowUp',
