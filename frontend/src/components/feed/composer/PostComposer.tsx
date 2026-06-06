@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, RotateCcw } from 'lucide-react';
+import { AlertTriangle, RotateCcw, ImagePlus } from 'lucide-react';
 import { ClaimRow } from './ClaimRow';
 import { extractClaims } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -24,6 +24,8 @@ interface PostComposerProps {
   assets: AssetItem[];
   onAddExtracted: (claim: AttachedClaim) => void;
   onEditExtracted: (claim: ReviewClaim) => void;
+  /** Opens the image file picker. Rendered as an icon inside the input area. */
+  onAttachImage?: () => void;
 }
 
 /**
@@ -38,6 +40,7 @@ export function PostComposer({
   assets,
   onAddExtracted,
   onEditExtracted,
+  onAttachImage,
 }: PostComposerProps) {
   const [extracted, setExtracted] = useState<ReviewClaim[]>([]);
   const [extracting, setExtracting] = useState(false);
@@ -142,15 +145,30 @@ export function PostComposer({
   return (
     <div className="space-y-4">
       <div className="space-y-1.5 p-1">
-        <Textarea
-          placeholder="What's your financial take?"
-          value={content}
-          onChange={(e) => onContentChange(e.target.value)}
-          rows={4}
-          className="resize-none text-sm"
-          maxLength={MAX_CHARS + 50}
-          autoFocus
-        />
+        <div className="relative">
+          <Textarea
+            placeholder="What's your financial take?"
+            value={content}
+            onChange={(e) => onContentChange(e.target.value)}
+            rows={4}
+            className="resize-none text-sm pb-11"
+            maxLength={MAX_CHARS + 50}
+            autoFocus
+          />
+          {onAttachImage && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onAttachImage}
+              aria-label="Add image"
+              title="Add image"
+              className="absolute bottom-2 left-2 size-8 text-primary hover:bg-primary/10 hover:text-primary"
+            >
+              <ImagePlus className="size-5" />
+            </Button>
+          )}
+        </div>
         <p
           className={cn(
             'text-xs text-right num',

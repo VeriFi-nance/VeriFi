@@ -31,3 +31,5 @@ services:
         sync: false
       - key: ADMIN_ADDRESSES
         sync: false
+      - key: CLOUDINARY_URL
+        sync: false

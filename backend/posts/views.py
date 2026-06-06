@@ -1,3 +1,4 @@
+import json
 import logging
 from django.conf import settings
 from django.db import transaction
@@ -24,6 +25,7 @@ from .resolution import (
 from . import rep_market
 from .signature_verification import verify_claim_signature, verify_position_signature
 from accounts.energy import grant_energy, spend, CLAIM_ENERGY_COST
+from accounts.serializers import validate_image_upload
 
 logger = logging.getLogger(__name__)
 
@@ -247,8 +249,27 @@ class PostListCreateView(APIView):
             except Channel.DoesNotExist:
                 return Response({"detail": f"Channel {channel_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
 
-        hard_claims_data = request.data.get("hard_claims", [])
-        positions_data = request.data.get("positions", [])
+        # Under multipart/form-data (image uploads), nested arrays arrive as a
+        # JSON-encoded string rather than a parsed list. Decode them here so both
+        # JSON and multipart requests reach the same code path.
+        def _parse_array_field(raw, label):
+            if isinstance(raw, str):
+                if not raw.strip():
+                    return [], None
+                try:
+                    raw = json.loads(raw)
+                except json.JSONDecodeError:
+                    return None, f"{label} must be valid JSON."
+            if not isinstance(raw, list):
+                return None, f"{label} must be a list."
+            return raw, None
+
+        hard_claims_data, hc_err = _parse_array_field(request.data.get("hard_claims", []), "hard_claims")
+        if hc_err:
+            return Response({"detail": hc_err}, status=status.HTTP_400_BAD_REQUEST)
+        positions_data, pos_err = _parse_array_field(request.data.get("positions", []), "positions")
+        if pos_err:
+            return Response({"detail": pos_err}, status=status.HTTP_400_BAD_REQUEST)
 
         # In channels, positions may only be attached by the channel creator
         if positions_data and channel_obj and channel_obj.creator != user:
@@ -257,8 +278,14 @@ class PostListCreateView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        image_file = request.FILES.get("image")
+        if image_file is not None:
+            img_error = validate_image_upload(image_file)
+            if img_error:
+                return Response({"detail": img_error}, status=status.HTTP_400_BAD_REQUEST)
+
         with transaction.atomic():
-            post = Post.objects.create(author=user, content=content, channel=channel_obj)
+            post = Post.objects.create(author=user, content=content, channel=channel_obj, image=image_file)
             
             for hc_data in hard_claims_data:
                 hc_serializer = HardClaimInputSerializer(data=hc_data)

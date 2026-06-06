@@ -11,7 +11,7 @@ from eth_account import Account
 from eth_account.messages import encode_defunct
 
 from .models import WalletUser, Follow, ProfileChangeLog
-from .serializers import RegisterSerializer, LoginSerializer, FollowSerializer, validate_username_format
+from .serializers import RegisterSerializer, LoginSerializer, FollowSerializer, validate_username_format, validate_image_upload, avatar_delivery_url
 from .energy import grant_energy, ENERGY_CAP
 
 
@@ -48,7 +48,14 @@ class RegisterView(APIView):
                 counter += 1
 
         user = WalletUser.objects.create(address=address, username=username)
-        return Response({"access": _make_jwt(user), "username": user.username}, status=status.HTTP_201_CREATED)
+        return Response(
+            {
+                "access": _make_jwt(user),
+                "username": user.username,
+                "avatar_url": avatar_delivery_url(user.avatar),
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class ChallengeView(APIView):
@@ -120,7 +127,11 @@ class LoginView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        return Response({"access": _make_jwt(user), "username": user.username})
+        return Response({
+            "access": _make_jwt(user),
+            "username": user.username,
+            "avatar_url": avatar_delivery_url(user.avatar),
+        })
 
 
 class ProfileView(APIView):
@@ -166,6 +177,7 @@ class ProfileView(APIView):
         data = {
             "address": target_user.address,
             "username": target_user.username,
+            "avatar_url": avatar_delivery_url(target_user.avatar),
             "followers_count": len(followers_list),
             "following_count": len(following_list),
             "followers": followers_list,
@@ -293,19 +305,31 @@ class UpdateProfileView(APIView):
             return Response({"detail": "Invalid token."}, status=status.HTTP_401_UNAUTHORIZED)
 
         new_username = request.data.get("username")
-        if not new_username:
-            return Response({"detail": "Username is required."}, status=status.HTTP_400_BAD_REQUEST)
-            
-        error = validate_username_format(new_username)
-        if error:
-            return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
-            
-        if WalletUser.objects.filter(username__iexact=new_username).exclude(pk=current_user.pk).exists():
-            return Response({"detail": "Username is already taken."}, status=status.HTTP_400_BAD_REQUEST)
-            
+        avatar_file = request.FILES.get("avatar")
+
+        if not new_username and avatar_file is None:
+            return Response({"detail": "Nothing to update."}, status=status.HTTP_400_BAD_REQUEST)
+
         old_username = current_user.username
-        current_user.username = new_username
+
+        if new_username:
+            error = validate_username_format(new_username)
+            if error:
+                return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
+
+            if WalletUser.objects.filter(username__iexact=new_username).exclude(pk=current_user.pk).exists():
+                return Response({"detail": "Username is already taken."}, status=status.HTTP_400_BAD_REQUEST)
+
+            current_user.username = new_username
+
+        if avatar_file is not None:
+            error = validate_image_upload(avatar_file)
+            if error:
+                return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
+            current_user.avatar = avatar_file
+
         current_user.save()
+
         if old_username != current_user.username:
             ProfileChangeLog.objects.create(
                 user=current_user,
@@ -314,4 +338,8 @@ class UpdateProfileView(APIView):
                 summary=f"Changed username from @{old_username} to @{current_user.username}",
                 metadata={"old_username": old_username, "new_username": current_user.username},
             )
-        return Response({"username": current_user.username})
+
+        return Response({
+            "username": current_user.username,
+            "avatar_url": avatar_delivery_url(current_user.avatar),
+        })

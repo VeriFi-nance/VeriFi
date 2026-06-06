@@ -1,9 +1,11 @@
+from cloudinary.models import CloudinaryField
 from django.db import models
 
 
 class WalletUser(models.Model):
     address = models.CharField(max_length=42, unique=True)  # Ethereum address: 0x + 40 hex
     username = models.CharField(max_length=30, unique=True)
+    avatar = CloudinaryField("avatar", blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     rep = models.FloatField(default=200.0)
     energy = models.FloatField(default=4.0)

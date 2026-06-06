@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,8 +23,7 @@ import {
 import { buildClaimPayload, buildPositionPayload } from '@/lib/payloads';
 import { signPayload, resolveUsername } from '@/lib/signing';
 import { PositionWizard, defaultPositionDraft, type PositionDraft } from './PositionWizard';
-
-
+import { safeImageSrc } from '@/lib/utils';
 
 interface NewPostModalProps {
   open: boolean;
@@ -37,6 +36,9 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
   const openLogin = useOpenLogin();
   const auth = useAuthState();
   const [content, setContent] = useState('');
+  const [image, setImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [attached, setAttached] = useState<AttachedClaim[]>([]);
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [draft, setDraft] = useState<ClaimDraft>(emptyDraft());
@@ -59,8 +61,43 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
     }
   }, [open]);
 
+  // Revoke the object URL when the preview changes or the modal unmounts.
+  useEffect(() => {
+    return () => {
+      if (imagePreview) URL.revokeObjectURL(imagePreview);
+    };
+  }, [imagePreview]);
+
+  function pickImage(file: File | null) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setError('Please choose an image file.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError('Image must be 10 MB or smaller.');
+      return;
+    }
+    setError('');
+    setImage(file);
+    setImagePreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+  }
+
+  function clearImage() {
+    setImage(null);
+    setImagePreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
   function reset() {
     setContent('');
+    clearImage();
     setAttached([]);
     setDraft(emptyDraft());
     setShowDraft(false);
@@ -223,7 +260,13 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
       }
 
       const shouldRefreshEnergy = hardClaimsPayload.some((claim) => claim.market);
-      await createPost(content.trim(), channelId, hardClaimsPayload, positionsPayload.length > 0 ? positionsPayload as any : undefined);
+      await createPost(
+        content.trim(),
+        channelId,
+        hardClaimsPayload,
+        positionsPayload.length > 0 ? (positionsPayload as any) : undefined,
+        image,
+      );
       if (shouldRefreshEnergy) {
         window.dispatchEvent(new Event('energy-updated'));
       }
@@ -264,7 +307,29 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
             assets={assets}
             onAddExtracted={(c) => setAttached((prev) => [...prev, c])}
             onEditExtracted={loadExtractedIntoDraft}
+            onAttachImage={() => fileInputRef.current?.click()}
           />
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => pickImage(e.target.files?.[0] ?? null)}
+          />
+          {imagePreview && (
+            <div className="relative w-full overflow-hidden rounded-lg border border-border">
+              <img src={safeImageSrc(imagePreview)} alt="" className="w-full max-h-72 object-cover" />
+              <button
+                type="button"
+                onClick={clearImage}
+                aria-label="Remove image"
+                className="absolute top-2 right-2 size-7 flex items-center justify-center rounded-full bg-background/80 text-foreground hover:bg-background transition-colors"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+          )}
 
           {attached.length > 0 && (
             <div className="space-y-2">

@@ -8,7 +8,7 @@ import { HardClaimCard } from '@/components/HardClaimCard';
 import { PositionAttachmentCard } from '@/components/PositionAttachmentCard';
 import { UserAvatar } from '@/components/UserAvatar';
 import { truncateAddress } from '@/lib/wallet';
-import { cn } from '@/lib/utils';
+import { cn, safeImageSrc } from '@/lib/utils';
 import type { PostItem, HardClaimItem, AssetItem } from '@/lib/types';
 import { getFeedClaimTagLabel } from '@/lib/claims';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
@@ -46,7 +46,7 @@ export function PostCard({ post, hardClaims = [], assets = [], onDelete }: PostC
 
       <div className="relative z-10 pointer-events-none">
         <div className="flex items-center gap-3 px-4 sm:px-5 pt-4 sm:pt-5 pb-3">
-          <UserAvatar address={post.author_address} size="md" />
+          <UserAvatar address={post.author_address} src={post.author_avatar_url} size="md" />
 
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <Button
@@ -104,6 +104,15 @@ export function PostCard({ post, hardClaims = [], assets = [], onDelete }: PostC
 
         <CardContent className="px-4 sm:px-5 pb-4">
           <p className="text-sm leading-relaxed whitespace-pre-wrap">{post.content}</p>
+
+          {post.image_url && (
+            <img
+              src={safeImageSrc(post.image_url)}
+              alt=""
+              loading="lazy"
+              className="mt-3 w-full max-h-[28rem] rounded-lg border border-border object-cover"
+            />
+          )}
         </CardContent>
 
         {hasAttachments && (

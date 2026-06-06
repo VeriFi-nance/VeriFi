@@ -7,7 +7,7 @@ import type { PositionItem, AssetItem } from '@/lib/types';
 import { useAuthState } from '@/lib/auth';
 import { Link } from 'react-router-dom';
 import { truncateAddress } from '@/lib/wallet';
-import { Download, ChevronUp } from 'lucide-react';
+import { Download, ChevronUp, ChevronDown } from 'lucide-react';
 import { PositionPriceChart } from './feed/PositionPriceChart';
 import { usePositionChartData } from '@/hooks/usePositionChartData';
 

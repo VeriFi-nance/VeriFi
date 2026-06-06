@@ -1,5 +1,6 @@
 from datetime import date
 from rest_framework import serializers
+from accounts.serializers import avatar_delivery_url, post_image_delivery_url
 from .models import Asset, Post, HardClaim, HardClaimEvent, OHLCData, Channel, ChannelMembership, Position, PositionEvent
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -80,18 +81,23 @@ class HardClaimEventSerializer(serializers.ModelSerializer):
 class HardClaimSerializer(serializers.ModelSerializer):
     author_address = serializers.CharField(source="author.address", read_only=True, allow_null=True)
     author_username = serializers.CharField(source="author.username", read_only=True, allow_null=True)
+    author_avatar_url = serializers.SerializerMethodField()
     events = HardClaimEventSerializer(many=True, read_only=True)
     profitability = serializers.SerializerMethodField()
 
     class Meta:
         model = HardClaim
         fields = [
-            "id", "author_address", "author_username", "post_id", "channel",
+            "id", "author_address", "author_username", "author_avatar_url", "post_id", "channel",
             "asset", "direction", "value_type", "percentage",
             "until", "created_at", "reference_price", "reference_price_url",
             "status", "events", "profitability",
             "signature", "claim_payload"
         ]
+
+    def get_author_avatar_url(self, obj):
+        avatar = getattr(obj.author, "avatar", None) if obj.author else None
+        return avatar_delivery_url(avatar)
 
     def to_representation(self, instance):
         from .resolution import reconcile_claim_fields, display_percentage, claim_target_price
@@ -229,6 +235,8 @@ class PositionInputSerializer(serializers.Serializer):
 class PostSerializer(serializers.ModelSerializer):
     author_address = serializers.CharField(source="author.address", read_only=True)
     author_username = serializers.CharField(source="author.username", read_only=True)
+    author_avatar_url = serializers.SerializerMethodField()
+    image_url = serializers.SerializerMethodField()
     hard_claims = HardClaimSerializer(many=True, read_only=True)
     positions = serializers.SerializerMethodField()
     profitability = serializers.SerializerMethodField()
@@ -236,9 +244,16 @@ class PostSerializer(serializers.ModelSerializer):
     class Meta:
         model = Post
         fields = [
-            "id", "author_address", "author_username", "content", "channel",
+            "id", "author_address", "author_username", "author_avatar_url", "content", "image_url", "channel",
             "created_at", "hard_claims", "positions", "profitability",
         ]
+
+    def get_author_avatar_url(self, obj):
+        avatar = getattr(obj.author, "avatar", None) if obj.author else None
+        return avatar_delivery_url(avatar)
+
+    def get_image_url(self, obj):
+        return post_image_delivery_url(obj.image)
 
     def get_profitability(self, obj):
         try:
