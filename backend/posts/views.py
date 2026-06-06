@@ -767,8 +767,19 @@ class PositionChartDataView(APIView):
 
         try:
             ohlc_rows = get_ohlc_data(asset, start_time, end_time, interval=chart_interval)
-        except OHLCFetchError as e:
-            return Response({"detail": str(e)}, status=status.HTTP_502_BAD_GATEWAY)
+        except OHLCFetchError:
+            logger.exception(
+                "Failed to fetch OHLC data",
+                extra={
+                    "asset_symbol": asset.symbol,
+                    "position_id": position.id,
+                    "interval": chart_interval.value,
+                },
+            )
+            return Response(
+                {"detail": "Unable to fetch chart data at this time."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
 
         ohlc_data = [
             {
