@@ -87,8 +87,14 @@ export function validateDraft(
     draft.direction
       ? draft.direction
       : claimType === 'PERCENTAGE_DOWN'
-      ? 'Bearish'
-      : 'Bullish';
+        ? 'Bearish'
+        : claimType === 'PERCENTAGE_UP'
+          ? 'Bullish'
+          : 'Bullish';
+
+  if (claimType === 'PRICE' && !draft.direction) {
+    return { ok: false, error: 'Choose whether the price will rise to or fall to your target.' };
+  }
 
   return {
     ok: true,

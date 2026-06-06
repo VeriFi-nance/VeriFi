@@ -9,10 +9,11 @@ import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, XCircle, UploadCloud, ChevronDown, ChevronUp, Share2, Copy, Check, Loader2 } from 'lucide-react';
 import { verifyProofSignature } from '@/lib/crypto';
 import { buildClaimPayload, buildPositionPayload } from '@/lib/payloads';
-import type { ProofBundle, ClaimChartData } from '@/lib/types';
+import type { ProofBundle } from '@/lib/types';
 import { truncateAddress } from '@/lib/wallet';
 import { ClaimRow } from '@/components/feed/composer/ClaimRow';
-import { getClaimChartData, getClaimProof, getPositionProof, getClaimOG, getPositionOG } from '@/lib/api';
+import { getClaimProof, getPositionProof, getClaimOG, getPositionOG } from '@/lib/api';
+import { useClaimChartData } from '@/hooks/useClaimChartData';
 
 const PriceChart = lazy(() =>
   import('@/components/feed/PriceChart').then((m) => ({ default: m.PriceChart }))
@@ -35,12 +36,39 @@ export function VerifyPage({ type }: { type?: 'claim' | 'position' }) {
   const [error, setError] = useState<string | null>(null);
   const [isValid, setIsValid] = useState<boolean | null>(null);
   const [showJson, setShowJson] = useState(false);
-  const [chartData, setChartData] = useState<ClaimChartData | null>(null);
-  const [chartLoading, setChartLoading] = useState(false);
-  const [chartError, setChartError] = useState<string | null>(null);
   const [autoLoading, setAutoLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [liveStatus, setLiveStatus] = useState<string | null>(null);
+
+  const claimChartId =
+    proof && isValid && proof.type === 'claim' && proof.claim_id ? proof.claim_id : undefined;
+  const claimCreatedAt = proof
+    ? String(proof.payload.created_at || proof.server_timestamp)
+    : undefined;
+  const claimUntil = proof?.payload.until ? String(proof.payload.until) : undefined;
+  const claimReferencePrice = proof?.reference_price ?? null;
+  const claimTargetPrice = proof?.target_price ?? null;
+  const {
+    data: chartData,
+    loading: chartLoading,
+    refetching: chartRefetching,
+    error: chartError,
+    interval: chartInterval,
+    setInterval: setChartInterval,
+  } = useClaimChartData(
+    claimChartId,
+    claimCreatedAt,
+    claimUntil,
+    liveStatus ?? (proof?.payload?.status ? String(proof.payload.status) : undefined),
+    proof?.type === 'claim'
+      ? {
+          reference_price: claimReferencePrice,
+          target_price: claimTargetPrice,
+          direction: String(proof.payload.direction || 'bullish'),
+          percentage: Number(proof.payload.percentage || 0),
+        }
+      : undefined,
+  );
 
   // Auto-fetch proof when navigating to /verify/claim/:id or /verify/position/:id
   useEffect(() => {
@@ -76,32 +104,22 @@ export function VerifyPage({ type }: { type?: 'claim' | 'position' }) {
       .finally(() => setAutoLoading(false));
   }, [routeIdParam, type]);
 
-  // Fetch chart and live status when proof is verified
+  // Fetch live status when proof is verified
   useEffect(() => {
     if (!proof || !isValid) {
-      setChartData(null);
       setLiveStatus(null);
       return;
     }
 
     if (proof.type === 'claim' && proof.claim_id) {
-      setChartLoading(true);
-      setChartError(null);
-      getClaimChartData(proof.claim_id)
-        .then(setChartData)
-        .catch(err => setChartError(err.message || 'Failed to load chart data.'))
-        .finally(() => setChartLoading(false));
-      
       getClaimOG(proof.claim_id)
         .then(og => setLiveStatus(og.status))
         .catch(() => setLiveStatus(null));
     } else if (proof.type === 'position' && proof.position_id) {
-      setChartData(null);
       getPositionOG(proof.position_id)
         .then(og => setLiveStatus(og.status))
         .catch(() => setLiveStatus(null));
     } else {
-      setChartData(null);
       setLiveStatus(null);
     }
   }, [proof, isValid]);
@@ -310,7 +328,12 @@ export function VerifyPage({ type }: { type?: 'claim' | 'position' }) {
                   {chartData && chartData.ohlc.length > 0 && (
                     <div className="mt-4 pt-2">
                       <Suspense fallback={null}>
-                        <PriceChart data={chartData} />
+                        <PriceChart
+                          data={chartData}
+                          interval={chartInterval}
+                          onIntervalChange={setChartInterval}
+                          refetching={chartRefetching}
+                        />
                       </Suspense>
                     </div>
                   )}

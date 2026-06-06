@@ -10,6 +10,7 @@ import ProfitabilityBadge from '@/components/ProfitabilityBadge';
 import { truncateAddress } from '@/lib/wallet';
 import { cn } from '@/lib/utils';
 import type { PostItem, HardClaimItem, AssetItem } from '@/lib/types';
+import { getFeedClaimTagLabel } from '@/lib/claims';
 
 interface PostCardProps {
   post: PostItem;
@@ -129,7 +130,7 @@ export function PostCard({ post, hardClaims = [], assets = [], onDelete }: PostC
                   {claimHints.map((hc, index) => {
                     const asset = assets.find((a) => a.id === hc.asset);
                     const symbol = asset?.symbol ?? `#${hc.asset}`;
-                    const isBullish = hc.direction.toLowerCase() === 'bullish';
+                    const tag = getFeedClaimTagLabel(hc);
                     return (
                       <span key={hc.id} className="inline-flex items-center gap-1.5">
                         {index > 0 && (
@@ -138,11 +139,8 @@ export function PostCard({ post, hardClaims = [], assets = [], onDelete }: PostC
                           </span>
                         )}
                         <span className="font-mono text-xs font-semibold text-foreground">{symbol}</span>
-                        <Badge
-                          variant={isBullish ? 'success' : 'destructive'}
-                          className="text-[10px] px-1.5 py-0 num"
-                        >
-                          {isBullish ? '▲' : '▼'} {hc.percentage.toFixed(1)}%
+                        <Badge variant={tag.variant} className="text-[10px] px-1.5 py-0 num">
+                          {tag.label}
                         </Badge>
                       </span>
                     );

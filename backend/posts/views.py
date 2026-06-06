@@ -11,7 +11,16 @@ from .models import Post, Claim, HardClaim, Asset, Channel, ChannelMembership, A
 from .serializers import PostSerializer, ClaimInputSerializer, HardClaimInputSerializer, HardClaimSerializer, AssetSerializer, ChannelSerializer, ChannelMembershipSerializer
 from .claim_extraction import rule_based_claims_from_prompt
 from django.shortcuts import get_object_or_404
-from .resolution import CONTRACT_VERSION, ResolutionError, preview_resolution, resolve_hard_claim
+from .resolution import (
+    CONTRACT_VERSION,
+    ResolutionError,
+    preview_resolution,
+    resolve_hard_claim,
+    capture_reference_price,
+    claim_target_price,
+    _normalize_direction_and_value_type,
+    reconcile_claim_fields,
+)
 from . import rep_market
 from .signature_verification import verify_claim_signature, verify_position_signature
 from accounts.energy import grant_energy, spend, CLAIM_ENERGY_COST
@@ -22,14 +31,8 @@ DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
 
 
-def _normalize_claim_direction(direction: str, value_type: str) -> str:
-    """Ensure direction is set consistently from value_type when missing."""
-    raw = (direction or "").strip().lower()
-    if raw in {"bullish", "bearish"}:
-        return raw
-    if value_type == "PERCENTAGE_DOWN":
-        return "bearish"
-    return "bullish"
+def _normalized_claim_fields(direction: str, value_type: str) -> tuple[str, str]:
+    return _normalize_direction_and_value_type(direction, value_type)
 
 
 def _posts_queryset():
@@ -286,16 +289,17 @@ class PostListCreateView(APIView):
                         logger.exception("Unexpected error during claim signature verification")
                         return Response({"detail": "Invalid claim signature."}, status=status.HTTP_400_BAD_REQUEST)
 
+                    hc_direction, hc_value_type = _normalized_claim_fields(
+                        valid_hc.get("direction", ""),
+                        valid_hc.get("value_type", "PERCENTAGE_UP"),
+                    )
                     hard_claim = HardClaim.objects.create(
                         author=user,
                         post=post,
                         channel=channel_obj,
                         asset=asset,
-                        direction=_normalize_claim_direction(
-                            valid_hc.get("direction", ""),
-                            valid_hc.get("value_type", "PERCENTAGE_UP"),
-                        ),
-                        value_type=valid_hc.get("value_type", "PERCENTAGE_UP"),
+                        direction=hc_direction,
+                        value_type=hc_value_type,
                         payda=valid_hc.get("payda", ""),
                         percentage=valid_hc["percentage"],
                         until=valid_hc["until"],
@@ -309,6 +313,14 @@ class PostListCreateView(APIView):
                         event_type=HardClaimEvent.EventType.CREATION,
                         details={}
                     )
+                    try:
+                        capture_reference_price(hard_claim)
+                    except ResolutionError as exc:
+                        logger.warning(
+                            "Reference price not captured for claim %s: %s",
+                            hard_claim.id,
+                            exc.message,
+                        )
                     if market_block is not None:
                         rep_market.init_market(hard_claim, user, m_side, m_stake)
                 except rep_market.MarketError:
@@ -488,16 +500,17 @@ class HardClaimView(APIView):
 
         # Create HardClaim object in the database with the given data
         try:
+            claim_direction, claim_value_type = _normalized_claim_fields(
+                data.get("direction", ""),
+                data.get("value_type", "PERCENTAGE_UP"),
+            )
             hard_claim = HardClaim.objects.create(
                 author=user,
                 post=post_obj,
                 channel=channel_obj,
                 asset=asset,
-                direction=_normalize_claim_direction(
-                    data.get("direction", ""),
-                    data.get("value_type", "PERCENTAGE_UP"),
-                ),
-                value_type=data.get("value_type", "PERCENTAGE_UP"),
+                direction=claim_direction,
+                value_type=claim_value_type,
                 payda=data.get("payda", ""),
                 percentage=data["percentage"],
                 until=data["until"],
@@ -511,6 +524,14 @@ class HardClaimView(APIView):
                 event_type=HardClaimEvent.EventType.CREATION,
                 details={}
             )
+            try:
+                capture_reference_price(hard_claim)
+            except ResolutionError as exc:
+                logger.warning(
+                    "Reference price not captured for claim %s: %s",
+                    hard_claim.id,
+                    exc.message,
+                )
             if market_block is not None:
                 rep_market.init_market(hard_claim, user, m_side, m_stake)
         except rep_market.MarketError as e:
@@ -606,51 +627,71 @@ class HardClaimChartDataView(APIView):
 
         asset = hard_claim.asset
         # get_ohlc_data requires aligned UTC datetime objects
-        from datetime import datetime, timezone
-        start_time = datetime.combine(hard_claim.created_at.date(), datetime.min.time(), tzinfo=timezone.utc)
-        end_time = datetime.combine(hard_claim.until, datetime.min.time(), tzinfo=timezone.utc)
+        from datetime import datetime, timedelta, timezone
+        from .resolution import (
+            _effective_direction,
+            claim_entry_price,
+            claim_target_price,
+            ResolutionError,
+            _round_decimal,
+        )
 
-        # Get or fetch OHLC data
-        from .ohlc_fetcher import get_ohlc_data, OHLCFetchError
+        claim_start_day = hard_claim.created_at.date()
+        claim_end_day = hard_claim.until
+        chart_start = claim_start_day - timedelta(days=3)
+        chart_end = claim_end_day + timedelta(days=3)
+        from .ohlc_fetcher import (
+            get_ohlc_data,
+            OHLCFetchError,
+            resolve_chart_interval,
+            floor_align_datetime,
+        )
         try:
-            ohlc_rows = get_ohlc_data(asset, start_time, end_time)
+            chart_interval, default_interval = resolve_chart_interval(
+                hard_claim, request.query_params.get("interval")
+            )
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        start_time = floor_align_datetime(
+            datetime.combine(chart_start, datetime.min.time(), tzinfo=timezone.utc),
+            chart_interval,
+        )
+        end_time = floor_align_datetime(
+            datetime.combine(chart_end, datetime.min.time(), tzinfo=timezone.utc),
+            chart_interval,
+        )
+        if hard_claim.status == HardClaim.Status.UNDETERMINED:
+            end_time = floor_align_datetime(
+                max(end_time, datetime.now(timezone.utc)),
+                chart_interval,
+            )
+
+        try:
+            ohlc_rows = get_ohlc_data(asset, start_time, end_time, interval=chart_interval)
         except OHLCFetchError as e:
             return Response({"detail": str(e)}, status=status.HTTP_502_BAD_GATEWAY)
 
-        # Compute target price
-        reference_price = None
-        target_price = None
+        # Entry/target from locked reference_price; resolution metadata for hit_days only.
+        reference_price = claim_entry_price(hard_claim)
+        if reference_price is not None:
+            reference_price = _round_decimal(reference_price)
+
         target_reached_at = None
         hit_days = []
         closest_price = None
 
-        # Try to get resolution details from events
         resolution_event = hard_claim.events.filter(event_type="resolution").first()
         if resolution_event and resolution_event.details:
             details = resolution_event.details
             prices = details.get("prices", {})
-            reference_price = prices.get("reference")
-            target_price = prices.get("target")
             closest_price = prices.get("closest")
             target_reached_at = details.get("target_reached_at")
             hit_days = details.get("hit_days", [])
-        elif ohlc_rows:
-            # Not resolved yet — compute from OHLC
-            from .resolution import fetch_reference_price, ResolutionError, _round_decimal
-            try:
-                reference_price, _ = fetch_reference_price(hard_claim)
-                reference_price = _round_decimal(reference_price)
-            except ResolutionError:
-                reference_price = ohlc_rows[0].open
 
-            direction = hard_claim.direction.lower()
-            pct = float(hard_claim.percentage)
-            if hard_claim.value_type == "PRICE":
-                target_price = pct
-            elif direction == "bullish":
-                target_price = _round_decimal(reference_price * (1 + pct / 100))
-            else:
-                target_price = _round_decimal(reference_price * (1 - pct / 100))
+        target_price = claim_target_price(hard_claim, reference_price)
+
+        direction, claim_value_type = reconcile_claim_fields(hard_claim)
 
         ohlc_data = [
             {
@@ -666,12 +707,17 @@ class HardClaimChartDataView(APIView):
         return Response({
             "claim_id": hard_claim.id,
             "asset_symbol": asset.symbol,
-            "direction": hard_claim.direction.lower(),
+            "direction": direction,
+            "value_type": claim_value_type,
             "reference_price": reference_price,
             "target_price": target_price,
             "percentage": float(hard_claim.percentage),
             "created_at": hard_claim.created_at.isoformat(),
             "until": hard_claim.until.isoformat(),
+            "interval": chart_interval.value,
+            "default_interval": default_interval.value,
+            "as_of": datetime.now(timezone.utc).isoformat(),
+            "live": hard_claim.status == HardClaim.Status.UNDETERMINED,
             "ohlc": ohlc_data,
             "hit_days": hit_days,
             "closest_price": closest_price,
@@ -1420,7 +1466,9 @@ class HardClaimProofView(APIView):
             "wallet_address": claim.author.address,
             "signature": claim.signature,
             "payload": claim.claim_payload,
-            "server_timestamp": claim.created_at.isoformat()
+            "server_timestamp": claim.created_at.isoformat(),
+            "reference_price": claim.reference_price,
+            "target_price": claim_target_price(claim),
         })
 
 

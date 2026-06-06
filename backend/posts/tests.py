@@ -482,7 +482,7 @@ class HardClaimResolveApiTestCase(APITestCase):
             response = self.client.post(self._url(claim), {}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data["error_code"], "PROVIDER_NO_PRICE_DATA")
+        self.assertEqual(response.data["error_code"], "NO_OHLC_DATA")
 
     @patch("posts.resolution._fetch_coingecko_price")
     def test_coingecko_provider_is_used_for_crypto(self, mock_price):

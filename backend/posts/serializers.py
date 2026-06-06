@@ -51,6 +51,31 @@ class HardClaimInputSerializer(serializers.Serializer):
     claim_payload = serializers.JSONField(required=True)
 
 
+    def validate(self, data):
+        value_type = (data.get("value_type") or "PERCENTAGE_UP").upper()
+        direction = (data.get("direction") or "").strip().lower()
+        pct = float(data.get("percentage", 0))
+
+        if value_type == "PRICE":
+            if direction not in {"bullish", "bearish"}:
+                raise serializers.ValidationError(
+                    {"direction": "PRICE claims require direction (bullish or bearish)."}
+                )
+            if not (data.get("payda") or "").strip():
+                raise serializers.ValidationError(
+                    {"payda": "PRICE claims require a parity (payda)."}
+                )
+        elif pct > 150:
+            raise serializers.ValidationError(
+                {
+                    "percentage": (
+                        "Values above 150 look like absolute prices — use value_type PRICE instead."
+                    )
+                }
+            )
+
+        return data
+
     def validate_until(self, value):
         if value <= date.today():
             raise serializers.ValidationError("'until' must be a future date.")
@@ -72,9 +97,25 @@ class HardClaimSerializer(serializers.ModelSerializer):
         fields = [
             "id", "author_address", "author_username", "post_id", "channel",
             "asset", "direction", "value_type", "payda", "percentage",
-            "until", "created_at", "status", "events", "profitability",
+            "until", "created_at", "reference_price", "reference_price_url",
+            "status", "events", "profitability",
             "signature", "claim_payload"
         ]
+
+    def to_representation(self, instance):
+        from .resolution import reconcile_claim_fields, display_percentage, claim_target_price
+
+        data = super().to_representation(instance)
+        direction, value_type = reconcile_claim_fields(instance)
+        data["direction"] = direction
+        data["value_type"] = value_type
+        pct = display_percentage(instance)
+        if pct is not None:
+            data["display_percentage"] = pct
+        target = claim_target_price(instance)
+        if target is not None:
+            data["target_price"] = target
+        return data
 
     def get_profitability(self, obj):
         try:
