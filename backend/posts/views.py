@@ -87,6 +87,11 @@ def _filter_posts_queryset(qs, request):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
+    # ── Text search ───────────────────────────────────────────────────────────
+    query = request.query_params.get("q", "").strip()
+    if query:
+        qs = qs.filter(content__icontains=query)
+
     # ── Asset + type filtering ────────────────────────────────────────────────
     raw_asset_ids = request.query_params.get("asset_ids", "").strip()
     asset_ids = []
@@ -1855,3 +1860,39 @@ class PositionProofView(APIView):
             "payload": position.position_payload,
             "server_timestamp": position.created_at.isoformat()
         })
+
+
+class SearchAPIView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        query = request.query_params.get("q", "").strip()
+        search_type = request.query_params.get("type", "posts").lower()
+
+        if not query:
+            return Response([])
+
+        if search_type == "posts":
+            from django.db.models import Prefetch
+            from .models import Position
+            qs = Post.objects.select_related("author", "author__profitability") \
+                .prefetch_related(
+                    Prefetch("hard_claims", HardClaim.objects.select_related("author", "asset").prefetch_related("events")),
+                    Prefetch("positions", Position.objects.select_related("author", "asset"))
+                ) \
+                .filter(content__icontains=query).order_by("-created_at")[:10]
+            return Response(PostSerializer(qs, many=True).data)
+        
+        elif search_type == "people":
+            from django.db.models import Q
+            from accounts.serializers import avatar_delivery_url
+            qs = WalletUser.objects.filter(Q(username__icontains=query) | Q(address__icontains=query))[:10]
+            data = [{"address": u.address, "username": u.username, "avatar_url": avatar_delivery_url(u.avatar)} for u in qs]
+            return Response(data)
+        
+        elif search_type == "channels":
+            qs = Channel.objects.filter(name__icontains=query, is_active=True).select_related("creator")[:10]
+            return Response(ChannelSerializer(qs, many=True).data)
+        
+        return Response([])
