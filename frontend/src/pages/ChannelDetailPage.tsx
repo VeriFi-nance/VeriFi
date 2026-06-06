@@ -10,7 +10,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuthState, useOpenLogin } from '@/lib/auth';
 import { FeedList } from '@/components/feed/FeedList';
 import { NewPostButton } from '@/components/feed/NewPostModal';
-import ProfitabilityBadge from '@/components/ProfitabilityBadge';
 import { PositionCard } from '@/components/PositionCard';
 import { NewPositionModal } from '@/components/NewPositionModal';
 import { Settings, ArrowLeft, Lock, Users } from 'lucide-react';
@@ -309,7 +308,6 @@ export default function ChannelDetailPage() {
                       <div>
                         <div className="font-mono font-semibold text-xs sm:text-sm flex flex-wrap items-center gap-1.5">
                           <span>{member.user_username ? `@${member.user_username}` : member.user_address}</span>
-                          <ProfitabilityBadge data={member.profitability} />
                           {member.role === 'owner' && (
                             <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500">
                               Owner

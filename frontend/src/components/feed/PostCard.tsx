@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { ChevronDown } from 'lucide-react';
 import { HardClaimCard } from '@/components/HardClaimCard';
 import { UserAvatar } from '@/components/UserAvatar';
-import ProfitabilityBadge from '@/components/ProfitabilityBadge';
 import { truncateAddress } from '@/lib/wallet';
 import { cn } from '@/lib/utils';
 import type { PostItem, HardClaimItem, AssetItem } from '@/lib/types';
@@ -60,7 +59,6 @@ export function PostCard({ post, hardClaims = [], assets = [], onDelete }: PostC
           </div>
 
           <div className="pointer-events-auto flex items-center gap-2">
-            <ProfitabilityBadge data={post.profitability} />
             {onDelete && (
               <Button
                 variant="ghost"

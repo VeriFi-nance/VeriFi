@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { closePosition, getPositionResolveStatus, triggerPositionResolve, getPositionProof } from '@/lib/api';
 import type { PositionItem, AssetItem } from '@/lib/types';
 import { useAuthState } from '@/lib/auth';
-import ProfitabilityBadge from './ProfitabilityBadge';
 import { Link } from 'react-router-dom';
 import { truncateAddress } from '@/lib/wallet';
 import { RefreshCw, Download } from 'lucide-react';
@@ -141,7 +140,6 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
             <Link to={`/u/${position.author_username || position.author_address}`} className="text-xs font-mono hover:underline">
               {position.author_username ? `@${position.author_username}` : truncateAddress(position.author_address)}
             </Link>
-            <ProfitabilityBadge data={position.profitability} />
           </div>
         </div>
 
@@ -152,13 +150,36 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
           </div>
           <div>
             <div className="text-muted-foreground text-xs uppercase tracking-wider">Stop Loss</div>
-            <div className="font-mono text-danger font-medium num">${position.stop_loss.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</div>
+            <div className="font-mono text-danger font-medium num">
+              ${position.stop_loss.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}
+              <span className="text-[10px] ml-1 opacity-80">
+                ({(isLong ? ((position.stop_loss - position.entry_price) / position.entry_price) * 100 : ((position.entry_price - position.stop_loss) / position.entry_price) * 100).toFixed(2)}%)
+              </span>
+            </div>
           </div>
           <div>
             <div className="text-muted-foreground text-xs uppercase tracking-wider">Take Profit</div>
-            <div className="font-mono text-success font-medium num">${position.take_profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</div>
+            <div className="font-mono text-success font-medium num">
+              ${position.take_profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}
+              <span className="text-[10px] ml-1 opacity-80">
+                ({(isLong ? ((position.take_profit - position.entry_price) / position.entry_price) * 100 : ((position.entry_price - position.take_profit) / position.entry_price) * 100) > 0 ? '+' : ''}{(isLong ? ((position.take_profit - position.entry_price) / position.entry_price) * 100 : ((position.entry_price - position.take_profit) / position.entry_price) * 100).toFixed(2)}%)
+              </span>
+            </div>
           </div>
         </div>
+
+        {(['confirmed', 'rejected', 'closed_early', 'expired'] as const).includes(position.status as any) && position.pnl_percentage !== null && (
+          <div className={`mt-3 p-3 rounded-lg border flex items-center justify-between text-sm ${position.pnl_percentage > 0 ? 'bg-success/10 border-success/30 text-success-foreground' : 'bg-destructive/10 border-destructive/30 text-destructive-foreground'}`}>
+            <span className="font-medium">
+              {position.author_username ? `@${position.author_username}` : 'User'} {position.pnl_percentage > 0 ? 'gained' : 'lost'} {Math.abs(position.pnl_percentage).toFixed(2)}% with this position.
+            </span>
+            {position.exit_price && (
+              <span className="text-xs opacity-80 font-mono">
+                Exit: ${position.exit_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}
+              </span>
+            )}
+          </div>
+        )}
 
         <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
           <div>
@@ -167,12 +188,6 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
             )}
             {position.status === 'active' && (
               <span>Expires: {new Date(position.lifetime).toLocaleString()}</span>
-            )}
-            {(['confirmed', 'rejected', 'closed_early', 'expired'] as const).includes(position.status as any) && position.pnl_percentage !== null && (
-              <span className={`font-bold num ${position.pnl_percentage > 0 ? 'text-success' : 'text-danger'}`}>
-                PnL: {position.pnl_percentage > 0 ? '+' : ''}{position.pnl_percentage.toFixed(2)}%
-                {position.exit_price && ` (Exit: $${position.exit_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })})`}
-              </span>
             )}
             {position.status === 'missed' && <span>Entry target not reached.</span>}
             {position.signature && (
