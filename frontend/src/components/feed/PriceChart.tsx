@@ -14,7 +14,7 @@ import {
   type UTCTimestamp,
 } from 'lightweight-charts';
 import type { ClaimChartData, ChartCandleInterval } from '@/lib/types';
-import { CHART_INTERVAL_OPTIONS, claimWindowForChart, markerWindowEnd } from '@/lib/chart';
+import { CHART_INTERVAL_OPTIONS, claimWindowForChart } from '@/lib/chart';
 import { cn } from '@/lib/utils';
 
 interface PriceChartProps {
@@ -306,15 +306,7 @@ export function PriceChart({
     const candles = candlesRef.current;
     if (!chart || !overlay || !startMarker || !endMarker) return;
 
-    const lastCandleTime =
-      candles.length > 0 ? (candles[candles.length - 1].time as number) : null;
-    const endForMarker = markerWindowEnd(
-      claimWindowEnd as number,
-      lastCandleTime,
-      Boolean(data.live),
-    );
-    const windowEnd =
-      endForMarker !== null ? (endForMarker as UTCTimestamp) : null;
+    const windowEnd = claimWindowEnd as UTCTimestamp;
 
     const timeScale = chart.timeScale();
     const startX = timeToPlotCoordinate(timeScale, windowStart, candles, interval);
@@ -337,7 +329,7 @@ export function PriceChart({
     endMarker.style.display = showAt(endX) ? 'block' : 'none';
     if (startX !== null && showAt(startX)) startMarker.style.left = `${startX}px`;
     if (endX !== null && showAt(endX)) endMarker.style.left = `${endX}px`;
-  }, [windowStart, claimWindowEnd, interval, data.live]);
+  }, [windowStart, claimWindowEnd, interval]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -438,7 +430,7 @@ export function PriceChart({
       seriesRef.current = null;
       candlesRef.current = [];
     };
-  }, [data.claim_id, data.reference_price, data.target_price, interval, updateOverlay, windowStart, claimWindowEnd]);
+  }, [data, interval, updateOverlay, windowStart, claimWindowEnd]);
 
   useEffect(() => {
     const chart = chartRef.current;
@@ -454,12 +446,10 @@ export function PriceChart({
     const intervalChanged = prevDataIntervalRef.current !== data.interval;
 
     if ((shouldRefocusRef.current || intervalChanged) && styledCandles.length > 0) {
-      const lastTime = styledCandles[styledCandles.length - 1].time as number;
-      const focusEnd = markerWindowEnd(claimWindowEnd as number, lastTime, Boolean(data.live));
       focusClaimWindow(
         chart,
         windowStart,
-        focusEnd !== null ? (focusEnd as UTCTimestamp) : null,
+        claimWindowEnd as UTCTimestamp,
         styledCandles,
         interval,
       );
