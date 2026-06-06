@@ -5,13 +5,14 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
 import { Settings as SettingsIcon, Copy, Check, History } from 'lucide-react';
 import { HardClaimCard } from '@/components/HardClaimCard';
+import { FeedList } from '@/components/feed/FeedList';
 import { UserAvatar } from '@/components/UserAvatar';
 import { EmptyState } from '@/components/EmptyState';
 import { PageContent } from '@/components/PageContent';
 import { SkeletonRow } from '@/components/Skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getHardClaimsByAddress, getAssets, getProfileStats, toggleFollow, createChannel } from '@/lib/api';
-import type { HardClaimItem, AssetItem, ProfileStats } from '@/lib/types';
+import { getAssets, getProfileStats, toggleFollow, createChannel } from '@/lib/api';
+import type { AssetItem, ProfileStats } from '@/lib/types';
 import { loadAddress } from '@/lib/auth';
 import { truncateAddress } from '@/lib/wallet';
 import { Plus, Sparkles } from 'lucide-react';
@@ -70,7 +71,6 @@ export default function UserPage() {
   const { address } = useParams();
   const myAddress = loadAddress();
 
-  const [claims, setClaims] = useState<HardClaimItem[]>([]);
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [following, setFollowing] = useState(false);
@@ -114,12 +114,10 @@ export default function UserPage() {
         setStats(s);
         setFollowing(s.is_following ?? false);
         return Promise.all([
-          getHardClaimsByAddress(s.address),
           getAssets(),
         ]);
       })
-      .then(([c, a]) => {
-        setClaims(c);
+      .then(([a]) => {
         setAssets(a);
       })
       .catch((e) => setError(e.message))
@@ -253,29 +251,8 @@ export default function UserPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="public" className="space-y-2 mt-4 animate-in fade-in-50 duration-200">
-          {loading ? (
-            <div className="space-y-2">
-              <SkeletonRow />
-              <SkeletonRow />
-              <SkeletonRow />
-            </div>
-          ) : claims.length === 0 ? (
-            <EmptyState
-              title="No claims yet"
-              description={
-                isSelf
-                  ? 'Your verifiable predictions will show up here once you publish them.'
-                  : 'This user hasn’t published any claims yet.'
-              }
-            />
-          ) : (
-            <div className="space-y-2">
-              {claims.map((c) => (
-                <HardClaimCard key={c.id} claim={c} assets={assets} />
-              ))}
-            </div>
-          )}
+        <TabsContent value="public" className="mt-4 animate-in fade-in-50 duration-200">
+          <FeedList userAddress={stats?.address || address} />
         </TabsContent>
 
         <TabsContent value="premium" className="space-y-6 mt-4 animate-in fade-in-50 duration-200">

@@ -20,13 +20,14 @@ const DEFAULT_FILTER: FeedFilter = {
 interface FeedListProps {
   feed?: string;
   channel?: number;
+  userAddress?: string;
   myRole?: 'member' | 'moderator' | 'owner' | null;
   creatorAddress?: string;
   filter?: FeedFilter;
   hideFilterToolbar?: boolean;
 }
 
-export function FeedList({ feed, channel, myRole, creatorAddress, filter: propFilter, hideFilterToolbar }: FeedListProps) {
+export function FeedList({ feed, channel, userAddress, myRole, creatorAddress, filter: propFilter, hideFilterToolbar }: FeedListProps) {
   const auth = useAuthState();
   const myAddress = auth.address;
   const [posts, setPosts] = useState<PostItem[]>([]);
@@ -68,6 +69,7 @@ export function FeedList({ feed, channel, myRole, creatorAddress, filter: propFi
         const feedPage = await getFeed({
           feed,
           channel,
+          address: userAddress,
           page: pageNum,
           asset_ids: f.assetIds.length > 0 ? f.assetIds : undefined,
           has_claims: f.hasClaims || undefined,
@@ -84,7 +86,7 @@ export function FeedList({ feed, channel, myRole, creatorAddress, filter: propFi
         setLoadingMore(false);
       }
     },
-    [feed, channel, activeFilter, propFilter],
+    [feed, channel, userAddress, activeFilter, propFilter],
   );
 
   useEffect(() => {
