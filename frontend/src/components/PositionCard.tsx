@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { closePosition, getPositionResolveStatus, triggerPositionResolve, getPositionProof } from '@/lib/api';
+import { closePosition, getPositionProof } from '@/lib/api';
 import type { PositionItem, AssetItem } from '@/lib/types';
 import { useAuthState } from '@/lib/auth';
 import { Link } from 'react-router-dom';
@@ -20,9 +20,6 @@ interface PositionCardProps {
 
 export function PositionCard({ position, assets, onClosed, onResolved }: PositionCardProps) {
   const [closing, setClosing] = useState(false);
-  const [resolving, setResolving] = useState(false);
-  const [resolveMsg, setResolveMsg] = useState('');
-  const [countdown, setCountdown] = useState(0);
   const [downloadingProof, setDownloadingProof] = useState(false);
   const [showChart, setShowChart] = useState(false);
 
@@ -56,50 +53,8 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
   const { address: myAddress } = useAuthState();
   const asset = assets.find(a => a.id === position.asset);
   const isAuthor = !!myAddress && myAddress.toLowerCase() === position.author_address.toLowerCase();
-  const canResolve = isAuthor && (position.status === 'pending' || position.status === 'active');
   const canClose = isAuthor && position.status === 'active';
   const canCancel = isAuthor && position.status === 'pending';
-
-  // Fetch cooldown on mount (author only, resolvable positions only)
-  const fetchCooldown = useCallback(async () => {
-    if (!canResolve) return;
-    try {
-      const rs = await getPositionResolveStatus(position.id);
-      setCountdown(rs.remaining_seconds);
-    } catch {
-      // not authed or position already resolved
-    }
-  }, [position.id, canResolve]);
-
-  useEffect(() => { fetchCooldown(); }, [fetchCooldown]);
-
-  // Live ticker
-  useEffect(() => {
-    if (countdown <= 0) return;
-    const t = window.setInterval(() => setCountdown(c => Math.max(0, c - 1)), 1000);
-    return () => window.clearInterval(t);
-  }, [countdown]);
-
-  const fmtCountdown = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return m > 0 ? `${m}m ${s}s` : `${s}s`;
-  };
-
-  const handleResolve = async () => {
-    setResolving(true);
-    setResolveMsg('');
-    try {
-      const res = await triggerPositionResolve(position.id);
-      setCountdown(res.remaining_seconds);
-      setResolveMsg('Resolution triggered.');
-      onResolved?.(res.position);
-    } catch (e: any) {
-      setResolveMsg(e.message || 'Failed to resolve.');
-    } finally {
-      setResolving(false);
-    }
-  };
 
   const handleClose = async () => {
     const isPending = position.status === 'pending';
@@ -233,22 +188,9 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
           </div>
 
           {/* Author actions */}
-          {(canResolve || canClose) && (
+          {(canClose || canCancel) && (
             <div className="flex flex-col items-end gap-1 shrink-0">
               <div className="flex gap-2">
-                {canResolve && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleResolve}
-                    disabled={resolving || countdown > 0}
-                    className="h-7 text-xs gap-1.5"
-                    title={countdown > 0 ? `Next resolve in ${fmtCountdown(countdown)}` : 'Check if SL or TP has been hit'}
-                  >
-                    <RefreshCw className={`size-3 ${resolving ? 'animate-spin' : ''}`} />
-                    {resolving ? 'Checking…' : countdown > 0 ? `Wait ${fmtCountdown(countdown)}` : 'Resolve'}
-                  </Button>
-                )}
                 {canClose && (
                   <Button size="sm" variant="outline" onClick={handleClose} disabled={closing} className="h-7 text-xs">
                     {closing ? 'Closing…' : 'Close Early'}
@@ -260,11 +202,6 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
                   </Button>
                 )}
               </div>
-              {resolveMsg && (
-                <p className={`text-[10px] ${resolveMsg.startsWith('Failed') ? 'text-destructive' : 'text-success'}`}>
-                  {resolveMsg}
-                </p>
-              )}
             </div>
           )}
         </div>

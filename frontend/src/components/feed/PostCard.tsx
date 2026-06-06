@@ -31,7 +31,11 @@ export function PostCard({ post, hardClaims = [], assets = [], onDelete }: PostC
   const hasAttachments = claimHints.length > 0 || positions.length > 0;
 
   return (
-    <Card className="relative max-w-2xl gap-0 py-0 overflow-hidden rounded-lg transition-colors hover:bg-muted">
+    <Card className={cn(
+      "relative max-w-2xl gap-0 py-0 overflow-hidden rounded-lg transition-colors hover:bg-muted",
+      claimHints.length > 0 && "border-claim-badge/35 shadow-claim-badge/10",
+      positions.length > 0 && "border-position-badge/35 shadow-position-badge/10"
+    )}>
       <Link
         to={`/post/${post.id}`}
         className="absolute inset-0 z-0"
@@ -66,6 +70,16 @@ export function PostCard({ post, hardClaims = [], assets = [], onDelete }: PostC
               <span className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded ml-1 shrink-0">
                 <Star className="size-3 fill-amber-500" />
                 PREMIUM
+              </span>
+            )}
+            {claimHints.length > 0 && (
+              <span className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-claim-badge bg-claim-badge/10 px-1.5 py-0.5 rounded ml-1 shrink-0">
+                CLAIM
+              </span>
+            )}
+            {positions.length > 0 && (
+              <span className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-position-badge bg-position-badge/10 px-1.5 py-0.5 rounded ml-1 shrink-0">
+                POSITION
               </span>
             )}
           </div>
@@ -134,7 +148,7 @@ export function PostCard({ post, hardClaims = [], assets = [], onDelete }: PostC
                     return (
                       <span
                         key={`pos-${pos.id}`}
-                        className="inline-flex items-center gap-1 text-indigo-400"
+                        className="inline-flex items-center gap-1 text-position-badge"
                       >
                         {(claimHints.length > 0 || index > 0) && (
                           <span aria-hidden className="text-muted-foreground/30 text-xs select-none">·</span>
@@ -147,7 +161,7 @@ export function PostCard({ post, hardClaims = [], assets = [], onDelete }: PostC
                         <span className="font-mono text-xs font-semibold text-foreground">{symbol}</span>
                         <Badge
                           variant="outline"
-                          className="text-[10px] px-1.5 py-0 border-indigo-500/30 text-indigo-400"
+                          className="text-[10px] px-1.5 py-0 border-position-badge/30 text-position-badge"
                         >
                           {isLong ? 'LONG' : 'SHORT'}
                         </Badge>
@@ -196,7 +210,7 @@ export function PostCard({ post, hardClaims = [], assets = [], onDelete }: PostC
                   {/* Positions section */}
                   {positions.length > 0 && (
                     <div className="space-y-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-indigo-400">
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-position-badge">
                         Positions
                       </p>
                       {positions.map((pos) => (
