@@ -39,7 +39,6 @@ def _posts_queryset():
     return (
         Post.objects.select_related("author", "author__profitability")
         .prefetch_related(
-            "claims",
             Prefetch(
                 "hard_claims",
                 HardClaim.objects.select_related("author", "author__profitability").prefetch_related(
