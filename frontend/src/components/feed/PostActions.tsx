@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bookmark, Heart, MessageCircle } from 'lucide-react';
+import { Heart, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { likePost, savePostProof, unlikePost, unsavePostProof } from '@/lib/api';
 import { useAuthState, useOpenLogin } from '@/lib/auth';
@@ -132,7 +132,6 @@ export function PostActions({ post, onPostChange, className }: PostActionsProps)
           aria-pressed={post.saved_proof_by_me}
           aria-label={post.saved_proof_by_me ? 'Unsave proof' : 'Save proof'}
         >
-          <Bookmark className={cn('size-4', post.saved_proof_by_me && 'fill-current')} />
           <span className="hidden sm:inline">Proof</span>
           <span className="num">{post.saved_proof_count}</span>
         </Button>
