@@ -11,6 +11,7 @@ import { FeedList } from '@/components/feed/FeedList';
 import { NewPostButton } from '@/components/feed/NewPostModal';
 import { Settings, Lock, Users } from 'lucide-react';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
+import { toast, getMessage } from '@/lib/errors';
 import { SmartTimestamp } from '@/components/SmartTimestamp';
 
 interface PremiumChannelViewProps {
@@ -95,7 +96,7 @@ export function PremiumChannelView({ channelId, onSubscribed }: PremiumChannelVi
       await fetchChannelAndPosts();
       if (onSubscribed) onSubscribed();
     } catch (e: any) {
-      alert(e.message);
+      toast.error(getMessage(e));
     }
   };
 
@@ -105,7 +106,7 @@ export function PremiumChannelView({ channelId, onSubscribed }: PremiumChannelVi
       await approveChannelMember(channelId, userAddress, action);
       await fetchChannelAndPosts();
     } catch (e: any) {
-      alert(e.message);
+      toast.error(getMessage(e));
     }
   };
 
@@ -120,7 +121,7 @@ export function PremiumChannelView({ channelId, onSubscribed }: PremiumChannelVi
           await banChannelMember(channelId, userAddress);
           await fetchChannelAndPosts();
         } catch (e: any) {
-          alert(e.message);
+          toast.error(getMessage(e));
         }
       }
     });
@@ -137,7 +138,7 @@ export function PremiumChannelView({ channelId, onSubscribed }: PremiumChannelVi
           await unbanChannelMember(channelId, userAddress);
           await fetchChannelAndPosts();
         } catch (e: any) {
-          alert(e.message);
+          toast.error(getMessage(e));
         }
       }
     });
@@ -149,7 +150,7 @@ export function PremiumChannelView({ channelId, onSubscribed }: PremiumChannelVi
       await promoteModerator(channelId, userAddress);
       await fetchChannelAndPosts();
     } catch (e: any) {
-      alert(e.message);
+      toast.error(getMessage(e));
     }
   };
 
@@ -159,7 +160,7 @@ export function PremiumChannelView({ channelId, onSubscribed }: PremiumChannelVi
       await demoteModerator(channelId, userAddress);
       await fetchChannelAndPosts();
     } catch (e: any) {
-      alert(e.message);
+      toast.error(getMessage(e));
     }
   };
 

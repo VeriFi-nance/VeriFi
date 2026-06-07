@@ -13,6 +13,7 @@ import { useAuthState } from '@/lib/auth';
 import { useAssets } from '@/hooks/useAssets';
 import { useFeed, feedQueryKey, flattenFeed, updatePostAcrossCachedFeeds, type FeedParams } from '@/hooks/useFeed';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
+import { toast, getMessage } from '@/lib/errors';
 
 const DEFAULT_FILTER: FeedFilter = {
   assetIds: [],
@@ -23,6 +24,7 @@ const DEFAULT_FILTER: FeedFilter = {
 interface FeedListProps {
   feed?: string;
   channel?: number;
+  userAddress?: string;
   myRole?: 'member' | 'moderator' | 'owner' | null;
   creatorAddress?: string;
   filter?: FeedFilter;
@@ -32,7 +34,7 @@ interface FeedListProps {
 
 type FeedData = InfiniteData<PaginatedResponse<PostItem>>;
 
-export function FeedList({ feed, channel, myRole, creatorAddress, filter: propFilter, hideFilterToolbar, q }: FeedListProps) {
+export function FeedList({ feed, channel, userAddress, myRole, creatorAddress, filter: propFilter, hideFilterToolbar, q }: FeedListProps) {
   const auth = useAuthState();
   const myAddress = auth.address;
   const assets = useAssets();
@@ -58,6 +60,7 @@ export function FeedList({ feed, channel, myRole, creatorAddress, filter: propFi
     hasClaims: effectiveFilter.hasClaims,
     hasPositions: effectiveFilter.hasPositions,
     q,
+    address: userAddress,
     viewerAddress: myAddress,
   };
   const queryKey = feedQueryKey(params);
@@ -119,8 +122,8 @@ export function FeedList({ feed, channel, myRole, creatorAddress, filter: propFi
                 }
               : old,
           );
-        } catch (e: any) {
-          alert(e.message);
+        } catch (e: unknown) {
+          toast.error(getMessage(e, 'Failed to delete post'));
         }
       },
     });

@@ -9,6 +9,7 @@ export interface FeedParams {
   hasClaims?: boolean;
   hasPositions?: boolean;
   q?: string;
+  address?: string;
   viewerAddress?: string | null;
 }
 
@@ -23,6 +24,7 @@ export function feedQueryKey(params: FeedParams) {
       hasClaims: params.hasClaims || false,
       hasPositions: params.hasPositions || false,
       q: params.q || '',
+      address: params.address?.toLowerCase() ?? null,
       viewerAddress: params.viewerAddress?.toLowerCase() ?? null,
     },
   ] as const;
@@ -45,6 +47,7 @@ export function useFeed(params: FeedParams, enabled = true) {
         asset_ids: params.assetIds && params.assetIds.length > 0 ? params.assetIds : undefined,
         has_claims: params.hasClaims || undefined,
         has_positions: params.hasPositions || undefined,
+        address: params.address,
         q: params.q,
       }),
     getNextPageParam: (lastPage) => (lastPage.has_next ? lastPage.page + 1 : undefined),
