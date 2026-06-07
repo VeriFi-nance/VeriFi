@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 import { PremiumChannelView } from '@/components/PremiumChannelView';
+import { toast, getMessage } from '@/lib/errors';
 import { ChannelCard } from '@/components/ChannelCard';
 
 function CopyAddressButton({ text }: { text: string }) {
@@ -141,7 +142,7 @@ export default function UserPage() {
           : null,
       );
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to follow');
+      toast.error(getMessage(e, 'Failed to follow'));
     }
   }
 

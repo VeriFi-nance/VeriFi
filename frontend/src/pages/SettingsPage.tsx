@@ -8,6 +8,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Copy, Check, Sun, Moon, LogOut, KeyRound, ImagePlus } from 'lucide-react';
 import { clearAuth, useAuthState, saveUsername, saveAvatar } from '@/lib/auth';
 import { updateProfile, updateUsername, getProfileStats } from '@/lib/api';
+import { FieldError } from '@/components/ui/field-error';
+import { getFieldError, getMessage } from '@/lib/errors';
 import { UserAvatar } from '@/components/UserAvatar';
 import { clearPrivateKey } from '@/lib/keystore';
 import { loadTheme, toggleTheme, type Theme } from '@/lib/theme';
@@ -143,7 +145,7 @@ export default function SettingsPage() {
       saveUsername(res.username);
       setIsEditingUsername(false);
     } catch (e) {
-      setUsernameError(e instanceof Error ? e.message : 'Failed to update username');
+      setUsernameError(getFieldError(e, 'username') ?? getMessage(e, 'Failed to update username'));
     } finally {
       setSavingUsername(false);
     }
@@ -230,12 +232,11 @@ export default function SettingsPage() {
             <div className="space-y-3">
               <Input
                 value={editUsername}
-                onChange={(e) => setEditUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
+                onChange={(e) => { setEditUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, '')); if (usernameError) setUsernameError(''); }}
                 placeholder="New username"
+                aria-invalid={!!usernameError}
               />
-              {usernameError && (
-                <p className="text-xs text-destructive">{usernameError}</p>
-              )}
+              <FieldError>{usernameError}</FieldError>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => { setIsEditingUsername(false); setEditUsername(username ?? ''); }}>
                   Cancel
