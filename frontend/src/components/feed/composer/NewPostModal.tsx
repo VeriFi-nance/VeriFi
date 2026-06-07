@@ -7,7 +7,8 @@ import { PenSquare, Plus, Pencil, X, TrendingUp } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 import { useAuthState, useOpenLogin } from '@/lib/auth';
-import { createPost, getAssets } from '@/lib/api';
+import { createPost } from '@/lib/api';
+import { fetchAssets } from '@/hooks/useAssets';
 import type { AssetItem, ReviewClaim } from '@/lib/types';
 import { getClaimType } from '@/lib/claims';
 import { PostComposer, MAX_CHARS } from './PostComposer';
@@ -57,7 +58,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
 
   useEffect(() => {
     if (open) {
-      getAssets().then(setAssets).catch(console.error);
+      fetchAssets().then(setAssets).catch(console.error);
     }
   }, [open]);
 
