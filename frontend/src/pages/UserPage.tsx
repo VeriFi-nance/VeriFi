@@ -4,14 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
 import { Settings as SettingsIcon, Copy, Check, History } from 'lucide-react';
-import { HardClaimCard } from '@/components/HardClaimCard';
 import { FeedList } from '@/components/feed/FeedList';
 import { UserAvatar } from '@/components/UserAvatar';
 import { EmptyState } from '@/components/EmptyState';
 import { PageContent } from '@/components/PageContent';
-import { SkeletonRow } from '@/components/Skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getAssets, getProfileStats, toggleFollow, createChannel } from '@/lib/api';
+import { getProfileStats, toggleFollow, createChannel } from '@/lib/api';
 import type { AssetItem, ProfileStats } from '@/lib/types';
 import { loadAddress } from '@/lib/auth';
 import { truncateAddress } from '@/lib/wallet';
@@ -71,10 +69,8 @@ export default function UserPage() {
   const { address } = useParams();
   const myAddress = loadAddress();
 
-  const [assets, setAssets] = useState<AssetItem[]>([]);
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [following, setFollowing] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [profileRefreshKey, setProfileRefreshKey] = useState(0);
 
@@ -108,20 +104,12 @@ export default function UserPage() {
 
   useEffect(() => {
     if (!address) return;
-    setLoading(true);
     getProfileStats(address)
       .then((s) => {
         setStats(s);
         setFollowing(s.is_following ?? false);
-        return Promise.all([
-          getAssets(),
-        ]);
       })
-      .then(([a]) => {
-        setAssets(a);
-      })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
+      .catch((e) => setError(e.message));
   }, [address, profileRefreshKey]);
 
   useEffect(() => {
