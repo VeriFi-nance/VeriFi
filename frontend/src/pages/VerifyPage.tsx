@@ -14,6 +14,8 @@ import { truncateAddress } from '@/lib/wallet';
 import { ClaimRow } from '@/components/feed/composer/ClaimRow';
 import { getClaimProof, getPositionProof, getClaimOG, getPositionOG } from '@/lib/api';
 import { useClaimChartData } from '@/hooks/useClaimChartData';
+import { SmartTimestamp } from '@/components/SmartTimestamp';
+import { formatDateTimestamp } from '@/lib/timestamps';
 
 const PriceChart = lazy(() =>
   import('@/components/feed/PriceChart').then((m) => ({ default: m.PriceChart }))
@@ -26,7 +28,7 @@ function buildSummaryText(proof: ProofBundle): string {
   const direction = String(proof.payload.direction).toLowerCase();
   const verb = direction === 'bullish' ? 'rises' : 'falls';
   const pct = String(proof.payload.percentage || '');
-  const until = new Date(String(proof.payload.until || '')).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  const until = formatDateTimestamp(String(proof.payload.until || ''), { month: 'short', day: 'numeric', year: 'numeric' });
   return `${authorPrefix} ${asset} ${verb} ${pct}% by ${until}`;
 }
 
@@ -289,7 +291,7 @@ export function VerifyPage({ type }: { type?: 'claim' | 'position' }) {
               </div>
               <div className="space-y-1">
                 <Label className="text-muted-foreground">Server Timestamp</Label>
-                <div>{new Date(proof.server_timestamp).toLocaleString()}</div>
+                <div><SmartTimestamp value={proof.server_timestamp} mode="full" /></div>
               </div>
             </div>
             
@@ -310,7 +312,7 @@ export function VerifyPage({ type }: { type?: 'claim' | 'position' }) {
                 <div className="mb-2 space-y-3">
                   <div className="text-sm font-medium">
                     {buildSummaryText(proof)}{' '}
-                    (at {new Date(String(proof.payload.created_at || proof.server_timestamp)).toLocaleDateString()})
+                    (at {formatDateTimestamp(String(proof.payload.created_at || proof.server_timestamp))})
                   </div>
                   <ClaimRow
                     assetSymbol={String(proof.payload.asset_symbol || '')}

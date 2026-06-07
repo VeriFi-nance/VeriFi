@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ChevronLeft, Heart, MessageCircle, ImagePlus, X } from 'lucide-react';
 import { UserAvatar } from '@/components/UserAvatar';
+import { SmartTimestamp } from '@/components/SmartTimestamp';
 import { ClaimDetailView } from '@/components/feed/ClaimDetailView';
 import { PostActions } from '@/components/feed/PostActions';
 import { SkeletonPostCard } from '@/components/Skeleton';
@@ -14,6 +16,7 @@ import { HardClaimCard } from '@/components/HardClaimCard';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 import { createPostComment, getPost, getPostComments, likePostComment, unlikePostComment } from '@/lib/api';
 import { fetchAssets } from '@/hooks/useAssets';
+import { updatePostAcrossCachedFeeds } from '@/hooks/useFeed';
 import { useAuthState, useOpenLogin } from '@/lib/auth';
 import { safeImageSrc, imageFileFromClipboard } from '@/lib/utils';
 import { truncateAddress } from '@/lib/wallet';
@@ -142,9 +145,7 @@ function CommentThreadItem({
             >
               {comment.author_username ? `@${comment.author_username}` : truncateAddress(comment.author_address)}
             </Link>
-            <time dateTime={comment.created_at} className="text-xs text-muted-foreground num">
-              {new Date(comment.created_at).toLocaleString()}
-            </time>
+            <SmartTimestamp value={comment.created_at} className="text-xs text-muted-foreground" />
           </div>
           {comment.content && (
             <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">{comment.content}</p>
@@ -266,6 +267,7 @@ function CommentThreadItem({
 export default function PostDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const auth = useAuthState();
   const openLogin = useOpenLogin();
   const [post, setPost] = useState<PostItem | null>(null);
@@ -281,6 +283,20 @@ export default function PostDetailPage() {
   const [error, setError] = useState('');
   const [commentsError, setCommentsError] = useState('');
   const [claimModal, setClaimModal] = useState<HardClaimItem | null>(null);
+
+  const updateCurrentPost = (updater: (post: PostItem) => PostItem) => {
+    setPost((prev) => {
+      if (!prev) return prev;
+      const next = updater(prev);
+      updatePostAcrossCachedFeeds(queryClient, next, auth.address);
+      return next;
+    });
+  };
+
+  const handlePostChange = (updatedPost: PostItem) => {
+    setPost(updatedPost);
+    updatePostAcrossCachedFeeds(queryClient, updatedPost, auth.address);
+  };
 
   const pickCommentImage = (file: File | null) => {
     if (!file) return;
@@ -303,6 +319,7 @@ export default function PostDetailPage() {
     Promise.all([getPost(postId), fetchAssets(), getPostComments(postId)])
       .then(([found, a, loadedComments]) => {
         setPost(found);
+        updatePostAcrossCachedFeeds(queryClient, found, auth.address);
         setAssets(a);
         setComments(loadedComments);
         setCommentsError('');
@@ -312,7 +329,7 @@ export default function PostDetailPage() {
         setLoading(false);
         setCommentsLoading(false);
       });
-  }, [id]);
+  }, [auth.address, id, queryClient]);
 
   const handleSubmitComment = async () => {
     if (!post) return;
@@ -334,7 +351,10 @@ export default function PostDetailPage() {
       setComments((prev) => [...prev, comment]);
       setCommentContent('');
       clearCommentImage();
-      setPost((prev) => prev ? { ...prev, comment_count: prev.comment_count + 1 } : prev);
+      updateCurrentPost((currentPost) => ({
+        ...currentPost,
+        comment_count: currentPost.comment_count + 1,
+      }));
     } catch (e) {
       setCommentsError(e instanceof Error ? e.message : 'Failed to post comment.');
     } finally {
@@ -348,7 +368,10 @@ export default function PostDetailPage() {
 
   const handleReplyCreated = (parentId: number, reply: PostCommentItem) => {
     setComments((prev) => appendReply(prev, parentId, reply));
-    setPost((prev) => prev ? { ...prev, comment_count: prev.comment_count + 1 } : prev);
+    updateCurrentPost((currentPost) => ({
+      ...currentPost,
+      comment_count: currentPost.comment_count + 1,
+    }));
   };
 
   if (loading) {
@@ -392,9 +415,7 @@ export default function PostDetailPage() {
             >
               {post.author_username ? `@${post.author_username}` : truncateAddress(post.author_address)}
             </Link>
-            <span className="ml-auto text-xs text-muted-foreground num">
-              {new Date(post.created_at).toLocaleString()}
-            </span>
+            <SmartTimestamp value={post.created_at} mode="full" className="ml-auto text-xs text-muted-foreground" />
           </div>
 
           <p className="text-sm whitespace-pre-wrap leading-relaxed">{post.content}</p>
@@ -436,7 +457,7 @@ export default function PostDetailPage() {
             </div>
           )}
 
-          <PostActions post={post} onPostChange={setPost} className="border-t border-border pt-4" />
+          <PostActions post={post} onPostChange={handlePostChange} className="border-t border-border pt-4" />
         </CardContent>
       </Card>
 

@@ -12,6 +12,7 @@ import { NewPostButton } from '@/components/feed/NewPostModal';
 import { Settings, Lock, Users } from 'lucide-react';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 import { toast, getMessage } from '@/lib/errors';
+import { SmartTimestamp } from '@/components/SmartTimestamp';
 
 interface PremiumChannelViewProps {
   channelId: number;
@@ -285,7 +286,9 @@ export function PremiumChannelView({ channelId, onSubscribed }: PremiumChannelVi
                             </span>
                           )}
                         </div>
-                        <div className="text-[10px] text-muted-foreground mt-1">Subscribed: {new Date(member.created_at).toLocaleDateString()}</div>
+                        <div className="text-[10px] text-muted-foreground mt-1">
+                          Subscribed: <SmartTimestamp value={member.created_at} />
+                        </div>
                       </div>
                       <div className="flex gap-1.5">
                         {canModerate && member.role === 'member' && member.user_address.toLowerCase() !== channel.creator_address.toLowerCase() && (

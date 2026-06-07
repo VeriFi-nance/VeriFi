@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { CalendarDays, CheckCircle2, XCircle, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/UserAvatar';
+import { SmartTimestamp } from '@/components/SmartTimestamp';
 import type { HardClaimItem, AssetItem } from '@/lib/types';
 import { truncateAddress } from '@/lib/wallet';
 import { getClaimProof } from '@/lib/api';
@@ -124,9 +125,7 @@ export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
           <div className="text-right text-xs text-muted-foreground shrink-0">
             <div className="flex items-center gap-1 justify-end">
               <CalendarDays className="size-3" />
-              <time dateTime={claim.created_at}>
-                {new Date(claim.created_at).toLocaleDateString()}
-              </time>
+              <SmartTimestamp value={claim.created_at} />
             </div>
             <p className="mt-0.5">Due {untilLabel}</p>
           </div>
@@ -135,7 +134,7 @@ export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <CalendarDays className="size-3.5 shrink-0" />
           <span>
-            Created {new Date(claim.created_at).toLocaleDateString()} · Due {untilLabel}
+            Created <SmartTimestamp value={claim.created_at} /> · Due {untilLabel}
           </span>
         </div>
       )}

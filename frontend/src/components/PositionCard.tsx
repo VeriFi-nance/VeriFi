@@ -12,6 +12,7 @@ import { PositionPriceChart } from './feed/PositionPriceChart';
 import { usePositionChartData } from '@/hooks/usePositionChartData';
 import { toast, getMessage } from '@/lib/errors';
 import { useConfirm } from './ConfirmDialog';
+import { SmartTimestamp } from '@/components/SmartTimestamp';
 
 interface PositionCardProps {
   position: PositionItem;
@@ -179,10 +180,10 @@ export function PositionCard({ position, assets, onClosed }: PositionCardProps) 
         <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
           <div>
             {position.status === 'pending' && (
-              <span>Valid until: {new Date(position.entry_interval).toLocaleString()}</span>
+              <span>Valid until: <SmartTimestamp value={position.entry_interval} /></span>
             )}
             {position.status === 'active' && (
-              <span>Expires: {new Date(position.lifetime).toLocaleString()}</span>
+              <span>Expires: <SmartTimestamp value={position.lifetime} /></span>
             )}
             {position.status === 'missed' && <span>Entry target not reached.</span>}
             {position.signature && (
