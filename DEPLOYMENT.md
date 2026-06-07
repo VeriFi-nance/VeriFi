@@ -54,7 +54,9 @@ If you already created **verifi-db** or Render crons from an older blueprint, de
 ## 3. Vercel (frontend)
 
 1. Import **ArdaSaygan/VeriFi** → **Root Directory** `frontend`.
-2. Production env: `VITE_API_URL` = Render URL (no trailing slash).
+2. Production env:
+   - `VITE_API_URL` = Render URL (no trailing slash)
+   - `VITE_PRIVY_APP_ID` = Privy App ID from [dashboard.privy.io](https://dashboard.privy.io) (enable Google login + embedded Ethereum wallets; add your Vercel URL to allowed origins)
 3. Deploy → update Render `CORS_ALLOWED_ORIGINS` to match this URL.
 
 ---
