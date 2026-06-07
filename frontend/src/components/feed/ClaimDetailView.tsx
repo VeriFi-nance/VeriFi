@@ -10,6 +10,7 @@ import { getClaimProof } from '@/lib/api';
 import { useClaimChartData } from '@/hooks/useClaimChartData';
 import { isClaimPastDue, formatClaimUntil, getHardClaimDisplay, getHardClaimType } from '@/lib/claims';
 import { MarketPanel } from '../MarketPanel';
+import { toast, getMessage } from '@/lib/errors';
 
         // Lazy so the lightweight-charts bundle is fetched only when a claim
 // actually has price history to render, not in the initial chunk.
@@ -68,8 +69,8 @@ export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch (e: any) {
-      alert(e.message || 'Failed to download proof');
+    } catch (e: unknown) {
+      toast.error(getMessage(e, 'Failed to download proof'));
     } finally {
       setDownloadingProof(false);
     }

@@ -13,6 +13,7 @@ import { useAuthState } from '@/lib/auth';
 import { useAssets } from '@/hooks/useAssets';
 import { useFeed, feedQueryKey, flattenFeed, type FeedParams } from '@/hooks/useFeed';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
+import { toast, getMessage } from '@/lib/errors';
 
 const DEFAULT_FILTER: FeedFilter = {
   assetIds: [],
@@ -128,8 +129,8 @@ export function FeedList({ feed, channel, myRole, creatorAddress, filter: propFi
                 }
               : old,
           );
-        } catch (e: any) {
-          alert(e.message);
+        } catch (e: unknown) {
+          toast.error(getMessage(e, 'Failed to delete post'));
         }
       },
     });

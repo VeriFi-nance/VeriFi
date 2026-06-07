@@ -13,6 +13,7 @@ import { NewPostButton } from '@/components/feed/NewPostModal';
 import { Settings, ArrowLeft, Lock, Users } from 'lucide-react';
 import { PageContent } from '@/components/PageContent';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
+import { toast, getMessage } from '@/lib/errors';
 
 export default function ChannelDetailPage() {
   const { id } = useParams();
@@ -90,8 +91,8 @@ export default function ChannelDetailPage() {
     try {
       await joinChannel(Number(id));
       await fetchChannelAndPosts();
-    } catch (e: any) {
-      alert(e.message);
+    } catch (e: unknown) {
+      toast.error(getMessage(e));
     }
   };
 
@@ -100,8 +101,8 @@ export default function ChannelDetailPage() {
     try {
       await approveChannelMember(Number(id), userAddress, action);
       await fetchChannelAndPosts();
-    } catch (e: any) {
-      alert(e.message);
+    } catch (e: unknown) {
+      toast.error(getMessage(e));
     }
   };
 
@@ -115,8 +116,8 @@ export default function ChannelDetailPage() {
         try {
           await banChannelMember(Number(id), userAddress);
           await fetchChannelAndPosts();
-        } catch (e: any) {
-          alert(e.message);
+        } catch (e: unknown) {
+          toast.error(getMessage(e));
         }
       }
     });
@@ -132,8 +133,8 @@ export default function ChannelDetailPage() {
         try {
           await unbanChannelMember(Number(id), userAddress);
           await fetchChannelAndPosts();
-        } catch (e: any) {
-          alert(e.message);
+        } catch (e: unknown) {
+          toast.error(getMessage(e));
         }
       }
     });
@@ -144,8 +145,8 @@ export default function ChannelDetailPage() {
     try {
       await promoteModerator(Number(id), userAddress);
       await fetchChannelAndPosts();
-    } catch (e: any) {
-      alert(e.message);
+    } catch (e: unknown) {
+      toast.error(getMessage(e));
     }
   };
 
@@ -154,8 +155,8 @@ export default function ChannelDetailPage() {
     try {
       await demoteModerator(Number(id), userAddress);
       await fetchChannelAndPosts();
-    } catch (e: any) {
-      alert(e.message);
+    } catch (e: unknown) {
+      toast.error(getMessage(e));
     }
   };
 

@@ -979,7 +979,11 @@ class HardClaimResolveView(APIView):
         try:
             result = preview_resolution(hard_claim) if preview_only else resolve_hard_claim(hard_claim)
         except ResolutionError as exc:
-            return Response(exc.to_payload(), status=status.HTTP_400_BAD_REQUEST)
+            payload = exc.to_payload()
+            # Standard error envelope (consumed by the frontend client) while
+            # keeping the legacy top-level keys for the admin resolution UI.
+            payload["error"] = {"code": exc.code, "message": exc.message}
+            return Response(payload, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(result)
 
