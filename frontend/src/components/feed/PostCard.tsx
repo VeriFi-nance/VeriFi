@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, Star } from 'lucide-react';
+import { Star } from 'lucide-react';
 import { HardClaimCard } from '@/components/HardClaimCard';
 import { PositionAttachmentCard } from '@/components/PositionAttachmentCard';
 import { UserAvatar } from '@/components/UserAvatar';
@@ -11,10 +10,8 @@ import { PostActions } from '@/components/feed/PostActions';
 import { truncateAddress } from '@/lib/wallet';
 import { cn, safeImageSrc } from '@/lib/utils';
 import type { PostItem, HardClaimItem, AssetItem } from '@/lib/types';
-import { getFeedClaimTagLabel } from '@/lib/claims';
 import { ClaimDetailView } from '@/components/feed/ClaimDetailView';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
-import { TrendingUp, TrendingDown } from 'lucide-react';
 
 interface PostCardProps {
   post: PostItem;
