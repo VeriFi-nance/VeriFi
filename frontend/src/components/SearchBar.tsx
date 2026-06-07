@@ -78,7 +78,7 @@ export function SearchBar() {
     };
 
     fetchResults();
-  }, [debouncedQuery, type, navigate]);
+  }, [debouncedQuery, type, navigate, location.pathname]);
 
   const handleResultClick = (result: SearchResult) => {
     setIsOpen(false);

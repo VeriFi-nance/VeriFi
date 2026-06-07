@@ -34,17 +34,18 @@ export default function FeedPage() {
   return (
     <PageContent className="space-y-5">
       <Tabs value={feedType} onValueChange={handleFeedChange}>
-        <div className="flex items-center gap-3">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 sm:gap-3">
           <FeedFilterPopover
             assets={assets}
             filter={activeFilter}
             onApply={setActiveFilter}
           />
-          <TabsList className="grid flex-1 grid-cols-2">
+          <TabsList className="grid w-full min-w-0 grid-cols-2">
             <TabsTrigger value="global">Global</TabsTrigger>
             <TabsTrigger value="following">Following</TabsTrigger>
           </TabsList>
           <NewPostButton
+            compactOnMobile
             onPosted={() => window.dispatchEvent(new Event('post-created'))}
           />
         </div>
