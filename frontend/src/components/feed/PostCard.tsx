@@ -6,6 +6,7 @@ import { Star } from 'lucide-react';
 import { HardClaimCard } from '@/components/HardClaimCard';
 import { PositionAttachmentCard } from '@/components/PositionAttachmentCard';
 import { UserAvatar } from '@/components/UserAvatar';
+import { SmartTimestamp } from '@/components/SmartTimestamp';
 import { PostActions } from '@/components/feed/PostActions';
 import { truncateAddress } from '@/lib/wallet';
 import { cn, safeImageSrc } from '@/lib/utils';
@@ -57,12 +58,7 @@ function PostCardImpl({ post, hardClaims = [], assets = [], onDelete, onPostChan
               </Link>
             </Button>
 
-            <time
-              dateTime={post.created_at}
-              className="text-xs text-muted-foreground shrink-0 hidden sm:block num"
-            >
-              {new Date(post.created_at).toLocaleDateString()}
-            </time>
+            <SmartTimestamp value={post.created_at} className="text-xs text-muted-foreground shrink-0 hidden sm:block" />
             {post.channel && (
               <span className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded ml-1 shrink-0">
                 <Star className="size-3 fill-amber-500" />
