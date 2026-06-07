@@ -85,9 +85,9 @@ export function PostActions({ post, onPostChange, className }: PostActionsProps)
   };
 
   const handleCopyText = () => {
-    const { text, url } = getShareTextAndUrl();
-    const copyText = text + `Read more on VeriFi:\n${url}`;
-    
+    const { url } = getShareTextAndUrl();
+    const copyText = url;
+
     try {
       void navigator.clipboard.writeText(copyText);
       setCopied(true);
