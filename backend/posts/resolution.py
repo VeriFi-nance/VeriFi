@@ -642,15 +642,31 @@ def _maybe_settle_rep_market(hard_claim: HardClaim) -> None:
     if market is None or market.resolved:
         return
     from .rep_market import resolve as resolve_market
+    from notifications.emitters import notify_rep_payout
+    from accounts.models import WalletUser
 
     winning_side = "YES" if hard_claim.status == HardClaim.Status.CONFIRMED else "NO"
-    resolve_market(market, winning_side)
+    deltas = resolve_market(market, winning_side)
+    users = WalletUser.objects.in_bulk(deltas.keys())
+    for user_id, delta in deltas.items():
+        if delta <= 0 or user_id not in users:
+            continue
+        notify_rep_payout(
+            recipient=users[user_id],
+            amount=float(delta),
+            claim=hard_claim,
+            refunded=market.refunded_trivial,
+        )
 
 
 def resolve_hard_claim(hard_claim: HardClaim) -> dict[str, Any]:
     """Resolve a claim and save the result to DB."""
     result = preview_resolution(hard_claim)
     _persist_resolution_result(hard_claim, result)
+    from notifications.emitters import notify_claim_resolved
+
+    hard_claim.refresh_from_db()
+    notify_claim_resolved(hard_claim)
     _maybe_settle_rep_market(hard_claim)
     return result
 

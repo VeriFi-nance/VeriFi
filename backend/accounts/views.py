@@ -260,7 +260,10 @@ class FollowToggleView(APIView):
             # Already following, so unfollow
             follow_obj.delete()
             return Response({"detail": "Unfollowed successfully.", "following": False})
-            
+
+        from notifications.emitters import notify_followed
+
+        notify_followed(target_user, current_user, follow_obj.id)
         return Response({"detail": "Followed successfully.", "following": True})
 
 class ProfitabilityView(APIView):

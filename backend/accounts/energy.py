@@ -29,9 +29,20 @@ def grant_energy(user) -> None:
     days = (_utc_midnight(now) - _utc_midnight(last)).days
     if days <= 0:
         return
+    granted = days * DAILY_GRANT
     user.energy = user.energy + days * DAILY_GRANT
     user.last_energy_grant = now
     user.save(update_fields=["energy", "last_energy_grant"])
+    try:
+        from notifications.emitters import notify_energy_granted
+
+        notify_energy_granted(
+            user,
+            float(granted),
+            f"energy-grant:{user.pk}:{now.astimezone(dt_tz.utc).date().isoformat()}",
+        )
+    except Exception:
+        pass
 
 
 def spend(user, cost: int) -> bool:
