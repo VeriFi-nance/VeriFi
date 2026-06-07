@@ -2,6 +2,7 @@ import { loadEncryptedKey, decryptPrivateKey } from './keystore';
 import { loadAddress, loadUsername, saveUsername } from './auth';
 import { getProfileStats } from './api';
 import { getPrivySigner } from './privySigner';
+import { requestPassword } from './passwordPrompt';
 
 /**
  * Returns the current user's username for inclusion in a signed payload.
@@ -36,20 +37,21 @@ export async function signPayload(payload: string): Promise<string> {
   const encryptedKey = loadEncryptedKey();
   
   if (encryptedKey) {
-    // Native wallet
-    const password = prompt('Enter your wallet password to sign this action:');
-    if (!password) {
-      throw new Error('Password required to sign');
-    }
-    
-    try {
-      const privateKey = await decryptPrivateKey(encryptedKey, password);
-      // Heavy secp256k1 signer loaded on demand so the eagerly-mounted feed
-      // composer doesn't pull the crypto bundle into the initial chunk.
-      const { signClaimPayload } = await import('./crypto');
-      return await signClaimPayload(privateKey, payload);
-    } catch {
-      throw new Error('Wrong password or failed to decrypt key');
+    // Native wallet — prompt via the React password modal (not window.prompt),
+    // looping so a wrong password can be retried without restarting the action.
+    let error: string | undefined;
+    for (;;) {
+      // Rejects if the user cancels — propagates out as "Password required to sign".
+      const password = await requestPassword({ reason: 'Sign this action', error });
+      try {
+        const privateKey = await decryptPrivateKey(encryptedKey, password);
+        // Heavy secp256k1 signer loaded on demand so the eagerly-mounted feed
+        // composer doesn't pull the crypto bundle into the initial chunk.
+        const { signClaimPayload } = await import('./crypto');
+        return await signClaimPayload(privateKey, payload);
+      } catch {
+        error = 'Wrong password. Please try again.';
+      }
     }
   }
 

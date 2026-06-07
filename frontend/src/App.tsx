@@ -19,6 +19,9 @@ import { clearPrivateKey } from './lib/keystore';
 import { authenticateMetaMaskAddress } from './lib/walletAuth';
 import { PrivyAccountSync } from './components/PrivyAccountSync';
 import { isPrivyConfigured } from './lib/privyAuth';
+import { ConfirmProvider } from './components/ConfirmDialog';
+import { PasswordPromptProvider } from './components/PasswordPromptProvider';
+import { Toaster } from './components/ui/sonner';
 
 // Lazy so the BIP39/BIP32/secp256k1 bundle (only reachable through LoginForm)
 // is fetched on demand when the login modal opens, not in the initial chunk.
@@ -158,9 +161,14 @@ function PostLegacyRedirect() {
 export default function App() {
   return (
     <BrowserRouter>
-      <WalletAccountSync />
-      {isPrivyConfigured() && <PrivyAccountSync />}
-      <AppRoutes />
+      <ConfirmProvider>
+        <PasswordPromptProvider>
+          <WalletAccountSync />
+          {isPrivyConfigured() && <PrivyAccountSync />}
+          <AppRoutes />
+          <Toaster />
+        </PasswordPromptProvider>
+      </ConfirmProvider>
     </BrowserRouter>
   );
 }
