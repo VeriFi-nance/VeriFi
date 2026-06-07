@@ -11,7 +11,7 @@ import { deletePost, type PaginatedResponse } from '@/lib/api';
 import type { PostItem } from '@/lib/types';
 import { useAuthState } from '@/lib/auth';
 import { useAssets } from '@/hooks/useAssets';
-import { useFeed, feedQueryKey, flattenFeed, type FeedParams } from '@/hooks/useFeed';
+import { useFeed, feedQueryKey, flattenFeed, updatePostAcrossCachedFeeds, type FeedParams } from '@/hooks/useFeed';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 
 const DEFAULT_FILTER: FeedFilter = {
@@ -58,6 +58,7 @@ export function FeedList({ feed, channel, myRole, creatorAddress, filter: propFi
     hasClaims: effectiveFilter.hasClaims,
     hasPositions: effectiveFilter.hasPositions,
     q,
+    viewerAddress: myAddress,
   };
   const queryKey = feedQueryKey(params);
   // Keep the latest key reachable from stable callbacks without re-creating them
@@ -93,21 +94,11 @@ export function FeedList({ feed, channel, myRole, creatorAddress, filter: propFi
     setActiveFilter(f); // query key changes -> useInfiniteQuery refetches automatically
   }
 
-  // Stable across renders (reads the live key via queryKeyRef) so memoized
-  // PostCards don't re-render when unrelated FeedList state changes.
+  // Stable across renders so memoized PostCards don't re-render when unrelated
+  // FeedList state changes.
   const handlePostChange = useCallback((updatedPost: PostItem) => {
-    queryClient.setQueryData<FeedData>(queryKeyRef.current, (old) =>
-      old
-        ? {
-            ...old,
-            pages: old.pages.map((pg) => ({
-              ...pg,
-              results: pg.results.map((p) => (p.id === updatedPost.id ? updatedPost : p)),
-            })),
-          }
-        : old,
-    );
-  }, [queryClient]);
+    updatePostAcrossCachedFeeds(queryClient, updatedPost, myAddress);
+  }, [myAddress, queryClient]);
 
   const handleDeletePost = useCallback((postId: number) => {
     setConfirmDialog({
