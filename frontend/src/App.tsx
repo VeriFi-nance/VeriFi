@@ -14,9 +14,11 @@ import PostDetailPage from './pages/PostDetailPage';
 import UserPage from './pages/UserPage';
 import SettingsPage from './pages/SettingsPage';
 import ClaimDetailPage from './pages/ClaimDetailPage';
-import { clearAuth, loadAddress, openLogin, useAuthState } from './lib/auth';
+import { clearAuth, loadAddress, loadAuthMethod, openLogin, useAuthState, setAuthMethod } from './lib/auth';
 import { clearPrivateKey } from './lib/keystore';
 import { authenticateMetaMaskAddress } from './lib/walletAuth';
+import { PrivyAccountSync } from './components/PrivyAccountSync';
+import { isPrivyConfigured } from './lib/privyAuth';
 
 // Lazy so the BIP39/BIP32/secp256k1 bundle (only reachable through LoginForm)
 // is fetched on demand when the login modal opens, not in the initial chunk.
@@ -33,6 +35,8 @@ function WalletAccountSync() {
   const location = useLocation();
 
   useEffect(() => {
+    const authMethod = loadAuthMethod();
+    if (authMethod && authMethod !== 'metamask') return;
     if (!window.ethereum?.on || !window.ethereum?.removeListener) return;
     let cancelled = false;
 
@@ -48,6 +52,7 @@ function WalletAccountSync() {
       if (next === current) return;
       try {
         await authenticateMetaMaskAddress(next);
+        setAuthMethod('metamask');
       } catch {
         clearAuth();
         clearPrivateKey();
@@ -154,6 +159,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <WalletAccountSync />
+      {isPrivyConfigured() && <PrivyAccountSync />}
       <AppRoutes />
     </BrowserRouter>
   );

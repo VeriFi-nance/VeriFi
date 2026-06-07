@@ -1,6 +1,7 @@
 import { loadEncryptedKey, decryptPrivateKey } from './keystore';
 import { loadAddress, loadUsername, saveUsername } from './auth';
 import { getProfileStats } from './api';
+import { getPrivySigner } from './privySigner';
 
 /**
  * Returns the current user's username for inclusion in a signed payload.
@@ -50,25 +51,36 @@ export async function signPayload(payload: string): Promise<string> {
     } catch {
       throw new Error('Wrong password or failed to decrypt key');
     }
-  } else {
-    // MetaMask
-    if (!window.ethereum) {
-      throw new Error('MetaMask not found');
-    }
-    
-    // MetaMask personal_sign takes [payloadHex, address]
-    const payloadHex = '0x' + Array.from(new TextEncoder().encode(payload))
-      .map(b => b.toString(16).padStart(2, '0'))
+  }
+
+  const payloadHex =
+    '0x' +
+    Array.from(new TextEncoder().encode(payload))
+      .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
-      
+
+  const privySign = getPrivySigner();
+  if (privySign) {
     try {
-      const signature = await window.ethereum.request({
-        method: 'personal_sign',
-        params: [payloadHex, address],
-      }) as string;
-      return signature;
-    } catch (e: any) {
-      throw new Error(e.message || 'MetaMask signature rejected');
+      return await privySign(payloadHex, address);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Wallet signature rejected';
+      throw new Error(message);
     }
+  }
+
+  if (!window.ethereum) {
+    throw new Error('Wallet not found');
+  }
+
+  try {
+    const signature = (await window.ethereum.request({
+      method: 'personal_sign',
+      params: [payloadHex, address],
+    })) as string;
+    return signature;
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Wallet signature rejected';
+    throw new Error(message);
   }
 }
