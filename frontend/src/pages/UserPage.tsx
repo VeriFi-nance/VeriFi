@@ -10,7 +10,8 @@ import { EmptyState } from '@/components/EmptyState';
 import { PageContent } from '@/components/PageContent';
 import { SkeletonRow } from '@/components/Skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getHardClaimsByAddress, getAssets, getProfileStats, toggleFollow, createChannel } from '@/lib/api';
+import { getHardClaimsByAddress, getProfileStats, toggleFollow, createChannel } from '@/lib/api';
+import { fetchAssets } from '@/hooks/useAssets';
 import type { HardClaimItem, AssetItem, ProfileStats } from '@/lib/types';
 import { loadAddress } from '@/lib/auth';
 import { truncateAddress } from '@/lib/wallet';
@@ -115,7 +116,7 @@ export default function UserPage() {
         setFollowing(s.is_following ?? false);
         return Promise.all([
           getHardClaimsByAddress(s.address),
-          getAssets(),
+          fetchAssets(),
         ]);
       })
       .then(([c, a]) => {

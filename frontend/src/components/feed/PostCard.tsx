@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,7 +21,7 @@ interface PostCardProps {
   onPostChange?: (post: PostItem) => void;
 }
 
-export function PostCard({ post, hardClaims = [], assets = [], onDelete, onPostChange }: PostCardProps) {
+function PostCardImpl({ post, hardClaims = [], assets = [], onDelete, onPostChange }: PostCardProps) {
   // Claim detail modal state
   const [claimModal, setClaimModal] = useState<HardClaimItem | null>(null);
 
@@ -181,3 +181,5 @@ export function PostCard({ post, hardClaims = [], assets = [], onDelete, onPostC
     </Card>
   );
 }
+
+export const PostCard = memo(PostCardImpl);

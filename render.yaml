@@ -1,5 +1,7 @@
-# $0 backend: free web only. Postgres = Neon/Supabase (DATABASE_URL).
-# Crons = GitHub Actions (.github/workflows/).
+# Starter web (no spin-down, 2 workers x 4 threads), pinned to frankfurt/eu-central
+# to co-locate with the Neon Postgres (also Frankfurt) AND sit close to Istanbul
+# users (~30-50ms vs ~170-200ms to Oregon). DB RTT stays ~1ms.
+# Postgres = Neon Frankfurt (DATABASE_URL). Crons = GitHub Actions (.github/workflows/).
 
 envVarGroups:
   - name: verifi-common
@@ -19,10 +21,11 @@ services:
   - type: web
     name: verifi-backend
     runtime: python
-    plan: free
+    plan: starter
+    region: frankfurt         # co-located with Neon Frankfurt + near Istanbul users
     rootDir: backend
     buildCommand: "./build.sh"
-    startCommand: "uv run gunicorn core.wsgi:application --bind 0.0.0.0:$PORT"
+    startCommand: "uv run gunicorn core.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 60 --keep-alive 5"
     envVars:
       - fromGroup: verifi-common
       - key: DATABASE_URL

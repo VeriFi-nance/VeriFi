@@ -12,7 +12,8 @@ import { SkeletonPostCard } from '@/components/Skeleton';
 import { PageContent } from '@/components/PageContent';
 import { HardClaimCard } from '@/components/HardClaimCard';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
-import { createPostComment, getPost, getAssets, getPostComments, likePostComment, unlikePostComment } from '@/lib/api';
+import { createPostComment, getPost, getPostComments, likePostComment, unlikePostComment } from '@/lib/api';
+import { fetchAssets } from '@/hooks/useAssets';
 import { useAuthState, useOpenLogin } from '@/lib/auth';
 import { safeImageSrc, imageFileFromClipboard } from '@/lib/utils';
 import { truncateAddress } from '@/lib/wallet';
@@ -299,7 +300,7 @@ export default function PostDetailPage() {
   useEffect(() => {
     if (!id) return;
     const postId = Number(id);
-    Promise.all([getPost(postId), getAssets(), getPostComments(postId)])
+    Promise.all([getPost(postId), fetchAssets(), getPostComments(postId)])
       .then(([found, a, loadedComments]) => {
         setPost(found);
         setAssets(a);
