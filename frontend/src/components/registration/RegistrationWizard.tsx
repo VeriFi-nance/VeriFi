@@ -258,7 +258,7 @@ export function RegistrationWizard({ flow, authMethod, address: initialAddress, 
           </p>
           <div className="space-y-1">
             <Label htmlFor="reg-phone">Phone number</Label>
-            <Input id="reg-phone" type="tel" placeholder="+1 415 555 0100" value={phone}
+            <Input id="reg-phone" type="tel" placeholder="+90 532 123 45 67" value={phone}
               onChange={(e) => { setPhone(e.target.value); if (phoneError) setPhoneError(''); }}
               disabled={phoneSent} aria-invalid={!!phoneError} />
             <FieldError>{phoneError}</FieldError>

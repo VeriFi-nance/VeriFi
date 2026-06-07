@@ -35,9 +35,9 @@ def normalize_phone(raw: str) -> str:
     cleaned = re.sub(r"[\s\-()]", "", raw.strip())
     if not _E164_RE.match(cleaned):
         raise ApiError(
-            "Enter a valid phone number in international format, e.g. +14155552671.",
+            "Enter a valid phone number in international format, e.g. +905321234567.",
             code="validation_error",
-            fields={"phone": ["Enter a valid international phone number (e.g. +14155552671)."]},
+            fields={"phone": ["Enter a valid international phone number (e.g. +905321234567)."]},
         )
     return cleaned
 
