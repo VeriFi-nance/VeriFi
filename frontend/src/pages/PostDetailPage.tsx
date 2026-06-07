@@ -10,11 +10,13 @@ import { ClaimDetailView } from '@/components/feed/ClaimDetailView';
 import { PostActions } from '@/components/feed/PostActions';
 import { SkeletonPostCard } from '@/components/Skeleton';
 import { PageContent } from '@/components/PageContent';
+import { HardClaimCard } from '@/components/HardClaimCard';
+import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 import { createPostComment, getPost, getAssets, getPostComments, likePostComment, unlikePostComment } from '@/lib/api';
 import { useAuthState, useOpenLogin } from '@/lib/auth';
 import { safeImageSrc, imageFileFromClipboard } from '@/lib/utils';
 import { truncateAddress } from '@/lib/wallet';
-import type { PostItem, PostCommentItem, AssetItem } from '@/lib/types';
+import type { PostItem, PostCommentItem, AssetItem, HardClaimItem } from '@/lib/types';
 
 function replaceComment(comments: PostCommentItem[], updated: PostCommentItem): PostCommentItem[] {
   return comments.map((comment) => {
@@ -277,6 +279,7 @@ export default function PostDetailPage() {
   const [submittingComment, setSubmittingComment] = useState(false);
   const [error, setError] = useState('');
   const [commentsError, setCommentsError] = useState('');
+  const [claimModal, setClaimModal] = useState<HardClaimItem | null>(null);
 
   const pickCommentImage = (file: File | null) => {
     if (!file) return;
@@ -403,7 +406,36 @@ export default function PostDetailPage() {
             />
           )}
 
-          <PostActions post={post} onPostChange={setPost} className="border-t border-border pt-2" />
+          {post.hard_claims.length > 0 && (
+            <div className="space-y-3 pt-2">
+              <h2 className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                Claims
+              </h2>
+              {post.hard_claims.map((hc) => (
+                <div
+                  key={hc.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setClaimModal(hc);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setClaimModal(hc);
+                    }
+                  }}
+                  className="cursor-pointer [&_a]:pointer-events-none"
+                >
+                  <HardClaimCard claim={hc} assets={assets} />
+                </div>
+              ))}
+            </div>
+          )}
+
+          <PostActions post={post} onPostChange={setPost} className="border-t border-border pt-4" />
         </CardContent>
       </Card>
 
@@ -507,18 +539,21 @@ export default function PostDetailPage() {
         </div>
       </section>
 
-      {post.hard_claims.length > 0 && (
-        <section className="mt-4 space-y-6">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Claims
-          </h2>
-          {post.hard_claims.map((hc) => (
-            <div key={hc.id} className="rounded-lg border border-border bg-card p-4 sm:p-5">
-              <ClaimDetailView claim={hc} assets={assets} />
+
+
+      {/* Claim detail modal */}
+      <RD.Root open={!!claimModal} onOpenChange={(v) => !v && setClaimModal(null)}>
+        <RD.Content className="max-w-2xl">
+          <RD.Header>
+            <RD.Title>Claim Details</RD.Title>
+          </RD.Header>
+          {claimModal && (
+            <div className="overflow-y-auto max-h-[70vh] pr-1">
+              <ClaimDetailView claim={claimModal} assets={assets} />
             </div>
-          ))}
-        </section>
-      )}
+          )}
+        </RD.Content>
+      </RD.Root>
     </PageContent>
   );
 }
