@@ -19,27 +19,35 @@ export function formatFullTimestamp(value: TimestampValue): string {
   });
 }
 
+export function formatDateTimestamp(value: TimestampValue, options?: Intl.DateTimeFormatOptions): string {
+  const date = parseTimestamp(value);
+  if (!date) return '';
+  return date.toLocaleDateString(undefined, options);
+}
+
 export function formatRelativeTimestamp(value: TimestampValue, now: Date = new Date()): string {
   const date = parseTimestamp(value);
   if (!date) return '';
 
   const diffMs = now.getTime() - date.getTime();
-  const diffSeconds = Math.max(0, Math.floor(diffMs / 1000));
+  const isFuture = diffMs < 0;
+  const diffSeconds = Math.floor(Math.abs(diffMs) / 1000);
+  const prefix = isFuture ? 'in ' : '';
 
-  if (diffSeconds < 45) return 'a few secs ago';
+  if (diffSeconds < 45) return isFuture ? 'in a few secs' : 'a few secs ago';
 
   const diffMinutes = Math.floor(diffSeconds / 60);
-  if (diffMinutes < 60) return `${Math.max(1, diffMinutes)}m`;
+  if (diffMinutes < 60) return `${prefix}${Math.max(1, diffMinutes)}m`;
 
   const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours}h`;
+  if (diffHours < 24) return `${prefix}${diffHours}h`;
 
   const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) return `${diffDays}d`;
+  if (diffDays < 7) return `${prefix}${diffDays}d`;
 
   if (date.getFullYear() === now.getFullYear()) {
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return formatDateTimestamp(date, { month: 'short', day: 'numeric' });
   }
 
-  return date.toLocaleDateString();
+  return formatDateTimestamp(date);
 }

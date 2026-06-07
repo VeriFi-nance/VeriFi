@@ -391,7 +391,7 @@ export default function PostDetailPage() {
             >
               {post.author_username ? `@${post.author_username}` : truncateAddress(post.author_address)}
             </Link>
-            <SmartTimestamp value={post.created_at} className="ml-auto text-xs text-muted-foreground" />
+            <SmartTimestamp value={post.created_at} mode="full" className="ml-auto text-xs text-muted-foreground" />
           </div>
 
           <p className="text-sm whitespace-pre-wrap leading-relaxed">{post.content}</p>
