@@ -227,7 +227,7 @@ export default function AppLayout() {
 
         {/* Main column */}
         <div className="flex flex-col flex-1 min-w-0">
-          <header className="sticky top-0 z-20 h-14 flex items-center border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 px-4 sm:px-6 gap-3">
+          <header className="sticky top-0 z-20 h-14 flex items-center border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 px-3 sm:px-6 gap-2 sm:gap-3">
             <MobileMenuButton
               authenticated={auth.authenticated}
               theme={theme}
@@ -237,12 +237,12 @@ export default function AppLayout() {
               unreadNotifications={unreadNotifications}
             />
 
-            <div className="flex-1 flex justify-start lg:pl-4">
+            <div className="flex-1 min-w-0 flex justify-start lg:pl-4">
               <SearchBar />
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-              <EnergyMeter />
+              <EnergyMeter hideRepOnMobile />
 
               {auth.authenticated && (
                 <Button
@@ -276,7 +276,7 @@ export default function AppLayout() {
               {address && (
                 <Link
                   to={`/u/${username || address}`}
-                  className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                  className="hidden sm:flex items-center gap-2 hover:opacity-80 transition-opacity"
                   aria-label="Your profile"
                 >
                   <UserAvatar address={address} src={auth.avatar} size="sm" ring />
