@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Heart, MessageCircle, Share2 } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { likePost, unlikePost } from '@/lib/api';
 import { useAuthState, useOpenLogin } from '@/lib/auth';
@@ -27,6 +27,7 @@ export function PostActions({ post, onPostChange, className }: PostActionsProps)
   const openLogin = useOpenLogin();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
 
   const requireAuth = () => {
     if (auth.authenticated) return true;
@@ -79,13 +80,22 @@ export function PostActions({ post, onPostChange, className }: PostActionsProps)
       text += `"${truncated}"\n\n`;
     }
     
-    text += `Read more on VeriFi:`;
+    text += `Read more on VeriFi:\n${url}`;
     
-    window.open(
-      `https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
-      '_blank',
-      'noopener,noreferrer'
-    );
+    try {
+      void navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      const input = document.createElement('textarea');
+      input.value = text;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   return (
@@ -137,9 +147,9 @@ export function PostActions({ post, onPostChange, className }: PostActionsProps)
             e.stopPropagation();
             handleShare();
           }}
-          aria-label="Share post"
+          aria-label={copied ? "Copied" : "Share post"}
         >
-          <Share2 className="size-4" />
+          {copied ? <Check className="size-4 text-success" /> : <Share2 className="size-4" />}
         </Button>
 
       </div>
