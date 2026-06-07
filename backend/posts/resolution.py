@@ -1,9 +1,10 @@
 """
-Claim resolution engine — OHLC-based daily analysis.
+Claim resolution engine — OHLC-based analysis from claim creation through deadline.
 
-Fetches the reference price at exact created_at timestamp (preserving existing
-behaviour), then performs day-by-day high/low checks against the computed target
-price using cached OHLC candle data.
+Entry (reference) price is captured at claim creation from an intraday quote at
+created_at, stored on HardClaim.reference_price, and reused for charts and resolution.
+Target hits are evaluated only on candles at or after created_at (mixed intraday +
+daily), so pre-entry moves on the creation day cannot confirm a claim.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from .models import Asset, HardClaim, HardClaimEvent, OHLCData
-from .ohlc_fetcher import OHLCFetchError, get_ohlc_data
+from .ohlc_fetcher import Interval, OHLCFetchError, get_ohlc_data
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +58,172 @@ def _due_datetime_utc(value: date) -> datetime:
     return datetime.combine(value, time.max, tzinfo=timezone.utc)
 
 
+def _load_claim_ohlc_rows(hard_claim: HardClaim) -> list[OHLCData]:
+    """OHLC from created_at through end of until day; no pre-creation leakage."""
+    start_time = hard_claim.created_at.astimezone(timezone.utc)
+    # Exclusive end at midnight after until so mixed resolution includes the full last day.
+    end_time = datetime.combine(
+        hard_claim.until + timedelta(days=1),
+        time.min,
+        tzinfo=timezone.utc,
+    )
+    try:
+        return get_ohlc_data(hard_claim.asset, start_time, end_time, mixed_resolution=True)
+    except OHLCFetchError as exc:
+        # Daily-only fallback: skip the creation calendar day entirely so a full-day
+        # bar cannot credit price action that happened before created_at.
+        next_day = datetime.combine(
+            hard_claim.created_at.date() + timedelta(days=1),
+            time.min,
+            tzinfo=timezone.utc,
+        )
+        if next_day >= end_time:
+            raise ResolutionError(
+                "NO_OHLC_DATA",
+                "Could not obtain intraday OHLC for a same-day claim window.",
+            ) from exc
+        logger.warning(
+            "Mixed OHLC unavailable for claim %s; falling back to daily from %s: %s",
+            hard_claim.id,
+            next_day.date().isoformat(),
+            exc,
+        )
+        daily_end = datetime.combine(hard_claim.until, time.min, tzinfo=timezone.utc)
+        return get_ohlc_data(
+            hard_claim.asset,
+            next_day,
+            daily_end,
+            interval=Interval.ONE_DAY,
+        )
+
+
 def _round_decimal(value: float, places: str = "0.01") -> float:
     return float(Decimal(str(value)).quantize(Decimal(places), rounding=ROUND_HALF_UP))
+
+
+def _normalize_direction_and_value_type(
+    direction: str | None,
+    value_type: str | None,
+) -> tuple[str, str]:
+    """
+    Return consistent (direction, value_type).
+
+    For percentage claims, explicit direction wins over value_type so legacy rows
+    with direction=Bearish but value_type=PERCENTAGE_UP still resolve correctly.
+    """
+    raw = (direction or "").strip().lower()
+    vt = (value_type or "").strip().upper() or "PERCENTAGE_UP"
+
+    if vt == "PRICE":
+        if raw in {"bullish", "bearish"}:
+            return raw, vt
+        return "bullish", vt
+
+    if raw == "bearish":
+        return "bearish", "PERCENTAGE_DOWN"
+    if raw == "bullish":
+        return "bullish", "PERCENTAGE_UP"
+    if vt == "PERCENTAGE_DOWN":
+        return "bearish", "PERCENTAGE_DOWN"
+    return "bullish", "PERCENTAGE_UP"
+
+
+def infer_price_direction(hard_claim: HardClaim, target_price: float) -> str:
+    """Infer bullish/bearish for absolute price targets from reference vs target."""
+    reference = claim_entry_price(hard_claim)
+    if reference is not None:
+        if target_price < reference * 0.995:
+            return "bearish"
+        if target_price > reference * 1.005:
+            return "bullish"
+
+    raw = (hard_claim.direction or "").strip().lower()
+    if raw in {"bullish", "bearish"}:
+        return raw
+    return "bullish"
+
+
+def reconcile_claim_fields(hard_claim: HardClaim) -> tuple[str, str]:
+    """
+    Normalize direction/value_type and fix common legacy mistakes:
+    - large magnitudes stored as percentage moves → PRICE
+    - PRICE targets with direction opposite to reference → corrected
+    """
+    direction, value_type = _normalize_direction_and_value_type(
+        hard_claim.direction,
+        hard_claim.value_type,
+    )
+    pct = float(hard_claim.percentage)
+
+    if value_type in {"PERCENTAGE_UP", "PERCENTAGE_DOWN"} and pct > 150:
+        value_type = "PRICE"
+
+    if value_type == "PRICE":
+        direction = infer_price_direction(hard_claim, pct)
+
+    return direction, value_type
+
+
+def reference_price_for_display(hard_claim: HardClaim) -> float | None:
+    """Best-effort entry price for UI labels."""
+    return claim_entry_price(hard_claim)
+
+
+def claim_entry_price(hard_claim: HardClaim) -> float | None:
+    """Entry price locked at creation; falls back for legacy rows only."""
+    if hard_claim.reference_price is not None:
+        return float(hard_claim.reference_price)
+
+    creation = next(
+        (e for e in hard_claim.events.all() if e.event_type == HardClaimEvent.EventType.CREATION),
+        None
+    )
+    if creation and creation.details:
+        stored = creation.details.get("reference_price")
+        if stored is not None:
+            return float(stored)
+
+    # Do not make synchronous network requests during serialization.
+    # Legacy claims that lack a reference_price will just return None.
+    return None
+
+
+def claim_target_price(hard_claim: HardClaim, entry: float | None = None) -> float | None:
+    """Target price derived from entry and claim magnitude."""
+    entry = claim_entry_price(hard_claim) if entry is None else entry
+    if entry is None or entry <= 0:
+        return None
+
+    direction, value_type = reconcile_claim_fields(hard_claim)
+    magnitude = float(hard_claim.percentage)
+    if value_type == "PRICE":
+        return _round_decimal(magnitude)
+    if direction == "bullish":
+        return _round_decimal(entry * (1 + magnitude / 100))
+    return _round_decimal(entry * (1 - magnitude / 100))
+
+
+def display_percentage(hard_claim: HardClaim) -> float | None:
+    """Percentage magnitude for compact UI (converts absolute PRICE targets)."""
+    direction, value_type = reconcile_claim_fields(hard_claim)
+    magnitude = float(hard_claim.percentage)
+
+    if value_type != "PRICE":
+        return round(magnitude, 1)
+
+    reference = reference_price_for_display(hard_claim)
+    if reference is None or reference <= 0:
+        return None
+
+    if direction == "bullish":
+        return round((magnitude - reference) / reference * 100, 1)
+    return round((reference - magnitude) / reference * 100, 1)
+
+
+def _effective_direction(hard_claim: HardClaim) -> str:
+    """Return bullish or bearish for resolution."""
+    direction, _ = reconcile_claim_fields(hard_claim)
+    return direction
 
 
 # ---------------------------------------------------------------------------
@@ -92,13 +257,14 @@ def _fetch_coingecko_price(provider_symbol: str, quote_currency: str, at_dt: dat
 
 
 def _fetch_yfinance_price(provider_symbol: str, at_dt: datetime) -> tuple[float, str]:
-    day_start = datetime.combine(at_dt.date(), time.min, tzinfo=timezone.utc)
-    day_end = day_start + timedelta(days=1)
+    at_dt = at_dt.astimezone(timezone.utc).replace(microsecond=0)
+    period1 = int((at_dt - timedelta(minutes=10)).timestamp())
+    period2 = int((at_dt + timedelta(minutes=10)).timestamp())
     params = urlencode(
         {
-            "period1": int(day_start.timestamp()),
-            "period2": int(day_end.timestamp()),
-            "interval": "1d",
+            "period1": period1,
+            "period2": period2,
+            "interval": "1m",
             "includePrePost": "false",
             "events": "history",
         }
@@ -108,32 +274,63 @@ def _fetch_yfinance_price(provider_symbol: str, at_dt: datetime) -> tuple[float,
     chart = payload.get("chart", {})
     results = chart.get("result") or []
     if not results:
-        raise ResolutionError("PROVIDER_NO_PRICE_DATA", "Yahoo Finance returned no price data.")
+        raise ResolutionError("PROVIDER_NO_PRICE_DATA", "Yahoo Finance returned no chart data.")
 
-    indicators = results[0].get("indicators", {})
+    result = results[0]
+    timestamps = result.get("timestamp") or []
+    indicators = result.get("indicators", {})
     quotes = indicators.get("quote") or []
     closes = quotes[0].get("close") if quotes else None
-    if not closes:
-        raise ResolutionError("PROVIDER_NO_PRICE_DATA", "Yahoo Finance returned no closing price.")
+    if not timestamps or not closes:
+        raise ResolutionError("PROVIDER_NO_PRICE_DATA", "Yahoo Finance returned no intraday prices.")
 
-    for close in closes:
-        if close is not None:
-            return float(close), url
-    raise ResolutionError("PROVIDER_NO_PRICE_DATA", "Yahoo Finance returned only null close prices.")
+    target_ts = at_dt.timestamp()
+    best_idx = None
+    best_delta = None
+    for idx, (ts, close) in enumerate(zip(timestamps, closes)):
+        if close is None:
+            continue
+        delta = abs(ts - target_ts)
+        if best_delta is None or delta < best_delta:
+            best_delta = delta
+            best_idx = idx
+
+    if best_idx is None:
+        raise ResolutionError("PROVIDER_NO_PRICE_DATA", "Yahoo Finance returned only null close prices.")
+
+    return float(closes[best_idx]), url
 
 
 def _fetch_binance_price(symbol: str, at_dt: datetime) -> tuple[float, str]:
-    """Fetch the close price of the daily candle containing at_dt from Binance."""
-    day_start_ms = int(datetime.combine(at_dt.date(), time.min, tzinfo=timezone.utc).timestamp() * 1000)
-    day_end_ms = int(datetime.combine(at_dt.date(), time.max, tzinfo=timezone.utc).timestamp() * 1000)
-    params = urlencode({"symbol": symbol, "interval": "1d", "startTime": day_start_ms, "endTime": day_end_ms, "limit": 1})
+    """Fetch BTC/USDT-style price at at_dt using the 1m kline containing that instant."""
+    at_dt = at_dt.astimezone(timezone.utc).replace(microsecond=0)
+    minute_start = at_dt.replace(second=0)
+    start_ms = int(minute_start.timestamp() * 1000)
+    end_ms = start_ms + 60_000 - 1
+    params = urlencode(
+        {
+            "symbol": symbol,
+            "interval": "1m",
+            "startTime": start_ms,
+            "endTime": end_ms,
+            "limit": 1,
+        }
+    )
     url = f"https://api.binance.com/api/v3/klines?{params}"
     payload = _http_get_json(url)
     if not payload:
         raise ResolutionError("PROVIDER_NO_PRICE_DATA", "Binance returned no kline data.")
-    # Use the open price if at_dt is at the start of the day, otherwise use close
+
     candle = payload[0]
-    return float(candle[4]), url  # close price
+    open_price = float(candle[1])
+    close_price = float(candle[4])
+    seconds_into_minute = (at_dt - minute_start).total_seconds()
+    if seconds_into_minute <= 0:
+        return open_price, url
+    if seconds_into_minute >= 60:
+        return close_price, url
+    fraction = seconds_into_minute / 60.0
+    return open_price + (close_price - open_price) * fraction, url
 
 
 def fetch_current_price(asset: Asset, at_dt: datetime) -> tuple[float, str]:
@@ -162,18 +359,43 @@ def fetch_current_price(asset: Asset, at_dt: datetime) -> tuple[float, str]:
 
 def fetch_reference_price(hard_claim: HardClaim) -> tuple[float, str]:
     """
-    Fetch the price at the exact created_at timestamp.
-    Routes based on asset type: crypto → Binance / CoinGecko, traditional → Yahoo Finance.
+    Return the entry price captured at claim creation, or fetch it for legacy rows.
     """
+    if hard_claim.reference_price is not None:
+        return float(hard_claim.reference_price), hard_claim.reference_price_url or "stored_at_creation"
     return fetch_current_price(hard_claim.asset, hard_claim.created_at)
+
+
+def capture_reference_price(hard_claim: HardClaim) -> HardClaim:
+    """Fetch spot price at created_at and persist on the claim."""
+    price, url = fetch_current_price(hard_claim.asset, hard_claim.created_at)
+    rounded = _round_decimal(price)
+    hard_claim.reference_price = rounded
+    hard_claim.reference_price_url = url
+    hard_claim.save(update_fields=["reference_price", "reference_price_url"])
+
+    creation_event = hard_claim.events.filter(event_type=HardClaimEvent.EventType.CREATION).first()
+    if creation_event is not None:
+        details = dict(creation_event.details or {})
+        details["reference_price"] = rounded
+        details["reference_url"] = url
+        details["reference_at"] = _isoformat_utc(hard_claim.created_at)
+        creation_event.details = details
+        creation_event.save(update_fields=["details"])
+
+    return hard_claim
 
 
 # ---------------------------------------------------------------------------
 # Claim validation
 # ---------------------------------------------------------------------------
 
-def normalize_claim_for_resolution(hard_claim: HardClaim) -> dict[str, Any]:
-    if hard_claim.status != HardClaim.Status.UNDETERMINED:
+def normalize_claim_for_resolution(
+    hard_claim: HardClaim,
+    *,
+    allow_resolved: bool = False,
+) -> dict[str, Any]:
+    if not allow_resolved and hard_claim.status != HardClaim.Status.UNDETERMINED:
         raise ResolutionError("CLAIM_ALREADY_RESOLVED", "Claim is already resolved.")
 
     due_at = _due_datetime_utc(hard_claim.until)
@@ -185,11 +407,14 @@ def normalize_claim_for_resolution(hard_claim: HardClaim) -> dict[str, Any]:
         )
 
     asset = hard_claim.asset
-    if hard_claim.direction.lower() not in {"bullish", "bearish"}:
+    raw_direction = (hard_claim.direction or "").strip().lower()
+    if raw_direction and raw_direction not in {"bullish", "bearish"}:
         raise ResolutionError(
             "UNSUPPORTED_DIRECTION",
             "Only bullish and bearish percentage claims are supported.",
         )
+    direction = _effective_direction(hard_claim)
+    _, value_type = reconcile_claim_fields(hard_claim)
 
     return {
         "version": CONTRACT_VERSION,
@@ -202,10 +427,10 @@ def normalize_claim_for_resolution(hard_claim: HardClaim) -> dict[str, Any]:
             "quote_currency": asset.quote_currency,
         },
         "target": {
-            "kind": "price" if hard_claim.value_type == "PRICE" else "percentage",
-            "direction": hard_claim.direction.lower(),
+            "kind": "price" if value_type == "PRICE" else "percentage",
+            "direction": direction,
             "value": float(hard_claim.percentage),
-            "unit": asset.quote_currency if hard_claim.value_type == "PRICE" else "percent",
+            "unit": asset.quote_currency if value_type == "PRICE" else "percent",
         },
         "reference_at": _isoformat_utc(hard_claim.created_at),
         "due_at": _isoformat_utc(due_at),
@@ -223,21 +448,22 @@ def _evaluate_ohlc(
     ohlc_rows: list[OHLCData],
 ) -> dict[str, Any]:
     """
-    Day-by-day scan of OHLC data to detect target price breaches.
+    Scan OHLC candles (post-creation) to detect target price breaches.
 
     Returns a full resolution result dict including:
     - target_price, hit_days, target_reached_at, closest_price
     - status (confirmed / rejected)
     - ohlc data for chart rendering
     """
-    direction = hard_claim.direction.lower()
+    direction = _effective_direction(hard_claim)
+    _, value_type = reconcile_claim_fields(hard_claim)
     percentage = float(hard_claim.percentage)
 
     if reference_price <= 0:
         raise ResolutionError("INVALID_REFERENCE_PRICE", "Reference price must be greater than zero.")
 
     # Compute target price
-    if hard_claim.value_type == "PRICE":
+    if value_type == "PRICE":
         target_price = percentage
     elif direction == "bullish":
         target_price = reference_price * (1 + percentage / 100)
@@ -350,34 +576,49 @@ def _evaluate_ohlc(
 # Public API
 # ---------------------------------------------------------------------------
 
-def preview_resolution(hard_claim: HardClaim) -> dict[str, Any]:
+def preview_resolution(hard_claim: HardClaim, *, allow_resolved: bool = False) -> dict[str, Any]:
     """Validate and compute resolution without saving."""
-    normalize_claim_for_resolution(hard_claim)
+    normalize_claim_for_resolution(hard_claim, allow_resolved=allow_resolved)
 
-    # 1. Reference price at created_at
-    reference_price, reference_url = fetch_reference_price(hard_claim)
-
-    # 2. Load OHLC data for the claim period
-    start_time = datetime.combine(hard_claim.created_at.date(), datetime.min.time(), tzinfo=timezone.utc)
-    end_time = datetime.combine(hard_claim.until, datetime.min.time(), tzinfo=timezone.utc)
-    ohlc_rows = get_ohlc_data(hard_claim.asset, start_time, end_time)
+    # 1. Load OHLC from claim creation through deadline (mixed intraday + daily).
+    try:
+        ohlc_rows = _load_claim_ohlc_rows(hard_claim)
+    except ResolutionError:
+        raise
+    except OHLCFetchError as exc:
+        raise ResolutionError("NO_OHLC_DATA", str(exc)) from exc
 
     if not ohlc_rows:
         raise ResolutionError("NO_OHLC_DATA", "Could not obtain any OHLC data for the claim period.")
+
+    # 2. Reference price locked at claim creation (fallback for legacy claims)
+    try:
+        reference_price, reference_url = fetch_reference_price(hard_claim)
+        if hard_claim.reference_price is None:
+            hard_claim.reference_price = _round_decimal(reference_price)
+            hard_claim.reference_price_url = reference_url
+            hard_claim.save(update_fields=["reference_price", "reference_price_url"])
+    except ResolutionError:
+        # Fallback to the first in-window candle open if APIs fail.
+        reference_price = float(ohlc_rows[0].open)
+        reference_url = "fallback_ohlc_open"
 
     # 3. Evaluate
     return _evaluate_ohlc(hard_claim, reference_price, reference_url, ohlc_rows)
 
 
-def resolve_hard_claim(hard_claim: HardClaim) -> dict[str, Any]:
-    """Resolve a claim and save the result to DB."""
-    result = preview_resolution(hard_claim)
-
-    # Update claim status
+def _persist_resolution_result(
+    hard_claim: HardClaim,
+    result: dict[str, Any],
+    *,
+    replace_existing_event: bool = False,
+) -> None:
     hard_claim.status = result["status"]
     hard_claim.save(update_fields=["status"])
 
-    # Create resolution event with enriched details
+    if replace_existing_event:
+        hard_claim.events.filter(event_type=HardClaimEvent.EventType.RESOLUTION).delete()
+
     HardClaimEvent.objects.create(
         hard_claim=hard_claim,
         event_type=HardClaimEvent.EventType.RESOLUTION,
@@ -390,16 +631,35 @@ def resolve_hard_claim(hard_claim: HardClaim) -> dict[str, Any]:
         },
     )
 
-    # Model G rep market: settle stakes if a market is attached.
-    if hard_claim.status in (HardClaim.Status.CONFIRMED, HardClaim.Status.REJECTED):
-        try:
-            market = hard_claim.market
-        except HardClaim.market.RelatedObjectDoesNotExist:
-            market = None
-        if market is not None and not market.resolved:
-            from .rep_market import resolve as resolve_market
 
-            winning_side = "YES" if hard_claim.status == HardClaim.Status.CONFIRMED else "NO"
-            resolve_market(market, winning_side)
+def _maybe_settle_rep_market(hard_claim: HardClaim) -> None:
+    if hard_claim.status not in (HardClaim.Status.CONFIRMED, HardClaim.Status.REJECTED):
+        return
+    try:
+        market = hard_claim.market
+    except HardClaim.market.RelatedObjectDoesNotExist:
+        return
+    if market is None or market.resolved:
+        return
+    from .rep_market import resolve as resolve_market
 
+    winning_side = "YES" if hard_claim.status == HardClaim.Status.CONFIRMED else "NO"
+    resolve_market(market, winning_side)
+
+
+def resolve_hard_claim(hard_claim: HardClaim) -> dict[str, Any]:
+    """Resolve a claim and save the result to DB."""
+    result = preview_resolution(hard_claim)
+    _persist_resolution_result(hard_claim, result)
+    _maybe_settle_rep_market(hard_claim)
+    return result
+
+
+def reassess_hard_claim(hard_claim: HardClaim) -> dict[str, Any]:
+    """Re-run resolution for an already-settled claim (e.g. after reference_price backfill)."""
+    previous_status = hard_claim.status
+    result = preview_resolution(hard_claim, allow_resolved=True)
+    _persist_resolution_result(hard_claim, result, replace_existing_event=True)
+    result["previous_status"] = previous_status
+    result["status_changed"] = previous_status != result["status"]
     return result

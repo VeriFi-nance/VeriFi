@@ -1,28 +1,33 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { closePosition, getPositionResolveStatus, triggerPositionResolve, getPositionProof } from '@/lib/api';
+import { closePosition, getPositionProof } from '@/lib/api';
 import type { PositionItem, AssetItem } from '@/lib/types';
 import { useAuthState } from '@/lib/auth';
-import ProfitabilityBadge from './ProfitabilityBadge';
 import { Link } from 'react-router-dom';
 import { truncateAddress } from '@/lib/wallet';
-import { RefreshCw, Download } from 'lucide-react';
+import { Download, ChevronUp, ChevronDown } from 'lucide-react';
+import { PositionPriceChart } from './feed/PositionPriceChart';
+import { usePositionChartData } from '@/hooks/usePositionChartData';
 
 interface PositionCardProps {
   position: PositionItem;
   assets: AssetItem[];
   onClosed?: () => void;
-  onResolved?: (updated: PositionItem) => void;
 }
 
-export function PositionCard({ position, assets, onClosed, onResolved }: PositionCardProps) {
+export function PositionCard({ position, assets, onClosed }: PositionCardProps) {
   const [closing, setClosing] = useState(false);
-  const [resolving, setResolving] = useState(false);
-  const [resolveMsg, setResolveMsg] = useState('');
-  const [countdown, setCountdown] = useState(0);
   const [downloadingProof, setDownloadingProof] = useState(false);
+  const [showChart, setShowChart] = useState(false);
+
+  const { data: chartData, interval, setInterval, loading: chartLoading, refetching } = usePositionChartData(
+    showChart ? position.id : undefined,
+    position.created_at,
+    position.lifetime,
+    position.status,
+  );
 
   const handleDownloadProof = async () => {
     try {
@@ -47,50 +52,8 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
   const { address: myAddress } = useAuthState();
   const asset = assets.find(a => a.id === position.asset);
   const isAuthor = !!myAddress && myAddress.toLowerCase() === position.author_address.toLowerCase();
-  const canResolve = isAuthor && (position.status === 'pending' || position.status === 'active');
   const canClose = isAuthor && position.status === 'active';
   const canCancel = isAuthor && position.status === 'pending';
-
-  // Fetch cooldown on mount (author only, resolvable positions only)
-  const fetchCooldown = useCallback(async () => {
-    if (!canResolve) return;
-    try {
-      const rs = await getPositionResolveStatus(position.id);
-      setCountdown(rs.remaining_seconds);
-    } catch {
-      // not authed or position already resolved
-    }
-  }, [position.id, canResolve]);
-
-  useEffect(() => { fetchCooldown(); }, [fetchCooldown]);
-
-  // Live ticker
-  useEffect(() => {
-    if (countdown <= 0) return;
-    const t = setInterval(() => setCountdown(c => Math.max(0, c - 1)), 1000);
-    return () => clearInterval(t);
-  }, [countdown]);
-
-  const fmtCountdown = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return m > 0 ? `${m}m ${s}s` : `${s}s`;
-  };
-
-  const handleResolve = async () => {
-    setResolving(true);
-    setResolveMsg('');
-    try {
-      const res = await triggerPositionResolve(position.id);
-      setCountdown(res.remaining_seconds);
-      setResolveMsg('Resolution triggered.');
-      onResolved?.(res.position);
-    } catch (e: any) {
-      setResolveMsg(e.message || 'Failed to resolve.');
-    } finally {
-      setResolving(false);
-    }
-  };
 
   const handleClose = async () => {
     const isPending = position.status === 'pending';
@@ -141,7 +104,6 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
             <Link to={`/u/${position.author_username || position.author_address}`} className="text-xs font-mono hover:underline">
               {position.author_username ? `@${position.author_username}` : truncateAddress(position.author_address)}
             </Link>
-            <ProfitabilityBadge data={position.profitability} />
           </div>
         </div>
 
@@ -152,13 +114,58 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
           </div>
           <div>
             <div className="text-muted-foreground text-xs uppercase tracking-wider">Stop Loss</div>
-            <div className="font-mono text-danger font-medium num">${position.stop_loss.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</div>
+            <div className="font-mono text-danger font-medium num">
+              ${position.stop_loss.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}
+              <span className="text-[10px] ml-1 opacity-80">
+                ({(isLong ? ((position.stop_loss - position.entry_price) / position.entry_price) * 100 : ((position.entry_price - position.stop_loss) / position.entry_price) * 100).toFixed(2)}%)
+              </span>
+            </div>
           </div>
           <div>
             <div className="text-muted-foreground text-xs uppercase tracking-wider">Take Profit</div>
-            <div className="font-mono text-success font-medium num">${position.take_profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</div>
+            <div className="font-mono text-success font-medium num">
+              ${position.take_profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}
+              <span className="text-[10px] ml-1 opacity-80">
+                ({(isLong ? ((position.take_profit - position.entry_price) / position.entry_price) * 100 : ((position.entry_price - position.take_profit) / position.entry_price) * 100) > 0 ? '+' : ''}{(isLong ? ((position.take_profit - position.entry_price) / position.entry_price) * 100 : ((position.entry_price - position.take_profit) / position.entry_price) * 100).toFixed(2)}%)
+              </span>
+            </div>
           </div>
         </div>
+
+        {(['confirmed', 'rejected', 'closed_early', 'expired'] as const).includes(position.status as any) && position.pnl_percentage !== null && (
+          <div className={`mt-3 p-3 rounded-lg border flex items-center justify-between text-sm ${position.pnl_percentage > 0 ? 'bg-emerald-500/10 border-emerald-500/30 text-foreground' : 'bg-red-500/10 border-red-500/30 text-foreground'}`}>
+            <span className="font-medium">
+              {position.author_username ? `@${position.author_username}` : 'User'} <span className={position.pnl_percentage > 0 ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-red-600 dark:text-red-400 font-semibold'}>{position.pnl_percentage > 0 ? 'gained' : 'lost'} {Math.abs(position.pnl_percentage).toFixed(2)}%</span> with this position.
+            </span>
+            {position.exit_price && (
+              <span className="text-xs text-muted-foreground font-mono">
+                Exit: ${position.exit_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}
+              </span>
+            )}
+          </div>
+        )}
+
+        <Button variant="ghost" size="sm" onClick={() => setShowChart(!showChart)} className="w-full mt-2 h-8 text-xs text-muted-foreground flex items-center justify-center gap-1.5 hover:bg-muted/50 transition-colors">
+          {showChart ? <><ChevronUp className="size-3.5" /> Hide Chart</> : <><ChevronDown className="size-3.5" /> Show Chart</>}
+        </Button>
+
+        {showChart && (
+          <div className="mt-2 relative mb-3">
+            {chartLoading && !chartData && (
+              <div className="h-[320px] flex items-center justify-center text-sm text-muted-foreground rounded-lg border bg-muted/20">
+                Loading chart...
+              </div>
+            )}
+            {chartData && (
+              <PositionPriceChart
+                data={chartData}
+                interval={interval}
+                onIntervalChange={setInterval}
+                refetching={refetching}
+              />
+            )}
+          </div>
+        )}
 
         <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
           <div>
@@ -167,12 +174,6 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
             )}
             {position.status === 'active' && (
               <span>Expires: {new Date(position.lifetime).toLocaleString()}</span>
-            )}
-            {(['confirmed', 'rejected', 'closed_early', 'expired'] as const).includes(position.status as any) && position.pnl_percentage !== null && (
-              <span className={`font-bold num ${position.pnl_percentage > 0 ? 'text-success' : 'text-danger'}`}>
-                PnL: {position.pnl_percentage > 0 ? '+' : ''}{position.pnl_percentage.toFixed(2)}%
-                {position.exit_price && ` (Exit: $${position.exit_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })})`}
-              </span>
             )}
             {position.status === 'missed' && <span>Entry target not reached.</span>}
             {position.signature && (
@@ -186,22 +187,9 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
           </div>
 
           {/* Author actions */}
-          {(canResolve || canClose) && (
+          {(canClose || canCancel) && (
             <div className="flex flex-col items-end gap-1 shrink-0">
               <div className="flex gap-2">
-                {canResolve && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleResolve}
-                    disabled={resolving || countdown > 0}
-                    className="h-7 text-xs gap-1.5"
-                    title={countdown > 0 ? `Next resolve in ${fmtCountdown(countdown)}` : 'Check if SL or TP has been hit'}
-                  >
-                    <RefreshCw className={`size-3 ${resolving ? 'animate-spin' : ''}`} />
-                    {resolving ? 'Checking…' : countdown > 0 ? `Wait ${fmtCountdown(countdown)}` : 'Resolve'}
-                  </Button>
-                )}
                 {canClose && (
                   <Button size="sm" variant="outline" onClick={handleClose} disabled={closing} className="h-7 text-xs">
                     {closing ? 'Closing…' : 'Close Early'}
@@ -213,11 +201,6 @@ export function PositionCard({ position, assets, onClosed, onResolved }: Positio
                   </Button>
                 )}
               </div>
-              {resolveMsg && (
-                <p className={`text-[10px] ${resolveMsg.startsWith('Failed') ? 'text-destructive' : 'text-success'}`}>
-                  {resolveMsg}
-                </p>
-              )}
             </div>
           )}
         </div>

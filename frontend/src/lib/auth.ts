@@ -5,12 +5,17 @@ import type { Location, NavigateFunction } from 'react-router-dom';
 const TOKEN_KEY = 'verifi_jwt';
 const ADDRESS_STORAGE = 'verifi_address';
 const USERNAME_STORAGE = 'verifi_username';
+const AUTH_METHOD_KEY = 'verifi_auth_method';
+const AVATAR_STORAGE = 'verifi_avatar';
 const AUTH_EVENT = 'verifi-auth-changed';
+
+export type AuthMethod = 'native' | 'metamask' | 'privy';
 
 export interface AuthState {
   token: string | null;
   address: string | null;
   username: string | null;
+  avatar: string | null;
   authenticated: boolean;
 }
 
@@ -22,10 +27,12 @@ function readAuthState(): AuthState {
   const token = localStorage.getItem(TOKEN_KEY);
   const address = localStorage.getItem(ADDRESS_STORAGE);
   const username = localStorage.getItem(USERNAME_STORAGE);
+  const avatar = localStorage.getItem(AVATAR_STORAGE);
   return {
     token,
     address,
     username,
+    avatar,
     authenticated: token !== null,
   };
 }
@@ -39,6 +46,7 @@ function getAuthSnapshot(): AuthState {
     lastSnapshot.token === next.token &&
     lastSnapshot.address === next.address &&
     lastSnapshot.username === next.username &&
+    lastSnapshot.avatar === next.avatar &&
     lastSnapshot.authenticated === next.authenticated
   ) {
     return lastSnapshot;
@@ -48,7 +56,7 @@ function getAuthSnapshot(): AuthState {
 }
 
 function getServerSnapshot(): AuthState {
-  return lastSnapshot ?? { token: null, address: null, username: null, authenticated: false };
+  return lastSnapshot ?? { token: null, address: null, username: null, avatar: null, authenticated: false };
 }
 
 export function saveToken(token: string): void {
@@ -82,24 +90,67 @@ export function loadUsername(): string | null {
   return localStorage.getItem(USERNAME_STORAGE);
 }
 
+export function setAuthMethod(method: AuthMethod): void {
+  localStorage.setItem(AUTH_METHOD_KEY, method);
+}
+
+export function loadAuthMethod(): AuthMethod | null {
+  const value = localStorage.getItem(AUTH_METHOD_KEY);
+  if (value === 'native' || value === 'metamask' || value === 'privy') {
+    return value;
+  }
+  return null;
+}
+
+export function saveAvatar(avatarUrl: string | null): void {
+  if (avatarUrl) {
+    localStorage.setItem(AVATAR_STORAGE, avatarUrl);
+  } else {
+    localStorage.removeItem(AVATAR_STORAGE);
+  }
+  notifyAuthChange();
+}
+
+export function loadAvatar(): string | null {
+  return localStorage.getItem(AVATAR_STORAGE);
+}
+
 export function clearAuth(): void {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(ADDRESS_STORAGE);
   localStorage.removeItem(USERNAME_STORAGE);
+  localStorage.removeItem(AUTH_METHOD_KEY);
+  localStorage.removeItem(AVATAR_STORAGE);
   notifyAuthChange();
 }
 
-export function saveAuthSession(address: string, username: string, token: string): void {
+export function saveAuthSession(
+  address: string,
+  username: string,
+  token: string,
+  avatarUrl?: string | null,
+): void {
   localStorage.setItem(ADDRESS_STORAGE, address.toLowerCase());
   localStorage.setItem(USERNAME_STORAGE, username);
   localStorage.setItem(TOKEN_KEY, token);
+  if (avatarUrl) {
+    localStorage.setItem(AVATAR_STORAGE, avatarUrl);
+  } else {
+    localStorage.removeItem(AVATAR_STORAGE);
+  }
   notifyAuthChange();
 }
 
 function subscribeAuthStore(listener: () => void): () => void {
   const onAuthEvent = () => listener();
   const onStorageEvent = (event: StorageEvent) => {
-    if (event.key === TOKEN_KEY || event.key === ADDRESS_STORAGE || event.key === USERNAME_STORAGE) {
+    if (
+      event.key === TOKEN_KEY ||
+      event.key === ADDRESS_STORAGE ||
+      event.key === USERNAME_STORAGE ||
+      event.key === AUTH_METHOD_KEY ||
+      event.key === AVATAR_STORAGE
+    ) {
       listener();
     }
   };

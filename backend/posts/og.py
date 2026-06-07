@@ -2,6 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from .models import HardClaim, Position
+from .resolution import claim_entry_price, claim_target_price, reconcile_claim_fields
 
 
 class HardClaimOGView(APIView):
@@ -15,11 +16,13 @@ class HardClaimOGView(APIView):
             pk=pk,
         )
 
-        direction = claim.direction.lower()
+        direction, value_type = reconcile_claim_fields(claim)
         verb = "rises" if direction == "bullish" else "falls"
         pct = float(claim.percentage)
         until_str = claim.until.strftime("%b %d, %Y")
         symbol = claim.asset.symbol
+        entry = claim_entry_price(claim)
+        target = claim_target_price(claim, entry)
 
         author_username = getattr(claim.author, "username", "") or ""
         author_display = f"@{author_username}" if author_username else claim.author.address[:10] + "…"
@@ -29,16 +32,24 @@ class HardClaimOGView(APIView):
             f"Cryptographically signed prediction by {author_display}. "
             f"Verify the proof yourself on VeriFi."
         )
+        if entry is not None and target is not None:
+            description = (
+                f"Signed prediction by {author_display}. "
+                f"Entry ${entry:,.2f} → Target ${target:,.2f} by {until_str}."
+            )
 
         return Response({
             "title": title,
             "description": description,
             "asset_symbol": symbol,
             "direction": direction,
+            "value_type": value_type,
             "percentage": pct,
             "until": claim.until.isoformat(),
             "status": claim.status,
             "author_username": author_username,
+            "reference_price": entry,
+            "target_price": target,
         })
 
 class PositionOGView(APIView):

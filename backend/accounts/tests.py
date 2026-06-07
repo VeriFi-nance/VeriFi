@@ -1,6 +1,6 @@
 from django.test import TestCase
 from rest_framework.test import APIClient
-from accounts.models import WalletUser
+from accounts.models import WalletUser, ProfileChangeLog
 
 class UsernameTests(TestCase):
     def setUp(self):
@@ -61,6 +61,15 @@ class UsernameTests(TestCase):
         self.assertEqual(res.data["username"], "new_name")
         user.refresh_from_db()
         self.assertEqual(user.username, "new_name")
+        entry = ProfileChangeLog.objects.get(user=user)
+        self.assertEqual(entry.event_type, ProfileChangeLog.EventType.USERNAME_UPDATED)
+        self.assertEqual(entry.metadata["old_username"], "old_name")
+        self.assertEqual(entry.metadata["new_username"], "new_name")
+
+        profile = self.client.get(f"/api/auth/profile/{address}/")
+        self.assertEqual(profile.status_code, 200)
+        self.assertEqual(profile.data["changelog"][0]["event_type"], "username_updated")
+        self.assertIn("@old_name", profile.data["changelog"][0]["summary"])
 
     def test_profile_update_duplicate_username(self):
         # Create another user to take the name
@@ -118,28 +127,44 @@ class UsernameTests(TestCase):
         self.assertIn("detail", res.data)
         self.assertEqual(res.data["detail"], "Username cannot start with '0x'.")
 
-    def test_profile_lookup_shadowing(self):
-        # User A's address is identical to User B's username
-        address_a = "0x" + "a" * 40
-        WalletUser.objects.create(address=address_a, username="user_a")
-        
-        address_b = "0x" + "b" * 40
-        WalletUser.objects.create(address=address_b, username=address_a)
-
-        # Lookup address_a (User A's address, which is also User B's username)
-        res = self.client.get(f"/api/auth/profile/{address_a}/")
-        self.assertEqual(res.status_code, 200)
-        # Should return User A, prioritizing the address match
-        self.assertEqual(res.data["address"], address_a)
-        self.assertEqual(res.data["username"], "user_a")
-
-        # Lookup address_b (User B's address)
-        res_b = self.client.get(f"/api/auth/profile/{address_b}/")
-        self.assertEqual(res_b.status_code, 200)
-        self.assertEqual(res_b.data["address"], address_b)
-        self.assertEqual(res_b.data["username"], address_a)
-
+    # Note: A `test_profile_lookup_shadowing` test was removed because shadowing is
+    # structurally impossible. A username (max 30 chars) can never equal a
+    # 42-char address, and the '0x' prefix guard further reinforces this.
+    def test_profile_lookup_not_found(self):
         # Non-existent user returns 404
         res_none = self.client.get("/api/auth/profile/non_existent/")
         self.assertEqual(res_none.status_code, 404)
+
+    def test_profile_channels(self):
+        from posts.models import Channel, ChannelMembership
+        address = "0x" + "f" * 40
+        user = WalletUser.objects.create(address=address, username="channel_user")
+        
+        channel_owned = Channel.objects.create(name="Owned Comm", creator=user)
+        ChannelMembership.objects.create(channel=channel_owned, user=user, status="approved", role="owner")
+
+        other_user = WalletUser.objects.create(address="0x" + "e" * 40, username="other_user")
+        channel_joined = Channel.objects.create(name="Joined Comm", creator=other_user)
+        
+        # User is not approved member yet
+        ChannelMembership.objects.create(channel=channel_joined, user=user, status="pending")
+        
+        # Verify pending membership doesn't show up
+        res = self.client.get(f"/api/auth/profile/{address}/")
+        self.assertEqual(res.status_code, 200)
+        self.assertIsNotNone(res.data["channel_owned"])
+        self.assertEqual(res.data["channel_owned"]["id"], channel_owned.id)
+        self.assertEqual(len(res.data["channels_member_of"]), 0)
+        
+        # Make membership approved
+        membership = ChannelMembership.objects.get(channel=channel_joined, user=user)
+        membership.status = "approved"
+        membership.save()
+        
+        # Verify approved membership shows up
+        res = self.client.get(f"/api/auth/profile/{address}/")
+        self.assertEqual(res.status_code, 200)
+        self.assertIsNotNone(res.data["channel_owned"])
+        self.assertEqual(len(res.data["channels_member_of"]), 1)
+        self.assertEqual(res.data["channels_member_of"][0]["id"], channel_joined.id)
 

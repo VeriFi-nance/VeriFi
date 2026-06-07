@@ -6,8 +6,8 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
-from accounts.models import WalletUser
-from .models import Post, Asset, HardClaim
+from accounts.models import WalletUser, ProfileChangeLog
+from .models import Post, Asset, HardClaim, Channel, ChannelMembership
 from .resolution import ResolutionError, normalize_claim_for_resolution
 
 
@@ -50,7 +50,14 @@ class HardClaimAPITestCase(APITestCase):
             'until': '2027-12-31',
             'status': 'undetermined',
             'signature': '0x123',
-            'claim_payload': {'asset_symbol': 'BTC', 'direction': 'bullish', 'percentage': 25.0, 'until': '2027-12-31'}
+            'claim_payload': {
+                'asset_symbol': 'BTC',
+                'author_username': self.wallet_user.username,
+                'direction': 'bullish',
+                'percentage': 25.0,
+                'until': '2027-12-31',
+                'created_at': timezone.now().isoformat(),
+            },
         }
 
         response = self.client.post(url, data, format='json')
@@ -130,6 +137,42 @@ class HardClaimAPITestCase(APITestCase):
         # Should return 401 Unauthorized
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertIn('detail', response.data)
+
+
+class PostChangeLogTests(APITestCase):
+    def setUp(self):
+        self.user = WalletUser.objects.create(
+            address="0x" + "9" * 40,
+            username="post_logger",
+        )
+        refresh = RefreshToken()
+        refresh["address"] = self.user.address
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {str(refresh.access_token)}")
+
+    def test_post_create_records_profile_changelog(self):
+        response = self.client.post(
+            reverse("post-list-create"),
+            {"content": "BTC is looking strong."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        entry = ProfileChangeLog.objects.get(user=self.user)
+        self.assertEqual(entry.event_type, ProfileChangeLog.EventType.POST_CREATED)
+        self.assertEqual(entry.metadata["post_id"], response.data["id"])
+        self.assertEqual(entry.metadata["content_preview"], "BTC is looking strong.")
+
+    def test_channel_post_delete_records_profile_changelog(self):
+        channel = Channel.objects.create(name="Signals", creator=self.user)
+        post = Post.objects.create(author=self.user, channel=channel, content="Remove this post.")
+
+        response = self.client.delete(reverse("post-delete", kwargs={"pk": post.pk}))
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        entry = ProfileChangeLog.objects.get(user=self.user)
+        self.assertEqual(entry.event_type, ProfileChangeLog.EventType.POST_DELETED)
+        self.assertEqual(entry.metadata["post_id"], post.pk)
+        self.assertEqual(entry.metadata["deleted_by"], self.user.address)
 
 
 class HardClaimUpdateStatusTestCase(APITestCase):
@@ -475,7 +518,7 @@ class HardClaimResolveApiTestCase(APITestCase):
             response = self.client.post(self._url(claim), {}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data["error_code"], "PROVIDER_NO_PRICE_DATA")
+        self.assertEqual(response.data["error_code"], "NO_OHLC_DATA")
 
     @patch("posts.resolution._fetch_coingecko_price")
     def test_coingecko_provider_is_used_for_crypto(self, mock_price):
@@ -514,65 +557,62 @@ class HardClaimResolveApiTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["error_code"], "PROVIDER_INVALID_JSON")
 
-class CommunityPostPermissionTestCase(APITestCase):
+class ChannelPostPermissionTestCase(APITestCase):
     def setUp(self):
         self.creator_user = WalletUser.objects.create(address="0xcreator00000000000000000000000000000000")
         self.member_user = WalletUser.objects.create(address="0xmember00000000000000000000000000000000")
         self.non_member_user = WalletUser.objects.create(address="0xnonmember00000000000000000000000000000")
 
-        from .models import Community, CommunityMembership
-        self.community_all = Community.objects.create(
+        from .models import Channel, ChannelMembership
+        self.channel_all = Channel.objects.create(
             name="All Can Post",
             creator=self.creator_user,
-            privacy_type=Community.PrivacyType.PUBLIC,
-            post_permission=Community.PostPermission.ALL
+            post_permission=Channel.PostPermission.ALL
         )
-        self.community_creator = Community.objects.create(
+        self.channel_creator = Channel.objects.create(
             name="Creator Only Post",
             creator=self.creator_user,
-            privacy_type=Community.PrivacyType.PUBLIC,
-            post_permission=Community.PostPermission.CREATOR_ONLY
+            post_permission=Channel.PostPermission.CREATOR_ONLY
         )
 
-        CommunityMembership.objects.create(community=self.community_all, user=self.member_user, status=CommunityMembership.Status.APPROVED)
-        CommunityMembership.objects.create(community=self.community_creator, user=self.member_user, status=CommunityMembership.Status.APPROVED)
+        ChannelMembership.objects.create(channel=self.channel_all, user=self.member_user, status=ChannelMembership.Status.APPROVED)
+        ChannelMembership.objects.create(channel=self.channel_creator, user=self.member_user, status=ChannelMembership.Status.APPROVED)
 
     def _auth(self, user):
         refresh = RefreshToken()
         refresh["address"] = user.address
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {str(refresh.access_token)}')
 
-    def test_member_can_post_in_all_community(self):
+    def test_member_can_post_in_all_channel(self):
         self._auth(self.member_user)
         url = reverse('post-list-create')
-        response = self.client.post(url, {"content": "Hello", "community_id": self.community_all.id}, format="json")
+        response = self.client.post(url, {"content": "Hello", "channel_id": self.channel_all.id}, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
-    def test_member_cannot_post_in_creator_only_community(self):
+    def test_member_cannot_post_in_creator_only_channel(self):
         self._auth(self.member_user)
         url = reverse('post-list-create')
-        response = self.client.post(url, {"content": "Hello", "community_id": self.community_creator.id}, format="json")
+        response = self.client.post(url, {"content": "Hello", "channel_id": self.channel_creator.id}, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_creator_can_always_post(self):
         self._auth(self.creator_user)
         url = reverse('post-list-create')
-        response = self.client.post(url, {"content": "Hello", "community_id": self.community_creator.id}, format="json")
+        response = self.client.post(url, {"content": "Hello", "channel_id": self.channel_creator.id}, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
-class CommunityBanTestCase(APITestCase):
+class ChannelBanTestCase(APITestCase):
     def setUp(self):
         self.creator_user = WalletUser.objects.create(address="0xcreator00000000000000000000000000000000")
         self.member_user = WalletUser.objects.create(address="0xmember00000000000000000000000000000000")
         self.other_user = WalletUser.objects.create(address="0xother000000000000000000000000000000000")
 
-        from .models import Community, CommunityMembership
-        self.community = Community.objects.create(
+        from .models import Channel, ChannelMembership
+        self.channel = Channel.objects.create(
             name="Ban Test",
-            creator=self.creator_user,
-            privacy_type=Community.PrivacyType.PUBLIC
+            creator=self.creator_user
         )
-        CommunityMembership.objects.create(community=self.community, user=self.member_user, status=CommunityMembership.Status.APPROVED)
+        ChannelMembership.objects.create(channel=self.channel, user=self.member_user, status=ChannelMembership.Status.APPROVED)
 
     def _auth(self, user):
         refresh = RefreshToken()
@@ -581,96 +621,82 @@ class CommunityBanTestCase(APITestCase):
 
     def test_creator_can_ban(self):
         self._auth(self.creator_user)
-        url = reverse('community-ban', kwargs={"pk": self.community.id, "user_address": self.member_user.address})
+        url = reverse('channel-ban', kwargs={"pk": self.channel.id, "user_address": self.member_user.address})
         response = self.client.post(url, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["status"], "banned")
 
     def test_creator_cannot_ban_self(self):
         self._auth(self.creator_user)
-        url = reverse('community-ban', kwargs={"pk": self.community.id, "user_address": self.creator_user.address})
+        url = reverse('channel-ban', kwargs={"pk": self.channel.id, "user_address": self.creator_user.address})
         response = self.client.post(url, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_member_cannot_ban(self):
         self._auth(self.member_user)
-        url = reverse('community-ban', kwargs={"pk": self.community.id, "user_address": self.other_user.address})
+        url = reverse('channel-ban', kwargs={"pk": self.channel.id, "user_address": self.other_user.address})
         response = self.client.post(url, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_banned_user_cannot_join(self):
         self._auth(self.creator_user)
-        url = reverse('community-ban', kwargs={"pk": self.community.id, "user_address": self.other_user.address})
+        url = reverse('channel-ban', kwargs={"pk": self.channel.id, "user_address": self.other_user.address})
         self.client.post(url, format="json")
 
         self._auth(self.other_user)
-        join_url = reverse('community-join', kwargs={"pk": self.community.id})
+        join_url = reverse('channel-join', kwargs={"pk": self.channel.id})
         response = self.client.post(join_url, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_banned_user_cannot_post(self):
         self._auth(self.creator_user)
-        url = reverse('community-ban', kwargs={"pk": self.community.id, "user_address": self.member_user.address})
+        url = reverse('channel-ban', kwargs={"pk": self.channel.id, "user_address": self.member_user.address})
         self.client.post(url, format="json")
 
         self._auth(self.member_user)
         post_url = reverse('post-list-create')
-        response = self.client.post(post_url, {"content": "Hello", "community_id": self.community.id}, format="json")
+        response = self.client.post(post_url, {"content": "Hello", "channel_id": self.channel.id}, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-class CommunityMemberListTestCase(APITestCase):
+class ChannelMemberListTestCase(APITestCase):
     def setUp(self):
         self.creator_user = WalletUser.objects.create(address="0xcreator00000000000000000000000000000000")
         self.member_user = WalletUser.objects.create(address="0xmember00000000000000000000000000000000")
         self.other_user = WalletUser.objects.create(address="0xother000000000000000000000000000000000")
 
-        from .models import Community, CommunityMembership
-        self.public_community = Community.objects.create(
-            name="Public Community",
-            creator=self.creator_user,
-            privacy_type=Community.PrivacyType.PUBLIC
+        from .models import Channel, ChannelMembership
+        self.channel = Channel.objects.create(
+            name="Private Channel",
+            creator=self.creator_user
         )
-        self.private_community = Community.objects.create(
-            name="Private Community",
-            creator=self.creator_user,
-            privacy_type=Community.PrivacyType.PRIVATE
-        )
-        CommunityMembership.objects.create(community=self.public_community, user=self.member_user, status=CommunityMembership.Status.APPROVED)
-        CommunityMembership.objects.create(community=self.private_community, user=self.member_user, status=CommunityMembership.Status.APPROVED)
+        ChannelMembership.objects.create(channel=self.channel, user=self.member_user, status=ChannelMembership.Status.APPROVED)
 
     def _auth(self, user):
         refresh = RefreshToken()
         refresh["address"] = user.address
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {str(refresh.access_token)}')
 
-    def test_public_member_list(self):
-        url = reverse('community-members', kwargs={"pk": self.public_community.id})
-        response = self.client.get(url, format="json")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["user_address"], self.member_user.address)
-
     def test_private_member_list_unauthenticated(self):
-        url = reverse('community-members', kwargs={"pk": self.private_community.id})
+        url = reverse('channel-members', kwargs={"pk": self.channel.id})
         response = self.client.get(url, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_private_member_list_non_member(self):
         self._auth(self.other_user)
-        url = reverse('community-members', kwargs={"pk": self.private_community.id})
+        url = reverse('channel-members', kwargs={"pk": self.channel.id})
         response = self.client.get(url, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_private_member_list_member(self):
         self._auth(self.member_user)
-        url = reverse('community-members', kwargs={"pk": self.private_community.id})
+        url = reverse('channel-members', kwargs={"pk": self.channel.id})
         response = self.client.get(url, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
 
     def test_private_member_list_creator(self):
         self._auth(self.creator_user)
-        url = reverse('community-members', kwargs={"pk": self.private_community.id})
+        url = reverse('channel-members', kwargs={"pk": self.channel.id})
         response = self.client.get(url, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
@@ -685,13 +711,12 @@ class PositionTestCase(APITestCase):
         self.member_user = WalletUser.objects.create(address="0xmember00000000000000000000000000000000")
         self.other_user = WalletUser.objects.create(address="0xother000000000000000000000000000000000")
 
-        from .models import Community, CommunityMembership, Asset, Position
-        self.community = Community.objects.create(
-            name="Test Community",
-            creator=self.creator_user,
-            privacy_type=Community.PrivacyType.PUBLIC
+        from .models import Channel, ChannelMembership, Asset, Position
+        self.channel = Channel.objects.create(
+            name="Test Channel",
+            creator=self.creator_user
         )
-        CommunityMembership.objects.create(community=self.community, user=self.member_user, status=CommunityMembership.Status.APPROVED)
+        ChannelMembership.objects.create(channel=self.channel, user=self.member_user, status=ChannelMembership.Status.APPROVED)
         
         self.asset = Asset.objects.create(
             symbol="BTC",
@@ -708,10 +733,10 @@ class PositionTestCase(APITestCase):
 
     @patch('posts.views.verify_position_signature')
     def test_create_valid_long_position(self, mock_verify):
-        self._auth(self.member_user)
+        self._auth(self.creator_user)
         now = timezone.now()
         data = {
-            "community_id": self.community.id,
+            "channel_id": self.channel.id,
             "asset_id": self.asset.id,
             "direction": "long",
             "entry_price": 50000,
@@ -720,7 +745,7 @@ class PositionTestCase(APITestCase):
             "take_profit": 60000,
             "lifetime": (now + timedelta(days=7)).isoformat(),
             "signature": "0x123",
-            "position_payload": {"fake": "payload"}
+            "position_payload": {"fake": "payload"},
         }
         url = reverse('position-list-create')
         response = self.client.post(url, data, format="json")
@@ -729,10 +754,10 @@ class PositionTestCase(APITestCase):
 
     @patch('posts.views.verify_position_signature')
     def test_create_invalid_long_position_sl_tp(self, mock_verify):
-        self._auth(self.member_user)
+        self._auth(self.creator_user)
         now = timezone.now()
         data = {
-            "community_id": self.community.id,
+            "channel_id": self.channel.id,
             "asset_id": self.asset.id,
             "direction": "long",
             "entry_price": 50000,
@@ -741,7 +766,7 @@ class PositionTestCase(APITestCase):
             "take_profit": 40000, # TP < entry
             "lifetime": (now + timedelta(days=7)).isoformat(),
             "signature": "0x123",
-            "position_payload": {"fake": "payload"}
+            "position_payload": {"fake": "payload"},
         }
         url = reverse('position-list-create')
         response = self.client.post(url, data, format="json")
@@ -749,10 +774,10 @@ class PositionTestCase(APITestCase):
 
     @patch('posts.views.verify_position_signature')
     def test_create_invalid_short_position_sl_tp(self, mock_verify):
-        self._auth(self.member_user)
+        self._auth(self.creator_user)
         now = timezone.now()
         data = {
-            "community_id": self.community.id,
+            "channel_id": self.channel.id,
             "asset_id": self.asset.id,
             "direction": "short",
             "entry_price": 50000,
@@ -761,7 +786,7 @@ class PositionTestCase(APITestCase):
             "take_profit": 60000, # TP > entry
             "lifetime": (now + timedelta(days=7)).isoformat(),
             "signature": "0x123",
-            "position_payload": {"fake": "payload"}
+            "position_payload": {"fake": "payload"},
         }
         url = reverse('position-list-create')
         response = self.client.post(url, data, format="json")
@@ -769,10 +794,10 @@ class PositionTestCase(APITestCase):
 
     @patch('posts.views.verify_position_signature')
     def test_create_invalid_dates(self, mock_verify):
-        self._auth(self.member_user)
+        self._auth(self.creator_user)
         now = timezone.now()
         data = {
-            "community_id": self.community.id,
+            "channel_id": self.channel.id,
             "asset_id": self.asset.id,
             "direction": "long",
             "entry_price": 50000,
@@ -781,7 +806,7 @@ class PositionTestCase(APITestCase):
             "take_profit": 60000,
             "lifetime": (now + timedelta(days=7)).isoformat(),
             "signature": "0x123",
-            "position_payload": {"fake": "payload"}
+            "position_payload": {"fake": "payload"},
         }
         url = reverse('position-list-create')
         response = self.client.post(url, data, format="json")
@@ -803,7 +828,7 @@ class PositionTestCase(APITestCase):
         from .models import Position
         pos = Position.objects.create(
             author=self.member_user,
-            community=self.community,
+            channel=self.channel,
             asset=self.asset,
             direction="long",
             entry_price=50000,
@@ -828,7 +853,7 @@ class PositionTestCase(APITestCase):
         from .models import Position
         pos = Position.objects.create(
             author=self.member_user,
-            community=self.community,
+            channel=self.channel,
             asset=self.asset,
             direction="long",
             entry_price=50000,
@@ -849,7 +874,7 @@ class PositionTestCase(APITestCase):
         from .models import Position
         pos = Position.objects.create(
             author=self.member_user,
-            community=self.community,
+            channel=self.channel,
             asset=self.asset,
             direction="long",
             entry_price=50000,
@@ -910,12 +935,13 @@ class PostDetailTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
-class SignatureVerificationTestCase(APITestCase):
+class ChannelRolesTestCase(APITestCase):
     def setUp(self):
-        self.wallet_user = WalletUser.objects.create(
-            address="0x742d35cc6634c0532925a3b844bc454e4438f44e",
-            username="testuser"
-        )
+        self.owner_user = WalletUser.objects.create(address="0xowner00000000000000000000000000000000")
+        self.moderator_user = WalletUser.objects.create(address="0xmod0000000000000000000000000000000000")
+        self.member_user = WalletUser.objects.create(address="0xmember00000000000000000000000000000000")
+        self.other_member_user = WalletUser.objects.create(address="0xothermember0000000000000000000000000")
+        
         self.asset = Asset.objects.create(
             name="Bitcoin",
             symbol="BTC",
@@ -924,167 +950,153 @@ class SignatureVerificationTestCase(APITestCase):
             provider=Asset.Provider.COINGECKO,
             provider_symbol="bitcoin",
         )
-        self.token = self._get_jwt_token(self.wallet_user)
-        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
 
-    def _get_jwt_token(self, user):
+        from .models import Channel, ChannelMembership
+        self.channel = Channel.objects.create(
+            name="Role Test Channel",
+            creator=self.owner_user
+        )
+        
+        self.owner_membership = ChannelMembership.objects.create(
+            channel=self.channel,
+            user=self.owner_user,
+            status=ChannelMembership.Status.APPROVED,
+            role=ChannelMembership.Role.OWNER
+        )
+        
+        self.mod_membership = ChannelMembership.objects.create(
+            channel=self.channel,
+            user=self.moderator_user,
+            status=ChannelMembership.Status.APPROVED,
+            role=ChannelMembership.Role.MODERATOR
+        )
+        
+        self.member_membership = ChannelMembership.objects.create(
+            channel=self.channel,
+            user=self.member_user,
+            status=ChannelMembership.Status.APPROVED,
+            role=ChannelMembership.Role.MEMBER
+        )
+
+    def _auth(self, user):
         refresh = RefreshToken()
         refresh["address"] = user.address
-        return str(refresh.access_token)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {str(refresh.access_token)}')
 
-    @patch('posts.views.verify_claim_signature')
-    def test_stale_signature_timestamp(self, mock_verify):
-        from rest_framework.exceptions import ValidationError
-        mock_verify.side_effect = ValidationError({"signature": "Payload timestamp is stale or too far in the future (±5 min)."})
-        url = reverse('hard-claims')
+    def test_one_channel_per_user(self):
+        """Creating a second channel by the same user returns 400."""
+        self._auth(self.owner_user)
+        url = reverse("channel-list")
         data = {
-            'asset_id': self.asset.id,
-            'direction': 'bullish',
-            'percentage': 25.0,
-            'until': '2027-12-31',
-            'status': 'undetermined',
-            'signature': '0x123',
-            'claim_payload': {
-                'asset_symbol': 'BTC', 
-                'author_username': 'testuser',
-                'direction': 'bullish', 
-                'percentage': 25.0, 
-                'until': '2027-12-31',
-                'created_at': (timezone.now() - timedelta(minutes=10)).isoformat()
-            }
+            "name": "Second Channel",
+            "description": "Fail please"
         }
-        response = self.client.post(url, data, format='json')
+        response = self.client.post(url, data, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("signature", response.data)
+        self.assertIn("You can only create one channel.", response.data["detail"])
 
-    @patch('posts.views.verify_claim_signature')
-    def test_verify_invalid_signature_graceful_fail(self, mock_verify):
-        from rest_framework.exceptions import ValidationError
-        mock_verify.side_effect = ValidationError({"signature": "Invalid signature: recovery failed."})
-        url = reverse('hard-claims')
+    def test_moderator_can_ban(self):
+        """A moderator can ban a regular member."""
+        self._auth(self.moderator_user)
+        url = reverse("channel-ban", kwargs={"pk": self.channel.id, "user_address": self.member_user.address})
+        response = self.client.post(url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.member_membership.refresh_from_db()
+        self.assertEqual(self.member_membership.status, ChannelMembership.Status.BANNED)
+
+    def test_moderator_cannot_ban_owner(self):
+        """A moderator cannot ban the owner."""
+        self._auth(self.moderator_user)
+        url = reverse("channel-ban", kwargs={"pk": self.channel.id, "user_address": self.owner_user.address})
+        response = self.client.post(url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.owner_membership.refresh_from_db()
+        self.assertEqual(self.owner_membership.status, ChannelMembership.Status.APPROVED)
+
+    def test_owner_can_promote_moderator(self):
+        """Owner can promote a member to moderator."""
+        self._auth(self.owner_user)
+        url = reverse("channel-moderator", kwargs={"pk": self.channel.id, "user_address": self.member_user.address})
+        response = self.client.post(url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.member_membership.refresh_from_db()
+        self.assertEqual(self.member_membership.role, ChannelMembership.Role.MODERATOR)
+
+        # Also test demote
+        response_demote = self.client.delete(url, format="json")
+        self.assertEqual(response_demote.status_code, status.HTTP_200_OK)
+        self.member_membership.refresh_from_db()
+        self.assertEqual(self.member_membership.role, ChannelMembership.Role.MEMBER)
+
+    def test_non_owner_cannot_promote(self):
+        """A moderator cannot promote another moderator."""
+        self._auth(self.moderator_user)
+        url = reverse("channel-moderator", kwargs={"pk": self.channel.id, "user_address": self.member_user.address})
+        response = self.client.post(url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_author_cannot_delete_own_post(self):
+        """Post author cannot delete their own post unless moderator/owner."""
+        post = Post.objects.create(author=self.member_user, channel=self.channel, content="my post")
+        self._auth(self.member_user)
+        url = reverse("post-delete", kwargs={"pk": post.id})
+        response = self.client.delete(url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(Post.objects.filter(id=post.id).exists())
+
+    def test_moderator_can_delete_post(self):
+        """A moderator can delete a channel post."""
+        post = Post.objects.create(author=self.member_user, channel=self.channel, content="member post")
+        self._auth(self.moderator_user)
+        url = reverse("post-delete", kwargs={"pk": post.id})
+        response = self.client.delete(url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Post.objects.filter(id=post.id).exists())
+
+    def test_member_cannot_delete_post(self):
+        """A regular member cannot delete another member's post."""
+        post = Post.objects.create(author=self.member_user, channel=self.channel, content="member post")
+        self._auth(self.other_member_user)
+        url = reverse("post-delete", kwargs={"pk": post.id})
+        response = self.client.delete(url, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(Post.objects.filter(id=post.id).exists())
+
+    @patch('posts.views.verify_position_signature')
+    def test_only_owner_can_create_position(self, mock_verify):
+        """A regular member/moderator gets 403 when trying to create a position."""
+        now = timezone.now()
+        # Test moderator
+        self._auth(self.moderator_user)
         data = {
-            'asset_id': self.asset.id,
-            'direction': 'bullish',
-            'percentage': 25.0,
-            'until': '2027-12-31',
-            'status': 'undetermined',
-            'signature': '0xbadsignature',
-            'claim_payload': {
-                'asset_symbol': 'BTC', 
-                'author_username': 'testuser',
-                'direction': 'bullish', 
-                'percentage': 25.0, 
-                'until': '2027-12-31',
-                'created_at': timezone.now().isoformat()
-            }
+            "channel_id": self.channel.id,
+            "asset_id": self.asset.id,
+            "direction": "long",
+            "entry_price": 50000.0,
+            "entry_interval": (now + timedelta(days=1)).isoformat(),
+            "stop_loss": 40000.0,
+            "take_profit": 60000.0,
+            "lifetime": (now + timedelta(days=7)).isoformat(),
+            "signature": "0x123",
+            "position_payload": {"mock": "payload"},
         }
-        response = self.client.post(url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("signature", response.data)
+        url = reverse("position-list-create")
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    @patch('posts.views.verify_claim_signature')
-    def test_payload_consistency_mismatch(self, mock_verify):
-        from rest_framework.exceptions import ValidationError
-        mock_verify.side_effect = ValidationError({"signature": "Signed payload does not match request data."})
-        url = reverse('hard-claims')
-        data = {
-            'asset_id': self.asset.id,
-            'direction': 'bullish',
-            'percentage': 25.0,
-            'until': '2027-12-31',
-            'status': 'undetermined',
-            'signature': '0x123',
-            'claim_payload': {
-                'asset_symbol': 'BTC', 
-                'author_username': 'testuser',
-                'direction': 'bullish', 
-                'percentage': 50.0,  # Mismatched percentage
-                'until': '2027-12-31',
-                'created_at': timezone.now().isoformat()
-            }
-        }
-        response = self.client.post(url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("signature", response.data)
+        # Test owner
+        self._auth(self.owner_user)
+        response_owner = self.client.post(url, data, format="json")
+        self.assertEqual(response_owner.status_code, status.HTTP_201_CREATED)
 
-
-class ProofAndOGEndpointsTestCase(APITestCase):
-    def setUp(self):
-        from decimal import Decimal
-        from django.utils import timezone
-        from .models import Position
-        self.wallet_user = WalletUser.objects.create(
-            address="0x742d35cc6634c0532925a3b844bc454e4438f44e",
-            username="testuser"
-        )
-        self.asset = Asset.objects.create(
-            name="Bitcoin",
-            symbol="BTC",
-            description="Digital gold",
-            market_type=Asset.MarketType.CRYPTO,
-            provider=Asset.Provider.COINGECKO,
-            provider_symbol="bitcoin",
-        )
-        self.post = Post.objects.create(
-            author=self.wallet_user,
-            content="I predict BTC will go up",
-        )
-        self.claim = HardClaim.objects.create(
-            post=self.post,
-            author=self.wallet_user,
-            asset=self.asset,
-            direction="bullish",
-            percentage=Decimal("10.00"),
-            until=timezone.now() + timezone.timedelta(days=7),
-            signature="0xmocksignature",
-            claim_payload={"mock": "payload"}
-        )
-        from .models import Community
-        self.community = Community.objects.create(name="Test Community")
-        self.position = Position.objects.create(
-            author=self.wallet_user,
-            community=self.community,
-            asset=self.asset,
-            direction="LONG",
-            entry_price=Decimal("50000.00"),
-            entry_interval=timezone.now() + timezone.timedelta(days=1),
-            stop_loss=Decimal("45000.00"),
-            take_profit=Decimal("60000.00"),
-            lifetime=timezone.now() + timezone.timedelta(days=7),
-            signature="0xmockpossignature",
-            position_payload={"mock": "pospayload"}
-        )
-
-    def test_hard_claim_proof_endpoint(self):
-        url = reverse('hard-claim-proof', args=[self.claim.id])
-        response = self.client.get(url)
+    def test_role_field_in_member_list(self):
+        """Member list response includes the `role` field."""
+        self._auth(self.member_user)
+        url = reverse("channel-members", kwargs={"pk": self.channel.id})
+        response = self.client.get(url, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["type"], "claim")
-        self.assertEqual(response.data["claim_id"], self.claim.id)
-        self.assertEqual(response.data["signature"], "0xmocksignature")
-
-    def test_hard_claim_og_endpoint(self):
-        url = reverse('hard-claim-og', args=[self.claim.id])
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["asset_symbol"], "BTC")
-        self.assertEqual(response.data["direction"], "bullish")
-        self.assertIn("title", response.data)
-        self.assertIn("description", response.data)
-
-    def test_position_proof_endpoint(self):
-        url = reverse('position-proof', args=[self.position.id])
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["type"], "position")
-        self.assertEqual(response.data["position_id"], self.position.id)
-        self.assertEqual(response.data["signature"], "0xmockpossignature")
-
-    def test_position_og_endpoint(self):
-        url = reverse('position-og', args=[self.position.id])
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["asset_symbol"], "BTC")
-        self.assertEqual(response.data["direction"], "LONG")
-        self.assertIn("title", response.data)
-        self.assertIn("description", response.data)
+        # Verify role is in serialization
+        roles = {item["user_address"]: item["role"] for item in response.data}
+        self.assertEqual(roles[self.owner_user.address], "owner")
+        self.assertEqual(roles[self.moderator_user.address], "moderator")
+        self.assertEqual(roles[self.member_user.address], "member")

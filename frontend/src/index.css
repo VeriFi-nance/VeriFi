@@ -47,6 +47,9 @@
     --color-success-foreground: var(--success-foreground);
     --color-danger: var(--danger);
     --color-danger-foreground: var(--danger-foreground);
+    --color-claim-bg: var(--claim-bg);
+    --color-claim-badge: var(--claim-badge);
+    --color-position-badge: var(--position-badge);
 }
 
 :root {
@@ -87,6 +90,9 @@
     --danger: oklch(0.60 0.22 25);
     --danger-foreground: oklch(0.985 0 0);
     --grid-line: oklch(0.145 0 0 / 3.5%);
+    --claim-bg: #fef5ea;
+    --claim-badge: #e17924;
+    --position-badge: #8e60fb;
 }
 
 .dark {
@@ -127,6 +133,9 @@
     --danger: oklch(0.70 0.20 25);
     --danger-foreground: oklch(0.145 0 0);
     --grid-line: oklch(1 0 0 / 3%);
+    --claim-bg: #3d220f;
+    --claim-badge: #e17924;
+    --position-badge: #8e60fb;
 }
 
 @layer base {

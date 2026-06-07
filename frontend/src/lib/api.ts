@@ -1,23 +1,101 @@
 import { getToken } from './auth';
-import type { ReviewClaim, PostItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, ProfileStats, CommunityItem, CommunityMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType, ProofBundle, OGMetadata } from './types';
+import type { PostItem, PostCommentItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, PositionChartData, AssetChartData, ChartCandleInterval, ProfileStats, ChannelItem, ChannelMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType, ProofBundle, OGMetadata } from './types';
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+/**
+ * Ordered list of backend base URLs to try, sourced from build-time env vars:
+ *   - VITE_API_URL          primary backend (custom domain)
+ *   - VITE_API_FALLBACK_URL fallback backend, tried when the primary is
+ *                           unreachable — e.g. networks (eduroam) whose firewall
+ *                           MITM-inspects the custom *.veri.finance domain but
+ *                           leaves the Render *.onrender.com domain untouched.
+ *
+ * Both are configured per environment in Vercel. When neither is set (local
+ * dev) we fall back to the local Django server.
+ *
+ * The first candidate that answers a request is cached in localStorage so later
+ * page loads skip the dead one.
+ */
+const CACHE_KEY = 'verifi_api_base';
+const DEFAULT_BASE_URL = 'http://localhost:8000';
+
+function candidateBaseUrls(): string[] {
+  const urls = [import.meta.env.VITE_API_URL, import.meta.env.VITE_API_FALLBACK_URL]
+    .filter((u): u is string => typeof u === 'string' && u.length > 0)
+    .map((u) => u.replace(/\/+$/, '')); // strip trailing slashes
+
+  return urls.length > 0 ? urls : [DEFAULT_BASE_URL];
+}
+
+/** Candidates ordered with a previously-working base (if any) tried first. */
+function orderedBaseUrls(): string[] {
+  const candidates = candidateBaseUrls();
+  let cached: string | null = null;
+  try {
+    cached = typeof window !== 'undefined' ? window.localStorage.getItem(CACHE_KEY) : null;
+  } catch {
+    cached = null;
+  }
+  if (cached && candidates.includes(cached)) {
+    return [cached, ...candidates.filter((c) => c !== cached)];
+  }
+  return candidates;
+}
+
+function rememberBaseUrl(base: string): void {
+  try {
+    if (typeof window !== 'undefined') window.localStorage.setItem(CACHE_KEY, base);
+  } catch {
+    /* localStorage unavailable — ignore */
+  }
+}
 
 async function request<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
   const { headers: optHeaders, ...rest } = options;
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...rest,
-    headers: { 'Content-Type': 'application/json', ...optHeaders },
-  });
+  const bases = orderedBaseUrls();
+  let lastNetworkError: unknown;
 
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.detail ?? 'Request failed');
+  // For FormData bodies, let the browser set Content-Type (incl. the multipart
+  // boundary). Setting it manually breaks the upload.
+  const isFormData = typeof FormData !== 'undefined' && rest.body instanceof FormData;
+
+  for (let i = 0; i < bases.length; i++) {
+    const base = bases[i];
+    let res: Response;
+    try {
+      res = await fetch(`${base}${path}`, {
+        ...rest,
+        headers: isFormData
+          ? { ...optHeaders }
+          : { 'Content-Type': 'application/json', ...optHeaders },
+      });
+    } catch (err) {
+      // Network-level failure (DNS, TLS/cert MITM, connection refused). The
+      // request never reached the server, so it's safe to retry the next base.
+      lastNetworkError = err;
+      continue;
+    }
+
+    // Got an HTTP response — this base works; remember it and stop falling back.
+    rememberBaseUrl(base);
+
+    if (res.status === 204) {
+      return {} as T;
+    }
+
+    const text = await res.text();
+    const data = text ? JSON.parse(text) : {};
+    if (!res.ok) {
+      throw new Error(data.detail ?? 'Request failed');
+    }
+    return data as T;
   }
-  return data as T;
+
+  throw lastNetworkError instanceof Error
+    ? lastNetworkError
+    : new Error('Network request failed');
 }
 
 function authHeaders(): Record<string, string> {
@@ -25,7 +103,7 @@ function authHeaders(): Record<string, string> {
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
-export async function register(address: string, username?: string): Promise<{ access: string, username: string }> {
+export async function register(address: string, username?: string): Promise<{ access: string, username: string, avatar_url?: string | null }> {
   return request('/api/auth/register/', {
     method: 'POST',
     body: JSON.stringify({ address, ...(username ? { username } : {}) }),
@@ -44,7 +122,7 @@ export async function login(
   address: string,
   signature: string,
   nonce: string
-): Promise<{ access: string, username: string }> {
+): Promise<{ access: string, username: string, avatar_url?: string | null }> {
   return request('/api/auth/login/', {
     method: 'POST',
     body: JSON.stringify({ address, signature, nonce }),
@@ -67,7 +145,7 @@ export async function extractClaims(content: string): Promise<ExtractClaimsRespo
 
 export interface HardClaimPayload {
   asset_id: number;
-  community_id?: number;
+  channel_id?: number;
   direction: string;
   /** Backend field — mapped from frontend `claim_type`. */
   value_type?: ClaimType;
@@ -78,16 +156,47 @@ export interface HardClaimPayload {
   market?: { side: 'YES' | 'NO'; stake_rep: number };
 }
 
+export interface PositionPayload {
+  asset_id: number;
+  direction: 'long' | 'short';
+  entry_price: number;
+  entry_interval: string;
+  stop_loss: number;
+  take_profit: number;
+  lifetime: string;
+  signature: string;
+  position_payload: Record<string, unknown>;
+}
+
 export async function createPost(
   content: string,
-  claims: ReviewClaim[],
-  community_id?: number,
+  channel_id?: number,
   hard_claims?: HardClaimPayload[],
+  positions?: PositionPayload[],
+  image?: File | null,
 ): Promise<PostItem> {
+  if (image) {
+    // Multipart upload: image as a file part, nested arrays as JSON strings.
+    const form = new FormData();
+    form.append('content', content);
+    if (channel_id != null) form.append('channel_id', String(channel_id));
+    if (hard_claims && hard_claims.length > 0) {
+      form.append('hard_claims', JSON.stringify(hard_claims));
+    }
+    if (positions && positions.length > 0) {
+      form.append('positions', JSON.stringify(positions));
+    }
+    form.append('image', image);
+    return request('/api/posts/', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: form,
+    });
+  }
   return request('/api/posts/', {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ content, claims, community_id, hard_claims }),
+    body: JSON.stringify({ content, channel_id, hard_claims, positions }),
   });
 }
 
@@ -101,15 +210,24 @@ export interface PaginatedResponse<T> {
 
 export async function getFeed(params?: {
   feed?: string;
-  community?: number;
+  channel?: number;
   page?: number;
   page_size?: number;
+  asset_ids?: number[];
+  has_claims?: boolean;
+  has_positions?: boolean;
+  q?: string;
 }): Promise<PaginatedResponse<PostItem>> {
   const query = new URLSearchParams();
   if (params?.feed) query.append('feed', params.feed);
-  if (params?.community) query.append('community', params.community.toString());
+  if (params?.channel) query.append('channel', params.channel.toString());
   if (params?.page) query.append('page', params.page.toString());
   if (params?.page_size) query.append('page_size', params.page_size.toString());
+  if (params?.asset_ids && params.asset_ids.length > 0)
+    query.append('asset_ids', params.asset_ids.join(','));
+  if (params?.has_claims !== undefined) query.append('has_claims', String(params.has_claims));
+  if (params?.has_positions !== undefined) query.append('has_positions', String(params.has_positions));
+  if (params?.q) query.append('q', params.q);
   const qs = query.toString() ? `?${query.toString()}` : '';
   return request(`/api/posts/${qs}`, { headers: authHeaders() });
 }
@@ -118,10 +236,75 @@ export async function getPost(id: number): Promise<PostItem> {
   return request(`/api/posts/${id}/`, { headers: authHeaders() });
 }
 
-export async function getHardClaims(params?: { feed?: string, community?: number }): Promise<HardClaimItem[]> {
+export async function likePost(postId: number): Promise<PostItem> {
+  return request(`/api/posts/${postId}/like/`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+}
+
+export async function unlikePost(postId: number): Promise<PostItem> {
+  return request(`/api/posts/${postId}/like/`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+}
+
+export async function getPostComments(postId: number): Promise<PostCommentItem[]> {
+  return request(`/api/posts/${postId}/comments/`, { headers: authHeaders() });
+}
+
+export async function createPostComment(postId: number, content: string, parentId?: number, image?: File | null): Promise<PostCommentItem> {
+  if (image) {
+    const form = new FormData();
+    form.append('content', content);
+    if (parentId) form.append('parent_id', String(parentId));
+    form.append('image', image);
+    return request(`/api/posts/${postId}/comments/`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: form,
+    });
+  }
+  return request(`/api/posts/${postId}/comments/`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ content, ...(parentId ? { parent_id: parentId } : {}) }),
+  });
+}
+
+export async function likePostComment(commentId: number): Promise<PostCommentItem> {
+  return request(`/api/posts/comments/${commentId}/like/`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+}
+
+export async function unlikePostComment(commentId: number): Promise<PostCommentItem> {
+  return request(`/api/posts/comments/${commentId}/like/`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+}
+
+export async function savePostProof(postId: number): Promise<PostItem> {
+  return request(`/api/posts/${postId}/save-proof/`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+}
+
+export async function unsavePostProof(postId: number): Promise<PostItem> {
+  return request(`/api/posts/${postId}/save-proof/`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+}
+
+export async function getHardClaims(params?: { feed?: string, channel?: number }): Promise<HardClaimItem[]> {
   const query = new URLSearchParams();
   if (params?.feed) query.append('feed', params.feed);
-  if (params?.community) query.append('community', params.community.toString());
+  if (params?.channel) query.append('channel', params.channel.toString());
   const qs = query.toString() ? `?${query.toString()}` : '';
   return request(`/api/posts/hard-claims/${qs}`, { headers: authHeaders() });
 }
@@ -137,7 +320,7 @@ export async function getHardClaim(id: number): Promise<HardClaimItem> {
 export async function createHardClaim(data: {
   asset_id: number;
   post_id?: number;
-  community_id?: number;
+  channel_id?: number;
   direction: string;
   value_type?: ClaimType;
   payda?: string;
@@ -215,12 +398,24 @@ export async function getAssets(): Promise<AssetItem[]> {
   return request('/api/posts/assets/');
 }
 
-export async function getClaimChartData(claimId: number): Promise<ClaimChartData> {
-  return request(`/api/posts/hard-claims/${claimId}/chart-data/`);
+export async function getAssetChartData(
+  assetId: number,
+  interval?: ChartCandleInterval,
+): Promise<AssetChartData> {
+  const qs = interval ? `?interval=${encodeURIComponent(interval)}` : '';
+  return request(`/api/posts/assets/${assetId}/chart-data/${qs}`);
+}
+
+export async function getClaimChartData(
+  claimId: number,
+  interval?: ChartCandleInterval,
+): Promise<ClaimChartData> {
+  const qs = interval ? `?interval=${encodeURIComponent(interval)}` : '';
+  return request(`/api/posts/hard-claims/${claimId}/chart-data${qs}`);
 }
 
 export async function getProfileStats(address: string): Promise<ProfileStats> {
-  return request(`/api/auth/profile/${encodeURIComponent(address)}/`, {
+  return request(`/api/auth/profile/${encodeURIComponent(address)}/?t=${Date.now()}`, {
     headers: authHeaders(),
   });
 }
@@ -233,6 +428,19 @@ export async function updateUsername(username: string): Promise<{ username: stri
   });
 }
 
+export async function updateProfile(
+  fields: { username?: string; avatar?: File },
+): Promise<{ username: string; avatar_url: string | null }> {
+  const form = new FormData();
+  if (fields.username) form.append('username', fields.username);
+  if (fields.avatar) form.append('avatar', fields.avatar);
+  return request('/api/auth/profile/update/', {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: form,
+  });
+}
+
 export async function toggleFollow(target_address: string): Promise<{ following: boolean }> {
   return request('/api/auth/follow/', {
     method: 'POST',
@@ -241,54 +449,69 @@ export async function toggleFollow(target_address: string): Promise<{ following:
   });
 }
 
-export async function getCommunities(): Promise<CommunityItem[]> {
-  return request('/api/posts/communities/');
-}
-
-export async function getCommunity(id: number): Promise<CommunityItem> {
-  return request(`/api/posts/communities/${id}/`, {
+export async function getChannels(): Promise<ChannelItem[]> {
+  return request('/api/posts/channels/', {
     headers: authHeaders(),
   });
 }
 
-export async function createCommunity(name: string, description: string, privacy_type: 'public' | 'private', post_permission: 'all' | 'creator_only' = 'all'): Promise<CommunityItem> {
-  return request('/api/posts/communities/', {
+export async function getChannel(id: number): Promise<ChannelItem> {
+  return request(`/api/posts/channels/${id}/`, {
+    headers: authHeaders(),
+  });
+}
+
+export async function createChannel(name: string, description: string, post_permission: 'all' | 'creator_only' = 'all'): Promise<ChannelItem> {
+  return request('/api/posts/channels/', {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ name, description, privacy_type, post_permission }),
+    body: JSON.stringify({ name, description, post_permission }),
   });
 }
 
-export async function joinCommunity(id: number): Promise<CommunityMembershipItem> {
-  return request(`/api/posts/communities/${id}/join/`, {
+export async function joinChannel(id: number): Promise<ChannelMembershipItem> {
+  return request(`/api/posts/channels/${id}/join/`, {
     method: 'POST',
     headers: authHeaders(),
   });
 }
 
-export async function approveCommunityMember(id: number, user_address: string, action: 'approve' | 'reject'): Promise<any> {
-  return request(`/api/posts/communities/${id}/approve/${encodeURIComponent(user_address)}/`, {
+export async function approveChannelMember(id: number, user_address: string, action: 'approve' | 'reject'): Promise<any> {
+  return request(`/api/posts/channels/${id}/approve/${encodeURIComponent(user_address)}/`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({ action }),
   });
 }
 
-export async function banCommunityMember(id: number, user_address: string): Promise<any> {
-  return request(`/api/posts/communities/${id}/ban/${encodeURIComponent(user_address)}/`, {
+export async function banChannelMember(id: number, user_address: string): Promise<any> {
+  return request(`/api/posts/channels/${id}/ban/${encodeURIComponent(user_address)}/`, {
     method: 'POST',
     headers: authHeaders(),
   });
 }
 
-export async function getCommunityMembers(id: number): Promise<CommunityMembershipItem[]> {
-  return request(`/api/posts/communities/${id}/members/`, {
+export async function unbanChannelMember(id: number, user_address: string): Promise<any> {
+  return request(`/api/posts/channels/${id}/ban/${encodeURIComponent(user_address)}/`, {
+    method: 'DELETE',
     headers: authHeaders(),
   });
 }
 
-export async function updateCommunity(id: number, data: { post_permission?: 'all' | 'creator_only' }): Promise<CommunityItem> {
-  return request(`/api/posts/communities/${id}/`, {
+export async function getBannedChannelMembers(id: number): Promise<ChannelMembershipItem[]> {
+  return request(`/api/posts/channels/${id}/banned/`, {
+    headers: authHeaders(),
+  });
+}
+
+export async function getChannelMembers(id: number): Promise<ChannelMembershipItem[]> {
+  return request(`/api/posts/channels/${id}/members/`, {
+    headers: authHeaders(),
+  });
+}
+
+export async function updateChannel(id: number, data: { post_permission?: 'all' | 'creator_only' }): Promise<ChannelItem> {
+  return request(`/api/posts/channels/${id}/`, {
     method: 'PATCH',
     headers: authHeaders(),
     body: JSON.stringify(data),
@@ -314,15 +537,16 @@ export async function triggerPositionResolve(positionId: number): Promise<Resolv
   });
 }
 
-export async function getPositions(communityId?: number): Promise<PositionItem[]> {
+export async function getPositions(channelId?: number): Promise<PositionItem[]> {
   const query = new URLSearchParams();
-  if (communityId) query.append('community', communityId.toString());
+  if (channelId) query.append('channel', channelId.toString());
   const qs = query.toString() ? `?${query.toString()}` : '';
   return request(`/api/posts/positions/${qs}`, { headers: authHeaders() });
 }
 
 export async function createPosition(data: {
-  community_id: number;
+  channel_id: number;
+  post_id?: number;
   asset_id: number;
   direction: 'long' | 'short';
   entry_price: number;
@@ -347,10 +571,43 @@ export async function closePosition(id: number): Promise<PositionItem> {
   });
 }
 
+export async function promoteModerator(channelId: number, userAddress: string): Promise<ChannelMembershipItem> {
+  return request(`/api/posts/channels/${channelId}/moderator/${encodeURIComponent(userAddress)}/`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+}
+
+export async function demoteModerator(channelId: number, userAddress: string): Promise<ChannelMembershipItem> {
+  return request(`/api/posts/channels/${channelId}/moderator/${encodeURIComponent(userAddress)}/`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+}
+
+export async function deletePost(postId: number): Promise<void> {
+  return request(`/api/posts/${postId}/delete/`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+}
+
 export async function getPositionProof(positionId: number): Promise<ProofBundle> {
   return request(`/api/posts/positions/${positionId}/proof/`);
 }
 
 export async function getPositionOG(positionId: number): Promise<OGMetadata> {
   return request(`/api/posts/positions/${positionId}/og/`);
+}
+
+export async function getPositionChartData(
+  positionId: number,
+  interval?: ChartCandleInterval,
+): Promise<PositionChartData> {
+  const qs = interval ? `?interval=${encodeURIComponent(interval)}` : '';
+  return request(`/api/posts/positions/${positionId}/chart-data/${qs}`);
+}
+
+export async function searchAPI(query: string, type: string): Promise<any> {
+  return request(`/api/posts/search/?q=${encodeURIComponent(query)}&type=${encodeURIComponent(type)}`);
 }

@@ -42,13 +42,7 @@ export interface ExtractClaimsResponse {
   claims: ExtractedClaimContract[];
 }
 
-export interface ClaimItem {
-  id: number;
-  text: string;
-  asset: string;
-  direction: string;
-  status: 'confirmed' | 'rejected';
-}
+
 
 export interface ProfitabilityData {
   pnl_7d: number;
@@ -57,15 +51,49 @@ export interface ProfitabilityData {
   updated_at?: string | null;
 }
 
+export interface ProfileChangeLogEntry {
+  id: number;
+  event_type: 'username_updated' | 'post_created' | 'post_deleted';
+  summary: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  actor_address?: string | null;
+  actor_username?: string | null;
+}
+
 export interface PostItem {
   id: number;
   author_address: string;
   author_username: string;
+  author_avatar_url?: string | null;
   content: string;
+  image_url?: string | null;
   created_at: string;
-  claims: ClaimItem[];
+
   hard_claims: HardClaimItem[];
+  positions: PositionSummaryItem[];
   profitability?: ProfitabilityData | null;
+  channel?: number | null;
+  like_count: number;
+  comment_count: number;
+  saved_proof_count: number;
+  liked_by_me: boolean;
+  saved_proof_by_me: boolean;
+}
+
+export interface PostCommentItem {
+  id: number;
+  post: number;
+  parent: number | null;
+  author_address: string;
+  author_username: string;
+  author_avatar_url?: string | null;
+  content: string;
+  image_url?: string | null;
+  created_at: string;
+  like_count: number;
+  liked_by_me: boolean;
+  replies: PostCommentItem[];
 }
 
 export interface HardClaimEvent {
@@ -79,6 +107,7 @@ export interface HardClaimItem {
   id: number;
   author_address: string | null;
   author_username: string | null;
+  author_avatar_url?: string | null;
   post_id: number | null;
   asset: number;
   direction: string;
@@ -86,13 +115,16 @@ export interface HardClaimItem {
   claim_type?: ClaimType;
   /** API field — mapped to `claim_type` in UI helpers. */
   value_type?: ClaimType;
-  /** Frontend name; API may send `payda` instead. */
-  parity?: string;
-  /** API field — mapped to `parity` in UI helpers. */
-  payda?: string;
+  /** Full asset object from API for rendering */
+  asset_obj?: AssetItem;
   percentage: number;
+  /** Compact UI magnitude (%); absolute PRICE targets converted server-side. */
+  display_percentage?: number;
   until: string;
   created_at: string;
+  reference_price?: number | null;
+  reference_price_url?: string;
+  target_price?: number | null;
   status: string;
   signature?: string;
   claim_payload?: Record<string, unknown>;
@@ -105,6 +137,29 @@ export interface AssetItem {
   name: string;
   symbol: string;
   description: string;
+  quote_currency?: string;
+}
+
+/**
+ * Slim position shape embedded in PostItem (no events, no full profitability).
+ * Mirrors PositionSummarySerializer on the backend.
+ */
+export interface PositionSummaryItem {
+  id: number;
+  author_address: string;
+  author_username: string;
+  post: number | null;
+  channel: number | null;
+  asset: number;
+  asset_obj?: AssetItem;
+  direction: 'long' | 'short';
+  entry_price: number;
+  stop_loss: number;
+  take_profit: number;
+  status: 'pending' | 'active' | 'confirmed' | 'rejected' | 'missed' | 'closed_early' | 'expired';
+  pnl_percentage: number | null;
+  created_at: string;
+  lifetime: string;
 }
 
 // OHLC chart data types
@@ -117,24 +172,56 @@ export interface OHLCRow {
   close: number;
 }
 
+export type ChartCandleInterval = '15m' | '4h' | '1d';
+
+export interface AssetChartData {
+  asset_symbol: string;
+  interval: ChartCandleInterval;
+  default_interval: ChartCandleInterval;
+  as_of: string;
+  ohlc: OHLCRow[];
+  current_price: number | null;
+}
+
 export interface ClaimChartData {
   claim_id: number;
   asset_symbol: string;
   direction: string;
-  reference_price: number;
-  target_price: number;
+  reference_price: number | null;
+  target_price: number | null;
   percentage: number;
   created_at: string;
   until: string;
+  interval?: ChartCandleInterval;
+  default_interval?: ChartCandleInterval;
+  as_of?: string;
+  live?: boolean;
   ohlc: OHLCRow[];
   hit_days: string[];
   closest_price: number | null;
   target_reached_at: string | null;
 }
 
+export interface PositionChartData {
+  position_id: number;
+  asset_symbol: string;
+  direction: 'long' | 'short';
+  entry_price: number;
+  take_profit: number;
+  stop_loss: number;
+  created_at: string;
+  until: string;
+  interval?: ChartCandleInterval;
+  default_interval?: ChartCandleInterval;
+  as_of?: string;
+  live?: boolean;
+  ohlc: OHLCRow[];
+}
+
 export interface ProfileStats {
   address: string;
   username: string;
+  avatar_url?: string | null;
   followers_count: number;
   following_count: number;
   followers: string[];
@@ -144,6 +231,9 @@ export interface ProfileStats {
   rep?: number;
   energy?: number;
   energy_cap?: number | null;
+  channel_owned?: ChannelItem | null;
+  channels_member_of?: ChannelItem[];
+  changelog?: ProfileChangeLogEntry[];
 }
 
 export interface MarketYourStake {
@@ -200,26 +290,27 @@ export interface BuyResult {
   user_energy: number;
 }
 
-export interface CommunityItem {
+export interface ChannelItem {
   id: number;
   name: string;
   description: string;
   creator_address: string;
   creator_username: string;
-  privacy_type: 'public' | 'private';
   post_permission: 'all' | 'creator_only';
   created_at: string;
   member_count: number;
   my_membership_status?: 'pending' | 'approved' | null;
-  pending_requests?: CommunityMembershipItem[];
+  my_role?: 'member' | 'moderator' | 'owner' | null;
+  pending_requests?: ChannelMembershipItem[];
 }
 
-export interface CommunityMembershipItem {
+export interface ChannelMembershipItem {
   id: number;
-  community: number;
+  channel: number;
   user_address: string;
   user_username: string;
   status: 'pending' | 'approved' | 'banned';
+  role: 'member' | 'moderator' | 'owner';
   created_at: string;
   profitability?: ProfitabilityData | null;
 }
@@ -235,8 +326,10 @@ export interface PositionItem {
   id: number;
   author_address: string;
   author_username: string;
-  community: number;
+  post?: number | null;
+  channel: number;
   asset: number;
+  asset_obj?: AssetItem;
   direction: 'long' | 'short';
   entry_price: number;
   entry_interval: string;
@@ -261,6 +354,8 @@ export interface ProofBundle {
   signature: string;
   payload: Record<string, unknown>;
   server_timestamp: string;
+  reference_price?: number | null;
+  target_price?: number | null;
 }
 
 export interface OGMetadata {
@@ -269,6 +364,8 @@ export interface OGMetadata {
   asset_symbol: string;
   direction: string;
   percentage?: number;
+  reference_price?: number | null;
+  target_price?: number | null;
   entry_price?: number;
   take_profit?: number | null;
   stop_loss?: number | null;

@@ -12,12 +12,14 @@ import {
   deriveKeyPair,
   privateKeyToKeyPair,
   signMessage,
-  encryptPrivateKey,
-  saveEncryptedKey,
 } from '@/lib/crypto';
+import { encryptPrivateKey, saveEncryptedKey } from '@/lib/keystore';
 import { register, getChallenge, login } from '@/lib/api';
-import { saveAuthSession } from '@/lib/auth';
+import { saveAuthSession, setAuthMethod } from '@/lib/auth';
 import { connectAndAuthenticateMetaMask } from '@/lib/walletAuth';
+import { isPrivyConfigured } from '@/lib/privyAuth';
+import { GoogleLoginButton } from '@/components/GoogleLoginButton';
+import { GoogleIcon, MetaMaskIcon } from '@/components/BrandIcons';
 
 type Tab = 'create' | 'signin';
 
@@ -40,6 +42,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState('');
   const [metamaskLoading, setMetamaskLoading] = useState(false);
+  const privyEnabled = isPrivyConfigured();
 
   function resetTab(t: Tab) {
     setTab(t);
@@ -79,9 +82,10 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     try {
       const { privateKey, address } = deriveKeyPair(mnemonic);
       const encrypted = await encryptPrivateKey(privateKey, createPassword);
-      const { access, username } = await register(address, createUsername.trim());
+      const { access, username, avatar_url } = await register(address, createUsername.trim());
       saveEncryptedKey(encrypted);
-      saveAuthSession(address, username, access);
+      saveAuthSession(address, username, access, avatar_url);
+      setAuthMethod('native');
       onSuccess();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
@@ -104,10 +108,11 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           : privateKeyToKeyPair(inputPrivateKey.trim());
       const { nonce } = await getChallenge(address);
       const signature = await signMessage(privateKey, nonce);
-      const { access, username } = await login(address, signature, nonce);
+      const { access, username, avatar_url } = await login(address, signature, nonce);
       const encrypted = await encryptPrivateKey(privateKey, signinPassword);
       saveEncryptedKey(encrypted);
-      saveAuthSession(address, username, access);
+      saveAuthSession(address, username, access, avatar_url);
+      setAuthMethod('native');
       onSuccess();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
@@ -121,6 +126,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     setError('');
     try {
       await connectAndAuthenticateMetaMask();
+      setAuthMethod('metamask');
       onSuccess();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'MetaMask connection failed');
@@ -138,6 +144,38 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         <p className="text-sm text-muted-foreground">
           Your 12-word passphrase is your key. Set a password to encrypt it locally on this device.
         </p>
+      </div>
+
+      <div className="space-y-3">
+        {privyEnabled ? (
+          <GoogleLoginButton disabled={metamaskLoading} onError={setError} />
+        ) : (
+          <Button
+            variant="outline"
+            className="w-full"
+            disabled
+            title="Set VITE_PRIVY_APP_ID to enable Google sign-in"
+          >
+            <GoogleIcon className="size-4" />
+            Continue with Google
+          </Button>
+        )}
+
+        <Button
+          variant="outline"
+          className="w-full"
+          disabled={metamaskLoading}
+          onClick={handleMetaMask}
+        >
+          <MetaMaskIcon className="size-4" />
+          {metamaskLoading ? 'Connecting…' : 'Connect with MetaMask'}
+        </Button>
+      </div>
+
+      <div className="relative flex items-center gap-2">
+        <div className="flex-1 border-t" />
+        <span className="text-xs text-muted-foreground px-1">or</span>
+        <div className="flex-1 border-t" />
       </div>
 
       <div className="space-y-4">
@@ -325,21 +363,6 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
-
-        <div className="relative flex items-center gap-2">
-          <div className="flex-1 border-t" />
-          <span className="text-xs text-muted-foreground px-1">or</span>
-          <div className="flex-1 border-t" />
-        </div>
-
-        <Button
-          variant="outline"
-          className="w-full"
-          disabled={metamaskLoading}
-          onClick={handleMetaMask}
-        >
-          {metamaskLoading ? 'Connecting…' : 'Connect with MetaMask'}
-        </Button>
       </div>
     </div>
   );

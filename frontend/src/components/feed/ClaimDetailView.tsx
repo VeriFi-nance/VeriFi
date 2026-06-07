@@ -1,36 +1,58 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { CalendarDays, CheckCircle2, XCircle, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/UserAvatar';
-import type { HardClaimItem, AssetItem, ClaimChartData } from '@/lib/types';
+import type { HardClaimItem, AssetItem } from '@/lib/types';
 import { truncateAddress } from '@/lib/wallet';
-import { getClaimChartData, getClaimProof } from '@/lib/api';
-import { PriceChart } from './PriceChart';
+import { getClaimProof } from '@/lib/api';
+import { useClaimChartData } from '@/hooks/useClaimChartData';
+import { isClaimPastDue, formatClaimUntil, getHardClaimDisplay, getHardClaimType } from '@/lib/claims';
 import { MarketPanel } from '../MarketPanel';
+
+        // Lazy so the lightweight-charts bundle is fetched only when a claim
+// actually has price history to render, not in the initial chunk.
+const PriceChart = lazy(() =>
+  import('./PriceChart').then((m) => ({ default: m.PriceChart }))
+);
 
 interface ClaimDetailViewProps {
   claim: HardClaimItem;
   assets: AssetItem[];
 }
 
-function statusLabel(status: HardClaimItem['status']) {
+function statusLabel(status: HardClaimItem['status'], pastDue: boolean) {
   if (status === 'confirmed') return 'Confirmed';
   if (status === 'rejected') return 'Rejected';
+  if (pastDue) return 'Past due';
   return 'Open';
 }
 
-function statusVariant(status: HardClaimItem['status']) {
+function statusVariant(status: HardClaimItem['status'], pastDue: boolean) {
   if (status === 'confirmed') return 'success' as const;
   if (status === 'rejected') return 'destructive' as const;
+  if (pastDue) return 'outline' as const;
   return 'secondary' as const;
 }
 
 export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
-  const [chartData, setChartData] = useState<ClaimChartData | null>(null);
-  const [chartLoading, setChartLoading] = useState(false);
-  const [chartError, setChartError] = useState<string | null>(null);
+  const priceSnapshot = useMemo(() => ({
+    reference_price: claim.reference_price,
+    target_price: claim.target_price,
+    direction: claim.direction,
+    percentage: claim.percentage,
+    value_type: getHardClaimType(claim),
+  }), [claim]);
+
+  const {
+    data: chartData,
+    loading: chartLoading,
+    refetching: chartRefetching,
+    error: chartError,
+    interval: chartInterval,
+    setInterval: setChartInterval,
+  } = useClaimChartData(claim.id, claim.created_at, claim.until, claim.status, priceSnapshot);
   const [downloadingProof, setDownloadingProof] = useState(false);
 
   async function handleDownloadProof() {
@@ -53,45 +75,39 @@ export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
     }
   }
 
-  useEffect(() => {
-    setChartLoading(true);
-    setChartError(null);
-    getClaimChartData(claim.id)
-      .then(setChartData)
-      .catch((err) => setChartError(err.message || 'Failed to load chart data'))
-      .finally(() => setChartLoading(false));
-  }, [claim.id]);
-
   const asset = assets.find((a) => a.id === claim.asset);
   const assetSymbol = asset?.symbol ?? `#${claim.asset}`;
-  const isBullish = claim.direction.toLowerCase() === 'bullish';
-  const untilLabel = new Date(claim.until).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  const pastDue = isClaimPastDue(claim);
+  const untilLabel = formatClaimUntil(claim.until);
+  const display = getHardClaimDisplay(
+    {
+      direction: claim.direction,
+      percentage: claim.percentage,
+      until: claim.until,
+      claim_type: getHardClaimType(claim),
+      asset_obj: claim.asset_obj,
+    },
+    assetSymbol,
+  );
 
   const resolutionEvent = [...(claim.events || [])]
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
     .find((e) => e.event_type === 'resolution');
 
   const resDetails = resolutionEvent?.details;
-  const summary = isBullish
-    ? `Predicts ${assetSymbol} rises ${claim.percentage.toFixed(1)}% by ${untilLabel}`
-    : `Predicts ${assetSymbol} falls ${claim.percentage.toFixed(1)}% by ${untilLabel}`;
 
   return (
     <div className="space-y-5">
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={isBullish ? 'success' : 'destructive'} className="text-xs font-mono">
-            {assetSymbol} {isBullish ? '▲' : '▼'} {claim.percentage.toFixed(1)}%
+          <Badge variant={display.badgeVariant} className="text-xs font-mono">
+            {display.badgeText}
           </Badge>
-          <Badge variant={statusVariant(claim.status)} className="text-[10px] uppercase">
-            {statusLabel(claim.status)}
+          <Badge variant={statusVariant(claim.status, pastDue)} className="text-[10px] uppercase">
+            {statusLabel(claim.status, pastDue)}
           </Badge>
         </div>
-        <p className="text-sm text-muted-foreground">{summary}</p>
+        <p className="text-sm text-muted-foreground">{display.summary}</p>
       </div>
 
       {claim.author_address ? (
@@ -99,7 +115,7 @@ export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
           to={`/u/${claim.author_username || claim.author_address}`}
           className="flex items-center gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted/50"
         >
-          <UserAvatar address={claim.author_address} size="md" />
+          <UserAvatar address={claim.author_address ?? ''} src={claim.author_avatar_url} size="md" />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium">Posted by</p>
             <p className="text-sm font-mono truncate">{claim.author_username ? `@${claim.author_username}` : truncateAddress(claim.author_address)}</p>
@@ -177,12 +193,14 @@ export function ClaimDetailView({ claim, assets }: ClaimDetailViewProps) {
       )}
 
       {chartData && chartData.ohlc.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Price history
-          </h3>
-          <PriceChart data={chartData} />
-        </div>
+        <Suspense fallback={null}>
+          <PriceChart
+            data={chartData}
+            interval={chartInterval}
+            onIntervalChange={setChartInterval}
+            refetching={chartRefetching}
+          />
+        </Suspense>
       )}
     </div>
   );

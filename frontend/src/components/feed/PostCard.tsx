@@ -1,41 +1,49 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ChevronDown } from 'lucide-react';
+import { Star } from 'lucide-react';
 import { HardClaimCard } from '@/components/HardClaimCard';
+import { PositionAttachmentCard } from '@/components/PositionAttachmentCard';
 import { UserAvatar } from '@/components/UserAvatar';
-import ProfitabilityBadge from '@/components/ProfitabilityBadge';
+import { PostActions } from '@/components/feed/PostActions';
 import { truncateAddress } from '@/lib/wallet';
-import { cn } from '@/lib/utils';
+import { cn, safeImageSrc } from '@/lib/utils';
 import type { PostItem, HardClaimItem, AssetItem } from '@/lib/types';
+import { ClaimDetailView } from '@/components/feed/ClaimDetailView';
+import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 
 interface PostCardProps {
   post: PostItem;
   hardClaims?: HardClaimItem[];
   assets?: AssetItem[];
+  onDelete?: () => void;
+  onPostChange?: (post: PostItem) => void;
 }
 
-export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) {
-  const [claimsOpen, setClaimsOpen] = useState(false);
-  const confirmedClaims = post.claims.filter((c) => c.status === 'confirmed');
+function PostCardImpl({ post, hardClaims = [], assets = [], onDelete, onPostChange }: PostCardProps) {
+  // Claim detail modal state
+  const [claimModal, setClaimModal] = useState<HardClaimItem | null>(null);
+
   const claimHints = post.hard_claims.length > 0 ? post.hard_claims : hardClaims;
-  const hasClaims = claimHints.length > 0;
+  const positions = post.positions ?? [];
+  const hasAttachments = claimHints.length > 0 || positions.length > 0;
 
   return (
-    <Card className="relative max-w-2xl gap-0 py-0 overflow-hidden rounded-lg transition-colors hover:bg-muted">
+    <Card className={cn(
+      "group relative max-w-2xl gap-0 py-0 overflow-hidden rounded-lg transition-colors hover:bg-muted/20",
+      claimHints.length > 0 && "border-claim-badge/35 shadow-claim-badge/10",
+      positions.length > 0 && "border-position-badge/35 shadow-position-badge/10"
+    )}>
       <Link
         to={`/post/${post.id}`}
         className="absolute inset-0 z-0"
         aria-label={`View post by ${post.author_username || truncateAddress(post.author_address)}`}
-        aria-hidden={claimsOpen}
-        tabIndex={claimsOpen ? -1 : undefined}
       />
 
       <div className="relative z-10 pointer-events-none">
-        <div className="flex items-center gap-3 px-4 sm:px-5 pt-4 sm:pt-5 pb-3">
-          <UserAvatar address={post.author_address} size="md" />
+        <div className="flex items-center gap-3 px-4 sm:px-5 pt-4 sm:pt-5 pb-3 transition-colors duration-200 group-hover:bg-muted/60 rounded-t-lg">
+          <UserAvatar address={post.author_address} src={post.author_avatar_url} size="md" />
 
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <Button
@@ -55,112 +63,123 @@ export function PostCard({ post, hardClaims = [], assets = [] }: PostCardProps) 
             >
               {new Date(post.created_at).toLocaleDateString()}
             </time>
+            {post.channel && (
+              <span className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded ml-1 shrink-0">
+                <Star className="size-3 fill-amber-500" />
+                PREMIUM
+              </span>
+            )}
+            {claimHints.length > 0 && (
+              <span className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-claim-badge bg-claim-badge/10 px-1.5 py-0.5 rounded ml-1 shrink-0">
+                CLAIM
+              </span>
+            )}
+            {positions.length > 0 && (
+              <span className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-position-badge bg-position-badge/10 px-1.5 py-0.5 rounded ml-1 shrink-0">
+                POSITION
+              </span>
+            )}
           </div>
 
-          <div className="pointer-events-auto">
-            <ProfitabilityBadge data={post.profitability} />
+          <div className="pointer-events-auto flex items-center gap-2">
+            {onDelete && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive h-7 px-2"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onDelete();
+                }}
+              >
+                Delete
+              </Button>
+            )}
           </div>
         </div>
 
-        <CardContent className="px-4 sm:px-5 pb-4">
+        <CardContent className="px-4 sm:px-5 pb-3 transition-colors duration-200 group-hover:bg-muted/60">
           <p className="text-sm leading-relaxed whitespace-pre-wrap">{post.content}</p>
 
-          {confirmedClaims.length > 0 && (() => {
-            const seen = new Set<string>();
-            const unique = confirmedClaims.filter((c) => {
-              const key = `${c.asset}|${c.direction}`.toLowerCase();
-              if (seen.has(key)) return false;
-              seen.add(key);
-              return true;
-            });
-            return (
-              <div className="flex flex-wrap gap-1.5 mt-3">
-                {unique.map((c) => (
-                  <div key={c.id} className="flex gap-1">
-                    {c.asset && (
-                      <Badge variant="secondary" className="text-xs">
-                        {c.asset}
-                      </Badge>
-                    )}
-                    {c.direction && (
-                      <Badge
-                        variant={c.direction.toLowerCase() === 'bullish' ? 'success' : 'destructive'}
-                        className="text-xs"
-                      >
-                        {c.direction}
-                      </Badge>
-                    )}
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
+          {post.image_url && (
+            <img
+              src={safeImageSrc(post.image_url)}
+              alt=""
+              loading="lazy"
+              className="mt-3 w-full max-h-[28rem] rounded-lg border border-border object-cover"
+            />
+          )}
         </CardContent>
 
-        {hasClaims && (
-          <>
-            {!claimsOpen && (
-              <button
-                type="button"
-                onClick={() => setClaimsOpen(true)}
-                className={cn(
-                  'pointer-events-auto w-full border-t border-border px-4 sm:px-5 py-2',
-                  'text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-colors',
-                )}
-                aria-expanded={false}
-                aria-label={`Show ${claimHints.length} claim${claimHints.length !== 1 ? 's' : ''}`}
-              >
-                <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1.5">
-                  {claimHints.map((hc, index) => {
-                    const asset = assets.find((a) => a.id === hc.asset);
-                    const symbol = asset?.symbol ?? `#${hc.asset}`;
-                    const isBullish = hc.direction.toLowerCase() === 'bullish';
-                    return (
-                      <span key={hc.id} className="inline-flex items-center gap-1.5">
-                        {index > 0 && (
-                          <span aria-hidden className="text-muted-foreground/30 text-xs select-none">
-                            ·
-                          </span>
-                        )}
-                        <span className="font-mono text-xs font-semibold text-foreground">{symbol}</span>
-                        <Badge
-                          variant={isBullish ? 'success' : 'destructive'}
-                          className="text-[10px] px-1.5 py-0 num"
-                        >
-                          {isBullish ? '▲' : '▼'} {hc.percentage.toFixed(1)}%
-                        </Badge>
-                      </span>
-                    );
-                  })}
-                  <ChevronDown className="size-4 shrink-0 opacity-70" />
-                </div>
-              </button>
-            )}
-
-            {claimsOpen && (
-              <div className="pointer-events-auto border-t border-border">
-                <div className="px-4 sm:px-5 py-4 space-y-2">
+        {hasAttachments && (
+          <div className="pointer-events-auto border-t border-border transition-colors duration-200 group-hover:bg-muted/60">
+            <div className="px-4 sm:px-5 py-4 space-y-3">
+              {/* Claims section */}
+              {claimHints.length > 0 && (
+                <div className="space-y-2">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                     Claims
                   </p>
                   {claimHints.map((hc) => (
-                    <HardClaimCard key={hc.id} claim={hc} assets={assets} />
+                    <div
+                      key={hc.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setClaimModal(hc);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setClaimModal(hc);
+                        }
+                      }}
+                      className="cursor-pointer [&_a]:pointer-events-none"
+                    >
+                      <HardClaimCard claim={hc} assets={assets} />
+                    </div>
                   ))}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setClaimsOpen(false)}
-                  className="w-full flex items-center justify-center border-t border-border py-2 text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-colors"
-                  aria-expanded={true}
-                  aria-label="Hide claims"
-                >
-                  <ChevronDown className="size-4 rotate-180" />
-                </button>
-              </div>
-            )}
-          </>
+              )}
+
+              {/* Positions section */}
+              {positions.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-position-badge">
+                    Positions
+                  </p>
+                  {positions.map((pos) => (
+                    <PositionAttachmentCard key={pos.id} position={pos} assets={assets} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         )}
+
+        <div className="pointer-events-auto border-t border-border px-3 sm:px-4 py-1">
+          <PostActions post={post} onPostChange={onPostChange} />
+        </div>
       </div>
+
+      {/* Claim detail modal */}
+      <RD.Root open={!!claimModal} onOpenChange={(v) => !v && setClaimModal(null)}>
+        <RD.Content className="max-w-2xl">
+          <RD.Header>
+            <RD.Title>Claim Details</RD.Title>
+          </RD.Header>
+          {claimModal && (
+            <div className="overflow-y-auto max-h-[70vh] pr-1">
+              <ClaimDetailView claim={claimModal} assets={assets} />
+            </div>
+          )}
+        </RD.Content>
+      </RD.Root>
     </Card>
   );
 }
+
+export const PostCard = memo(PostCardImpl);

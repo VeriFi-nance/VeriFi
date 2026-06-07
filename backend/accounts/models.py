@@ -1,9 +1,11 @@
+from cloudinary.models import CloudinaryField
 from django.db import models
 
 
 class WalletUser(models.Model):
     address = models.CharField(max_length=42, unique=True)  # Ethereum address: 0x + 40 hex
     username = models.CharField(max_length=30, unique=True)
+    avatar = CloudinaryField("avatar", blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     rep = models.FloatField(default=200.0)
     energy = models.FloatField(default=4.0)
@@ -21,6 +23,35 @@ class WalletUser(models.Model):
 
     def __str__(self):
         return self.username
+
+
+class ProfileChangeLog(models.Model):
+    class EventType(models.TextChoices):
+        USERNAME_UPDATED = "username_updated", "Username updated"
+        POST_CREATED = "post_created", "Post created"
+        POST_DELETED = "post_deleted", "Post deleted"
+
+    user = models.ForeignKey(WalletUser, related_name="changelog_entries", on_delete=models.CASCADE)
+    actor = models.ForeignKey(
+        WalletUser,
+        related_name="profile_changelog_actions",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    event_type = models.CharField(max_length=32, choices=EventType.choices)
+    summary = models.CharField(max_length=160)
+    metadata = models.JSONField(blank=True, default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "-created_at"], name="profile_changelog_user_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username}: {self.summary}"
 
 
 class Follow(models.Model):

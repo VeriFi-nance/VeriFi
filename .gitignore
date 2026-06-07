@@ -232,3 +232,9 @@ pnpm-debug.log*
 copilot-instructions.md
 .roo
 .agents/
+.agent
+.cline
+# Local git worktrees and scratch clones (never commit)
+.claude/
+.worktrees/
+signance_wiki/

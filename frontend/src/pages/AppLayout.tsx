@@ -2,15 +2,18 @@
 import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Home, LogOut, Moon, Settings, Sun, User, Users, ShieldCheck } from 'lucide-react';
-import { clearAuth, useAuthState, useOpenLogin } from '@/lib/auth';
-import { clearPrivateKey } from '@/lib/crypto';
+import { Home, LogOut, Moon, Settings, Sun, User, ShieldCheck } from 'lucide-react';
+import { clearAuth, useAuthState, useOpenLogin, loadAuthMethod } from '@/lib/auth';
+import { clearPrivateKey } from '@/lib/keystore';
+import { triggerPrivyLogout } from '@/lib/privyLogout';
+import { clearPrivySigner } from '@/lib/privySigner';
 import { loadTheme, toggleTheme, type Theme } from '@/lib/theme';
 import { EnergyMeter } from '@/components/EnergyMeter';
 import { UserAvatar } from '@/components/UserAvatar';
 import { truncateAddress } from '@/lib/wallet';
 import { MobileMenuButton, BottomTabBar } from '@/components/MobileNav';
 import { BrandLogo } from '@/components/BrandLogo';
+import { SearchBar } from '@/components/SearchBar';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -27,12 +30,6 @@ export function buildNavItems(): NavItem[] {
       icon: <Home className="size-5" />,
       label: 'Feed',
       matches: (p) => p === '/feed' || p === '/' || p.startsWith('/post/') || p.startsWith('/claim/'),
-    },
-    {
-      to: '/c',
-      icon: <Users className="size-5" />,
-      label: 'Communities',
-      matches: (p) => p.startsWith('/c'),
     },
     {
       to: '/verify',
@@ -57,8 +54,6 @@ function pageTitle(pathname: string): string {
   if (pathname.startsWith('/post/')) return 'Post';
   if (pathname.startsWith('/claim/')) return 'Claim';
   if (pathname.startsWith('/u/')) return 'Profile';
-  if (pathname.startsWith('/c/')) return 'Community';
-  if (pathname === '/c') return 'Communities';
   return 'VeriFi';
 }
 
@@ -121,9 +116,13 @@ export default function AppLayout() {
     setTheme(next);
   }
 
-  function handleDisconnect() {
+  async function handleDisconnect() {
+    if (loadAuthMethod() === 'privy') {
+      await triggerPrivyLogout();
+    }
     clearAuth();
     clearPrivateKey();
+    clearPrivySigner();
   }
 
   function goLogin() {
@@ -193,14 +192,12 @@ export default function AppLayout() {
               onLogin={goLogin}
             />
 
-            <h1 className="text-base sm:text-lg font-semibold tracking-tight flex-1 truncate">
-              {title}
-            </h1>
+            <div className="flex-1 flex justify-start lg:pl-4">
+              <SearchBar />
+            </div>
 
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="hidden sm:block">
-                <EnergyMeter />
-              </div>
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              <EnergyMeter />
 
               <Button
                 variant="ghost"
@@ -218,7 +215,7 @@ export default function AppLayout() {
                   className="flex items-center gap-2 hover:opacity-80 transition-opacity"
                   aria-label="Your profile"
                 >
-                  <UserAvatar address={address} size="sm" ring />
+                  <UserAvatar address={address} src={auth.avatar} size="sm" ring />
                   <span className="hidden sm:inline text-sm font-mono text-muted-foreground">
                     {username ? `@${username}` : truncateAddress(address)}
                   </span>
@@ -237,6 +234,17 @@ export default function AppLayout() {
             </div>
           </main>
         </div>
+
+        {/* Right Sidebar for future tools */}
+        <aside
+          className={cn(
+            'hidden lg:flex sticky top-0 h-dvh flex-col border-l border-border bg-background shrink-0 self-start',
+            'w-56 transition-[width] duration-200',
+          )}
+          aria-label="Secondary navigation / Tools"
+        >
+          {/* Placeholder for future tools */}
+        </aside>
       </div>
 
       <BottomTabBar />

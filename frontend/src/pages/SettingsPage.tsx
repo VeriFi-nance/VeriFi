@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Copy, Check, Sun, Moon, LogOut, KeyRound } from 'lucide-react';
-import { clearAuth, useAuthState, saveUsername } from '@/lib/auth';
-import { updateUsername } from '@/lib/api';
-import { clearPrivateKey } from '@/lib/crypto';
+import { Copy, Check, Sun, Moon, LogOut, KeyRound, ImagePlus } from 'lucide-react';
+import { clearAuth, useAuthState, saveUsername, saveAvatar } from '@/lib/auth';
+import { updateProfile, updateUsername, getProfileStats } from '@/lib/api';
+import { UserAvatar } from '@/components/UserAvatar';
+import { clearPrivateKey } from '@/lib/keystore';
 import { loadTheme, toggleTheme, type Theme } from '@/lib/theme';
 import { useWalletReveal } from '@/lib/useWalletReveal';
 import { PageContent } from '@/components/PageContent';
@@ -61,8 +62,14 @@ function SettingsRow({
 
 export default function SettingsPage() {
   const navigate = useNavigate();
-  const { address, username } = useAuthState();
+  const { address, username, avatar } = useAuthState();
   const [theme, setTheme] = useState<Theme>(loadTheme);
+
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(avatar);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [savingAvatar, setSavingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState('');
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const reveal = useWalletReveal();
   const [showReveal, setShowReveal] = useState(false);
   const [password, setPassword] = useState('');
@@ -71,6 +78,58 @@ export default function SettingsPage() {
   const [isEditingUsername, setIsEditingUsername] = useState(false);
   const [savingUsername, setSavingUsername] = useState(false);
   const [usernameError, setUsernameError] = useState('');
+
+  // Hydrate the current avatar from the server (covers logins on a fresh device
+  // where the avatar isn't cached locally yet).
+  useEffect(() => {
+    if (!address) return;
+    getProfileStats(address)
+      .then((stats) => {
+        setAvatarUrl(stats.avatar_url ?? null);
+        saveAvatar(stats.avatar_url ?? null);
+      })
+      .catch(() => {});
+  }, [address]);
+
+  // Revoke the object URL for the local preview on change/unmount.
+  useEffect(() => {
+    return () => {
+      if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+    };
+  }, [avatarPreview]);
+
+  async function handlePickAvatar(file: File | null) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setAvatarError('Please choose an image file.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setAvatarError('Image must be 10 MB or smaller.');
+      return;
+    }
+    setAvatarError('');
+    const preview = URL.createObjectURL(file);
+    setAvatarPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return preview;
+    });
+    setSavingAvatar(true);
+    try {
+      const res = await updateProfile({ avatar: file });
+      setAvatarUrl(res.avatar_url);
+      saveAvatar(res.avatar_url);
+    } catch (e) {
+      setAvatarError(e instanceof Error ? e.message : 'Failed to update picture.');
+    } finally {
+      setSavingAvatar(false);
+      setAvatarPreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+    }
+  }
 
   async function handleSaveUsername() {
     setUsernameError('');
@@ -128,6 +187,36 @@ export default function SettingsPage() {
             </code>
             {address && <CopyButton text={address} />}
           </div>
+        </SettingsSection>
+
+        <SettingsSection>
+          <div className="space-y-1.5">
+            <h2 className={titleClass}>Profile picture</h2>
+            <p className={descriptionClass}>
+              Shown next to your posts and on your profile. Auto-resized; max 10 MB.
+            </p>
+          </div>
+          <div className="flex items-center gap-4">
+            <UserAvatar address={address || ''} src={avatarPreview || avatarUrl} size="lg" />
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => handlePickAvatar(e.target.files?.[0] ?? null)}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              disabled={savingAvatar}
+              onClick={() => avatarInputRef.current?.click()}
+            >
+              <ImagePlus className="size-3.5" />
+              {savingAvatar ? 'Uploading…' : avatarUrl ? 'Change' : 'Upload'}
+            </Button>
+          </div>
+          {avatarError && <p className="text-xs text-destructive">{avatarError}</p>}
         </SettingsSection>
 
         <SettingsSection>

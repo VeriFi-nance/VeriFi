@@ -6,7 +6,8 @@ import { ChevronLeft } from 'lucide-react';
 import { PageContent } from '@/components/PageContent';
 import { ClaimDetailView } from '@/components/feed/ClaimDetailView';
 import { Skeleton } from '@/components/Skeleton';
-import { getHardClaim, getAssets } from '@/lib/api';
+import { getHardClaim } from '@/lib/api';
+import { fetchAssets } from '@/hooks/useAssets';
 import type { HardClaimItem, AssetItem } from '@/lib/types';
 
 export default function ClaimDetailPage() {
@@ -25,7 +26,7 @@ export default function ClaimDetailPage() {
       return;
     }
 
-    Promise.all([getHardClaim(claimId), getAssets()])
+    Promise.all([getHardClaim(claimId), fetchAssets()])
       .then(([c, a]) => {
         setClaim(c);
         setAssets(a);

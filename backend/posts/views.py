@@ -1,59 +1,125 @@
+import json
 import logging
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Prefetch
+from django.db.models import Count, Exists, OuterRef, Prefetch, Value
+from django.db.models import BooleanField
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from accounts.models import WalletUser
-from .models import Post, Claim, HardClaim, Asset, OHLCData, Community, CommunityMembership, AssetSubscription, ClaimMarket, ClaimStake
-from .serializers import PostSerializer, ClaimInputSerializer, HardClaimInputSerializer, HardClaimSerializer, AssetSerializer, CommunitySerializer, CommunityMembershipSerializer
+from accounts.models import WalletUser, ProfileChangeLog
+from .models import Post, HardClaim, Asset, Channel, ChannelMembership, AssetSubscription, ClaimMarket, ClaimStake, PostLike, PostComment, PostCommentLike, SavedProof, Position, PositionEvent
+from .serializers import PostSerializer, PostCommentSerializer, HardClaimInputSerializer, HardClaimSerializer, AssetSerializer, ChannelSerializer, ChannelMembershipSerializer, PositionInputSerializer, PositionSerializer
 from .claim_extraction import rule_based_claims_from_prompt
 from django.shortcuts import get_object_or_404
-from .resolution import CONTRACT_VERSION, ResolutionError, preview_resolution, resolve_hard_claim
+from .resolution import (
+    CONTRACT_VERSION,
+    ResolutionError,
+    preview_resolution,
+    resolve_hard_claim,
+    capture_reference_price,
+    claim_target_price,
+    _normalize_direction_and_value_type,
+    reconcile_claim_fields,
+)
 from . import rep_market
 from .signature_verification import verify_claim_signature, verify_position_signature
 from accounts.energy import grant_energy, spend, CLAIM_ENERGY_COST
+from accounts.serializers import validate_image_upload
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
 
+# Sentinel distinguishing "not yet computed" from a cached None result.
+_UNSET = object()
+
+
+def _normalized_claim_fields(direction: str, value_type: str) -> tuple[str, str]:
+    return _normalize_direction_and_value_type(direction, value_type)
+
 
 def _posts_queryset():
+    from .models import Position
     return (
         Post.objects.select_related("author", "author__profitability")
         .prefetch_related(
-            "claims",
             Prefetch(
                 "hard_claims",
-                HardClaim.objects.select_related("author", "author__profitability").prefetch_related(
+                HardClaim.objects.select_related("author", "author__profitability", "asset").prefetch_related(
                     "events"
                 ),
+            ),
+            Prefetch(
+                "positions",
+                Position.objects.select_related("author", "asset"),
             ),
         )
         .order_by("-created_at")
     )
 
 
-def _filter_posts_queryset(qs, request):
-    community_id = request.query_params.get("community")
-    if community_id:
-        qs = qs.filter(community_id=community_id)
-        community = get_object_or_404(Community, id=community_id)
-        if community.privacy_type == Community.PrivacyType.PRIVATE:
-            user = _get_wallet_user(request)
-            if not user or not CommunityMembership.objects.filter(
-                community=community, user=user, status=CommunityMembership.Status.APPROVED
-            ).exists():
-                return None, Response(
-                    {"detail": "You must be an approved member to view this community's posts."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
+def _posts_with_social_annotations(qs, user=None):
+    annotations = {
+        "like_count": Count("likes", distinct=True),
+        "comment_count": Count("comments", distinct=True),
+        "saved_proof_count": Count("saved_proofs", distinct=True),
+    }
+    if user:
+        annotations["liked_by_me"] = Exists(
+            PostLike.objects.filter(post_id=OuterRef("pk"), user=user)
+        )
+        annotations["saved_proof_by_me"] = Exists(
+            SavedProof.objects.filter(post_id=OuterRef("pk"), user=user)
+        )
     else:
-        qs = qs.filter(community__isnull=True)
+        annotations["liked_by_me"] = Value(False, output_field=BooleanField())
+        annotations["saved_proof_by_me"] = Value(False, output_field=BooleanField())
+    return qs.annotate(**annotations)
+
+
+def _comments_with_social_annotations(qs, user=None):
+    annotations = {
+        "like_count": Count("likes", distinct=True),
+    }
+    if user:
+        annotations["liked_by_me"] = Exists(
+            PostCommentLike.objects.filter(comment_id=OuterRef("pk"), user=user)
+        )
+    else:
+        annotations["liked_by_me"] = Value(False, output_field=BooleanField())
+    return qs.annotate(**annotations)
+
+
+def _comment_tree(comments):
+    by_parent = {}
+    for comment in comments:
+        by_parent.setdefault(comment.parent_id, []).append(comment)
+        comment.prefetched_replies = []
+    for comment in comments:
+        comment.prefetched_replies = by_parent.get(comment.id, [])
+    return by_parent.get(None, [])
+
+
+def _filter_posts_queryset(qs, request):
+    from django.db.models import Q
+
+    channel_id = request.query_params.get("channel")
+    if channel_id:
+        qs = qs.filter(channel_id=channel_id)
+        channel = get_object_or_404(Channel, id=channel_id)
+        user = _get_wallet_user(request)
+        if not user or (channel.creator != user and not ChannelMembership.objects.filter(
+            channel=channel, user=user, status=ChannelMembership.Status.APPROVED
+        ).exists()):
+            return None, Response(
+                {"detail": "You must be an approved member to view this channel's posts."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+    else:
+        qs = qs.filter(channel__isnull=True)
 
     feed_type = request.query_params.get("feed")
     if feed_type == "following":
@@ -66,6 +132,46 @@ def _filter_posts_queryset(qs, request):
                 {"detail": "Authentication required for following feed."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+
+    # ── Text search ───────────────────────────────────────────────────────────
+    query = request.query_params.get("q", "").strip()
+    if query:
+        qs = qs.filter(content__icontains=query)
+
+    # ── Asset + type filtering ────────────────────────────────────────────────
+    raw_asset_ids = request.query_params.get("asset_ids", "").strip()
+    asset_ids = []
+    if raw_asset_ids:
+        try:
+            asset_ids = [int(x) for x in raw_asset_ids.split(",") if x.strip()]
+        except ValueError:
+            pass
+
+    has_claims_param = request.query_params.get("has_claims", "").lower()
+    has_positions_param = request.query_params.get("has_positions", "").lower()
+    # Only apply type filter when at least one type flag is explicitly provided
+    filter_types = has_claims_param in ("true", "1") or has_positions_param in ("true", "1")
+
+    if asset_ids or filter_types:
+        type_filter = Q()
+        if has_claims_param in ("true", "1"):
+            claim_q = Q(hard_claims__isnull=False)
+            if asset_ids:
+                claim_q &= Q(hard_claims__asset_id__in=asset_ids)
+            type_filter |= claim_q
+        if has_positions_param in ("true", "1"):
+            pos_q = Q(positions__isnull=False)
+            if asset_ids:
+                pos_q &= Q(positions__asset_id__in=asset_ids)
+            type_filter |= pos_q
+        # If only asset_ids given with no type flag, filter posts having any claim/position with those assets
+        if asset_ids and not filter_types:
+            type_filter = (
+                Q(hard_claims__asset_id__in=asset_ids) |
+                Q(positions__asset_id__in=asset_ids)
+            )
+        if type_filter:
+            qs = qs.filter(type_filter).distinct()
 
     return qs, None
 
@@ -98,17 +204,15 @@ def _paginate_queryset(qs, request):
 
 
 def _can_view_post(post, request) -> bool | Response:
-    if not post.community_id:
+    if not post.channel_id:
         return True
 
-    community = post.community
-    if community.privacy_type != Community.PrivacyType.PRIVATE:
-        return True
+    channel = post.channel
 
     user = _get_wallet_user(request)
-    if user and CommunityMembership.objects.filter(
-        community=community, user=user, status=CommunityMembership.Status.APPROVED
-    ).exists():
+    if user and (channel.creator == user or ChannelMembership.objects.filter(
+        channel=channel, user=user, status=ChannelMembership.Status.APPROVED
+    ).exists()):
         return True
 
     return Response(
@@ -117,14 +221,51 @@ def _can_view_post(post, request) -> bool | Response:
     )
 
 
+def _get_viewable_post(request, pk):
+    try:
+        post = _posts_with_social_annotations(_posts_queryset(), _get_wallet_user(request)).get(pk=pk)
+    except Post.DoesNotExist:
+        return None, Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    permission = _can_view_post(post, request)
+    if isinstance(permission, Response):
+        return None, permission
+    return post, None
+
+
+def _get_viewable_comment(request, pk):
+    try:
+        comment = PostComment.objects.select_related("post", "post__channel", "author").get(pk=pk)
+    except PostComment.DoesNotExist:
+        return None, Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    permission = _can_view_post(comment.post, request)
+    if isinstance(permission, Response):
+        return None, permission
+    return comment, None
+
+
 def _get_wallet_user(request) -> WalletUser | None:
+    # Memoize per request: the feed flow calls this several times (filtering,
+    # following check, social annotations), each otherwise re-decoding the JWT
+    # and re-querying WalletUser. Cache the result (including None) on the request.
+    cached = getattr(request, "_cached_wallet_user", _UNSET)
+    if cached is not _UNSET:
+        return cached
+
     auth = JWTAuthentication()
     try:
         raw = auth.get_raw_token(auth.get_header(request))
         token = auth.get_validated_token(raw)
-        return WalletUser.objects.get(address=token.get("address", "").lower())
+        user = WalletUser.objects.get(address=token.get("address", "").lower())
     except Exception:
-        return None
+        user = None
+
+    try:
+        request._cached_wallet_user = user
+    except Exception:
+        pass
+    return user
 
 
 def _require_admin_user(request) -> WalletUser | Response:
@@ -137,6 +278,17 @@ def _require_admin_user(request) -> WalletUser | Response:
     return user
 
 
+def _is_channel_moderator(channel, user) -> bool:
+    if channel.creator == user:
+        return True
+    return ChannelMembership.objects.filter(
+        channel=channel,
+        user=user,
+        status=ChannelMembership.Status.APPROVED,
+        role__in=[ChannelMembership.Role.OWNER, ChannelMembership.Role.MODERATOR],
+    ).exists()
+
+
 class PostListCreateView(APIView):
     authentication_classes = []
     permission_classes = []
@@ -145,6 +297,7 @@ class PostListCreateView(APIView):
         qs, error_response = _filter_posts_queryset(_posts_queryset(), request)
         if error_response is not None:
             return error_response
+        qs = _posts_with_social_annotations(qs, _get_wallet_user(request))
 
         page = _paginate_queryset(qs, request)
         return Response(
@@ -168,42 +321,60 @@ class PostListCreateView(APIView):
         if len(content) > 500:
             return Response({"detail": "content exceeds 500 characters."}, status=status.HTTP_400_BAD_REQUEST)
 
-        community_id = request.data.get("community_id")
-        community_obj = None
-        if community_id is not None:
+        channel_id = request.data.get("channel_id")
+        channel_obj = None
+        if channel_id is not None:
             try:
-                community_obj = Community.objects.get(id=community_id)
-                membership = CommunityMembership.objects.filter(community=community_obj, user=user).first()
-                if membership and membership.status == CommunityMembership.Status.BANNED:
-                    return Response({"detail": "You are banned from this community."}, status=status.HTTP_403_FORBIDDEN)
+                channel_obj = Channel.objects.get(id=channel_id)
+                membership = ChannelMembership.objects.filter(channel=channel_obj, user=user).first()
+                if membership and membership.status == ChannelMembership.Status.BANNED:
+                    return Response({"detail": "You are banned from this channel."}, status=status.HTTP_403_FORBIDDEN)
                 
-                if community_obj.privacy_type == Community.PrivacyType.PRIVATE:
-                    if not membership or membership.status != CommunityMembership.Status.APPROVED:
-                        return Response({"detail": "You must be an approved member to post in this private community."}, status=status.HTTP_403_FORBIDDEN)
+                if channel_obj.creator != user and (not membership or membership.status != ChannelMembership.Status.APPROVED):
+                    return Response({"detail": "You must be an approved member to post in this private channel."}, status=status.HTTP_403_FORBIDDEN)
                 
-                if community_obj.post_permission == Community.PostPermission.CREATOR_ONLY and user != community_obj.creator:
-                    return Response({"detail": "Only the community creator can post in this community."}, status=status.HTTP_403_FORBIDDEN)
-            except Community.DoesNotExist:
-                return Response({"detail": f"Community {community_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
+                if channel_obj.post_permission == Channel.PostPermission.CREATOR_ONLY and user != channel_obj.creator:
+                    return Response({"detail": "Only the channel creator can post in this channel."}, status=status.HTTP_403_FORBIDDEN)
+            except Channel.DoesNotExist:
+                return Response({"detail": f"Channel {channel_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
 
-        claims_data = request.data.get("claims", [])
-        serializer = ClaimInputSerializer(data=claims_data, many=True)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        # Under multipart/form-data (image uploads), nested arrays arrive as a
+        # JSON-encoded string rather than a parsed list. Decode them here so both
+        # JSON and multipart requests reach the same code path.
+        def _parse_array_field(raw, label):
+            if isinstance(raw, str):
+                if not raw.strip():
+                    return [], None
+                try:
+                    raw = json.loads(raw)
+                except json.JSONDecodeError:
+                    return None, f"{label} must be valid JSON."
+            if not isinstance(raw, list):
+                return None, f"{label} must be a list."
+            return raw, None
 
-        hard_claims_data = request.data.get("hard_claims", [])
+        hard_claims_data, hc_err = _parse_array_field(request.data.get("hard_claims", []), "hard_claims")
+        if hc_err:
+            return Response({"detail": hc_err}, status=status.HTTP_400_BAD_REQUEST)
+        positions_data, pos_err = _parse_array_field(request.data.get("positions", []), "positions")
+        if pos_err:
+            return Response({"detail": pos_err}, status=status.HTTP_400_BAD_REQUEST)
+
+        # In channels, positions may only be attached by the channel creator
+        if positions_data and channel_obj and channel_obj.creator != user:
+            return Response(
+                {"detail": "In channels, only the channel creator can attach positions to posts."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        image_file = request.FILES.get("image")
+        if image_file is not None:
+            img_error = validate_image_upload(image_file)
+            if img_error:
+                return Response({"detail": img_error}, status=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
-            post = Post.objects.create(author=user, content=content, community=community_obj)
-            for claim in serializer.validated_data:
-                if claim.get("status") != "rejected":
-                    Claim.objects.create(
-                        post=post,
-                        text=claim["text"],
-                        asset=claim.get("asset", ""),
-                        direction=claim.get("direction", ""),
-                        status=Claim.Status.CONFIRMED,
-                    )
+            post = Post.objects.create(author=user, content=content, channel=channel_obj, image=image_file)
             
             for hc_data in hard_claims_data:
                 hc_serializer = HardClaimInputSerializer(data=hc_data)
@@ -265,14 +436,17 @@ class PostListCreateView(APIView):
                         logger.exception("Unexpected error during claim signature verification")
                         return Response({"detail": "Invalid claim signature."}, status=status.HTTP_400_BAD_REQUEST)
 
+                    hc_direction, hc_value_type = _normalized_claim_fields(
+                        valid_hc.get("direction", ""),
+                        valid_hc.get("value_type", "PERCENTAGE_UP"),
+                    )
                     hard_claim = HardClaim.objects.create(
                         author=user,
                         post=post,
-                        community=community_obj,
+                        channel=channel_obj,
                         asset=asset,
-                        direction=valid_hc.get("direction", ""),
-                        value_type=valid_hc.get("value_type", "PERCENTAGE_UP"),
-                        payda=valid_hc.get("payda", ""),
+                        direction=hc_direction,
+                        value_type=hc_value_type,
                         percentage=valid_hc["percentage"],
                         until=valid_hc["until"],
                         status=valid_hc.get("status", "undetermined"),
@@ -285,6 +459,14 @@ class PostListCreateView(APIView):
                         event_type=HardClaimEvent.EventType.CREATION,
                         details={}
                     )
+                    try:
+                        capture_reference_price(hard_claim)
+                    except ResolutionError as exc:
+                        logger.warning(
+                            "Reference price not captured for claim %s: %s",
+                            hard_claim.id,
+                            exc.message,
+                        )
                     if market_block is not None:
                         rep_market.init_market(hard_claim, user, m_side, m_stake)
                 except rep_market.MarketError:
@@ -296,6 +478,74 @@ class PostListCreateView(APIView):
                     logger.exception("Unexpected error while creating hard claim.")
                     return Response({"detail": "An internal error has occurred."}, status=status.HTTP_400_BAD_REQUEST)
 
+            # ── Attached positions (channel-creator only) ──────────────────────────────
+            for pos_data in positions_data:
+                pos_data_with_channel = dict(pos_data)
+                pos_data_with_channel["channel_id"] = channel_obj.id if channel_obj else None
+                pos_serializer = PositionInputSerializer(data=pos_data_with_channel)
+                if not pos_serializer.is_valid():
+                    transaction.set_rollback(True)
+                    return Response(pos_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                valid_pos = pos_serializer.validated_data
+
+                try:
+                    pos_asset = Asset.objects.get(id=valid_pos["asset_id"])
+                except Asset.DoesNotExist:
+                    transaction.set_rollback(True)
+                    return Response({"detail": "Invalid asset reference for position."}, status=status.HTTP_400_BAD_REQUEST)
+
+                pos_sig = valid_pos.get("signature", "")
+                pos_payload = valid_pos.get("position_payload", {})
+                try:
+                    verify_position_signature(
+                        user_address=user.address,
+                        user_username=user.username,
+                        signature=pos_sig,
+                        position_payload=pos_payload,
+                        asset_symbol=pos_asset.symbol,
+                    )
+                except Exception as sig_exc:
+                    transaction.set_rollback(True)
+                    from rest_framework.exceptions import ValidationError as DRFValidationError
+                    if isinstance(sig_exc, DRFValidationError):
+                        return Response(sig_exc.detail, status=status.HTTP_400_BAD_REQUEST)
+                    logger.exception("Unexpected error during position signature verification")
+                    return Response({"detail": "Invalid position signature."}, status=status.HTTP_400_BAD_REQUEST)
+
+                position = Position.objects.create(
+                    author=user,
+                    channel=channel_obj,
+                    post=post,
+                    asset=pos_asset,
+                    direction=valid_pos["direction"],
+                    entry_price=valid_pos["entry_price"],
+                    entry_interval=valid_pos["entry_interval"],
+                    stop_loss=valid_pos["stop_loss"],
+                    take_profit=valid_pos["take_profit"],
+                    lifetime=valid_pos["lifetime"],
+                    signature=pos_sig,
+                    position_payload=pos_payload,
+                    status=Position.Status.PENDING,
+                )
+                PositionEvent.objects.create(
+                    position=position,
+                    event_type=PositionEvent.EventType.CREATION,
+                    details={"message": "Position created with post"},
+                )
+                AssetSubscription.objects.create(asset=pos_asset, position=position)
+
+            ProfileChangeLog.objects.create(
+                user=user,
+                actor=user,
+                event_type=ProfileChangeLog.EventType.POST_CREATED,
+                summary="Created a post",
+                metadata={
+                    "post_id": post.id,
+                    "channel_id": post.channel_id,
+                    "content_preview": post.content[:120],
+                },
+            )
+
         return Response(PostSerializer(post).data, status=status.HTTP_201_CREATED)
 
 
@@ -304,16 +554,167 @@ class PostDetailView(APIView):
     permission_classes = []
 
     def get(self, request, pk):
-        try:
-            post = _posts_queryset().get(pk=pk)
-        except Post.DoesNotExist:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        post, error_response = _get_viewable_post(request, pk)
+        if error_response is not None:
+            return error_response
 
-        permission = _can_view_post(post, request)
-        if isinstance(permission, Response):
-            return permission
+        from datetime import date
+        from django.utils import timezone as django_timezone
+        from .resolution import resolve_hard_claim, ResolutionError
+
+        for claim in post.hard_claims.all():
+            if claim.status == HardClaim.Status.UNDETERMINED and claim.until < date.today():
+                try:
+                    resolve_hard_claim(claim)
+                except ResolutionError:
+                    pass
 
         return Response(PostSerializer(post).data)
+
+
+class PostLikeView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, pk):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        post, error_response = _get_viewable_post(request, pk)
+        if error_response is not None:
+            return error_response
+
+        PostLike.objects.get_or_create(post=post, user=user)
+        post = _posts_with_social_annotations(_posts_queryset(), user).get(pk=pk)
+        return Response(PostSerializer(post).data, status=status.HTTP_200_OK)
+
+    def delete(self, request, pk):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        post, error_response = _get_viewable_post(request, pk)
+        if error_response is not None:
+            return error_response
+
+        PostLike.objects.filter(post=post, user=user).delete()
+        post = _posts_with_social_annotations(_posts_queryset(), user).get(pk=pk)
+        return Response(PostSerializer(post).data, status=status.HTTP_200_OK)
+
+
+class PostCommentListCreateView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        post, error_response = _get_viewable_post(request, pk)
+        if error_response is not None:
+            return error_response
+
+        comments = list(
+            _comments_with_social_annotations(
+                post.comments.select_related("author").order_by("created_at"),
+                _get_wallet_user(request),
+            )
+        )
+        return Response(PostCommentSerializer(_comment_tree(comments), many=True).data)
+
+    def post(self, request, pk):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        post, error_response = _get_viewable_post(request, pk)
+        if error_response is not None:
+            return error_response
+
+        content = request.data.get("content", "").strip()
+        if len(content) > 500:
+            return Response({"detail": "content exceeds 500 characters."}, status=status.HTTP_400_BAD_REQUEST)
+
+        image_file = request.FILES.get("image")
+        if image_file is not None:
+            img_error = validate_image_upload(image_file)
+            if img_error:
+                return Response({"detail": img_error}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not content and image_file is None:
+            return Response({"detail": "content or image is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        parent_id = request.data.get("parent_id")
+        parent = None
+        if parent_id is not None:
+            try:
+                parent = PostComment.objects.get(pk=parent_id, post=post)
+            except PostComment.DoesNotExist:
+                return Response({"detail": "Invalid parent comment."}, status=status.HTTP_400_BAD_REQUEST)
+
+        comment = PostComment.objects.create(post=post, parent=parent, author=user, content=content, image=image_file)
+        comment = _comments_with_social_annotations(PostComment.objects.filter(pk=comment.pk), user).get()
+        return Response(PostCommentSerializer(comment).data, status=status.HTTP_201_CREATED)
+
+
+class PostCommentLikeView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, pk):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        comment, error_response = _get_viewable_comment(request, pk)
+        if error_response is not None:
+            return error_response
+
+        PostCommentLike.objects.get_or_create(comment=comment, user=user)
+        comment = _comments_with_social_annotations(PostComment.objects.filter(pk=pk).select_related("author"), user).get()
+        return Response(PostCommentSerializer(comment).data, status=status.HTTP_200_OK)
+
+    def delete(self, request, pk):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        comment, error_response = _get_viewable_comment(request, pk)
+        if error_response is not None:
+            return error_response
+
+        PostCommentLike.objects.filter(comment=comment, user=user).delete()
+        comment = _comments_with_social_annotations(PostComment.objects.filter(pk=pk).select_related("author"), user).get()
+        return Response(PostCommentSerializer(comment).data, status=status.HTTP_200_OK)
+
+
+class PostSavedProofView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, pk):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        post, error_response = _get_viewable_post(request, pk)
+        if error_response is not None:
+            return error_response
+
+        SavedProof.objects.get_or_create(post=post, user=user)
+        post = _posts_with_social_annotations(_posts_queryset(), user).get(pk=pk)
+        return Response(PostSerializer(post).data, status=status.HTTP_200_OK)
+
+    def delete(self, request, pk):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        post, error_response = _get_viewable_post(request, pk)
+        if error_response is not None:
+            return error_response
+
+        SavedProof.objects.filter(post=post, user=user).delete()
+        post = _posts_with_social_annotations(_posts_queryset(), user).get(pk=pk)
+        return Response(PostSerializer(post).data, status=status.HTTP_200_OK)
 
 
 class ExtractClaimsView(APIView):
@@ -345,18 +746,17 @@ class HardClaimView(APIView):
     permission_classes = []
 
     def get(self, request):
-        qs = HardClaim.objects.all().order_by("-id")
+        qs = HardClaim.objects.select_related("author", "author__profitability", "asset").order_by("-id")
         
-        community_id = request.query_params.get("community")
-        if community_id:
-            qs = qs.filter(community_id=community_id)
-            community = get_object_or_404(Community, id=community_id)
-            if community.privacy_type == Community.PrivacyType.PRIVATE:
-                user = _get_wallet_user(request)
-                if not user or not CommunityMembership.objects.filter(community=community, user=user, status=CommunityMembership.Status.APPROVED).exists():
-                    return Response({"detail": "You must be an approved member to view this community's claims."}, status=status.HTTP_403_FORBIDDEN)
+        channel_id = request.query_params.get("channel")
+        if channel_id:
+            qs = qs.filter(channel_id=channel_id)
+            channel = get_object_or_404(Channel, id=channel_id)
+            user = _get_wallet_user(request)
+            if not user or (channel.creator != user and not ChannelMembership.objects.filter(channel=channel, user=user, status=ChannelMembership.Status.APPROVED).exists()):
+                return Response({"detail": "You must be an approved member to view this channel's claims."}, status=status.HTTP_403_FORBIDDEN)
         else:
-            qs = qs.filter(community__isnull=True)
+            qs = qs.filter(channel__isnull=True)
 
         address = request.query_params.get("address", "").strip().lower()
         if address:
@@ -402,24 +802,23 @@ class HardClaimView(APIView):
             except Post.DoesNotExist:
                 return Response({"detail": f"Post {post_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Resolve optional community reference
-        community_obj = None
-        community_id = data.get("community_id")
-        if community_id is not None:
+        # Resolve optional channel reference
+        channel_obj = None
+        channel_id = data.get("channel_id")
+        if channel_id is not None:
             try:
-                community_obj = Community.objects.get(id=community_id)
-                membership = CommunityMembership.objects.filter(community=community_obj, user=user).first()
-                if membership and membership.status == CommunityMembership.Status.BANNED:
-                    return Response({"detail": "You are banned from this community."}, status=status.HTTP_403_FORBIDDEN)
+                channel_obj = Channel.objects.get(id=channel_id)
+                membership = ChannelMembership.objects.filter(channel=channel_obj, user=user).first()
+                if membership and membership.status == ChannelMembership.Status.BANNED:
+                    return Response({"detail": "You are banned from this channel."}, status=status.HTTP_403_FORBIDDEN)
 
-                if community_obj.privacy_type == Community.PrivacyType.PRIVATE:
-                    if not membership or membership.status != CommunityMembership.Status.APPROVED:
-                        return Response({"detail": "You must be an approved member to post in this private community."}, status=status.HTTP_403_FORBIDDEN)
+                if channel_obj.creator != user and (not membership or membership.status != ChannelMembership.Status.APPROVED):
+                    return Response({"detail": "You must be an approved member to post in this private channel."}, status=status.HTTP_403_FORBIDDEN)
                 
-                if community_obj.post_permission == Community.PostPermission.CREATOR_ONLY and user != community_obj.creator:
-                    return Response({"detail": "Only the community creator can post claims in this community."}, status=status.HTTP_403_FORBIDDEN)
-            except Community.DoesNotExist:
-                return Response({"detail": f"Community {community_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
+                if channel_obj.post_permission == Channel.PostPermission.CREATOR_ONLY and user != channel_obj.creator:
+                    return Response({"detail": "Only the channel creator can post claims in this channel."}, status=status.HTTP_403_FORBIDDEN)
+            except Channel.DoesNotExist:
+                return Response({"detail": f"Channel {channel_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Optional Model G market block.
         market_block = request.data.get("market") if isinstance(request.data, dict) else None
@@ -464,14 +863,17 @@ class HardClaimView(APIView):
 
         # Create HardClaim object in the database with the given data
         try:
+            claim_direction, claim_value_type = _normalized_claim_fields(
+                data.get("direction", ""),
+                data.get("value_type", "PERCENTAGE_UP"),
+            )
             hard_claim = HardClaim.objects.create(
                 author=user,
                 post=post_obj,
-                community=community_obj,
+                channel=channel_obj,
                 asset=asset,
-                direction=data.get("direction", ""),
-                value_type=data.get("value_type", "PERCENTAGE_UP"),
-                payda=data.get("payda", ""),
+                direction=claim_direction,
+                value_type=claim_value_type,
                 percentage=data["percentage"],
                 until=data["until"],
                 status=data.get("status", "undetermined"),
@@ -484,6 +886,14 @@ class HardClaimView(APIView):
                 event_type=HardClaimEvent.EventType.CREATION,
                 details={}
             )
+            try:
+                capture_reference_price(hard_claim)
+            except ResolutionError as exc:
+                logger.warning(
+                    "Reference price not captured for claim %s: %s",
+                    hard_claim.id,
+                    exc.message,
+                )
             if market_block is not None:
                 rep_market.init_market(hard_claim, user, m_side, m_stake)
         except rep_market.MarketError as e:
@@ -521,23 +931,30 @@ class HardClaimDetailView(APIView):
 
     def get(self, request, pk):
         try:
-            hard_claim = HardClaim.objects.get(pk=pk)
+            hard_claim = HardClaim.objects.select_related("asset").get(pk=pk)
         except HardClaim.DoesNotExist:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        if hard_claim.community_id:
-            community = hard_claim.community
-            if community.privacy_type == Community.PrivacyType.PRIVATE:
-                user = _get_wallet_user(request)
-                if not user or not CommunityMembership.objects.filter(
-                    community=community,
-                    user=user,
-                    status=CommunityMembership.Status.APPROVED,
-                ).exists():
-                    return Response(
-                        {"detail": "You must be an approved member to view this claim."},
-                        status=status.HTTP_403_FORBIDDEN,
-                    )
+        if hard_claim.channel_id:
+            channel = hard_claim.channel
+            user = _get_wallet_user(request)
+            if not user or (channel.creator != user and not ChannelMembership.objects.filter(
+                channel=channel,
+                user=user,
+                status=ChannelMembership.Status.APPROVED,
+            ).exists()):
+                return Response(
+                    {"detail": "You must be an approved member to view this claim."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        from datetime import date
+        from .resolution import resolve_hard_claim, ResolutionError
+        if hard_claim.status == HardClaim.Status.UNDETERMINED and hard_claim.until < date.today():
+            try:
+                resolve_hard_claim(hard_claim)
+            except ResolutionError:
+                pass
 
         return Response(HardClaimSerializer(hard_claim).data)
 
@@ -567,6 +984,92 @@ class HardClaimResolveView(APIView):
         return Response(result)
 
 
+class AssetChartDataView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        from datetime import datetime, timedelta, timezone
+        from django.core.cache import cache
+        from .ohlc_fetcher import (
+            get_ohlc_data,
+            OHLCFetchError,
+            Interval,
+            floor_align_datetime,
+            CHART_INTERVAL_CHOICES,
+            get_cache_timeout,
+        )
+
+        # Default window: Last 30 days
+        chart_end = datetime.now(timezone.utc).date()
+        chart_start = chart_end - timedelta(days=30)
+        default_interval = Interval.FOUR_HOUR
+
+        requested = request.query_params.get("interval")
+        if not requested:
+            chart_interval = default_interval
+        else:
+            try:
+                chart_interval = Interval(requested)
+            except ValueError as exc:
+                return Response({"detail": f"Invalid interval: {requested}"}, status=status.HTTP_400_BAD_REQUEST)
+            if chart_interval not in CHART_INTERVAL_CHOICES:
+                return Response({"detail": f"Interval {requested} not supported for charts."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Serve the whole chart payload from cache when warm. Checked BEFORE any
+        # DB access (keyed on pk), so a warm hit does zero DB round-trips. Stale
+        # window matches the live-candle refresh cadence.
+        response_cache_key = f"asset_chart_payload_{pk}_{chart_interval.value}"
+        cached_payload = cache.get(response_cache_key)
+        if cached_payload is not None:
+            return Response(cached_payload)
+
+        try:
+            asset = Asset.objects.get(pk=pk)
+        except Asset.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        start_time = floor_align_datetime(
+            datetime.combine(chart_start, datetime.min.time(), tzinfo=timezone.utc),
+            chart_interval,
+        )
+        end_time = floor_align_datetime(
+            datetime.now(timezone.utc),
+            chart_interval,
+        )
+
+        try:
+            ohlc_rows = get_ohlc_data(asset, start_time, end_time, interval=chart_interval)
+        except OHLCFetchError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        ohlc_data = [
+            {
+                "date": row.timestamp.isoformat(),
+                "open": row.open,
+                "high": row.high,
+                "low": row.low,
+                "close": row.close,
+            }
+            for row in ohlc_rows
+        ]
+        
+        current_price = None
+        if ohlc_data:
+            current_price = ohlc_data[-1]["close"]
+
+        payload = {
+            "asset_symbol": asset.symbol,
+            "interval": chart_interval.value,
+            "default_interval": default_interval.value,
+            "as_of": datetime.now(timezone.utc).isoformat(),
+            "ohlc": ohlc_data,
+            "current_price": current_price,
+        }
+        cache.set(response_cache_key, payload, timeout=get_cache_timeout(chart_interval))
+        return Response(payload)
+
+
 class HardClaimChartDataView(APIView):
     authentication_classes = []
     permission_classes = []
@@ -579,51 +1082,80 @@ class HardClaimChartDataView(APIView):
 
         asset = hard_claim.asset
         # get_ohlc_data requires aligned UTC datetime objects
-        from datetime import datetime, timezone
-        start_time = datetime.combine(hard_claim.created_at.date(), datetime.min.time(), tzinfo=timezone.utc)
-        end_time = datetime.combine(hard_claim.until, datetime.min.time(), tzinfo=timezone.utc)
+        from datetime import datetime, timedelta, timezone
+        from .resolution import (
+            _effective_direction,
+            claim_entry_price,
+            claim_target_price,
+            ResolutionError,
+            _round_decimal,
+        )
 
-        # Get or fetch OHLC data
-        from .ohlc_fetcher import get_ohlc_data, OHLCFetchError
+        claim_start_day = hard_claim.created_at.date()
+        claim_end_day = hard_claim.until
+        chart_start = claim_start_day - timedelta(days=3)
+        chart_end = claim_end_day + timedelta(days=3)
+        from .ohlc_fetcher import (
+            get_ohlc_data,
+            OHLCFetchError,
+            resolve_chart_interval,
+            floor_align_datetime,
+        )
         try:
-            ohlc_rows = get_ohlc_data(asset, start_time, end_time)
+            chart_interval, default_interval = resolve_chart_interval(
+                hard_claim, request.query_params.get("interval")
+            )
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        start_time = floor_align_datetime(
+            datetime.combine(chart_start, datetime.min.time(), tzinfo=timezone.utc),
+            chart_interval,
+        )
+        end_time = floor_align_datetime(
+            datetime.combine(chart_end, datetime.min.time(), tzinfo=timezone.utc),
+            chart_interval,
+        )
+
+        from datetime import date
+        from .resolution import resolve_hard_claim, ResolutionError
+        if hard_claim.status == HardClaim.Status.UNDETERMINED and hard_claim.until < date.today():
+            try:
+                resolve_hard_claim(hard_claim)
+            except ResolutionError:
+                pass
+
+        if hard_claim.status == HardClaim.Status.UNDETERMINED:
+            end_time = floor_align_datetime(
+                max(end_time, datetime.now(timezone.utc)),
+                chart_interval,
+            )
+
+        try:
+            ohlc_rows = get_ohlc_data(asset, start_time, end_time, interval=chart_interval)
         except OHLCFetchError as e:
             return Response({"detail": str(e)}, status=status.HTTP_502_BAD_GATEWAY)
 
-        # Compute target price
-        reference_price = None
-        target_price = None
+        # Entry/target from locked reference_price; resolution metadata for hit_days only.
+        reference_price = claim_entry_price(hard_claim)
+        if reference_price is not None:
+            reference_price = _round_decimal(reference_price)
+
         target_reached_at = None
         hit_days = []
         closest_price = None
 
-        # Try to get resolution details from events
         resolution_event = hard_claim.events.filter(event_type="resolution").first()
         if resolution_event and resolution_event.details:
             details = resolution_event.details
             prices = details.get("prices", {})
-            reference_price = prices.get("reference")
-            target_price = prices.get("target")
             closest_price = prices.get("closest")
             target_reached_at = details.get("target_reached_at")
             hit_days = details.get("hit_days", [])
-        elif ohlc_rows:
-            # Not resolved yet — compute from OHLC
-            from .resolution import fetch_reference_price, ResolutionError, _round_decimal
-            try:
-                reference_price, _ = fetch_reference_price(hard_claim)
-                reference_price = _round_decimal(reference_price)
-            except ResolutionError:
-                reference_price = ohlc_rows[0].open
 
-            direction = hard_claim.direction.lower()
-            pct = float(hard_claim.percentage)
-            if hard_claim.value_type == "PRICE":
-                target_price = pct
-            elif direction == "bullish":
-                target_price = _round_decimal(reference_price * (1 + pct / 100))
-            else:
-                target_price = _round_decimal(reference_price * (1 - pct / 100))
+        target_price = claim_target_price(hard_claim, reference_price)
+
+        direction, claim_value_type = reconcile_claim_fields(hard_claim)
 
         ohlc_data = [
             {
@@ -639,12 +1171,17 @@ class HardClaimChartDataView(APIView):
         return Response({
             "claim_id": hard_claim.id,
             "asset_symbol": asset.symbol,
-            "direction": hard_claim.direction.lower(),
+            "direction": direction,
+            "value_type": claim_value_type,
             "reference_price": reference_price,
             "target_price": target_price,
             "percentage": float(hard_claim.percentage),
             "created_at": hard_claim.created_at.isoformat(),
             "until": hard_claim.until.isoformat(),
+            "interval": chart_interval.value,
+            "default_interval": default_interval.value,
+            "as_of": datetime.now(timezone.utc).isoformat(),
+            "live": hard_claim.status == HardClaim.Status.UNDETERMINED,
             "ohlc": ohlc_data,
             "hit_days": hit_days,
             "closest_price": closest_price,
@@ -652,63 +1189,197 @@ class HardClaimChartDataView(APIView):
         })
 
 
-class CommunityListView(APIView):
+class PositionChartDataView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        try:
+            position = Position.objects.select_related("asset").get(pk=pk)
+        except Position.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        asset = position.asset
+        from datetime import datetime, timedelta, timezone
+        from .ohlc_fetcher import (
+            get_ohlc_data,
+            OHLCFetchError,
+            Interval,
+            floor_align_datetime,
+            CHART_INTERVAL_CHOICES,
+        )
+
+        chart_start = position.created_at.date() - timedelta(days=3)
+        chart_end = position.lifetime.date() + timedelta(days=3)
+
+        window_sec = (position.lifetime - position.created_at).total_seconds()
+        if window_sec < 7 * 86400:
+            default_interval = Interval.FIFTEEN_MIN
+        elif window_sec < 30 * 86400:
+            default_interval = Interval.FOUR_HOUR
+        else:
+            default_interval = Interval.ONE_DAY
+
+        requested = request.query_params.get("interval")
+        if not requested:
+            chart_interval = default_interval
+        else:
+            try:
+                chart_interval = Interval(requested)
+            except ValueError as exc:
+                return Response({"detail": f"Invalid interval: {requested}"}, status=status.HTTP_400_BAD_REQUEST)
+            if chart_interval not in CHART_INTERVAL_CHOICES:
+                return Response({"detail": f"Interval {requested} not supported for charts."}, status=status.HTTP_400_BAD_REQUEST)
+
+        start_time = floor_align_datetime(
+            datetime.combine(chart_start, datetime.min.time(), tzinfo=timezone.utc),
+            chart_interval,
+        )
+        end_time = floor_align_datetime(
+            datetime.combine(chart_end, datetime.min.time(), tzinfo=timezone.utc),
+            chart_interval,
+        )
+        
+        if position.status in [Position.Status.PENDING, Position.Status.ACTIVE]:
+            from django.utils import timezone as django_timezone
+            from .position_resolution import _resolve_pending, _resolve_active
+            now = django_timezone.now()
+            try:
+                if position.status == Position.Status.PENDING:
+                    _resolve_pending(position, now)
+                if position.status == Position.Status.ACTIVE:
+                    _resolve_active(position, now)
+            except Exception:
+                pass
+
+        if position.status in [Position.Status.PENDING, Position.Status.ACTIVE]:
+            end_time = floor_align_datetime(
+                max(end_time, datetime.now(timezone.utc)),
+                chart_interval,
+            )
+
+        try:
+            ohlc_rows = get_ohlc_data(asset, start_time, end_time, interval=chart_interval)
+        except OHLCFetchError:
+            logger.exception(
+                "Failed to fetch OHLC data",
+                extra={
+                    "asset_symbol": asset.symbol,
+                    "position_id": position.id,
+                    "interval": chart_interval.value,
+                },
+            )
+            return Response(
+                {"detail": "Unable to fetch chart data at this time."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        ohlc_data = [
+            {
+                "date": row.timestamp.isoformat(),
+                "open": row.open,
+                "high": row.high,
+                "low": row.low,
+                "close": row.close,
+            }
+            for row in ohlc_rows
+        ]
+
+        return Response({
+            "position_id": position.id,
+            "asset_symbol": asset.symbol,
+            "direction": position.direction,
+            "entry_price": float(position.entry_price),
+            "take_profit": float(position.take_profit),
+            "stop_loss": float(position.stop_loss),
+            "created_at": position.created_at.isoformat(),
+            "until": position.lifetime.isoformat(),
+            "interval": chart_interval.value,
+            "default_interval": default_interval.value,
+            "as_of": datetime.now(timezone.utc).isoformat(),
+            "live": position.status in [Position.Status.PENDING, Position.Status.ACTIVE],
+            "ohlc": ohlc_data,
+        })
+
+
+class ChannelListView(APIView):
     authentication_classes = []
     permission_classes = []
 
     def get(self, request):
-        qs = Community.objects.all().order_by("-created_at")
-        return Response(CommunitySerializer(qs, many=True).data)
+        qs = Channel.objects.all().order_by("-created_at")
+        data = ChannelSerializer(qs, many=True).data
+        
+        user = _get_wallet_user(request)
+        if user:
+            # Build a lookup of channel_id -> membership_status for this user
+            memberships = ChannelMembership.objects.filter(
+                user=user
+            ).values("channel_id", "status")
+            membership_map = {m["channel_id"]: m["status"] for m in memberships}
+            
+            for item in data:
+                item["my_membership_status"] = membership_map.get(item["id"])
+        
+        return Response(data)
 
     def post(self, request):
         user = _get_wallet_user(request)
         if user is None:
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
             
+        if Channel.objects.filter(creator=user).exists():
+            return Response(
+                {"detail": "You can only create one channel."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         name = request.data.get("name")
         description = request.data.get("description", "")
-        privacy_type = request.data.get("privacy_type", Community.PrivacyType.PUBLIC)
-        post_permission = request.data.get("post_permission", Community.PostPermission.ALL)
+        post_permission = request.data.get("post_permission", Channel.PostPermission.ALL)
         
         if not name:
             return Response({"detail": "Name is required."}, status=status.HTTP_400_BAD_REQUEST)
             
-        community = Community.objects.create(
+        channel = Channel.objects.create(
             name=name,
             description=description,
             creator=user,
-            privacy_type=privacy_type,
             post_permission=post_permission
         )
         
-        CommunityMembership.objects.create(
-            community=community,
+        ChannelMembership.objects.create(
+            channel=channel,
             user=user,
-            status=CommunityMembership.Status.APPROVED
+            status=ChannelMembership.Status.APPROVED,
+            role=ChannelMembership.Role.OWNER
         )
         
-        return Response(CommunitySerializer(community).data, status=status.HTTP_201_CREATED)
+        return Response(ChannelSerializer(channel).data, status=status.HTTP_201_CREATED)
 
-class CommunityDetailView(APIView):
+class ChannelDetailView(APIView):
     authentication_classes = []
     permission_classes = []
 
     def get(self, request, pk):
-        community = get_object_or_404(Community, pk=pk)
-        data = CommunitySerializer(community).data
+        channel = get_object_or_404(Channel, pk=pk)
+        data = ChannelSerializer(channel).data
         
         user = _get_wallet_user(request)
         membership_status = None
+        membership_role = None
         if user:
-            membership = CommunityMembership.objects.filter(community=community, user=user).first()
+            membership = ChannelMembership.objects.filter(channel=channel, user=user).first()
             if membership:
                 membership_status = membership.status
+                membership_role = membership.role
                 
         data["my_membership_status"] = membership_status
+        data["my_role"] = membership_role
         
-        if user and community.creator == user:
-            pending_memberships = CommunityMembership.objects.filter(community=community, status=CommunityMembership.Status.PENDING)
-            data["pending_requests"] = CommunityMembershipSerializer(pending_memberships, many=True).data
+        if user and (channel.creator == user or _is_channel_moderator(channel, user)):
+            pending_memberships = ChannelMembership.objects.filter(channel=channel, status=ChannelMembership.Status.PENDING)
+            data["pending_requests"] = ChannelMembershipSerializer(pending_memberships, many=True).data
             
         return Response(data)
 
@@ -717,25 +1388,25 @@ class CommunityDetailView(APIView):
         if not user:
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
 
-        community = get_object_or_404(Community, pk=pk)
-        if community.creator != user:
-            return Response({"detail": "Only the creator can update community settings."}, status=status.HTTP_403_FORBIDDEN)
+        channel = get_object_or_404(Channel, pk=pk)
+        if channel.creator != user:
+            return Response({"detail": "Only the creator can update channel settings."}, status=status.HTTP_403_FORBIDDEN)
 
         allowed_fields = {"post_permission"}
         updated = False
         for field in allowed_fields:
             if field in request.data:
                 value = request.data[field]
-                if field == "post_permission" and value not in (Community.PostPermission.ALL, Community.PostPermission.CREATOR_ONLY):
+                if field == "post_permission" and value not in (Channel.PostPermission.ALL, Channel.PostPermission.CREATOR_ONLY):
                     return Response({"detail": f"Invalid value for {field}."}, status=status.HTTP_400_BAD_REQUEST)
-                setattr(community, field, value)
+                setattr(channel, field, value)
                 updated = True
 
         if updated:
-            community.save()
-        return Response(CommunitySerializer(community).data)
+            channel.save()
+        return Response(ChannelSerializer(channel).data)
 
-class CommunityJoinView(APIView):
+class ChannelJoinView(APIView):
     authentication_classes = []
     permission_classes = []
 
@@ -744,23 +1415,23 @@ class CommunityJoinView(APIView):
         if user is None:
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
             
-        community = get_object_or_404(Community, pk=pk)
+        channel = get_object_or_404(Channel, pk=pk)
         
-        membership = CommunityMembership.objects.filter(community=community, user=user).first()
+        membership = ChannelMembership.objects.filter(channel=channel, user=user).first()
         if membership:
-            if membership.status == CommunityMembership.Status.BANNED:
-                return Response({"detail": "You are banned from this community."}, status=status.HTTP_403_FORBIDDEN)
+            if membership.status == ChannelMembership.Status.BANNED:
+                return Response({"detail": "You are banned from this channel."}, status=status.HTTP_403_FORBIDDEN)
             return Response({"detail": f"Already have a membership with status: {membership.status}."}, status=status.HTTP_400_BAD_REQUEST)
             
-        membership = CommunityMembership.objects.create(
-            community=community,
+        membership = ChannelMembership.objects.create(
+            channel=channel,
             user=user,
-            status=CommunityMembership.Status.APPROVED if community.privacy_type == Community.PrivacyType.PUBLIC else CommunityMembership.Status.PENDING
+            status=ChannelMembership.Status.PENDING
         )
             
-        return Response(CommunityMembershipSerializer(membership).data, status=status.HTTP_201_CREATED)
+        return Response(ChannelMembershipSerializer(membership).data, status=status.HTTP_201_CREATED)
 
-class CommunityApproveView(APIView):
+class ChannelApproveView(APIView):
     authentication_classes = []
     permission_classes = []
 
@@ -769,25 +1440,25 @@ class CommunityApproveView(APIView):
         if user is None:
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
             
-        community = get_object_or_404(Community, pk=pk)
-        if community.creator != user:
-            return Response({"detail": "Only the community creator can approve members."}, status=status.HTTP_403_FORBIDDEN)
+        channel = get_object_or_404(Channel, pk=pk)
+        if not _is_channel_moderator(channel, user):
+            return Response({"detail": "Only moderators or the owner can approve members."}, status=status.HTTP_403_FORBIDDEN)
             
         target_user = get_object_or_404(WalletUser, address=user_address.lower())
-        membership = get_object_or_404(CommunityMembership, community=community, user=target_user)
+        membership = get_object_or_404(ChannelMembership, channel=channel, user=target_user)
         
         action = request.data.get("action")
         if action == "approve":
-            membership.status = CommunityMembership.Status.APPROVED
+            membership.status = ChannelMembership.Status.APPROVED
             membership.save()
-            return Response(CommunityMembershipSerializer(membership).data)
+            return Response(ChannelMembershipSerializer(membership).data)
         elif action == "reject":
             membership.delete()
             return Response({"detail": "Request rejected."})
         else:
             return Response({"detail": "Invalid action. Use 'approve' or 'reject'."}, status=status.HTTP_400_BAD_REQUEST)
 
-class CommunityBanView(APIView):
+class ChannelBanView(APIView):
     authentication_classes = []
     permission_classes = []
 
@@ -796,36 +1467,76 @@ class CommunityBanView(APIView):
         if user is None:
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
             
-        community = get_object_or_404(Community, pk=pk)
-        if community.creator != user:
-            return Response({"detail": "Only the community creator can ban members."}, status=status.HTTP_403_FORBIDDEN)
+        channel = get_object_or_404(Channel, pk=pk)
+        if not _is_channel_moderator(channel, user):
+            return Response({"detail": "Only moderators or the owner can ban members."}, status=status.HTTP_403_FORBIDDEN)
             
         target_user = get_object_or_404(WalletUser, address=user_address.lower())
         if target_user == user:
             return Response({"detail": "You cannot ban yourself."}, status=status.HTTP_400_BAD_REQUEST)
 
-        membership, _ = CommunityMembership.objects.get_or_create(
-            community=community,
+        # Guard: moderators cannot ban the owner or other moderators of equal/higher rank
+        target_membership = ChannelMembership.objects.filter(channel=channel, user=target_user).first()
+        if target_membership and target_membership.role in [ChannelMembership.Role.OWNER, ChannelMembership.Role.MODERATOR]:
+            if channel.creator != user:  # Only owner can ban moderators
+                return Response({"detail": "Moderators cannot ban the owner or other moderators."}, status=status.HTTP_403_FORBIDDEN)
+
+        membership, _ = ChannelMembership.objects.get_or_create(
+            channel=channel,
             user=target_user
         )
-        membership.status = CommunityMembership.Status.BANNED
+        membership.status = ChannelMembership.Status.BANNED
         membership.save()
-        return Response(CommunityMembershipSerializer(membership).data)
+        return Response(ChannelMembershipSerializer(membership).data)
 
-class CommunityMemberListView(APIView):
+    def delete(self, request, pk, user_address):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+            
+        channel = get_object_or_404(Channel, pk=pk)
+        if not _is_channel_moderator(channel, user):
+            return Response({"detail": "Only moderators or the owner can unban members."}, status=status.HTTP_403_FORBIDDEN)
+            
+        target_user = get_object_or_404(WalletUser, address=user_address.lower())
+        
+        try:
+            membership = ChannelMembership.objects.get(channel=channel, user=target_user)
+            if membership.status == ChannelMembership.Status.BANNED:
+                membership.delete()
+                return Response({"detail": "User unbanned."}, status=status.HTTP_204_NO_CONTENT)
+            else:
+                return Response({"detail": "User is not banned."}, status=status.HTTP_400_BAD_REQUEST)
+        except ChannelMembership.DoesNotExist:
+            return Response({"detail": "User is not banned."}, status=status.HTTP_400_BAD_REQUEST)
+
+class ChannelMemberListView(APIView):
     authentication_classes = []
     permission_classes = []
 
     def get(self, request, pk):
-        community = get_object_or_404(Community, pk=pk)
+        channel = get_object_or_404(Channel, pk=pk)
         
-        if community.privacy_type == Community.PrivacyType.PRIVATE:
-            user = _get_wallet_user(request)
-            if not user or (community.creator != user and not CommunityMembership.objects.filter(community=community, user=user, status=CommunityMembership.Status.APPROVED).exists()):
-                return Response({"detail": "You must be a member to view this list."}, status=status.HTTP_403_FORBIDDEN)
+        user = _get_wallet_user(request)
+        if not user or (channel.creator != user and not ChannelMembership.objects.filter(channel=channel, user=user, status=ChannelMembership.Status.APPROVED).exists()):
+            return Response({"detail": "You must be a member to view this list."}, status=status.HTTP_403_FORBIDDEN)
                 
-        memberships = CommunityMembership.objects.filter(community=community, status=CommunityMembership.Status.APPROVED).order_by('created_at')
-        return Response(CommunityMembershipSerializer(memberships, many=True).data)
+        memberships = ChannelMembership.objects.filter(channel=channel, status=ChannelMembership.Status.APPROVED).order_by('created_at')
+        return Response(ChannelMembershipSerializer(memberships, many=True).data)
+
+class ChannelBannedListView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        channel = get_object_or_404(Channel, pk=pk)
+        
+        user = _get_wallet_user(request)
+        if not user or not _is_channel_moderator(channel, user):
+            return Response({"detail": "Only moderators or the owner can view the banned list."}, status=status.HTTP_403_FORBIDDEN)
+                
+        memberships = ChannelMembership.objects.filter(channel=channel, status=ChannelMembership.Status.BANNED).order_by('created_at')
+        return Response(ChannelMembershipSerializer(memberships, many=True).data)
 
 from django.core.cache import cache as django_cache
 import time
@@ -919,8 +1630,6 @@ class PositionResolveView(APIView):
             "remaining_seconds": RESOLVE_COOLDOWN_SECONDS,
         })
 
-from .models import Position, PositionEvent
-from .serializers import PositionSerializer, PositionInputSerializer
 from .resolution import fetch_current_price
 from django.utils import timezone
 
@@ -935,19 +1644,18 @@ class PositionListCreateView(APIView):
         return super().get_permissions()
 
     def get(self, request):
-        community_id = request.query_params.get("community")
-        if not community_id:
-            return Response({"detail": "community parameter is required."}, status=status.HTTP_400_BAD_REQUEST)
+        channel_id = request.query_params.get("channel")
+        if not channel_id:
+            return Response({"detail": "channel parameter is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        community = get_object_or_404(Community, pk=community_id)
+        channel = get_object_or_404(Channel, pk=channel_id)
         
         # Privacy check
-        if community.privacy_type == Community.PrivacyType.PRIVATE:
-            user = _get_wallet_user(request)
-            if not user or (community.creator != user and not CommunityMembership.objects.filter(community=community, user=user, status=CommunityMembership.Status.APPROVED).exists()):
-                return Response({"detail": "You must be an approved member to view positions in this private community."}, status=status.HTTP_403_FORBIDDEN)
+        user = _get_wallet_user(request)
+        if not user or (channel.creator != user and not ChannelMembership.objects.filter(channel=channel, user=user, status=ChannelMembership.Status.APPROVED).exists()):
+            return Response({"detail": "You must be an approved member to view positions in this private channel."}, status=status.HTTP_403_FORBIDDEN)
                 
-        positions = Position.objects.filter(community=community).order_by("-created_at")
+        positions = Position.objects.filter(channel=channel).select_related("author", "author__profitability", "asset").order_by("-created_at")
         return Response(PositionSerializer(positions, many=True).data)
 
     def post(self, request):
@@ -960,19 +1668,18 @@ class PositionListCreateView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         data = serializer.validated_data
-        community = get_object_or_404(Community, pk=data["community_id"])
+        channel = get_object_or_404(Channel, pk=data["channel_id"])
         
         # Permission checks
-        membership = CommunityMembership.objects.filter(community=community, user=user).first()
-        if membership and membership.status == CommunityMembership.Status.BANNED:
-            return Response({"detail": "You are banned from this community."}, status=status.HTTP_403_FORBIDDEN)
+        membership = ChannelMembership.objects.filter(channel=channel, user=user).first()
+        if membership and membership.status == ChannelMembership.Status.BANNED:
+            return Response({"detail": "You are banned from this channel."}, status=status.HTTP_403_FORBIDDEN)
 
-        if community.privacy_type == Community.PrivacyType.PRIVATE:
-            if not membership or membership.status != CommunityMembership.Status.APPROVED:
-                return Response({"detail": "You must be an approved member to post positions in this private community."}, status=status.HTTP_403_FORBIDDEN)
+        if channel.creator != user and (not membership or membership.status != ChannelMembership.Status.APPROVED):
+            return Response({"detail": "You must be an approved member to post positions in this private channel."}, status=status.HTTP_403_FORBIDDEN)
                 
-        if community.post_permission == Community.PostPermission.CREATOR_ONLY and user != community.creator:
-            return Response({"detail": "Only the creator can post in this community."}, status=status.HTTP_403_FORBIDDEN)
+        if channel.creator != user:
+            return Response({"detail": "Only the channel owner can share positions."}, status=status.HTTP_403_FORBIDDEN)
 
         asset = get_object_or_404(Asset, pk=data["asset_id"])
 
@@ -993,9 +1700,19 @@ class PositionListCreateView(APIView):
             logger.exception("Unexpected error while verifying position signature")
             return Response({"detail": "Unable to verify position signature."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Resolve optional post link
+        post_obj = None
+        post_id = data.get("post_id")
+        if post_id is not None:
+            try:
+                post_obj = Post.objects.get(id=post_id)
+            except Post.DoesNotExist:
+                return Response({"detail": f"Post {post_id} not found."}, status=status.HTTP_400_BAD_REQUEST)
+
         position = Position.objects.create(
             author=user,
-            community=community,
+            channel=channel,
+            post=post_obj,
             asset=asset,
             direction=data["direction"],
             entry_price=data["entry_price"],
@@ -1248,6 +1965,87 @@ class HardClaimMarketPreviewView(APIView):
         )
 
 
+class ChannelModeratorView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, pk, user_address):
+        """Promote a member to moderator (owner only)."""
+        user = _get_wallet_user(request)
+        if not user:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        channel = get_object_or_404(Channel, pk=pk)
+        if channel.creator != user:
+            return Response({"detail": "Only the owner can promote moderators."}, status=status.HTTP_403_FORBIDDEN)
+
+        target_user = get_object_or_404(WalletUser, address=user_address.lower())
+        if target_user == user:
+            return Response({"detail": "You are already the owner."}, status=status.HTTP_400_BAD_REQUEST)
+
+        membership = get_object_or_404(ChannelMembership, channel=channel, user=target_user)
+        if membership.status != ChannelMembership.Status.APPROVED:
+            return Response({"detail": "User must be an approved member to be promoted."}, status=status.HTTP_400_BAD_REQUEST)
+
+        membership.role = ChannelMembership.Role.MODERATOR
+        membership.save()
+        return Response(ChannelMembershipSerializer(membership).data)
+
+    def delete(self, request, pk, user_address):
+        """Demote a moderator back to member (owner only)."""
+        user = _get_wallet_user(request)
+        if not user:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        channel = get_object_or_404(Channel, pk=pk)
+        if channel.creator != user:
+            return Response({"detail": "Only the owner can demote moderators."}, status=status.HTTP_403_FORBIDDEN)
+
+        target_user = get_object_or_404(WalletUser, address=user_address.lower())
+        membership = get_object_or_404(ChannelMembership, channel=channel, user=target_user)
+        if membership.role != ChannelMembership.Role.MODERATOR:
+            return Response({"detail": "User is not a moderator."}, status=status.HTTP_400_BAD_REQUEST)
+
+        membership.role = ChannelMembership.Role.MEMBER
+        membership.save()
+        return Response(ChannelMembershipSerializer(membership).data)
+
+
+class PostDeleteView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def delete(self, request, pk):
+        user = _get_wallet_user(request)
+        if not user:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        post = get_object_or_404(Post, pk=pk)
+
+        is_channel_mod = post.channel and _is_channel_moderator(post.channel, user)
+
+        if not is_channel_mod:
+            return Response({"detail": "You do not have permission to delete this post."}, status=status.HTTP_403_FORBIDDEN)
+
+        author = post.author
+        metadata = {
+            "post_id": post.id,
+            "channel_id": post.channel_id,
+            "content_preview": post.content[:120],
+            "deleted_by": user.address,
+        }
+        with transaction.atomic():
+            post.delete()
+            ProfileChangeLog.objects.create(
+                user=author,
+                actor=user,
+                event_type=ProfileChangeLog.EventType.POST_DELETED,
+                summary="Deleted a post",
+                metadata=metadata,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class HardClaimProofView(APIView):
     authentication_classes = []
     permission_classes = []
@@ -1263,7 +2061,9 @@ class HardClaimProofView(APIView):
             "wallet_address": claim.author.address,
             "signature": claim.signature,
             "payload": claim.claim_payload,
-            "server_timestamp": claim.created_at.isoformat()
+            "server_timestamp": claim.created_at.isoformat(),
+            "reference_price": claim.reference_price,
+            "target_price": claim_target_price(claim),
         })
 
 
@@ -1284,3 +2084,31 @@ class PositionProofView(APIView):
             "payload": position.position_payload,
             "server_timestamp": position.created_at.isoformat()
         })
+
+
+class SearchAPIView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        query = request.query_params.get("q", "").strip()
+        search_type = request.query_params.get("type", "posts").lower()
+
+        if not query:
+            return Response([])
+
+        if search_type == "people":
+            from django.db.models import Q
+            from accounts.serializers import avatar_delivery_url
+            qs = WalletUser.objects.filter(Q(username__icontains=query) | Q(address__icontains=query))[:10]
+            data = [{"address": u.address, "username": u.username, "avatar_url": avatar_delivery_url(u.avatar)} for u in qs]
+            return Response(data)
+        
+        elif search_type == "channels":
+            from django.db.models import Count, Q
+            qs = Channel.objects.filter(name__icontains=query, is_active=True).select_related("creator").annotate(
+                member_count_annotated=Count('memberships', filter=Q(memberships__status='approved'))
+            )[:10]
+            return Response(ChannelSerializer(qs, many=True).data)
+        
+        return Response([])

@@ -10,9 +10,8 @@ from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 from eth_account import Account
 from eth_account.messages import encode_defunct
 
-from .models import WalletUser, Follow
-from .serializers import RegisterSerializer, LoginSerializer, FollowSerializer
-from .serializers import RegisterSerializer, LoginSerializer, FollowSerializer, validate_username_format
+from .models import WalletUser, Follow, ProfileChangeLog
+from .serializers import RegisterSerializer, LoginSerializer, FollowSerializer, validate_username_format, validate_image_upload, avatar_delivery_url
 from .energy import grant_energy, ENERGY_CAP
 
 
@@ -49,7 +48,14 @@ class RegisterView(APIView):
                 counter += 1
 
         user = WalletUser.objects.create(address=address, username=username)
-        return Response({"access": _make_jwt(user), "username": user.username}, status=status.HTTP_201_CREATED)
+        return Response(
+            {
+                "access": _make_jwt(user),
+                "username": user.username,
+                "avatar_url": avatar_delivery_url(user.avatar),
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class ChallengeView(APIView):
@@ -121,7 +127,11 @@ class LoginView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        return Response({"access": _make_jwt(user), "username": user.username})
+        return Response({
+            "access": _make_jwt(user),
+            "username": user.username,
+            "avatar_url": avatar_delivery_url(user.avatar),
+        })
 
 
 class ProfileView(APIView):
@@ -152,9 +162,22 @@ class ProfileView(APIView):
 
         is_following = False
 
+        # Import dynamically to avoid circular import issues
+        from posts.models import Channel
+        from posts.serializers import ChannelSerializer
+
+        owned_qs = Channel.objects.filter(creator=target_user)
+        owned_channel = owned_qs.first()
+
+        member_qs = Channel.objects.filter(
+            memberships__user=target_user,
+            memberships__status="approved"
+        ).exclude(creator=target_user)
+
         data = {
             "address": target_user.address,
             "username": target_user.username,
+            "avatar_url": avatar_delivery_url(target_user.avatar),
             "followers_count": len(followers_list),
             "following_count": len(following_list),
             "followers": followers_list,
@@ -162,6 +185,20 @@ class ProfileView(APIView):
             "rep": target_user.rep,
             "energy": target_user.energy,
             "energy_cap": ENERGY_CAP,
+            "channel_owned": ChannelSerializer(owned_channel).data if owned_channel else None,
+            "channels_member_of": ChannelSerializer(member_qs, many=True).data,
+            "changelog": [
+                {
+                    "id": entry.id,
+                    "event_type": entry.event_type,
+                    "summary": entry.summary,
+                    "metadata": entry.metadata,
+                    "created_at": entry.created_at.isoformat(),
+                    "actor_address": entry.actor.address if entry.actor else None,
+                    "actor_username": entry.actor.username if entry.actor else None,
+                }
+                for entry in target_user.changelog_entries.select_related("actor")[:25]
+            ],
         }
         
         try:
@@ -268,16 +305,41 @@ class UpdateProfileView(APIView):
             return Response({"detail": "Invalid token."}, status=status.HTTP_401_UNAUTHORIZED)
 
         new_username = request.data.get("username")
-        if not new_username:
-            return Response({"detail": "Username is required."}, status=status.HTTP_400_BAD_REQUEST)
-            
-        error = validate_username_format(new_username)
-        if error:
-            return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
-            
-        if WalletUser.objects.filter(username__iexact=new_username).exclude(pk=current_user.pk).exists():
-            return Response({"detail": "Username is already taken."}, status=status.HTTP_400_BAD_REQUEST)
-            
-        current_user.username = new_username
+        avatar_file = request.FILES.get("avatar")
+
+        if not new_username and avatar_file is None:
+            return Response({"detail": "Nothing to update."}, status=status.HTTP_400_BAD_REQUEST)
+
+        old_username = current_user.username
+
+        if new_username:
+            error = validate_username_format(new_username)
+            if error:
+                return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
+
+            if WalletUser.objects.filter(username__iexact=new_username).exclude(pk=current_user.pk).exists():
+                return Response({"detail": "Username is already taken."}, status=status.HTTP_400_BAD_REQUEST)
+
+            current_user.username = new_username
+
+        if avatar_file is not None:
+            error = validate_image_upload(avatar_file)
+            if error:
+                return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
+            current_user.avatar = avatar_file
+
         current_user.save()
-        return Response({"username": current_user.username})
+
+        if old_username != current_user.username:
+            ProfileChangeLog.objects.create(
+                user=current_user,
+                actor=current_user,
+                event_type=ProfileChangeLog.EventType.USERNAME_UPDATED,
+                summary=f"Changed username from @{old_username} to @{current_user.username}",
+                metadata={"old_username": old_username, "new_username": current_user.username},
+            )
+
+        return Response({
+            "username": current_user.username,
+            "avatar_url": avatar_delivery_url(current_user.avatar),
+        })

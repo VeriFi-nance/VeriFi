@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 import os
+import sys
 from pathlib import Path
 
 import dj_database_url
@@ -90,6 +91,8 @@ INSTALLED_APPS = [
     # Third-party
     "rest_framework",
     "corsheaders",
+    "cloudinary_storage",
+    "cloudinary",
     # Local
     "accounts",
     "posts",
@@ -150,6 +153,16 @@ DATABASES = {
 if _database_url.startswith(("postgres://", "postgresql://")):
     DATABASES["default"].setdefault("OPTIONS", {}).setdefault("connect_timeout", 10)
 
+# Always use a local in-memory SQLite DB for `manage.py test`, regardless of
+# DATABASE_URL in .env (Neon/Postgres makes the suite slow or appear hung).
+if "test" in sys.argv:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+        }
+    }
+
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
@@ -188,6 +201,20 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+# Media files (user uploads) — stored on Cloudinary because Render's free tier
+# has an ephemeral filesystem that wipes local uploads on every redeploy.
+# The cloudinary SDK and django-cloudinary-storage both auto-configure from the
+# CLOUDINARY_URL env var: cloudinary://<api_key>:<api_secret>@<cloud_name>
+CLOUDINARY_URL = os.environ.get("CLOUDINARY_URL", "").strip()
+DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
+if not CLOUDINARY_URL:
+    import warnings
+
+    warnings.warn(
+        "CLOUDINARY_URL is not set; image uploads (post images, avatars) will fail.",
+        stacklevel=1,
+    )
 
 # Admin wallet addresses — only these can change HardClaim status
 _DEFAULT_ADMIN = "0x8C66A1aBF7C949004aF7dE80A3fc0F691538ea74"
