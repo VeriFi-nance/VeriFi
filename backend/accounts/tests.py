@@ -1,28 +1,36 @@
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 from accounts.models import WalletUser, ProfileChangeLog
+from accounts.tokens import issue_phone_token
+
+
+def phone_token(phone="+14155550100"):
+    """Mint a valid phone-verification token directly (bypasses the OTP round-trip)."""
+    return issue_phone_token(phone)
+
 
 class UsernameTests(TestCase):
     def setUp(self):
         self.client = APIClient()
 
-    def test_register_generates_username(self):
-        # When no username is provided, it should generate one from address
-        address = "0x" + "a" * 40
-        res = self.client.post("/api/auth/register/", {"address": address})
-        self.assertEqual(res.status_code, 201)
-        self.assertIn("username", res.data)
-        user = WalletUser.objects.get(address=address)
-        self.assertTrue(user.username.startswith("0xaaaa"))
-
     def test_register_with_username(self):
-        # When a valid username is provided, it should be used
+        # A valid username + verified-phone token creates the account.
         address = "0x" + "b" * 40
-        res = self.client.post("/api/auth/register/", {"address": address, "username": "custom_user"})
+        res = self.client.post("/api/auth/register/", {
+            "address": address, "username": "custom_user", "phone_token": phone_token("+14155550111"),
+        })
         self.assertEqual(res.status_code, 201)
         self.assertEqual(res.data["username"], "custom_user")
         user = WalletUser.objects.get(address=address)
         self.assertEqual(user.username, "custom_user")
+        self.assertEqual(user.phone_e164, "+14155550111")
+
+    def test_register_requires_username_and_phone_token(self):
+        # Address alone is no longer enough — username + phone_token are required.
+        res = self.client.post("/api/auth/register/", {"address": "0x" + "a" * 40})
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("username", res.data["error"]["fields"])
+        self.assertIn("phone_token", res.data["error"]["fields"])
 
     def test_register_duplicate_username(self):
         # When an existing username is provided, it should fail
@@ -30,9 +38,27 @@ class UsernameTests(TestCase):
         WalletUser.objects.create(address=address1, username="taken_name")
 
         address2 = "0x" + "2" * 40
-        res = self.client.post("/api/auth/register/", {"address": address2, "username": "taken_name"})
+        res = self.client.post("/api/auth/register/", {
+            "address": address2, "username": "taken_name", "phone_token": phone_token("+14155550122"),
+        })
         self.assertEqual(res.status_code, 400)
         self.assertIn("username", res.data["error"]["fields"])
+
+    def test_register_duplicate_phone(self):
+        # A phone already linked to an account cannot register another.
+        WalletUser.objects.create(address="0x" + "1" * 40, username="first", phone_e164="+14155550133")
+        res = self.client.post("/api/auth/register/", {
+            "address": "0x" + "2" * 40, "username": "second", "phone_token": phone_token("+14155550133"),
+        })
+        self.assertEqual(res.status_code, 409)
+        self.assertEqual(res.data["error"]["code"], "phone_taken")
+
+    def test_register_invalid_phone_token(self):
+        res = self.client.post("/api/auth/register/", {
+            "address": "0x" + "3" * 40, "username": "third", "phone_token": "not-a-token",
+        })
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.data["error"]["code"], "phone_token_invalid")
 
     def test_profile_lookup_by_username_and_address(self):
         address = "0x" + "c" * 40
@@ -167,4 +193,52 @@ class UsernameTests(TestCase):
         self.assertIsNotNone(res.data["channel_owned"])
         self.assertEqual(len(res.data["channels_member_of"]), 1)
         self.assertEqual(res.data["channels_member_of"][0]["id"], channel_joined.id)
+
+
+@override_settings(TWILIO_DISABLED=True)
+class OtpAndExistsTests(TestCase):
+    """OTP flow runs in dev-bypass mode: code 000000 is accepted, no Twilio calls."""
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_exists(self):
+        addr = "0x" + "a" * 40
+        self.assertFalse(self.client.get(f"/api/auth/exists/?address={addr}").data["exists"])
+        WalletUser.objects.create(address=addr, username="someone")
+        self.assertTrue(self.client.get(f"/api/auth/exists/?address={addr}").data["exists"])
+
+    def test_otp_start_rejects_taken_phone(self):
+        WalletUser.objects.create(address="0x" + "b" * 40, username="taken", phone_e164="+14155550200")
+        res = self.client.post("/api/auth/otp/start/", {"phone": "+14155550200"})
+        self.assertEqual(res.status_code, 409)
+        self.assertEqual(res.data["error"]["code"], "phone_taken")
+
+    def test_otp_start_rejects_bad_phone(self):
+        res = self.client.post("/api/auth/otp/start/", {"phone": "12345"})
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("phone", res.data["error"]["fields"])
+
+    def test_otp_start_success(self):
+        res = self.client.post("/api/auth/otp/start/", {"phone": "+14155550201"})
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(res.data["sent"])
+
+    def test_otp_check_wrong_code(self):
+        res = self.client.post("/api/auth/otp/check/", {"phone": "+14155550202", "code": "111111"})
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.data["error"]["code"], "otp_invalid")
+
+    def test_otp_check_success_returns_token_then_registers(self):
+        phone = "+14155550203"
+        check = self.client.post("/api/auth/otp/check/", {"phone": phone, "code": "000000"})
+        self.assertEqual(check.status_code, 200)
+        token = check.data["phone_token"]
+        self.assertTrue(token)
+
+        reg = self.client.post("/api/auth/register/", {
+            "address": "0x" + "c" * 40, "username": "wizard_user", "phone_token": token,
+        })
+        self.assertEqual(reg.status_code, 201)
+        self.assertEqual(WalletUser.objects.get(username="wizard_user").phone_e164, phone)
 

@@ -5,6 +5,10 @@ from django.db import models
 class WalletUser(models.Model):
     address = models.CharField(max_length=42, unique=True)  # Ethereum address: 0x + 40 hex
     username = models.CharField(max_length=30, unique=True)
+    # Verified phone (E.164, e.g. +14155552671). Unique so a phone can only back one
+    # account; null for legacy users registered before phone verification existed
+    # (Postgres allows multiple NULLs under a UNIQUE constraint).
+    phone_e164 = models.CharField(max_length=20, unique=True, null=True, blank=True)
     avatar = CloudinaryField("avatar", blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     rep = models.FloatField(default=200.0)

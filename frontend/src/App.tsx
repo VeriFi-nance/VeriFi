@@ -21,6 +21,7 @@ import { PrivyAccountSync } from './components/PrivyAccountSync';
 import { isPrivyConfigured } from './lib/privyAuth';
 import { ConfirmProvider } from './components/ConfirmDialog';
 import { PasswordPromptProvider } from './components/PasswordPromptProvider';
+import { RegistrationGate } from './components/registration/RegistrationGate';
 import { Toaster } from './components/ui/sonner';
 
 // Lazy so the BIP39/BIP32/secp256k1 bundle (only reachable through LoginForm)
@@ -166,6 +167,7 @@ export default function App() {
           <WalletAccountSync />
           {isPrivyConfigured() && <PrivyAccountSync />}
           <AppRoutes />
+          <RegistrationGate />
           <Toaster />
         </PasswordPromptProvider>
       </ConfirmProvider>

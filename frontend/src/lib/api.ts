@@ -165,10 +165,34 @@ function authHeaders(): Record<string, string> {
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
-export async function register(address: string, username?: string): Promise<{ access: string, username: string, avatar_url?: string | null }> {
+export async function register(
+  address: string,
+  username: string,
+  phoneToken: string,
+): Promise<{ access: string, username: string, avatar_url?: string | null }> {
   return request('/api/auth/register/', {
     method: 'POST',
-    body: JSON.stringify({ address, ...(username ? { username } : {}) }),
+    body: JSON.stringify({ address, username, phone_token: phoneToken }),
+  });
+}
+
+export async function accountExists(address: string): Promise<{ exists: boolean }> {
+  return request(`/api/auth/exists/?address=${encodeURIComponent(address)}`);
+}
+
+/** Send an SMS OTP to `phone` (E.164). Throws if the phone already backs an account. */
+export async function otpStart(phone: string): Promise<{ sent: boolean }> {
+  return request('/api/auth/otp/start/', {
+    method: 'POST',
+    body: JSON.stringify({ phone }),
+  });
+}
+
+/** Verify the OTP. Returns a short-lived phone_token to pass to `register`. */
+export async function otpCheck(phone: string, code: string): Promise<{ phone_token: string }> {
+  return request('/api/auth/otp/check/', {
+    method: 'POST',
+    body: JSON.stringify({ phone, code }),
   });
 }
 

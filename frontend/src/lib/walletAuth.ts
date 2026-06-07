@@ -1,5 +1,6 @@
-import { getChallenge, login, register } from './api';
-import { saveAuthSession } from './auth';
+import { getChallenge, login, accountExists } from './api';
+import { saveAuthSession, type AuthMethod } from './auth';
+import { requestRegistration } from './pendingRegistration';
 
 export interface EIP1193Provider {
   request(args: { method: string; params?: unknown[] }): Promise<unknown>;
@@ -32,18 +33,20 @@ export async function signNonceWithEIP1193(
 export async function authenticateWalletAddress(
   rawAddress: string,
   signNonce: (nonce: string, address: string) => Promise<string>,
+  authMethod: AuthMethod,
 ): Promise<string> {
   const address = normalizeAddress(rawAddress);
-  try {
-    const { access, username, avatar_url } = await register(address);
-    saveAuthSession(address, username, access, avatar_url);
+
+  // New address → it must pick a username and verify a phone before the account
+  // is created. Hand control to the RegistrationWizard and wait for it to finish
+  // (it registers + saves the session itself).
+  const { exists } = await accountExists(address);
+  if (!exists) {
+    await requestRegistration(address, authMethod);
     return address;
-  } catch (regErr) {
-    if (!(regErr instanceof Error && regErr.message === 'Address already registered.')) {
-      throw regErr;
-    }
   }
 
+  // Returning user → standard challenge / signature / login.
   const { nonce } = await getChallenge(address);
   const signature = await signNonce(nonce, address);
   const { access, username, avatar_url } = await login(address, signature, nonce);
@@ -54,9 +57,12 @@ export async function authenticateWalletAddress(
 export async function authenticateWithEIP1193Provider(
   provider: EIP1193Provider,
   rawAddress: string,
+  authMethod: AuthMethod,
 ): Promise<string> {
-  return authenticateWalletAddress(rawAddress, (nonce, address) =>
-    signNonceWithEIP1193(provider, nonce, address),
+  return authenticateWalletAddress(
+    rawAddress,
+    (nonce, address) => signNonceWithEIP1193(provider, nonce, address),
+    authMethod,
   );
 }
 
@@ -64,7 +70,7 @@ export async function authenticateMetaMaskAddress(rawAddress: string): Promise<s
   if (!window.ethereum) {
     throw new Error('MetaMask is not installed. Please install it to use this option.');
   }
-  return authenticateWithEIP1193Provider(window.ethereum, rawAddress);
+  return authenticateWithEIP1193Provider(window.ethereum, rawAddress, 'metamask');
 }
 
 export async function connectAndAuthenticateMetaMask(): Promise<string> {

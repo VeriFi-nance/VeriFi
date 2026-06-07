@@ -48,27 +48,35 @@ def validate_username_format(value):
         return "Username can only contain letters, numbers, and underscores."
     if value.lower().startswith("0x"):
         return "Username cannot start with '0x'."
-    if value.lower() in {"update", "follow", "register", "login", "challenge", "profitability"}:
+    if value.lower() in {"update", "follow", "register", "login", "challenge", "profitability", "exists", "otp"}:
         return "This username is reserved."
     return None
 
 
 class RegisterSerializer(serializers.Serializer):
     address = serializers.CharField(max_length=42)
-    username = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    # Registration is now gated behind a chosen username + a verified-phone token.
+    username = serializers.CharField(max_length=30)
+    phone_token = serializers.CharField()
 
     def validate_username(self, value):
-        if not value:
-            return value
-            
         error = validate_username_format(value)
         if error:
             raise serializers.ValidationError(error)
-            
+
         if WalletUser.objects.filter(username__iexact=value).exists():
             raise serializers.ValidationError("Username is already taken.")
-            
+
         return value
+
+
+class OtpStartSerializer(serializers.Serializer):
+    phone = serializers.CharField(max_length=20)
+
+
+class OtpCheckSerializer(serializers.Serializer):
+    phone = serializers.CharField(max_length=20)
+    code = serializers.CharField(max_length=10)
 
 
 class ChallengeResponseSerializer(serializers.Serializer):

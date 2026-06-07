@@ -2,6 +2,7 @@ import os
 import binascii
 
 from django.core.cache import cache
+from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -10,8 +11,15 @@ from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 from eth_account import Account
 from eth_account.messages import encode_defunct
 
+from core.exceptions import ApiError
 from .models import WalletUser, Follow, ProfileChangeLog
-from .serializers import RegisterSerializer, LoginSerializer, FollowSerializer, validate_username_format, validate_image_upload, avatar_delivery_url
+from .serializers import (
+    RegisterSerializer, LoginSerializer, FollowSerializer,
+    OtpStartSerializer, OtpCheckSerializer,
+    validate_username_format, validate_image_upload, avatar_delivery_url,
+)
+from .sms import normalize_phone, start_verification, check_verification
+from .tokens import issue_phone_token, read_phone_token
 from .energy import grant_energy, ENERGY_CAP
 
 
@@ -30,23 +38,29 @@ class RegisterView(APIView):
         serializer.is_valid(raise_exception=True)
 
         address = serializer.validated_data["address"].lower()
-        username = serializer.validated_data.get("username")
-        
-        if WalletUser.objects.filter(address=address).exists():
-            return Response(
-                {"detail": "Address already registered."},
-                status=status.HTTP_409_CONFLICT,
-            )
-            
-        if not username:
-            base_username = address[:6]
-            username = base_username
-            counter = 1
-            while WalletUser.objects.filter(username__iexact=username).exists():
-                username = f"{base_username}_{counter}"
-                counter += 1
+        username = serializer.validated_data["username"]
+        phone = read_phone_token(serializer.validated_data["phone_token"])
 
-        user = WalletUser.objects.create(address=address, username=username)
+        if WalletUser.objects.filter(address=address).exists():
+            raise ApiError("Address already registered.", code="address_taken", status_code=409)
+
+        if WalletUser.objects.filter(phone_e164=phone).exists():
+            raise ApiError(
+                "This phone number is already linked to an account.",
+                code="phone_taken", status_code=409,
+            )
+
+        try:
+            user = WalletUser.objects.create(
+                address=address, username=username, phone_e164=phone,
+            )
+        except IntegrityError:
+            # Lost a race on the address/username/phone unique constraints.
+            raise ApiError(
+                "Account could not be created. The address, username, or phone is already in use.",
+                code="account_conflict", status_code=409,
+            )
+
         return Response(
             {
                 "access": _make_jwt(user),
@@ -55,6 +69,68 @@ class RegisterView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+class AccountExistsView(APIView):
+    """Lets the client decide register-vs-login before creating anything."""
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        address = request.query_params.get("address", "").strip().lower()
+        if not address:
+            raise ApiError("address query param required.", code="validation_error", status_code=400)
+        exists = WalletUser.objects.filter(address=address).exists()
+        return Response({"exists": exists})
+
+
+class OtpStartView(APIView):
+    authentication_classes = []
+    permission_classes = []
+    throttle_scope = "otp_start"
+
+    def post(self, request):
+        serializer = OtpStartSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        phone = normalize_phone(serializer.validated_data["phone"])
+        if WalletUser.objects.filter(phone_e164=phone).exists():
+            raise ApiError(
+                "This phone number is already linked to an account.",
+                code="phone_taken", status_code=409,
+            )
+
+        start_verification(phone)
+        return Response({"sent": True})
+
+
+class OtpCheckView(APIView):
+    authentication_classes = []
+    permission_classes = []
+    throttle_scope = "otp_check"
+
+    def post(self, request):
+        serializer = OtpCheckSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        phone = normalize_phone(serializer.validated_data["phone"])
+        code = serializer.validated_data["code"]
+        if not check_verification(phone, code):
+            raise ApiError(
+                "That code is incorrect or has expired.",
+                code="otp_invalid", status_code=400,
+                fields={"code": ["That code is incorrect or has expired."]},
+            )
+
+        # Re-check uniqueness at verification time (someone may have registered the
+        # number between start and check); the final register call checks again too.
+        if WalletUser.objects.filter(phone_e164=phone).exists():
+            raise ApiError(
+                "This phone number is already linked to an account.",
+                code="phone_taken", status_code=409,
+            )
+
+        return Response({"phone_token": issue_phone_token(phone)})
 
 
 class ChallengeView(APIView):

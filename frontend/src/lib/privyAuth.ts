@@ -30,7 +30,7 @@ export async function registerPrivySignerFromWallet(
 /** Complete VeriFi backend auth using a Privy embedded wallet. */
 export async function syncPrivyWalletToVerifi(wallet: ConnectedWallet): Promise<string> {
   const provider = await wallet.getEthereumProvider();
-  const address = await authenticateWithEIP1193Provider(provider, wallet.address);
+  const address = await authenticateWithEIP1193Provider(provider, wallet.address, 'privy');
   setAuthMethod('privy');
   await registerPrivySignerFromWallet(wallet);
   return address;

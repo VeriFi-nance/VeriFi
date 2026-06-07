@@ -237,6 +237,27 @@ if not TWELVE_DATA_API_KEY:
             stacklevel=1,
         )
 
+# Twilio Verify (SMS OTP at registration). Set TWILIO_DISABLED=true to bypass Twilio
+# locally — start is a no-op and the verification code 000000 is accepted.
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "").strip()
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
+TWILIO_VERIFY_SERVICE_SID = os.environ.get("TWILIO_VERIFY_SERVICE_SID", "").strip()
+TWILIO_DISABLED = os.environ.get("TWILIO_DISABLED", "").lower() == "true"
+
+if not TWILIO_DISABLED and not (
+    TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_VERIFY_SERVICE_SID
+):
+    if DEBUG:
+        # No creds in dev → fall back to bypass so the wizard still works locally.
+        TWILIO_DISABLED = True
+    else:
+        import warnings
+
+        warnings.warn(
+            "Twilio Verify is not configured; SMS OTP at registration will fail.",
+            stacklevel=1,
+        )
+
 # Observer Pattern: how often the price updater runs (in minutes)
 # Used as a reference for the scheduler (cron / Render cron); not enforced in code.
 PRICE_UPDATE_INTERVAL_MINUTES = 10
@@ -247,6 +268,15 @@ REST_FRAMEWORK = {
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
     "EXCEPTION_HANDLER": "core.exceptions.custom_exception_handler",
+    # Defense-in-depth on top of Twilio Verify's own rate limits. Scopes are applied
+    # per-view (see accounts.views OTP endpoints).
+    "DEFAULT_THROTTLE_CLASSES": (
+        "rest_framework.throttling.ScopedRateThrottle",
+    ),
+    "DEFAULT_THROTTLE_RATES": {
+        "otp_start": "5/min",
+        "otp_check": "10/min",
+    },
 }
 
 # Simple JWT
