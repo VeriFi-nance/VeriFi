@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { getProfileStats } from '@/lib/api';
 import { useAuthState } from '@/lib/auth';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { FieldError } from '@/components/ui/field-error';
 import type { ClaimDraft } from './types';
 import { LISTING_FEE, MIN_STAKE, MAX_STAKE } from './types';
 import { AlertCircle } from 'lucide-react';
@@ -79,6 +79,7 @@ export function StepStake({ value, onChange, onComplete, onBack }: StepStakeProp
             className="h-10 text-base num"
             aria-invalid={!!warning}
           />
+          <FieldError>{warning}</FieldError>
         </div>
 
         <div className="rounded-md bg-muted/50 p-3 flex gap-2 items-start text-xs text-muted-foreground">
@@ -89,13 +90,6 @@ export function StepStake({ value, onChange, onComplete, onBack }: StepStakeProp
           </div>
         </div>
       </div>
-
-      {warning && (
-        <Alert variant="destructive">
-          <AlertCircle className="size-4" />
-          <AlertDescription>{warning}</AlertDescription>
-        </Alert>
-      )}
 
       <div className="flex gap-2 pt-2">
         <Button variant="outline" className="w-1/3" onClick={onBack}>
