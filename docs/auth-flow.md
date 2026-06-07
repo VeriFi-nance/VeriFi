@@ -1,6 +1,6 @@
 # VeriFi Authentication Flow
 
-This document describes the two login methods supported by VeriFi and the exact data exchanged between the client and server in each flow.
+This document describes the login methods supported by VeriFi and the exact data exchanged between the client and server in each flow.
 
 ---
 
@@ -11,6 +11,7 @@ This document describes the two login methods supported by VeriFi and the exact 
 | **Browser (Client)** | React/TypeScript SPA running at `localhost:5173` |
 | **Django Backend** | DRF API running at `localhost:8000` |
 | **MetaMask Extension** | Browser wallet extension (EIP-1193 provider) |
+| **Privy** | OAuth + embedded Ethereum wallet (Google sign-in) |
 | **localStorage** | Client-side encrypted key storage |
 
 ---
@@ -138,6 +139,53 @@ Browser                          MetaMask Extension          Django Backend
 
 ---
 
+## Flow 3 — Privy Login (Google + Embedded Wallet)
+
+The user signs in with Google via Privy. Privy creates an embedded Ethereum wallet (MPC-backed, no seed phrase shown). VeriFi never touches the private key — signing happens through Privy's embedded wallet provider.
+
+### Registration
+
+```
+Browser                          Privy SDK                   Django Backend
+  │                                  │                              │
+  │── login() (Google OAuth) ───────▶│                              │
+  │                                  │  Create embedded wallet      │
+  │◀─ wallet.address ────────────────│                              │
+  │                                  │                              │
+  │──────────────────────── POST /api/auth/register/ ───────────────▶│
+  │                          { address: "0xABCD...1234" }            │
+  │                                                                 │  Create WalletUser
+  │◀─────────────────────── 201 { access: "<JWT>" } ────────────────│
+  │                                                                 │
+  │  Store JWT + address + authMethod "privy" in localStorage       │
+```
+
+### Login (Challenge–Response via Embedded Wallet)
+
+```
+Browser                          Privy SDK                   Django Backend
+  │                                  │                              │
+  │── login() (Google OAuth) ───────▶│                              │
+  │◀─ wallet.address ────────────────│                              │
+  │                                  │                              │
+  │──── GET /api/auth/challenge/?address=0xABCD... ────────────────▶│
+  │◀──── 200 { nonce: "0x3f7a...b2e1" } ────────────────────────────│
+  │                                  │                              │
+  │── wallet.getEthereumProvider() ─▶│                              │
+  │   personal_sign(nonce, address)  │  User approves in Privy UI   │
+  │◀─ "<130-char hex signature>" ────│                              │
+  │                                  │                              │
+  │──────────────────── POST /api/auth/login/ ─────────────────────▶│
+  │                  { address, nonce, signature }                    │
+  │◀──────────────── 200 { access: "<JWT>" } ───────────────────────│
+  │                                                                 │
+  │  Store JWT + address + authMethod "privy" in localStorage       │
+```
+
+> **Security note:** Privy splits the wallet key via Shamir secret sharing — no single party holds the full private key. VeriFi only receives the address and signature, same as MetaMask. Disconnect clears both the VeriFi JWT and the Privy session.
+
+---
+
 ## JWT Structure
 
 All authenticated API calls attach the token as a Bearer header:
@@ -160,11 +208,11 @@ The backend extracts `address` from the token to look up the `WalletUser` — no
 
 ## Security Properties Summary
 
-| Property | Native Wallet | MetaMask |
-|---|---|---|
-| Private key location | Browser localStorage (AES-256-GCM encrypted) | MetaMask encrypted vault |
-| Private key transmitted? | Never | Never |
-| Replay attack protection | Single-use nonce (5-min TTL) | Single-use nonce (5-min TTL) |
-| Signature scheme | EIP-191 personal_sign (secp256k1) | EIP-191 personal_sign (secp256k1) |
-| Address verification | Server recovers address from signature | Server recovers address from signature |
-| Session mechanism | Stateless JWT (7-day expiry) | Stateless JWT (7-day expiry) |
+| Property | Native Wallet | MetaMask | Privy |
+|---|---|---|---|
+| Private key location | Browser localStorage (AES-256-GCM encrypted) | MetaMask encrypted vault | Privy embedded wallet (MPC split) |
+| Private key transmitted? | Never | Never | Never |
+| Replay attack protection | Single-use nonce (5-min TTL) | Single-use nonce (5-min TTL) | Single-use nonce (5-min TTL) |
+| Signature scheme | EIP-191 personal_sign (secp256k1) | EIP-191 personal_sign (secp256k1) | EIP-191 personal_sign (secp256k1) |
+| Address verification | Server recovers address from signature | Server recovers address from signature | Server recovers address from signature |
+| Session mechanism | Stateless JWT (7-day expiry) | Stateless JWT (7-day expiry) | Stateless JWT (7-day expiry) |

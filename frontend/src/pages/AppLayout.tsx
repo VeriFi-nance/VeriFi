@@ -3,8 +3,10 @@ import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Home, LogOut, Moon, Settings, Sun, User, ShieldCheck } from 'lucide-react';
-import { clearAuth, useAuthState, useOpenLogin } from '@/lib/auth';
+import { clearAuth, useAuthState, useOpenLogin, loadAuthMethod } from '@/lib/auth';
 import { clearPrivateKey } from '@/lib/keystore';
+import { triggerPrivyLogout } from '@/lib/privyLogout';
+import { clearPrivySigner } from '@/lib/privySigner';
 import { loadTheme, toggleTheme, type Theme } from '@/lib/theme';
 import { EnergyMeter } from '@/components/EnergyMeter';
 import { UserAvatar } from '@/components/UserAvatar';
@@ -114,9 +116,13 @@ export default function AppLayout() {
     setTheme(next);
   }
 
-  function handleDisconnect() {
+  async function handleDisconnect() {
+    if (loadAuthMethod() === 'privy') {
+      await triggerPrivyLogout();
+    }
     clearAuth();
     clearPrivateKey();
+    clearPrivySigner();
   }
 
   function goLogin() {
