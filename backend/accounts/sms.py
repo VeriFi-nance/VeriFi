@@ -11,13 +11,37 @@ Twilio credentials or spending verification credits.
 """
 from __future__ import annotations
 
+import logging
 import re
 
 from django.conf import settings
 
 from core.exceptions import ApiError
 
+logger = logging.getLogger(__name__)
+
 DEV_BYPASS_CODE = "000000"
+
+# Twilio error codes worth surfacing with a clearer, user-facing message.
+# https://www.twilio.com/docs/api/errors
+_TWILIO_MESSAGES = {
+    21211: "That phone number isn't valid.",
+    21408: "We can't send SMS to that country yet.",
+    21608: "This number isn't authorized on our SMS trial yet. "
+           "Add it to Twilio Verified Caller IDs, or try a different number.",
+    21610: "This number has opted out of messages.",
+    60200: "That phone number isn't valid.",
+    60203: "Too many attempts for this number. Wait a few minutes and try again.",
+}
+
+
+def _twilio_error(exc: Exception, *, default: str, code: str) -> ApiError:
+    """Map a Twilio exception to an ApiError, surfacing known codes cleanly."""
+    twilio_code = getattr(exc, "code", None)
+    logger.warning("Twilio error (code=%s): %s", twilio_code, exc)
+    message = _TWILIO_MESSAGES.get(twilio_code, default)
+    fields = {"phone": [message]} if twilio_code in _TWILIO_MESSAGES else None
+    return ApiError(message, code=code, status_code=502, fields=fields)
 
 # E.164: leading '+', country digit 1-9, then up to 14 more digits.
 _E164_RE = re.compile(r"^\+[1-9]\d{6,14}$")
@@ -61,10 +85,10 @@ def start_verification(phone: str) -> None:
             settings.TWILIO_VERIFY_SERVICE_SID
         ).verifications.create(to=phone, channel="sms")
     except Exception as exc:  # network/Twilio failure — surface a clean error
-        raise ApiError(
-            "Could not send the verification code. Try again shortly.",
+        raise _twilio_error(
+            exc,
+            default="Could not send the verification code. Try again shortly.",
             code="sms_send_failed",
-            status_code=502,
         ) from exc
 
 
@@ -79,9 +103,9 @@ def check_verification(phone: str, code: str) -> bool:
             settings.TWILIO_VERIFY_SERVICE_SID
         ).verification_checks.create(to=phone, code=code)
     except Exception as exc:
-        raise ApiError(
-            "Could not verify the code. Try again shortly.",
+        raise _twilio_error(
+            exc,
+            default="Could not verify the code. Try again shortly.",
             code="sms_check_failed",
-            status_code=502,
         ) from exc
     return getattr(result, "status", None) == "approved"
