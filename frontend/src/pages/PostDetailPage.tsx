@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ChevronLeft, Heart, MessageCircle, ImagePlus, X } from 'lucide-react';
 import { UserAvatar } from '@/components/UserAvatar';
+import { SmartTimestamp } from '@/components/SmartTimestamp';
 import { ClaimDetailView } from '@/components/feed/ClaimDetailView';
 import { PostActions } from '@/components/feed/PostActions';
 import { SkeletonPostCard } from '@/components/Skeleton';
@@ -142,9 +143,7 @@ function CommentThreadItem({
             >
               {comment.author_username ? `@${comment.author_username}` : truncateAddress(comment.author_address)}
             </Link>
-            <time dateTime={comment.created_at} className="text-xs text-muted-foreground num">
-              {new Date(comment.created_at).toLocaleString()}
-            </time>
+            <SmartTimestamp value={comment.created_at} className="text-xs text-muted-foreground" />
           </div>
           {comment.content && (
             <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">{comment.content}</p>
@@ -392,9 +391,7 @@ export default function PostDetailPage() {
             >
               {post.author_username ? `@${post.author_username}` : truncateAddress(post.author_address)}
             </Link>
-            <span className="ml-auto text-xs text-muted-foreground num">
-              {new Date(post.created_at).toLocaleString()}
-            </span>
+            <SmartTimestamp value={post.created_at} mode="full" className="ml-auto text-xs text-muted-foreground" />
           </div>
 
           <p className="text-sm whitespace-pre-wrap leading-relaxed">{post.content}</p>

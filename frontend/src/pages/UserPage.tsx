@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Settings as SettingsIcon, Copy, Check, History } from 'lucide-react';
 import { HardClaimCard } from '@/components/HardClaimCard';
 import { UserAvatar } from '@/components/UserAvatar';
+import { SmartTimestamp } from '@/components/SmartTimestamp';
 import { EmptyState } from '@/components/EmptyState';
 import { PageContent } from '@/components/PageContent';
 import { SkeletonRow } from '@/components/Skeleton';
@@ -56,15 +57,6 @@ function StatBlock({ label, value, onClick }: { label: string; value: string; on
       {content}
     </div>
   );
-}
-
-function formatChangeDate(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(value));
 }
 
 export default function UserPage() {
@@ -427,7 +419,7 @@ export default function UserPage() {
                       : entry.summary}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {formatChangeDate(entry.created_at)}
+                    <SmartTimestamp value={entry.created_at} />
                   </p>
                 </div>
               );
