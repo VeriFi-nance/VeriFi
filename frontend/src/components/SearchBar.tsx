@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useDebounce } from '@/hooks/useDebounce';
 import { searchAPI } from '@/lib/api';
+import { UserAvatar } from '@/components/UserAvatar';
 
 type SearchType = 'posts' | 'people' | 'channels';
 
@@ -179,7 +180,11 @@ export function SearchBar() {
                   )}
                   {type === 'people' && (
                     <>
-                      <User className="size-4 text-muted-foreground shrink-0" />
+                      {result.address ? (
+                        <UserAvatar address={result.address} src={result.avatar_url} size="sm" />
+                      ) : (
+                        <User className="size-4 text-muted-foreground shrink-0" />
+                      )}
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium truncate">@{result.username}</p>
                         <p className="text-xs text-muted-foreground font-mono truncate">{result.address}</p>
