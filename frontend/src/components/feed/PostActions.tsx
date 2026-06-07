@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Heart, MessageCircle, Share2, Check } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Check, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { likePost, unlikePost } from '@/lib/api';
 import { useAuthState, useOpenLogin } from '@/lib/auth';
 import { cn } from '@/lib/utils';
@@ -53,7 +54,7 @@ export function PostActions({ post, onPostChange, className }: PostActionsProps)
     }
   };
 
-  const handleShare = () => {
+  const getShareTextAndUrl = () => {
     const baseUrl = window.location.origin.includes('localhost') ? 'https://develop.veri.finance' : window.location.origin;
     const url = `${baseUrl}/post/${post.id}`;
     
@@ -80,15 +81,20 @@ export function PostActions({ post, onPostChange, className }: PostActionsProps)
       text += `"${truncated}"\n\n`;
     }
     
-    text += `Read more on VeriFi:\n${url}`;
+    return { text, url };
+  };
+
+  const handleCopyText = () => {
+    const { text, url } = getShareTextAndUrl();
+    const copyText = text + `Read more on VeriFi:\n${url}`;
     
     try {
-      void navigator.clipboard.writeText(text);
+      void navigator.clipboard.writeText(copyText);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
       const input = document.createElement('textarea');
-      input.value = text;
+      input.value = copyText;
       document.body.appendChild(input);
       input.select();
       document.execCommand('copy');
@@ -96,6 +102,17 @@ export function PostActions({ post, onPostChange, className }: PostActionsProps)
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
+  };
+
+  const handleShareTwitter = () => {
+    const { text, url } = getShareTextAndUrl();
+    const shareText = text + `Read more on VeriFi:`;
+    
+    window.open(
+      `https://x.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(url)}`,
+      '_blank',
+      'noopener,noreferrer'
+    );
   };
 
   return (
@@ -137,20 +154,33 @@ export function PostActions({ post, onPostChange, className }: PostActionsProps)
           </Link>
         </Button>
 
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-8 px-2.5"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            handleShare();
-          }}
-          aria-label={copied ? "Copied" : "Share post"}
-        >
-          {copied ? <Check className="size-4 text-success" /> : <Share2 className="size-4" />}
-        </Button>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2.5"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              aria-label="Share post"
+            >
+              <Share2 className="size-4" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-40 p-2 flex flex-col gap-1" align="end" onClick={(e) => e.stopPropagation()}>
+            <Button variant="ghost" size="sm" className="justify-start px-2" onClick={(e) => { e.preventDefault(); handleCopyText(); }}>
+              {copied ? <Check className="size-4 mr-2 text-success" /> : <Copy className="size-4 mr-2" />}
+              {copied ? "Copied!" : "Copy Link"}
+            </Button>
+            <Button variant="ghost" size="sm" className="justify-start px-2" onClick={(e) => { e.preventDefault(); handleShareTwitter(); }}>
+              <Share2 className="size-4 mr-2" />
+              Share on X
+            </Button>
+          </PopoverContent>
+        </Popover>
 
       </div>
 
