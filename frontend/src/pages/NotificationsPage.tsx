@@ -1,14 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Bell, CheckCheck, Loader2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Bell, Loader2, Trash2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/EmptyState';
 import { PageContent } from '@/components/PageContent';
 import { UserAvatar } from '@/components/UserAvatar';
 import {
+  deleteNotification,
   getNotifications,
   markAllNotificationsRead,
-  markNotificationRead,
 } from '@/lib/api';
 import { openLogin, useAuthState } from '@/lib/auth';
 import type { NotificationItem } from '@/lib/types';
@@ -40,8 +39,8 @@ export default function NotificationsPage() {
   const location = useLocation();
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const markedRef = useRef(false);
 
   useEffect(() => {
     if (auth.authenticated) return;
@@ -70,30 +69,34 @@ export default function NotificationsPage() {
     };
   }, [auth.authenticated]);
 
-  const unreadCount = useMemo(() => items.filter((item) => item.unread).length, [items]);
-
-  async function handleMarkRead(item: NotificationItem) {
-    if (item.unread) {
-      try {
-        const updated = await markNotificationRead(item.id);
-        setItems((prev) => prev.map((n) => (n.id === item.id ? updated : n)));
+  // Mark everything read once on landing, then clear the nav badge.
+  useEffect(() => {
+    if (!auth.authenticated || loading || error || markedRef.current) return;
+    if (!items.some((item) => item.unread)) return;
+    markedRef.current = true;
+    markAllNotificationsRead()
+      .then(() => {
+        const now = new Date().toISOString();
+        setItems((prev) => prev.map((item) => ({ ...item, unread: false, read_at: item.read_at ?? now })));
         window.dispatchEvent(new Event('notifications-updated'));
-      } catch {
-        /* Navigation should still work if marking read fails. */
-      }
-    }
+      })
+      .catch(() => {
+        markedRef.current = false;
+      });
+  }, [auth.authenticated, loading, error, items]);
+
+  function handleOpen(item: NotificationItem) {
     if (item.target_url) navigate(item.target_url);
   }
 
-  async function handleMarkAllRead() {
-    setBusy(true);
+  async function handleDelete(id: number) {
+    const prev = items;
+    setItems((curr) => curr.filter((n) => n.id !== id));
     try {
-      await markAllNotificationsRead();
-      const now = new Date().toISOString();
-      setItems((prev) => prev.map((item) => ({ ...item, unread: false, read_at: item.read_at ?? now })));
+      await deleteNotification(id);
       window.dispatchEvent(new Event('notifications-updated'));
-    } finally {
-      setBusy(false);
+    } catch {
+      setItems(prev);
     }
   }
 
@@ -101,23 +104,11 @@ export default function NotificationsPage() {
 
   return (
     <PageContent className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-normal">Notifications</h1>
-          <p className="text-sm text-muted-foreground">
-            {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2"
-          onClick={handleMarkAllRead}
-          disabled={busy || unreadCount === 0}
-        >
-          {busy ? <Loader2 className="size-4 animate-spin" /> : <CheckCheck className="size-4" />}
-          Mark all read
-        </Button>
+      <div>
+        <h1 className="text-xl font-semibold tracking-normal">Notifications</h1>
+        <p className="text-sm text-muted-foreground">
+          {items.length > 0 ? `${items.length} notification${items.length === 1 ? '' : 's'}` : 'All caught up'}
+        </p>
       </div>
 
       {loading ? (
@@ -135,38 +126,50 @@ export default function NotificationsPage() {
       ) : (
         <div className="overflow-hidden rounded-md border border-border bg-background">
           {items.map((item) => (
-            <button
+            <div
               key={item.id}
-              type="button"
-              onClick={() => handleMarkRead(item)}
               className={cn(
-                'w-full flex items-start gap-3 px-4 py-3 text-left border-b border-border last:border-b-0 transition-colors',
+                'group flex items-stretch border-b border-border last:border-b-0 transition-colors',
                 item.unread ? 'bg-foreground/[0.03]' : 'hover:bg-accent/60',
               )}
             >
-              <UserAvatar
-                address={item.actor_address || 'system'}
-                src={item.actor_avatar_url}
-                size="sm"
-                ring={item.unread}
-              />
-              <div className="min-w-0 flex-1 space-y-1">
-                <div className="flex items-start justify-between gap-3">
-                  <p className="text-sm font-medium leading-snug">
-                    {item.title}
-                    {item.unread && <span className="ml-2 inline-block size-2 rounded-full bg-primary align-middle" />}
+              <button
+                type="button"
+                onClick={() => handleOpen(item)}
+                className="flex min-w-0 flex-1 items-start gap-3 py-3 pl-4 pr-2 text-left"
+              >
+                <UserAvatar
+                  address={item.actor_address || 'system'}
+                  src={item.actor_avatar_url}
+                  size="sm"
+                  ring={item.unread}
+                />
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-sm font-medium leading-snug">
+                      {item.title}
+                      {item.unread && <span className="ml-2 inline-block size-2 rounded-full bg-primary align-middle" />}
+                    </p>
+                    <span className="shrink-0 text-xs text-muted-foreground font-mono">
+                      {formatTime(item.created_at)}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground leading-snug">
+                    <span className="text-foreground">{actorLabel(item)}</span>
+                    {item.message ? ` · ${item.message}` : ''}
                   </p>
-                  <span className="shrink-0 text-xs text-muted-foreground font-mono">
-                    {formatTime(item.created_at)}
-                  </span>
+                  {item.target_url && <span className="inline-flex text-xs font-medium text-primary">Open</span>}
                 </div>
-                <p className="text-sm text-muted-foreground leading-snug">
-                  <span className="text-foreground">{actorLabel(item)}</span>
-                  {item.message ? ` · ${item.message}` : ''}
-                </p>
-                {item.target_url && <span className="inline-flex text-xs font-medium text-primary">Open</span>}
-              </div>
-            </button>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDelete(item.id)}
+                aria-label="Delete notification"
+                className="flex shrink-0 items-center px-3 text-muted-foreground opacity-0 transition-colors hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+              >
+                <Trash2 className="size-4" />
+              </button>
+            </div>
           ))}
         </div>
       )}

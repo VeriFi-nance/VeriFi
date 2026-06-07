@@ -97,6 +97,20 @@ class NotificationReadView(APIView):
         return Response(NotificationSerializer(notification).data)
 
 
+class NotificationDeleteView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def delete(self, request, pk):
+        user = _get_wallet_user(request)
+        if user is None:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+        deleted, _ = Notification.objects.filter(pk=pk, recipient=user).delete()
+        if not deleted:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class MarkAllReadView(APIView):
     authentication_classes = []
     permission_classes = []

@@ -81,6 +81,31 @@ class NotificationAPITests(APITestCase):
         self.assertEqual(all_read.status_code, 200)
         self.assertEqual(Notification.objects.filter(recipient=self.user, read_at__isnull=True).count(), 0)
 
+    def test_delete_scopes_to_recipient(self):
+        mine = Notification.objects.create(
+            recipient=self.user,
+            type=Notification.Type.FOLLOWED,
+            title="Mine",
+        )
+        theirs = Notification.objects.create(
+            recipient=self.other,
+            type=Notification.Type.FOLLOWED,
+            title="Theirs",
+        )
+
+        self.assertEqual(self.client.delete(reverse("notification-delete", kwargs={"pk": mine.pk})).status_code, 401)
+
+        self.auth(self.user)
+        # Cannot delete another user's notification.
+        self.assertEqual(
+            self.client.delete(reverse("notification-delete", kwargs={"pk": theirs.pk})).status_code, 404
+        )
+        self.assertTrue(Notification.objects.filter(pk=theirs.pk).exists())
+
+        deleted = self.client.delete(reverse("notification-delete", kwargs={"pk": mine.pk}))
+        self.assertEqual(deleted.status_code, 204)
+        self.assertFalse(Notification.objects.filter(pk=mine.pk).exists())
+
 
 class NotificationEmitterTests(APITestCase):
     def setUp(self):

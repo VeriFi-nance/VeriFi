@@ -640,3 +640,10 @@ export async function markAllNotificationsRead(): Promise<{ updated: number }> {
     headers: authHeaders(),
   });
 }
+
+export async function deleteNotification(id: number): Promise<void> {
+  await request(`/api/notifications/${id}/`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+}
