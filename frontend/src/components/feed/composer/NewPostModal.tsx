@@ -7,7 +7,8 @@ import { PenSquare, Plus, Pencil, X, TrendingUp } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 import { useAuthState, useOpenLogin } from '@/lib/auth';
-import { createPost, getAssets } from '@/lib/api';
+import { createPost } from '@/lib/api';
+import { fetchAssets } from '@/hooks/useAssets';
 import type { AssetItem, ReviewClaim } from '@/lib/types';
 import { getClaimType } from '@/lib/claims';
 import { PostComposer, MAX_CHARS } from './PostComposer';
@@ -23,7 +24,7 @@ import {
 import { buildClaimPayload, buildPositionPayload } from '@/lib/payloads';
 import { signPayload, resolveUsername } from '@/lib/signing';
 import { PositionWizard, defaultPositionDraft, type PositionDraft } from './PositionWizard';
-import { safeImageSrc } from '@/lib/utils';
+import { cn, safeImageSrc } from '@/lib/utils';
 
 interface NewPostModalProps {
   open: boolean;
@@ -57,7 +58,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
 
   useEffect(() => {
     if (open) {
-      getAssets().then(setAssets).catch(console.error);
+      fetchAssets().then(setAssets).catch(console.error);
     }
   }, [open]);
 
@@ -640,9 +641,11 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
 export function NewPostButton({
   onPosted,
   channelId,
+  compactOnMobile = false,
 }: {
   onPosted: () => void;
   channelId?: number;
+  compactOnMobile?: boolean;
 }) {
   const openLogin = useOpenLogin();
   const auth = useAuthState();
@@ -658,9 +661,14 @@ export function NewPostButton({
 
   return (
     <>
-      <Button size="sm" className="gap-2 font-medium" onClick={handleClick}>
+      <Button
+        size="sm"
+        className="shrink-0 gap-2 font-medium"
+        onClick={handleClick}
+        aria-label="New post"
+      >
         <PenSquare className="size-4" />
-        New post
+        <span className={cn(compactOnMobile && 'hidden sm:inline')}>New post</span>
       </Button>
       <NewPostModal
         open={open}

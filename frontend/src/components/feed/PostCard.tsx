@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,6 +6,7 @@ import { Star } from 'lucide-react';
 import { HardClaimCard } from '@/components/HardClaimCard';
 import { PositionAttachmentCard } from '@/components/PositionAttachmentCard';
 import { UserAvatar } from '@/components/UserAvatar';
+import { SmartTimestamp } from '@/components/SmartTimestamp';
 import { PostActions } from '@/components/feed/PostActions';
 import { truncateAddress } from '@/lib/wallet';
 import { cn, safeImageSrc } from '@/lib/utils';
@@ -21,13 +22,14 @@ interface PostCardProps {
   onPostChange?: (post: PostItem) => void;
 }
 
-export function PostCard({ post, hardClaims = [], assets = [], onDelete, onPostChange }: PostCardProps) {
+function PostCardImpl({ post, hardClaims = [], assets = [], onDelete, onPostChange }: PostCardProps) {
   // Claim detail modal state
   const [claimModal, setClaimModal] = useState<HardClaimItem | null>(null);
 
   const claimHints = post.hard_claims.length > 0 ? post.hard_claims : hardClaims;
   const positions = post.positions ?? [];
   const hasAttachments = claimHints.length > 0 || positions.length > 0;
+  const hasBadge = Boolean(post.channel || claimHints.length > 0 || positions.length > 0);
 
   return (
     <Card className={cn(
@@ -57,25 +59,24 @@ export function PostCard({ post, hardClaims = [], assets = [], onDelete, onPostC
               </Link>
             </Button>
 
-            <time
-              dateTime={post.created_at}
-              className="text-xs text-muted-foreground shrink-0 hidden sm:block num"
-            >
-              {new Date(post.created_at).toLocaleDateString()}
-            </time>
+            <span aria-hidden="true" className="hidden size-0.5 shrink-0 rounded-full bg-muted-foreground/50 sm:block" />
+            <SmartTimestamp value={post.created_at} className="text-xs text-muted-foreground shrink-0 hidden sm:block" />
+            {hasBadge && (
+              <span aria-hidden="true" className="hidden size-0.5 shrink-0 rounded-full bg-muted-foreground/50 sm:block" />
+            )}
             {post.channel && (
-              <span className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded ml-1 shrink-0">
+              <span className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded shrink-0">
                 <Star className="size-3 fill-amber-500" />
                 PREMIUM
               </span>
             )}
             {claimHints.length > 0 && (
-              <span className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-claim-badge bg-claim-badge/10 px-1.5 py-0.5 rounded ml-1 shrink-0">
+              <span className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-claim-badge bg-claim-badge/10 px-1.5 py-0.5 rounded shrink-0">
                 CLAIM
               </span>
             )}
             {positions.length > 0 && (
-              <span className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-position-badge bg-position-badge/10 px-1.5 py-0.5 rounded ml-1 shrink-0">
+              <span className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-position-badge bg-position-badge/10 px-1.5 py-0.5 rounded shrink-0">
                 POSITION
               </span>
             )}
@@ -181,3 +182,5 @@ export function PostCard({ post, hardClaims = [], assets = [], onDelete, onPostC
     </Card>
   );
 }
+
+export const PostCard = memo(PostCardImpl);

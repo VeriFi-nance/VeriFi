@@ -6,11 +6,12 @@ import { Card } from '@/components/ui/card';
 import { Settings as SettingsIcon, Copy, Check, History } from 'lucide-react';
 import { FeedList } from '@/components/feed/FeedList';
 import { UserAvatar } from '@/components/UserAvatar';
+import { SmartTimestamp } from '@/components/SmartTimestamp';
 import { EmptyState } from '@/components/EmptyState';
 import { PageContent } from '@/components/PageContent';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getProfileStats, toggleFollow, createChannel } from '@/lib/api';
-import type { AssetItem, ProfileStats } from '@/lib/types';
+import type { ProfileStats } from '@/lib/types';
 import { loadAddress } from '@/lib/auth';
 import { truncateAddress } from '@/lib/wallet';
 import { Plus, Sparkles } from 'lucide-react';
@@ -54,15 +55,6 @@ function StatBlock({ label, value, onClick }: { label: string; value: string; on
       {content}
     </div>
   );
-}
-
-function formatChangeDate(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(value));
 }
 
 export default function UserPage() {
@@ -391,7 +383,7 @@ export default function UserPage() {
                       : entry.summary}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {formatChangeDate(entry.created_at)}
+                    <SmartTimestamp value={entry.created_at} />
                   </p>
                 </div>
               );

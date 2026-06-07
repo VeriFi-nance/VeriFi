@@ -312,14 +312,21 @@ class PostSerializer(serializers.ModelSerializer):
     def get_positions(self, obj):
         return PositionSummarySerializer(obj.positions.all(), many=True).data
 
+    # NOTE: read the DB annotation first and only fall back to a per-row COUNT
+    # when it's truly absent. Passing obj.<rel>.count() as the getattr default
+    # evaluates it on EVERY call (default args are computed before getattr runs),
+    # which silently defeats the annotation and triggers 3 N+1 counts per post.
     def get_like_count(self, obj):
-        return getattr(obj, "like_count", obj.likes.count())
+        val = getattr(obj, "like_count", None)
+        return val if val is not None else obj.likes.count()
 
     def get_comment_count(self, obj):
-        return getattr(obj, "comment_count", obj.comments.count())
+        val = getattr(obj, "comment_count", None)
+        return val if val is not None else obj.comments.count()
 
     def get_saved_proof_count(self, obj):
-        return getattr(obj, "saved_proof_count", obj.saved_proofs.count())
+        val = getattr(obj, "saved_proof_count", None)
+        return val if val is not None else obj.saved_proofs.count()
 
     def get_liked_by_me(self, obj):
         return bool(getattr(obj, "liked_by_me", False))

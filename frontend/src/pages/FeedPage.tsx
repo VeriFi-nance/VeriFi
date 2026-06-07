@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FeedList } from '@/components/feed/FeedList';
@@ -6,8 +6,7 @@ import { NewPostButton } from '@/components/feed/NewPostModal';
 import { PageContent } from '@/components/PageContent';
 import { useAuthState, useOpenLogin } from '@/lib/auth';
 import { FeedFilterPopover, type FeedFilter } from '@/components/feed/FeedFilterPopover';
-import { getAssets } from '@/lib/api';
-import type { AssetItem } from '@/lib/types';
+import { useAssets } from '@/hooks/useAssets';
 
 const DEFAULT_FILTER: FeedFilter = {
   assetIds: [],
@@ -19,16 +18,10 @@ export default function FeedPage() {
   const { authenticated: authed } = useAuthState();
   const openLogin = useOpenLogin();
   const [feedType, setFeedType] = useState('global');
-  const [assets, setAssets] = useState<AssetItem[]>([]);
+  const assets = useAssets();
   const [activeFilter, setActiveFilter] = useState<FeedFilter>(DEFAULT_FILTER);
   const [searchParams] = useSearchParams();
   const q = searchParams.get('q') || '';
-
-  useEffect(() => {
-    getAssets()
-      .then(setAssets)
-      .catch(() => {});
-  }, []);
 
   function handleFeedChange(value: string) {
     if (value === 'following' && !authed) {
@@ -41,17 +34,18 @@ export default function FeedPage() {
   return (
     <PageContent className="space-y-5">
       <Tabs value={feedType} onValueChange={handleFeedChange}>
-        <div className="flex items-center gap-3">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 sm:gap-3">
           <FeedFilterPopover
             assets={assets}
             filter={activeFilter}
             onApply={setActiveFilter}
           />
-          <TabsList className="grid flex-1 grid-cols-2">
+          <TabsList className="grid w-full min-w-0 grid-cols-2">
             <TabsTrigger value="global">Global</TabsTrigger>
             <TabsTrigger value="following">Following</TabsTrigger>
           </TabsList>
           <NewPostButton
+            compactOnMobile
             onPosted={() => window.dispatchEvent(new Event('post-created'))}
           />
         </div>

@@ -33,6 +33,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
 
+# Sentinel distinguishing "not yet computed" from a cached None result.
+_UNSET = object()
+
 
 def _normalized_claim_fields(direction: str, value_type: str) -> tuple[str, str]:
     return _normalize_direction_and_value_type(direction, value_type)
@@ -251,13 +254,26 @@ def _get_viewable_comment(request, pk):
 
 
 def _get_wallet_user(request) -> WalletUser | None:
+    # Memoize per request: the feed flow calls this several times (filtering,
+    # following check, social annotations), each otherwise re-decoding the JWT
+    # and re-querying WalletUser. Cache the result (including None) on the request.
+    cached = getattr(request, "_cached_wallet_user", _UNSET)
+    if cached is not _UNSET:
+        return cached
+
     auth = JWTAuthentication()
     try:
         raw = auth.get_raw_token(auth.get_header(request))
         token = auth.get_validated_token(raw)
-        return WalletUser.objects.get(address=token.get("address", "").lower())
+        user = WalletUser.objects.get(address=token.get("address", "").lower())
     except Exception:
-        return None
+        user = None
+
+    try:
+        request._cached_wallet_user = user
+    except Exception:
+        pass
+    return user
 
 
 def _require_admin_user(request) -> WalletUser | Response:

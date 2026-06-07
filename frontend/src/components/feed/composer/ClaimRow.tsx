@@ -3,6 +3,7 @@ import { AlertTriangle, CalendarDays } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ClaimType, ReviewClaim } from '@/lib/types';
 import { missingFieldMessages } from '@/lib/claims';
+import { formatDateTimestamp } from '@/lib/timestamps';
 
 interface ClaimRowProps {
   assetSymbol: string;
@@ -69,7 +70,7 @@ export function ClaimRow({
         <span className="flex items-center gap-1 text-xs text-muted-foreground flex-1 num">
           <CalendarDays className="size-3" />
           {until
-            ? new Date(until).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+            ? formatDateTimestamp(until, { month: 'short', day: 'numeric' })
             : 'No date'}
         </span>
         {incomplete && <AlertTriangle className="size-3.5 text-amber-500 shrink-0" />}

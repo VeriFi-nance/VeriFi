@@ -1,32 +1,65 @@
-# $0 backend: free web only. Postgres = Neon/Supabase (DATABASE_URL).
-# Crons = GitHub Actions (.github/workflows/).
+# Two web services from ONE blueprint, both in frankfurt (co-located with the
+# Neon Frankfurt Postgres, near EU/TR users). Each service tracks its own branch:
+#   verifi-backend  <- main     (production,  DATABASE_URL = neon-prod-fr)
+#   verifi-develop  <- develop  (staging,     DATABASE_URL = neon-test-fr)
+#
+# Secrets (sync:false) and CORS are set per-service in the Render dashboard so the
+# two environments can differ. ALLOWED_HOSTS is auto-derived from
+# RENDER_EXTERNAL_HOSTNAME (see core/settings.py), so the hostname isn't hardcoded.
+# Postgres = Neon Frankfurt. Crons = GitHub Actions (.github/workflows/).
 
 envVarGroups:
   - name: verifi-common
     envVars:
       - key: DJANGO_DEBUG
         value: "false"
-      - key: DJANGO_ALLOWED_HOSTS
-        value: verifi-backend.onrender.com
-      - key: CORS_ALLOWED_ORIGINS
-        value: https://your-app.vercel.app
       - key: PYTHON_VERSION
         value: "3.12"
-      - key: DJANGO_SECRET_KEY
-        generateValue: true
 
 services:
+  # ── Production (main) ──────────────────────────────────────────────────────
   - type: web
     name: verifi-backend
     runtime: python
-    plan: free
+    plan: starter            # no spin-down
+    region: frankfurt
+    branch: main
     rootDir: backend
     buildCommand: "./build.sh"
-    startCommand: "uv run gunicorn core.wsgi:application --bind 0.0.0.0:$PORT"
+    startCommand: "uv run gunicorn core.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 60 --keep-alive 5"
     envVars:
       - fromGroup: verifi-common
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
       - key: DATABASE_URL
+        sync: false          # set to neon-prod-fr (Frankfurt)
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false          # production Vercel domain(s)
+      - key: TWELVE_DATA_API_KEY
         sync: false
+      - key: ADMIN_ADDRESSES
+        sync: false
+      - key: CLOUDINARY_URL
+        sync: false
+
+  # ── Staging (develop) ──────────────────────────────────────────────────────
+  - type: web
+    name: verifi-develop
+    runtime: python
+    plan: free               # spin-down OK for staging; bump to starter if needed
+    region: frankfurt
+    branch: develop
+    rootDir: backend
+    buildCommand: "./build.sh"
+    startCommand: "uv run gunicorn core.wsgi:application --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 60 --keep-alive 5"
+    envVars:
+      - fromGroup: verifi-common
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false          # set to neon-test-fr (Frankfurt)
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false          # develop/preview Vercel domain(s)
       - key: TWELVE_DATA_API_KEY
         sync: false
       - key: ADMIN_ADDRESSES
