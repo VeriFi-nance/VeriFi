@@ -162,7 +162,6 @@ export function PostActions({ post, onPostChange, className }: PostActionsProps)
               size="sm"
               className="h-8 px-2.5"
               onClick={(e) => {
-                e.preventDefault();
                 e.stopPropagation();
               }}
               aria-label="Share post"
