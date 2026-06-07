@@ -11,6 +11,7 @@ import { PostActions } from '@/components/feed/PostActions';
 import { SkeletonPostCard } from '@/components/Skeleton';
 import { PageContent } from '@/components/PageContent';
 import { HardClaimCard } from '@/components/HardClaimCard';
+import { PositionAttachmentCard } from '@/components/PositionAttachmentCard';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 import { createPostComment, getPost, getPostComments, likePostComment, unlikePostComment } from '@/lib/api';
 import { fetchAssets } from '@/hooks/useAssets';
@@ -432,6 +433,17 @@ export default function PostDetailPage() {
                 >
                   <HardClaimCard claim={hc} assets={assets} />
                 </div>
+              ))}
+            </div>
+          )}
+
+          {post.positions && post.positions.length > 0 && (
+            <div className="space-y-3 pt-2">
+              <h2 className="text-[10px] font-semibold uppercase tracking-widest text-position-badge">
+                Positions
+              </h2>
+              {post.positions.map((pos) => (
+                <PositionAttachmentCard key={pos.id} position={pos} assets={assets} />
               ))}
             </div>
           )}

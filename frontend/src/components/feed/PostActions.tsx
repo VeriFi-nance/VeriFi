@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Heart, MessageCircle } from 'lucide-react';
+import { Heart, MessageCircle, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { likePost, unlikePost } from '@/lib/api';
 import { useAuthState, useOpenLogin } from '@/lib/auth';
@@ -52,6 +52,42 @@ export function PostActions({ post, onPostChange, className }: PostActionsProps)
     }
   };
 
+  const handleShare = () => {
+    const baseUrl = window.location.origin.includes('localhost') ? 'https://develop.veri.finance' : window.location.origin;
+    const url = `${baseUrl}/post/${post.id}`;
+    
+    let claimText = '';
+    if (post.hard_claims && post.hard_claims.length > 0) {
+      const claim = post.hard_claims[0];
+      const asset = claim.asset_obj?.symbol || 'Asset';
+      const direction = claim.direction.toLowerCase();
+      const verb = direction === 'bullish' ? 'rises' : 'falls';
+      const pct = claim.percentage || '';
+      const until = new Date(claim.until).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      claimText = `🎯 Claim: ${asset} ${verb} ${pct}% by ${until}\n\n`;
+    } else if (post.positions && post.positions.length > 0) {
+      const pos = post.positions[0];
+      const asset = pos.asset_obj?.symbol || 'Asset';
+      const direction = pos.direction.toUpperCase();
+      claimText = `📈 Position: ${direction} on ${asset}\n\n`;
+    }
+
+    let text = claimText;
+    if (post.content) {
+      // Truncate post content if too long
+      const truncated = post.content.length > 150 ? post.content.slice(0, 147) + '...' : post.content;
+      text += `"${truncated}"\n\n`;
+    }
+    
+    text += `Read more on VeriFi:`;
+    
+    window.open(
+      `https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
+      '_blank',
+      'noopener,noreferrer'
+    );
+  };
+
   return (
     <div className={cn('space-y-1', className)}>
       <div className="flex items-center gap-1 text-muted-foreground">
@@ -89,6 +125,21 @@ export function PostActions({ post, onPostChange, className }: PostActionsProps)
             <MessageCircle className="size-4" />
             <span className="num">{post.comment_count}</span>
           </Link>
+        </Button>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 px-2.5"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleShare();
+          }}
+          aria-label="Share post"
+        >
+          <Share2 className="size-4" />
         </Button>
 
       </div>
