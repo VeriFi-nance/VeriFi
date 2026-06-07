@@ -138,6 +138,14 @@ def _filter_posts_queryset(qs, request):
     if query:
         qs = qs.filter(content__icontains=query)
 
+    address = request.query_params.get("address", "").strip().lower()
+    if address:
+        qs = qs.filter(author__address=address)
+
+    username_q = request.query_params.get("username", "").strip()
+    if username_q:
+        qs = qs.filter(author__username__iexact=username_q)
+
     # ── Asset + type filtering ────────────────────────────────────────────────
     raw_asset_ids = request.query_params.get("asset_ids", "").strip()
     asset_ids = []

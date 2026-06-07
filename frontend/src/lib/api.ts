@@ -278,6 +278,7 @@ export async function getFeed(params?: {
   asset_ids?: number[];
   has_claims?: boolean;
   has_positions?: boolean;
+  address?: string;
   q?: string;
 }): Promise<PaginatedResponse<PostItem>> {
   const query = new URLSearchParams();
@@ -289,6 +290,7 @@ export async function getFeed(params?: {
     query.append('asset_ids', params.asset_ids.join(','));
   if (params?.has_claims !== undefined) query.append('has_claims', String(params.has_claims));
   if (params?.has_positions !== undefined) query.append('has_positions', String(params.has_positions));
+  if (params?.address) query.append('address', params.address);
   if (params?.q) query.append('q', params.q);
   const qs = query.toString() ? `?${query.toString()}` : '';
   return request(`/api/posts/${qs}`, { headers: authHeaders() });

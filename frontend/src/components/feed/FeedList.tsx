@@ -24,6 +24,7 @@ const DEFAULT_FILTER: FeedFilter = {
 interface FeedListProps {
   feed?: string;
   channel?: number;
+  userAddress?: string;
   myRole?: 'member' | 'moderator' | 'owner' | null;
   creatorAddress?: string;
   filter?: FeedFilter;
@@ -33,7 +34,7 @@ interface FeedListProps {
 
 type FeedData = InfiniteData<PaginatedResponse<PostItem>>;
 
-export function FeedList({ feed, channel, myRole, creatorAddress, filter: propFilter, hideFilterToolbar, q }: FeedListProps) {
+export function FeedList({ feed, channel, userAddress, myRole, creatorAddress, filter: propFilter, hideFilterToolbar, q }: FeedListProps) {
   const auth = useAuthState();
   const myAddress = auth.address;
   const assets = useAssets();
@@ -59,6 +60,7 @@ export function FeedList({ feed, channel, myRole, creatorAddress, filter: propFi
     hasClaims: effectiveFilter.hasClaims,
     hasPositions: effectiveFilter.hasPositions,
     q,
+    address: userAddress,
     viewerAddress: myAddress,
   };
   const queryKey = feedQueryKey(params);
