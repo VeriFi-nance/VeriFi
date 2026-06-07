@@ -16,6 +16,7 @@ import {
 import { encryptPrivateKey, saveEncryptedKey } from '@/lib/keystore';
 import { register, getChallenge, login } from '@/lib/api';
 import { getFieldError, getMessage } from '@/lib/errors';
+import { FieldError } from '@/components/ui/field-error';
 import { saveAuthSession, setAuthMethod } from '@/lib/auth';
 import { connectAndAuthenticateMetaMask } from '@/lib/walletAuth';
 import { isPrivyConfigured } from '@/lib/privyAuth';
@@ -41,6 +42,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   const [inputMnemonic, setInputMnemonic] = useState('');
   const [inputPrivateKey, setInputPrivateKey] = useState('');
   const [signinPassword, setSigninPassword] = useState('');
+  const [signinPwError, setSigninPwError] = useState('');
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState('');
   const [metamaskLoading, setMetamaskLoading] = useState(false);
@@ -59,6 +61,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     setInputMnemonic('');
     setInputPrivateKey('');
     setSigninPassword('');
+    setSigninPwError('');
   }
 
   function handleGenerate() {
@@ -105,8 +108,9 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 
   async function handleSignIn() {
     setError('');
+    setSigninPwError('');
     if (signinPassword.length < 8) {
-      setError('Password must be at least 8 characters.');
+      setSigninPwError('Password must be at least 8 characters.');
       return;
     }
     setSigningIn(true);
@@ -259,11 +263,8 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
                           if (usernameError) setUsernameError('');
                         }}
                         aria-invalid={!!usernameError}
-                        className={usernameError ? 'border-destructive' : ''}
                       />
-                      {usernameError && (
-                        <p className="text-xs text-destructive">{usernameError}</p>
-                      )}
+                      <FieldError>{usernameError}</FieldError>
                     </div>
                     <div className="space-y-1">
                       <Label htmlFor="create-pw">Password</Label>
@@ -283,11 +284,9 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
                         placeholder="Repeat password"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        className={passwordMismatch ? 'border-destructive' : ''}
+                        aria-invalid={passwordMismatch}
                       />
-                      {passwordMismatch && (
-                        <p className="text-xs text-destructive">Passwords do not match</p>
-                      )}
+                      <FieldError>{passwordMismatch ? 'Passwords do not match' : ''}</FieldError>
                     </div>
                   </div>
                 )}
@@ -363,8 +362,10 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
                 type="password"
                 placeholder="Used to encrypt your key on this device"
                 value={signinPassword}
-                onChange={(e) => setSigninPassword(e.target.value)}
+                onChange={(e) => { setSigninPassword(e.target.value); if (signinPwError) setSigninPwError(''); }}
+                aria-invalid={!!signinPwError}
               />
+              <FieldError>{signinPwError}</FieldError>
               <p className="text-xs text-muted-foreground">
                 You will need this password to decrypt your private key later.
               </p>

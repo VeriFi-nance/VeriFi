@@ -77,6 +77,7 @@ export function StepStake({ value, onChange, onComplete, onBack }: StepStakeProp
             value={value.stakeRep}
             onChange={(e) => onChange({ stakeRep: e.target.value })}
             className="h-10 text-base num"
+            aria-invalid={!!warning}
           />
         </div>
 
