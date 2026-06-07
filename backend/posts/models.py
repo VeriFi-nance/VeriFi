@@ -12,6 +12,7 @@ class Channel(models.Model):
     description = models.TextField(blank=True)
     creator = models.ForeignKey(WalletUser, on_delete=models.SET_NULL, null=True, related_name="created_channels")
     post_permission = models.CharField(max_length=15, choices=PostPermission.choices, default=PostPermission.ALL)
+    is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

@@ -231,6 +231,7 @@ class PositionInputSerializer(serializers.Serializer):
 class PostCommentSerializer(serializers.ModelSerializer):
     author_address = serializers.CharField(source="author.address", read_only=True)
     author_username = serializers.CharField(source="author.username", read_only=True)
+    author_avatar_url = serializers.SerializerMethodField()
     image_url = serializers.SerializerMethodField()
     like_count = serializers.SerializerMethodField()
     liked_by_me = serializers.SerializerMethodField()
@@ -239,10 +240,14 @@ class PostCommentSerializer(serializers.ModelSerializer):
     class Meta:
         model = PostComment
         fields = [
-            "id", "post", "parent", "author_address", "author_username",
+            "id", "post", "parent", "author_address", "author_username", "author_avatar_url",
             "content", "image_url", "created_at", "like_count", "liked_by_me", "replies"
         ]
         read_only_fields = ["id", "post", "author_address", "author_username", "created_at"]
+
+    def get_author_avatar_url(self, obj):
+        avatar = getattr(obj.author, "avatar", None) if obj.author else None
+        return avatar_delivery_url(avatar)
 
     def get_image_url(self, obj):
         return post_image_delivery_url(obj.image)
@@ -343,6 +348,8 @@ class ChannelSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "description", "creator_address", "creator_username", "post_permission", "created_at", "member_count"]
 
     def get_member_count(self, obj):
+        if hasattr(obj, "member_count_annotated"):
+            return obj.member_count_annotated
         return obj.memberships.filter(status="approved").count()
 
 

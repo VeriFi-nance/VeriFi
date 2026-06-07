@@ -12,7 +12,7 @@ import { SkeletonPostCard } from '@/components/Skeleton';
 import { PageContent } from '@/components/PageContent';
 import { createPostComment, getPost, getAssets, getPostComments, likePostComment, unlikePostComment } from '@/lib/api';
 import { useAuthState, useOpenLogin } from '@/lib/auth';
-import { safeImageSrc } from '@/lib/utils';
+import { safeImageSrc, imageFileFromClipboard } from '@/lib/utils';
 import { truncateAddress } from '@/lib/wallet';
 import type { PostItem, PostCommentItem, AssetItem } from '@/lib/types';
 
@@ -130,7 +130,7 @@ function CommentThreadItem({
   return (
     <article className={depth > 0 ? 'border-l border-border pl-3 sm:pl-4' : ''}>
       <div className="flex gap-3">
-        <UserAvatar address={comment.author_address} size="sm" />
+        <UserAvatar address={comment.author_address} src={comment.author_avatar_url} size="sm" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <Link
@@ -183,6 +183,10 @@ function CommentThreadItem({
               <Textarea
                 value={replyContent}
                 onChange={(e) => setReplyContent(e.target.value)}
+                onPaste={(e) => {
+                  const file = imageFileFromClipboard(e.clipboardData);
+                  if (file) { e.preventDefault(); pickReplyImage(file); }
+                }}
                 maxLength={500}
                 placeholder="Write a reply"
                 className="min-h-16 resize-none text-sm"
@@ -415,6 +419,10 @@ export default function PostDetailPage() {
               <Textarea
                 value={commentContent}
                 onChange={(e) => setCommentContent(e.target.value)}
+                onPaste={(e) => {
+                  const file = imageFileFromClipboard(e.clipboardData);
+                  if (file) { e.preventDefault(); pickCommentImage(file); }
+                }}
                 maxLength={500}
                 placeholder="Add a comment"
                 className="min-h-20 resize-none"

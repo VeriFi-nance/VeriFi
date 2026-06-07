@@ -308,6 +308,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
             onAddExtracted={(c) => setAttached((prev) => [...prev, c])}
             onEditExtracted={loadExtractedIntoDraft}
             onAttachImage={() => fileInputRef.current?.click()}
+            onPasteImage={(file) => pickImage(file)}
           />
 
           <input

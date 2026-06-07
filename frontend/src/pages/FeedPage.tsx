@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FeedList } from '@/components/feed/FeedList';
 import { NewPostButton } from '@/components/feed/NewPostModal';
@@ -20,6 +21,8 @@ export default function FeedPage() {
   const [feedType, setFeedType] = useState('global');
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [activeFilter, setActiveFilter] = useState<FeedFilter>(DEFAULT_FILTER);
+  const [searchParams] = useSearchParams();
+  const q = searchParams.get('q') || '';
 
   useEffect(() => {
     getAssets()
@@ -53,10 +56,10 @@ export default function FeedPage() {
           />
         </div>
         <TabsContent value="global" className="mt-4">
-          <FeedList feed="global" filter={activeFilter} hideFilterToolbar />
+          <FeedList feed="global" filter={activeFilter} hideFilterToolbar q={q} />
         </TabsContent>
         <TabsContent value="following" className="mt-4">
-          {authed ? <FeedList feed="following" filter={activeFilter} hideFilterToolbar /> : null}
+          {authed ? <FeedList feed="following" filter={activeFilter} hideFilterToolbar q={q} /> : null}
         </TabsContent>
       </Tabs>
     </PageContent>
