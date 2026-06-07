@@ -18,7 +18,7 @@ from __future__ import annotations
 from typing import Any
 
 from rest_framework import status as drf_status
-from rest_framework.exceptions import APIException
+from rest_framework.exceptions import APIException, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import exception_handler as drf_exception_handler
 
@@ -80,7 +80,10 @@ def custom_exception_handler(exc, context):
         # Unhandled (500) — let Django's default machinery handle it.
         return None
 
-    code = getattr(exc, "code", None) or getattr(exc, "default_code", None) or "error"
+    if isinstance(exc, ValidationError):
+        code = getattr(exc, "code", None) or "validation_error"
+    else:
+        code = getattr(exc, "code", None) or getattr(exc, "default_code", None) or "error"
     fields = getattr(exc, "fields", None) or _field_errors(response.data)
     message = _first_message(response.data)
 

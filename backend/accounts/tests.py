@@ -32,7 +32,7 @@ class UsernameTests(TestCase):
         address2 = "0x" + "2" * 40
         res = self.client.post("/api/auth/register/", {"address": address2, "username": "taken_name"})
         self.assertEqual(res.status_code, 400)
-        self.assertIn("username", res.data)
+        self.assertIn("username", res.data["error"]["fields"])
 
     def test_profile_lookup_by_username_and_address(self):
         address = "0x" + "c" * 40
@@ -92,14 +92,14 @@ class UsernameTests(TestCase):
         address = "0x" + "f" * 40
         res = self.client.post("/api/auth/register/", {"address": address, "username": "update"})
         self.assertEqual(res.status_code, 400)
-        self.assertIn("username", res.data)
+        self.assertIn("username", res.data["error"]["fields"])
 
     def test_register_username_starts_with_0x(self):
         # Trying to register with a username starting with '0x' should fail
         address = "0x" + "1a" * 20
         res = self.client.post("/api/auth/register/", {"address": address, "username": "0xmyuser"})
         self.assertEqual(res.status_code, 400)
-        self.assertIn("username", res.data)
+        self.assertIn("username", res.data["error"]["fields"])
 
     def test_profile_update_reserved_username(self):
         address = "0x" + "2b" * 20

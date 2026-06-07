@@ -15,6 +15,7 @@ import {
 } from '@/lib/crypto';
 import { encryptPrivateKey, saveEncryptedKey } from '@/lib/keystore';
 import { register, getChallenge, login } from '@/lib/api';
+import { getFieldError, getMessage } from '@/lib/errors';
 import { saveAuthSession, setAuthMethod } from '@/lib/auth';
 import { connectAndAuthenticateMetaMask } from '@/lib/walletAuth';
 import { isPrivyConfigured } from '@/lib/privyAuth';
@@ -34,6 +35,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   const [createPassword, setCreatePassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [createUsername, setCreateUsername] = useState('');
+  const [usernameError, setUsernameError] = useState('');
   const [creating, setCreating] = useState(false);
   const [restoreMethod, setRestoreMethod] = useState<'mnemonic' | 'privatekey'>('mnemonic');
   const [inputMnemonic, setInputMnemonic] = useState('');
@@ -47,6 +49,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   function resetTab(t: Tab) {
     setTab(t);
     setError('');
+    setUsernameError('');
     setMnemonic('');
     setSaved(false);
     setCreateUsername('');
@@ -65,6 +68,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     setCreatePassword('');
     setConfirmPassword('');
     setError('');
+    setUsernameError('');
   }
 
   const passwordMismatch =
@@ -78,6 +82,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 
   async function handleCreate() {
     setError('');
+    setUsernameError('');
     setCreating(true);
     try {
       const { privateKey, address } = deriveKeyPair(mnemonic);
@@ -88,7 +93,11 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       setAuthMethod('native');
       onSuccess();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong');
+      // Field-level errors (e.g. username taken) pin under the input; the rest
+      // fall back to the generic form alert.
+      const fieldErr = getFieldError(e, 'username');
+      if (fieldErr) setUsernameError(fieldErr);
+      else setError(getMessage(e));
     } finally {
       setCreating(false);
     }
@@ -245,8 +254,16 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
                         type="text"
                         placeholder="e.g. Satoshi"
                         value={createUsername}
-                        onChange={(e) => setCreateUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
+                        onChange={(e) => {
+                          setCreateUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''));
+                          if (usernameError) setUsernameError('');
+                        }}
+                        aria-invalid={!!usernameError}
+                        className={usernameError ? 'border-destructive' : ''}
                       />
+                      {usernameError && (
+                        <p className="text-xs text-destructive">{usernameError}</p>
+                      )}
                     </div>
                     <div className="space-y-1">
                       <Label htmlFor="create-pw">Password</Label>
