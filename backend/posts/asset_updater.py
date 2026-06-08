@@ -169,13 +169,27 @@ def _notify_hard_claim(
     now = django_timezone.now()
     old_status = hard_claim.status
 
-    if hard_claim.status == HardClaim.Status.UNDETERMINED:
-        from .resolution import resolve_hard_claim_observer
+    from .resolution import resolve_hard_claim_observer
+    from datetime import datetime, time, timezone
+
+    try:
         resolve_hard_claim_observer(hard_claim, now)
-    else:
-        # Already resolved -> clean up stale subscription
-        subscription.delete()
-        return False
+    except Exception as e:
+        deadline_utc = datetime.combine(hard_claim.until, time.max, tzinfo=timezone.utc)
+        if now > deadline_utc:
+            logger.warning("Evicting expired broken claim %s: %s", hard_claim.id, e)
+            subscription.delete()
+            hard_claim.status = HardClaim.Status.REJECTED
+            hard_claim.save(update_fields=['status'])
+            from .models import HardClaimEvent
+            HardClaimEvent.objects.create(
+                hard_claim=hard_claim,
+                event_type=HardClaimEvent.EventType.RESOLUTION,
+                details={"evaluation_reason": f"Claim expired and resolution failed: {str(e)}"}
+            )
+            return True
+        else:
+            raise
 
     hard_claim.refresh_from_db()
 

@@ -467,7 +467,7 @@ class PostListCreateView(APIView):
                         event_type=HardClaimEvent.EventType.CREATION,
                         details={}
                     )
-                    AssetSubscription.objects.create(asset=asset, hard_claim=hard_claim)
+                    AssetSubscription.objects.get_or_create(hard_claim=hard_claim, defaults={"asset": asset})
                     try:
                         capture_reference_price(hard_claim)
                     except ResolutionError as exc:
@@ -894,7 +894,7 @@ class HardClaimView(APIView):
                 event_type=HardClaimEvent.EventType.CREATION,
                 details={}
             )
-            AssetSubscription.objects.create(asset=asset, hard_claim=hard_claim)
+            AssetSubscription.objects.get_or_create(hard_claim=hard_claim, defaults={"asset": asset})
             try:
                 capture_reference_price(hard_claim)
             except ResolutionError as exc:
