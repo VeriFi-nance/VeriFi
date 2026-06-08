@@ -25,7 +25,7 @@ import {
 import { buildClaimPayload, buildPositionPayload } from '@/lib/payloads';
 import { signPayload, resolveUsername } from '@/lib/signing';
 import { PositionWizard, defaultPositionDraft, type PositionDraft } from './PositionWizard';
-import { safeImageSrc } from '@/lib/utils';
+import { cn, safeImageSrc } from '@/lib/utils';
 
 interface NewPostModalProps {
   open: boolean;
@@ -642,9 +642,11 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
 export function NewPostButton({
   onPosted,
   channelId,
+  compactOnMobile = false,
 }: {
   onPosted: () => void;
   channelId?: number;
+  compactOnMobile?: boolean;
 }) {
   const openLogin = useOpenLogin();
   const auth = useAuthState();
@@ -660,9 +662,14 @@ export function NewPostButton({
 
   return (
     <>
-      <Button size="sm" className="gap-2 font-medium" onClick={handleClick}>
+      <Button
+        size="sm"
+        className="shrink-0 gap-2 font-medium"
+        onClick={handleClick}
+        aria-label="New post"
+      >
         <PenSquare className="size-4" />
-        New post
+        <span className={cn(compactOnMobile && 'hidden sm:inline')}>New post</span>
       </Button>
       <NewPostModal
         open={open}

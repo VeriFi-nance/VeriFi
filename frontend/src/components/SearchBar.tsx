@@ -103,7 +103,7 @@ export function SearchBar() {
     };
 
     fetchResults();
-  }, [debouncedQuery, type, navigate]);
+  }, [debouncedQuery, type, navigate, location.pathname]);
 
   // Asset ids currently applied to the feed filter (from the URL), so the
   // dropdown can show which results are already active.

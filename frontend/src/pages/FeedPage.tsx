@@ -45,6 +45,7 @@ export default function FeedPage() {
             <TabsTrigger value="following">Following</TabsTrigger>
           </TabsList>
           <NewPostButton
+            compactOnMobile
             onPosted={() => window.dispatchEvent(new Event('post-created'))}
           />
         </div>

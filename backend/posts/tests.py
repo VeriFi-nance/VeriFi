@@ -811,13 +811,13 @@ class PositionTestCase(APITestCase):
         url = reverse('position-list-create')
         response = self.client.post(url, data, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("entry_interval", response.data)
+        self.assertIn("entry_interval", response.data["error"]["fields"])
 
         data["entry_interval"] = (now + timedelta(days=7)).isoformat()
         data["lifetime"] = (now + timedelta(days=1)).isoformat() # Before entry
         response = self.client.post(url, data, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("lifetime", response.data)
+        self.assertIn("lifetime", response.data["error"]["fields"])
 
     @patch('posts.views.fetch_current_price')
     def test_close_position(self, mock_fetch):

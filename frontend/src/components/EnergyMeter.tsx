@@ -2,13 +2,16 @@ import { useEffect, useState } from 'react';
 import { Zap } from 'lucide-react';
 import { getProfileStats } from '@/lib/api';
 import { useAuthState } from '@/lib/auth';
+import { cn } from '@/lib/utils';
 
 interface Props {
   /** Bump this counter to force a refetch after a market action. */
   refreshKey?: number;
+  className?: string;
+  hideRepOnMobile?: boolean;
 }
 
-export function EnergyMeter({ refreshKey }: Props) {
+export function EnergyMeter({ refreshKey, className, hideRepOnMobile = false }: Props) {
   const [energy, setEnergy] = useState<number | null>(null);
   const [rep, setRep] = useState<number | null>(null);
   const [localRefreshKey, setLocalRefreshKey] = useState(0);
@@ -38,9 +41,9 @@ export function EnergyMeter({ refreshKey }: Props) {
   if (!address || energy == null) return null;
 
   return (
-    <div className="flex items-center gap-3 text-xs">
+    <div className={cn('flex items-center gap-3 text-xs', className)}>
       {rep != null && (
-        <span className="font-mono">
+        <span className={cn('font-mono', hideRepOnMobile && 'hidden sm:inline')}>
           <span className="text-muted-foreground">rep</span> {rep.toFixed(0)}
         </span>
       )}

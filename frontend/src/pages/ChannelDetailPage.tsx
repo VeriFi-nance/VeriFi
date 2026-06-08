@@ -13,6 +13,8 @@ import { NewPostButton } from '@/components/feed/NewPostModal';
 import { Settings, ArrowLeft, Lock, Users } from 'lucide-react';
 import { PageContent } from '@/components/PageContent';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
+import { toast, getMessage } from '@/lib/errors';
+import { SmartTimestamp } from '@/components/SmartTimestamp';
 
 export default function ChannelDetailPage() {
   const { id } = useParams();
@@ -90,8 +92,8 @@ export default function ChannelDetailPage() {
     try {
       await joinChannel(Number(id));
       await fetchChannelAndPosts();
-    } catch (e: any) {
-      alert(e.message);
+    } catch (e: unknown) {
+      toast.error(getMessage(e));
     }
   };
 
@@ -100,8 +102,8 @@ export default function ChannelDetailPage() {
     try {
       await approveChannelMember(Number(id), userAddress, action);
       await fetchChannelAndPosts();
-    } catch (e: any) {
-      alert(e.message);
+    } catch (e: unknown) {
+      toast.error(getMessage(e));
     }
   };
 
@@ -115,8 +117,8 @@ export default function ChannelDetailPage() {
         try {
           await banChannelMember(Number(id), userAddress);
           await fetchChannelAndPosts();
-        } catch (e: any) {
-          alert(e.message);
+        } catch (e: unknown) {
+          toast.error(getMessage(e));
         }
       }
     });
@@ -132,8 +134,8 @@ export default function ChannelDetailPage() {
         try {
           await unbanChannelMember(Number(id), userAddress);
           await fetchChannelAndPosts();
-        } catch (e: any) {
-          alert(e.message);
+        } catch (e: unknown) {
+          toast.error(getMessage(e));
         }
       }
     });
@@ -144,8 +146,8 @@ export default function ChannelDetailPage() {
     try {
       await promoteModerator(Number(id), userAddress);
       await fetchChannelAndPosts();
-    } catch (e: any) {
-      alert(e.message);
+    } catch (e: unknown) {
+      toast.error(getMessage(e));
     }
   };
 
@@ -154,8 +156,8 @@ export default function ChannelDetailPage() {
     try {
       await demoteModerator(Number(id), userAddress);
       await fetchChannelAndPosts();
-    } catch (e: any) {
-      alert(e.message);
+    } catch (e: unknown) {
+      toast.error(getMessage(e));
     }
   };
 
@@ -287,7 +289,9 @@ export default function ChannelDetailPage() {
                             </span>
                           )}
                         </div>
-                        <div className="text-[10px] text-muted-foreground mt-1">Subscribed: {new Date(member.created_at).toLocaleDateString()}</div>
+                        <div className="text-[10px] text-muted-foreground mt-1">
+                          Subscribed: <SmartTimestamp value={member.created_at} />
+                        </div>
                       </div>
                       <div className="flex gap-1.5">
                         {canModerate && member.role === 'member' && member.user_address.toLowerCase() !== channel.creator_address.toLowerCase() && (

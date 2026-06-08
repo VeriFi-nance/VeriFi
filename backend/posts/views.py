@@ -138,6 +138,14 @@ def _filter_posts_queryset(qs, request):
     if query:
         qs = qs.filter(content__icontains=query)
 
+    address = request.query_params.get("address", "").strip().lower()
+    if address:
+        qs = qs.filter(author__address=address)
+
+    username_q = request.query_params.get("username", "").strip()
+    if username_q:
+        qs = qs.filter(author__username__iexact=username_q)
+
     # ── Asset + type filtering ────────────────────────────────────────────────
     raw_asset_ids = request.query_params.get("asset_ids", "").strip()
     asset_ids = []
@@ -453,12 +461,13 @@ class PostListCreateView(APIView):
                         signature=hc_sig,
                         claim_payload=hc_claim_payload,
                     )
-                    from .models import HardClaimEvent
+                    from .models import HardClaimEvent, AssetSubscription
                     HardClaimEvent.objects.create(
                         hard_claim=hard_claim,
                         event_type=HardClaimEvent.EventType.CREATION,
                         details={}
                     )
+                    AssetSubscription.objects.get_or_create(hard_claim=hard_claim, defaults={"asset": asset})
                     try:
                         capture_reference_price(hard_claim)
                     except ResolutionError as exc:
@@ -896,8 +905,7 @@ class HardClaimView(APIView):
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
         
         serializer = HardClaimInputSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
         # Validate that asset exists
@@ -993,12 +1001,13 @@ class HardClaimView(APIView):
                 signature=sig,
                 claim_payload=claim_payload,
             )
-            from .models import HardClaimEvent
+            from .models import HardClaimEvent, AssetSubscription
             HardClaimEvent.objects.create(
                 hard_claim=hard_claim,
                 event_type=HardClaimEvent.EventType.CREATION,
                 details={}
             )
+            AssetSubscription.objects.get_or_create(hard_claim=hard_claim, defaults={"asset": asset})
             try:
                 capture_reference_price(hard_claim)
             except ResolutionError as exc:
@@ -1092,7 +1101,11 @@ class HardClaimResolveView(APIView):
         try:
             result = preview_resolution(hard_claim) if preview_only else resolve_hard_claim(hard_claim)
         except ResolutionError as exc:
-            return Response(exc.to_payload(), status=status.HTTP_400_BAD_REQUEST)
+            payload = exc.to_payload()
+            # Standard error envelope (consumed by the frontend client) while
+            # keeping the legacy top-level keys for the admin resolution UI.
+            payload["error"] = {"code": exc.code, "message": exc.message}
+            return Response(payload, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(result)
 
@@ -1777,8 +1790,7 @@ class PositionListCreateView(APIView):
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
 
         serializer = PositionInputSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
 
         data = serializer.validated_data
         channel = get_object_or_404(Channel, pk=data["channel_id"])
