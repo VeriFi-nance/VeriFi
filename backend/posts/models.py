@@ -359,7 +359,7 @@ class AssetSubscription(models.Model):
         ]
 
     def __str__(self):
-        target = f"Position #{self.position.id}" if self.position_id else f"HardClaim #{self.hard_claim.id}"
+        target = f"Position #{self.position_id}" if self.position_id else f"HardClaim #{self.hard_claim_id}"
         return f"Subscription: {target} → {self.asset.symbol}"
 
 
