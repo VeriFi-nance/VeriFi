@@ -17,7 +17,7 @@ from datetime import date, datetime, time, timedelta, timezone as datetime_timez
 
 from django.utils import timezone as django_timezone
 
-from .models import Asset, AssetSubscription, OHLCData, Position, PositionEvent
+from .models import Asset, AssetSubscription, OHLCData, Position, PositionEvent, HardClaim
 from .ohlc_fetcher import OHLCFetchError, fetch_ohlc_for_asset
 from .position_resolution import _resolve_pending, _resolve_active
 
@@ -93,20 +93,26 @@ def notify_subscribers(asset: Asset, ohlc_data: list[OHLCData]) -> dict:
     # Explicitly query the AssetSubscription model (the subscriber list)
     subscriptions = AssetSubscription.objects.filter(
         asset=asset
-    ).select_related("position")
+    ).select_related("position", "hard_claim")
 
     summary = {"notified": 0, "transitioned": 0, "errors": 0}
 
     for sub in subscriptions:
         try:
-            changed = _notify_position(sub.position, ohlc_data, sub)
+            changed = False
+            if sub.position_id is not None:
+                changed = _notify_position(sub.position, ohlc_data, sub)
+            elif sub.hard_claim_id is not None:
+                changed = _notify_hard_claim(sub.hard_claim, sub)
+
             summary["notified"] += 1
             if changed:
                 summary["transitioned"] += 1
         except Exception as e:
+            target_id = f"pos:{sub.position_id}" if sub.position_id else f"claim:{sub.hard_claim_id}"
             logger.error(
-                "Error notifying position %d for asset %s: %s",
-                sub.position.id, asset.symbol, e
+                "Error notifying subscription %s for asset %s: %s",
+                target_id, asset.symbol, e
             )
             summary["errors"] += 1
 
@@ -151,6 +157,46 @@ def _notify_position(
         subscription.delete()  # unsubscribe()
 
     return position.status != old_status
+
+
+def _notify_hard_claim(
+    hard_claim: HardClaim,
+    subscription: AssetSubscription,
+) -> bool:
+    """
+    Observer update() — runs resolution logic for a single HardClaim.
+    """
+    now = django_timezone.now()
+    old_status = hard_claim.status
+
+    from .resolution import resolve_hard_claim_observer
+    from datetime import datetime, time, timezone
+
+    try:
+        resolve_hard_claim_observer(hard_claim, now)
+    except Exception as e:
+        deadline_utc = datetime.combine(hard_claim.until, time.max, tzinfo=timezone.utc)
+        if now > deadline_utc:
+            logger.warning("Evicting expired broken claim %s: %s", hard_claim.id, e)
+            subscription.delete()
+            hard_claim.status = HardClaim.Status.REJECTED
+            hard_claim.save(update_fields=['status'])
+            from .models import HardClaimEvent
+            HardClaimEvent.objects.create(
+                hard_claim=hard_claim,
+                event_type=HardClaimEvent.EventType.RESOLUTION,
+                details={"evaluation_reason": f"Claim expired and resolution failed: {str(e)}"}
+            )
+            return True
+        else:
+            raise
+
+    hard_claim.refresh_from_db()
+
+    if hard_claim.status != HardClaim.Status.UNDETERMINED:
+        subscription.delete()
+
+    return hard_claim.status != old_status
 
 
 def update_all_assets() -> dict:
