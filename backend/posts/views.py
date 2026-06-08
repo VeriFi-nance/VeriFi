@@ -453,12 +453,13 @@ class PostListCreateView(APIView):
                         signature=hc_sig,
                         claim_payload=hc_claim_payload,
                     )
-                    from .models import HardClaimEvent
+                    from .models import HardClaimEvent, AssetSubscription
                     HardClaimEvent.objects.create(
                         hard_claim=hard_claim,
                         event_type=HardClaimEvent.EventType.CREATION,
                         details={}
                     )
+                    AssetSubscription.objects.create(asset=asset, hard_claim=hard_claim)
                     try:
                         capture_reference_price(hard_claim)
                     except ResolutionError as exc:
@@ -880,12 +881,13 @@ class HardClaimView(APIView):
                 signature=sig,
                 claim_payload=claim_payload,
             )
-            from .models import HardClaimEvent
+            from .models import HardClaimEvent, AssetSubscription
             HardClaimEvent.objects.create(
                 hard_claim=hard_claim,
                 event_type=HardClaimEvent.EventType.CREATION,
                 details={}
             )
+            AssetSubscription.objects.create(asset=asset, hard_claim=hard_claim)
             try:
                 capture_reference_price(hard_claim)
             except ResolutionError as exc:

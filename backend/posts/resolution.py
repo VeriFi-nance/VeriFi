@@ -183,6 +183,16 @@ def claim_entry_price(hard_claim: HardClaim) -> float | None:
         if stored is not None:
             return float(stored)
 
+    resolution = next(
+        (e for e in hard_claim.events.all() if e.event_type == HardClaimEvent.EventType.RESOLUTION),
+        None
+    )
+    if resolution and resolution.details:
+        prices = resolution.details.get("prices", {})
+        stored = prices.get("reference")
+        if stored is not None:
+            return float(stored)
+
     # Do not make synchronous network requests during serialization.
     # Legacy claims that lack a reference_price will just return None.
     return None
@@ -653,6 +663,82 @@ def resolve_hard_claim(hard_claim: HardClaim) -> dict[str, Any]:
     _persist_resolution_result(hard_claim, result)
     _maybe_settle_rep_market(hard_claim)
     return result
+
+
+def resolve_hard_claim_observer(hard_claim: HardClaim, now: datetime) -> dict[str, Any] | None:
+    """
+    Observer-based resolution logic for HardClaims.
+    Fetches OHLC data up to min(now, deadline).
+    Returns a resolution result (and persists it) if target hit or deadline passed.
+    Otherwise returns None (claim remains UNDETERMINED).
+    """
+    try:
+        normalize_claim_for_resolution(hard_claim, allow_resolved=False)
+    except ResolutionError as e:
+        if e.code == "CLAIM_NOT_DUE":
+            pass # We expect it not to be due, we are checking early hits
+        else:
+            raise
+
+    deadline_utc = _due_datetime_utc(hard_claim.until)
+    end_time = min(now, deadline_utc)
+    start_time = hard_claim.created_at.astimezone(timezone.utc)
+    
+    try:
+        ohlc_rows = get_ohlc_data(hard_claim.asset, start_time, end_time, mixed_resolution=True)
+    except OHLCFetchError as exc:
+        next_day = datetime.combine(
+            hard_claim.created_at.date() + timedelta(days=1),
+            time.min,
+            tzinfo=timezone.utc,
+        )
+        if next_day >= end_time:
+            logger.warning("No OHLC data for claim %s observer resolution: %s", hard_claim.id, exc)
+            if now > deadline_utc:
+                raise ResolutionError("NO_OHLC_DATA", "Could not obtain OHLC for expired claim.") from exc
+            return None
+            
+        daily_end = min(end_time, datetime.combine(hard_claim.until, time.min, tzinfo=timezone.utc))
+        try:
+            ohlc_rows = get_ohlc_data(
+                hard_claim.asset,
+                next_day,
+                daily_end,
+                interval=Interval.ONE_DAY,
+            )
+        except OHLCFetchError as e:
+            logger.warning("Daily fallback failed for claim %s: %s", hard_claim.id, e)
+            if now > deadline_utc:
+                raise ResolutionError("NO_OHLC_DATA", "Could not obtain daily OHLC for expired claim.") from e
+            return None
+
+    if not ohlc_rows:
+        if now > deadline_utc:
+            raise ResolutionError("NO_OHLC_DATA", "Could not obtain any OHLC data for the claim period.")
+        return None
+        
+    try:
+        reference_price, reference_url = fetch_reference_price(hard_claim)
+        if hard_claim.reference_price is None:
+            hard_claim.reference_price = _round_decimal(reference_price)
+            hard_claim.reference_price_url = reference_url
+            hard_claim.save(update_fields=["reference_price", "reference_price_url"])
+    except ResolutionError:
+        reference_price = float(ohlc_rows[0].open)
+        reference_url = "fallback_ohlc_open"
+
+    result = _evaluate_ohlc(hard_claim, reference_price, reference_url, ohlc_rows)
+    
+    is_confirmed = result["status"] == HardClaim.Status.CONFIRMED
+    is_expired = now > deadline_utc
+    
+    if is_confirmed or is_expired:
+        _persist_resolution_result(hard_claim, result)
+        _maybe_settle_rep_market(hard_claim)
+        return result
+        
+    return None
+
 
 
 def reassess_hard_claim(hard_claim: HardClaim) -> dict[str, Any]:
