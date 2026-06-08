@@ -25,3 +25,9 @@ migrate_with_retry() {
 }
 
 migrate_with_retry
+
+# Seed/refresh the asset catalog (crypto + NASDAQ + BIST + FX/commodities).
+# Idempotent (update_or_create), so it's safe to run on every deploy. Non-fatal:
+# the picker also resolves assets on demand via live provider search, so a
+# transient CoinGecko/TwelveData error must never block the deploy.
+uv run python manage.py seed_assets || echo "seed_assets failed (non-fatal); picker falls back to live search" >&2

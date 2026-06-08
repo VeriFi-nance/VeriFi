@@ -152,7 +152,6 @@ export function FeedList({ feed, channel, myRole, creatorAddress, filter: propFi
       {!hideFilterToolbar && (
         <div className="flex items-center justify-end">
           <FeedFilterPopover
-            assets={assets}
             filter={activeFilter}
             onApply={handleApplyFilter}
           />

@@ -11,6 +11,7 @@ import { createPost } from '@/lib/api';
 import { fetchAssets } from '@/hooks/useAssets';
 import type { AssetItem, ReviewClaim } from '@/lib/types';
 import { getClaimType } from '@/lib/claims';
+import { AssetCombobox } from '@/components/AssetCombobox';
 import { PostComposer, MAX_CHARS } from './PostComposer';
 import { ClaimForm } from './ClaimForm';
 import { ClaimWizard } from './ClaimWizard';
@@ -117,6 +118,12 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
 
   function patchDraft(patch: Partial<ClaimDraft>) {
     setDraft((d) => ({ ...d, ...patch }));
+  }
+
+  // Merge an asset selected/resolved via the search combobox into the known
+  // list so validateDraft and the symbol/parity lookups below can find it.
+  function registerAsset(asset: AssetItem) {
+    setAssets((prev) => (prev.some((a) => a.id === asset.id) ? prev : [...prev, asset]));
   }
 
   function addDraft(customDraft?: ClaimDraft) {
@@ -421,7 +428,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
             <div className="space-y-3">
               {posWizardMode ? (
                 <PositionWizard
-                  assets={assets}
+                  registerAsset={registerAsset}
                   initialDraft={posDraft}
                   onComplete={(pd) => {
                     setPosAttached(pd);
@@ -444,21 +451,15 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
                       <Label className="text-[11px]">Asset</Label>
-                      <Select
-                        value={posDraft.assetId}
-                        onValueChange={(v) => setPosDraft((p) => ({ ...p, assetId: v }))}
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue placeholder="Select" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {assets.map((a) => (
-                            <SelectItem key={a.id} value={a.id.toString()} className="text-xs">
-                              {a.symbol}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <AssetCombobox
+                        size="sm"
+                        placeholder="Select"
+                        selectedLabel={posDraft.assetSymbol}
+                        onSelect={(a) => {
+                          registerAsset(a);
+                          setPosDraft((p) => ({ ...p, assetId: a.id.toString(), assetSymbol: a.symbol }));
+                        }}
+                      />
                     </div>
 
                     <div className="space-y-1">
@@ -559,7 +560,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
           {showDraft && (
             wizardMode ? (
               <ClaimWizard
-                assets={assets}
+                registerAsset={registerAsset}
                 initialDraft={draft}
                 onComplete={(d) => addDraft(d)}
                 onCancel={() => {
@@ -572,7 +573,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
             ) : (
               <ClaimForm
                 value={draft}
-                assets={assets}
+                registerAsset={registerAsset}
                 onChange={patchDraft}
                 onSubmit={() => addDraft()}
                 onCancel={() => {

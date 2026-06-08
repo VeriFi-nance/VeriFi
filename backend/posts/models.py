@@ -178,6 +178,10 @@ class Asset(models.Model):
     kraken_pair = models.CharField(max_length=20, blank=True, default="")
     twelvedata_symbol = models.CharField(max_length=20, blank=True, default="")
     last_price_update = models.DateTimeField(null=True, blank=True)
+    # How often this asset is referenced by claims/positions. Drives "most used
+    # first" ordering in the asset search/filter dropdowns. Bumped via post_save
+    # signals (see posts/signals.py).
+    usage_count = models.PositiveIntegerField(default=0, db_index=True)
 
     def __str__(self):
         return self.name

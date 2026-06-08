@@ -6,7 +6,7 @@ import { StepTarget } from './StepTarget';
 import { StepStake } from './StepStake';
 
 interface ClaimWizardProps {
-  assets: AssetItem[];
+  registerAsset: (asset: AssetItem) => void;
   initialDraft?: Partial<ClaimDraft>;
   onComplete: (claim: ClaimDraft) => void;
   onCancel: () => void;
@@ -14,7 +14,7 @@ interface ClaimWizardProps {
 }
 
 export function ClaimWizard({
-  assets,
+  registerAsset,
   initialDraft,
   onComplete,
   onCancel,
@@ -51,7 +51,7 @@ export function ClaimWizard({
         {step === 0 && (
           <StepAsset
             value={draft}
-            assets={assets}
+            registerAsset={registerAsset}
             onChange={patchDraft}
             onNext={nextStep}
           />
