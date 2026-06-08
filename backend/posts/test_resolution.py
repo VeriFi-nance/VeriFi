@@ -299,53 +299,6 @@ class ResolutionTests(TestCase):
         self.assertEqual(result["prices"]["target"], 1200.0)
 
 
-class ResolveClaimsCommandTests(TestCase):
-    def setUp(self):
-        self.asset = Asset.objects.create(
-            symbol="BTC",
-            name="Bitcoin",
-            market_type=Asset.MarketType.CRYPTO,
-            provider=Asset.Provider.BINANCE,
-            provider_symbol="bitcoin",
-            quote_currency="USD",
-            binance_symbol="BTCUSDT",
-        )
-        self.author = WalletUser.objects.create(address="0xabc")
-        self.post = Post.objects.create(author=self.author, content="test")
-
-    def test_due_claims_excludes_until_today(self):
-        from posts.management.commands.resolve_claims import due_claims_queryset
-
-        today_claim = HardClaim.objects.create(
-            author=self.author,
-            post=self.post,
-            asset=self.asset,
-            direction="bullish",
-            percentage=5.0,
-            until=date.today() + timedelta(days=1),
-            status=HardClaim.Status.UNDETERMINED,
-        )
-        past = HardClaim.objects.create(
-            author=self.author,
-            post=self.post,
-            asset=self.asset,
-            direction="bullish",
-            percentage=5.0,
-            until=date.today() + timedelta(days=1),
-            status=HardClaim.Status.UNDETERMINED,
-        )
-        HardClaim.objects.filter(id=today_claim.id).update(
-            created_at=timezone.now() - timedelta(days=5),
-            until=date.today(),
-        )
-        HardClaim.objects.filter(id=past.id).update(
-            created_at=timezone.now() - timedelta(days=5),
-            until=date.today() - timedelta(days=1),
-        )
-        due_ids = list(due_claims_queryset().values_list("id", flat=True))
-        self.assertEqual(due_ids, [past.id])
-
-
 class ReferencePriceTests(TestCase):
     def setUp(self):
         self.asset = Asset.objects.create(

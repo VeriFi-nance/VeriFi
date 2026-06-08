@@ -525,12 +525,12 @@ def _evaluate_ohlc(
 
     if confirmed:
         reason = (
-            f"price {'met or exceeded' if direction == 'bullish' else 'fell to or below'} "
+            f"Claim price {'met or exceeded' if direction == 'bullish' else 'fell to or below'} "
             f"target on {len(hit_days)} day(s) within timeframe"
         )
     else:
         reason = (
-            f"price did not {'reach' if direction == 'bullish' else 'fall to'} "
+            f"Claim price did not {'reach' if direction == 'bullish' else 'fall to'} "
             f"target within timeframe"
         )
 
