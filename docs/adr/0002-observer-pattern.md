@@ -12,11 +12,9 @@ VeriFi uses the **Observer Design Pattern** to keep financial positions in sync 
 
 A periodic job (every 10 minutes, configurable) fetches updated OHLC price data for **all** assets. When an asset's price data is updated, the asset **notifies** all of its subscribed Positions so they can evaluate whether a state transition has occurred (e.g., entry price hit, stop-loss triggered, take-profit reached).
 
-### Why only Positions, not HardClaims?
+### Update: HardClaims Migration (PR #225)
 
-HardClaims have a fundamentally different resolution model: they can **only be resolved after their `until` deadline passes**. During a claim's lifetime, incoming price data doesn't trigger any state change — the claim simply waits until its deadline, then the full historical price range is evaluated retroactively. This is a **deadline-triggered check**, not an event-driven reaction, and therefore does not fit the Observer pattern. HardClaims continue to use the existing `resolve_claims` management command.
-
-**Positions**, by contrast, react to price changes **in real-time**: every price update could trigger entry activation, stop-loss, or take-profit. This is the textbook Observer use case — "new data arrives → observer reacts."
+*Note: As of PR #225, HardClaims were migrated to also use the Observer pattern. They now subscribe to incoming price data and resolve immediately (in real-time) if their target price is hit before their deadline. The `resolve_claims` command was removed in favor of `update_and_notify`.*
 
 ---
 
@@ -259,7 +257,7 @@ If all API providers fail for an asset:
 
 #### Step 3.2 — Deprecate old command
 
-- `resolve_positions.py` — **no longer called** for the Observer flow. Add deprecation notice in the command. The `resolve_claims.py` command remains active for HardClaim resolution (separate concern).
+- `resolve_positions.py` — **no longer called** for the Observer flow. Add deprecation notice in the command. (Note: `resolve_claims.py` was also later removed when HardClaims migrated to the Observer flow).
 
 #### Step 3.3 — Scheduler setup
 
@@ -371,11 +369,11 @@ PRICE_UPDATE_INTERVAL_MINUTES = 10  # Configurable update frequency
 
 ---
 
-## 9. What's NOT Changing
+## 9. What's NOT Changing (At the time of ADR)
 
 | Component | Reason |
 |-----------|--------|
-| `resolve_claims.py` command | HardClaims use deadline-based resolution, not Observer. This command stays as-is. |
-| `resolution.py` | HardClaim resolution logic is untouched. |
+| `resolve_claims.py` command | (Later removed in PR #225 when HardClaims were migrated to Observer). |
+| `resolution.py` | (Later modified to support `resolve_hard_claim_observer`). |
 | `PositionResolveView` (manual resolve API) | Remains as a user-triggered bypass for on-demand resolution. |
 | `OHLCData` model | Stays daily. Sub-daily granularity deferred. |
