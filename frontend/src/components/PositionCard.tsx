@@ -10,6 +10,9 @@ import { truncateAddress } from '@/lib/wallet';
 import { Download, ChevronUp, ChevronDown } from 'lucide-react';
 import { PositionPriceChart } from './feed/PositionPriceChart';
 import { usePositionChartData } from '@/hooks/usePositionChartData';
+import { toast, getMessage } from '@/lib/errors';
+import { useConfirm } from './ConfirmDialog';
+import { SmartTimestamp } from '@/components/SmartTimestamp';
 
 interface PositionCardProps {
   position: PositionItem;
@@ -21,6 +24,7 @@ export function PositionCard({ position, assets, onClosed }: PositionCardProps) 
   const [closing, setClosing] = useState(false);
   const [downloadingProof, setDownloadingProof] = useState(false);
   const [showChart, setShowChart] = useState(false);
+  const confirm = useConfirm();
 
   const { data: chartData, interval, setInterval, loading: chartLoading, refetching } = usePositionChartData(
     showChart ? position.id : undefined,
@@ -42,8 +46,8 @@ export function PositionCard({ position, assets, onClosed }: PositionCardProps) 
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch (e: any) {
-      alert(e.message || 'Failed to download proof');
+    } catch (e: unknown) {
+      toast.error(getMessage(e, 'Failed to download proof'));
     } finally {
       setDownloadingProof(false);
     }
@@ -57,16 +61,22 @@ export function PositionCard({ position, assets, onClosed }: PositionCardProps) 
 
   const handleClose = async () => {
     const isPending = position.status === 'pending';
-    const msg = isPending 
-      ? 'Are you sure you want to cancel this pending position?' 
-      : 'Are you sure you want to close this position early?';
-    if (!confirm(msg)) return;
+    const ok = await confirm({
+      title: isPending ? 'Cancel pending position?' : 'Close position early?',
+      description: isPending
+        ? 'This pending position will be cancelled.'
+        : 'This will close the position before its lifetime ends.',
+      confirmText: isPending ? 'Cancel position' : 'Close position',
+      variant: 'destructive',
+    });
+    if (!ok) return;
     setClosing(true);
     try {
       await closePosition(position.id);
+      toast.success(isPending ? 'Position cancelled.' : 'Position closed.');
       onClosed?.();
-    } catch (e: any) {
-      alert(e.message);
+    } catch (e: unknown) {
+      toast.error(getMessage(e, 'Failed to close position'));
     } finally {
       setClosing(false);
     }
@@ -170,10 +180,10 @@ export function PositionCard({ position, assets, onClosed }: PositionCardProps) 
         <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
           <div>
             {position.status === 'pending' && (
-              <span>Valid until: {new Date(position.entry_interval).toLocaleString()}</span>
+              <span>Valid until: <SmartTimestamp value={position.entry_interval} /></span>
             )}
             {position.status === 'active' && (
-              <span>Expires: {new Date(position.lifetime).toLocaleString()}</span>
+              <span>Expires: <SmartTimestamp value={position.lifetime} /></span>
             )}
             {position.status === 'missed' && <span>Entry target not reached.</span>}
             {position.signature && (

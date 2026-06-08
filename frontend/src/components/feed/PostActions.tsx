@@ -85,9 +85,9 @@ export function PostActions({ post, onPostChange, className }: PostActionsProps)
   };
 
   const handleCopyText = () => {
-    const { text, url } = getShareTextAndUrl();
-    const copyText = text + `Read more on VeriFi:\n${url}`;
-    
+    const { url } = getShareTextAndUrl();
+    const copyText = url;
+
     try {
       void navigator.clipboard.writeText(copyText);
       setCopied(true);
@@ -162,7 +162,6 @@ export function PostActions({ post, onPostChange, className }: PostActionsProps)
               size="sm"
               className="h-8 px-2.5"
               onClick={(e) => {
-                e.preventDefault();
                 e.stopPropagation();
               }}
               aria-label="Share post"
