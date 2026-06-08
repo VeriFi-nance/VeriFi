@@ -4,10 +4,10 @@ Management command: update_and_notify
 Observer Design Pattern entry point — called periodically by a scheduler
 (cron, Render cron, Celery Beat) to:
   1. Fetch fresh OHLC price data for ALL assets from external APIs
-  2. Notify all subscribed Positions via AssetSubscription
+  2. Notify all subscribed Positions and HardClaims via AssetSubscription
   3. Recalculate profitability scores for users whose positions transitioned
 
-Replaces the old resolve_positions command for Position resolution.
+Replaces the old resolve_positions and resolve_claims commands for resolution.
 
 Usage:
     uv run python manage.py update_and_notify
@@ -38,7 +38,7 @@ class Command(BaseCommand):
             f"failed: {results['assets_failed']}"
         )
         self.stdout.write(
-            f"  Positions notified: {results['total_notified']}, "
+            f"  Subscriptions notified: {results['total_notified']}, "
             f"transitioned: {results['total_transitioned']}, "
             f"errors: {results['total_errors']}"
         )
