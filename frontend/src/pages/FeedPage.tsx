@@ -5,23 +5,28 @@ import { FeedList } from '@/components/feed/FeedList';
 import { NewPostButton } from '@/components/feed/NewPostModal';
 import { PageContent } from '@/components/PageContent';
 import { useAuthState, useOpenLogin } from '@/lib/auth';
-import { FeedFilterPopover, type FeedFilter } from '@/components/feed/FeedFilterPopover';
-import { useAssets } from '@/hooks/useAssets';
+import type { FeedFilter } from '@/components/feed/FeedFilterPopover';
 
-const DEFAULT_FILTER: FeedFilter = {
-  assetIds: [],
-  hasClaims: false,
-  hasPositions: false,
-};
+/** Parse the comma-separated `assets` query param into a list of asset ids. */
+function parseAssetIds(raw: string | null): number[] {
+  if (!raw) return [];
+  return raw.split(',').map(Number).filter((n) => Number.isFinite(n) && n > 0);
+}
 
 export default function FeedPage() {
   const { authenticated: authed } = useAuthState();
   const openLogin = useOpenLogin();
   const [feedType, setFeedType] = useState('global');
-  const assets = useAssets();
-  const [activeFilter, setActiveFilter] = useState<FeedFilter>(DEFAULT_FILTER);
   const [searchParams] = useSearchParams();
   const q = searchParams.get('q') || '';
+
+  // All feed filtering lives in the header SearchBar and is expressed through
+  // the URL, so this page is a pure reader of that state.
+  const activeFilter: FeedFilter = {
+    assetIds: parseAssetIds(searchParams.get('assets')),
+    hasClaims: searchParams.get('claims') === '1',
+    hasPositions: searchParams.get('positions') === '1',
+  };
 
   function handleFeedChange(value: string) {
     if (value === 'following' && !authed) {
@@ -34,13 +39,8 @@ export default function FeedPage() {
   return (
     <PageContent className="space-y-5">
       <Tabs value={feedType} onValueChange={handleFeedChange}>
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 sm:gap-3">
-          <FeedFilterPopover
-            assets={assets}
-            filter={activeFilter}
-            onApply={setActiveFilter}
-          />
-          <TabsList className="grid w-full min-w-0 grid-cols-2">
+        <div className="flex items-center gap-3">
+          <TabsList className="grid flex-1 grid-cols-2">
             <TabsTrigger value="global">Global</TabsTrigger>
             <TabsTrigger value="following">Following</TabsTrigger>
           </TabsList>

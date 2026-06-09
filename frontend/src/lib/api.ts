@@ -1,5 +1,5 @@
 import { getToken } from './auth';
-import type { PostItem, PostCommentItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, PositionChartData, AssetChartData, ChartCandleInterval, ProfileStats, ChannelItem, ChannelMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType, ProofBundle, OGMetadata, NotificationItem } from './types';
+import type { PostItem, PostCommentItem, HardClaimItem, AssetItem, AssetSearchResult, ExtractClaimsResponse, ClaimChartData, PositionChartData, AssetChartData, ChartCandleInterval, ProfileStats, ChannelItem, ChannelMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType, ProofBundle, OGMetadata, NotificationItem } from './types';
 
 /**
  * Ordered list of backend base URLs to try, sourced from build-time env vars:
@@ -460,6 +460,21 @@ export async function updateHardClaimStatus(
 
 export async function getAssets(): Promise<AssetItem[]> {
   return request('/api/posts/assets/');
+}
+
+/** Hybrid asset search: local DB hits plus remote provider candidates. */
+export async function searchAssets(q: string, limit = 20): Promise<AssetSearchResult[]> {
+  const qs = new URLSearchParams({ q, limit: String(limit) });
+  return request(`/api/posts/assets/search/?${qs.toString()}`);
+}
+
+/** Persist a remote search candidate into a real Asset row (idempotent). */
+export async function resolveAsset(candidate: AssetSearchResult): Promise<AssetItem> {
+  return request('/api/posts/assets/resolve/', {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(candidate),
+  });
 }
 
 export async function getAssetChartData(

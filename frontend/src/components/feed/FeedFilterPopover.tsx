@@ -9,7 +9,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import type { AssetItem } from '@/lib/types';
+import { AssetMultiSelect } from '@/components/AssetMultiSelect';
 
 export interface FeedFilter {
   assetIds: number[];
@@ -28,12 +28,11 @@ function isFilterActive(f: FeedFilter): boolean {
 }
 
 interface FeedFilterPopoverProps {
-  assets: AssetItem[];
   filter: FeedFilter;
   onApply: (f: FeedFilter) => void;
 }
 
-export function FeedFilterPopover({ assets, filter, onApply }: FeedFilterPopoverProps) {
+export function FeedFilterPopover({ filter, onApply }: FeedFilterPopoverProps) {
   const [open, setOpen] = useState(false);
   // Local draft — not committed until Apply
   const [draft, setDraft] = useState<FeedFilter>({ ...filter });
@@ -45,15 +44,6 @@ export function FeedFilterPopover({ assets, filter, onApply }: FeedFilterPopover
   function handleOpen(v: boolean) {
     if (v) setDraft({ ...filter }); // reset draft to current applied filter
     setOpen(v);
-  }
-
-  function toggleAsset(id: number) {
-    setDraft((prev) => ({
-      ...prev,
-      assetIds: prev.assetIds.includes(id)
-        ? prev.assetIds.filter((a) => a !== id)
-        : [...prev.assetIds, id],
-    }));
   }
 
   function handleApply() {
@@ -109,35 +99,16 @@ export function FeedFilterPopover({ assets, filter, onApply }: FeedFilterPopover
           )}
         </div>
 
-        {/* ── Asset selection ────────────────────────────────── */}
-        {assets.length > 0 && (
-          <div className="space-y-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Asset
-            </p>
-            <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
-              {assets.map((asset) => {
-                const selected = draft.assetIds.includes(asset.id);
-                return (
-                  <button
-                    key={asset.id}
-                    type="button"
-                    onClick={() => toggleAsset(asset.id)}
-                    className={cn(
-                      'text-[11px] font-mono font-semibold px-2 py-0.5 rounded-md border transition-all',
-                      selected
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : 'bg-transparent text-muted-foreground border-border hover:border-primary/50 hover:text-foreground',
-                    )}
-                    aria-pressed={selected}
-                  >
-                    {asset.symbol}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        {/* ── Asset selection (search-driven) ─────────────────── */}
+        <div className="space-y-2.5">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Asset
+          </p>
+          <AssetMultiSelect
+            value={draft.assetIds}
+            onChange={(ids) => setDraft((prev) => ({ ...prev, assetIds: ids }))}
+          />
+        </div>
 
         {/* ── Type toggles (Object selection) ────────────────── */}
         <div className="space-y-3">
