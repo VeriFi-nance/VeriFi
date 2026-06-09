@@ -15,6 +15,8 @@ import {
 } from '@/lib/crypto';
 import { encryptPrivateKey, saveEncryptedKey } from '@/lib/keystore';
 import { register, getChallenge, login } from '@/lib/api';
+import { getFieldError, getMessage } from '@/lib/errors';
+import { FieldError } from '@/components/ui/field-error';
 import { saveAuthSession, setAuthMethod } from '@/lib/auth';
 import { connectAndAuthenticateMetaMask } from '@/lib/walletAuth';
 import { isPrivyConfigured } from '@/lib/privyAuth';
@@ -30,15 +32,18 @@ interface LoginFormProps {
 export function LoginForm({ onSuccess }: LoginFormProps) {
   const [tab, setTab] = useState<Tab>('create');
   const [mnemonic, setMnemonic] = useState('');
+  const [createStep, setCreateStep] = useState(0); // 0 passphrase, 1 password, 2 username
   const [saved, setSaved] = useState(false);
   const [createPassword, setCreatePassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [createUsername, setCreateUsername] = useState('');
+  const [usernameError, setUsernameError] = useState('');
   const [creating, setCreating] = useState(false);
   const [restoreMethod, setRestoreMethod] = useState<'mnemonic' | 'privatekey'>('mnemonic');
   const [inputMnemonic, setInputMnemonic] = useState('');
   const [inputPrivateKey, setInputPrivateKey] = useState('');
   const [signinPassword, setSigninPassword] = useState('');
+  const [signinPwError, setSigninPwError] = useState('');
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState('');
   const [metamaskLoading, setMetamaskLoading] = useState(false);
@@ -47,7 +52,9 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   function resetTab(t: Tab) {
     setTab(t);
     setError('');
+    setUsernameError('');
     setMnemonic('');
+    setCreateStep(0);
     setSaved(false);
     setCreateUsername('');
     setCreatePassword('');
@@ -56,28 +63,30 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     setInputMnemonic('');
     setInputPrivateKey('');
     setSigninPassword('');
+    setSigninPwError('');
   }
 
   function handleGenerate() {
     setMnemonic(generateMnemonic());
+    setCreateStep(0);
     setSaved(false);
     setCreateUsername('');
     setCreatePassword('');
     setConfirmPassword('');
     setError('');
+    setUsernameError('');
   }
 
   const passwordMismatch =
     confirmPassword.length > 0 && createPassword !== confirmPassword;
-  const createReady =
-    mnemonic &&
-    saved &&
-    createUsername.trim().length >= 3 &&
-    createPassword.length >= 8 &&
-    createPassword === confirmPassword;
+  const passwordReady =
+    createPassword.length >= 8 && createPassword === confirmPassword;
+  const usernameReady = createUsername.trim().length >= 3;
+  const createReady = mnemonic && saved && usernameReady && passwordReady;
 
   async function handleCreate() {
     setError('');
+    setUsernameError('');
     setCreating(true);
     try {
       const { privateKey, address } = deriveKeyPair(mnemonic);
@@ -88,7 +97,11 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       setAuthMethod('native');
       onSuccess();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong');
+      // Field-level errors (e.g. username taken) pin under the input; the rest
+      // fall back to the generic form alert.
+      const fieldErr = getFieldError(e, 'username');
+      if (fieldErr) setUsernameError(fieldErr);
+      else setError(getMessage(e));
     } finally {
       setCreating(false);
     }
@@ -96,8 +109,9 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 
   async function handleSignIn() {
     setError('');
+    setSigninPwError('');
     if (signinPassword.length < 8) {
-      setError('Password must be at least 8 characters.');
+      setSigninPwError('Password must be at least 8 characters.');
       return;
     }
     setSigningIn(true);
@@ -204,50 +218,67 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
               </Button>
             ) : (
               <>
-                <Alert>
-                  <AlertDescription className="text-amber-600 font-medium">
-                    Write down these 12 words and store them safely. You cannot recover your account
-                    without them.
-                  </AlertDescription>
-                </Alert>
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground text-center">
+                  {createStep === 0
+                    ? 'Step 1 of 3 · Passphrase'
+                    : createStep === 1
+                      ? 'Step 2 of 3 · Password'
+                      : 'Step 3 of 3 · Username'}
+                </p>
 
-                <div className="grid grid-cols-3 gap-2">
-                  {words.map((word, i) => (
-                    <div key={i} className="flex items-center gap-1">
-                      <span className="text-xs text-muted-foreground w-4">{i + 1}.</span>
-                      <Badge variant="secondary" className="font-mono text-xs">
-                        {word}
-                      </Badge>
+                {/* ── Step 1: passphrase ─────────────────────── */}
+                {createStep === 0 && (
+                  <>
+                    <Alert>
+                      <AlertDescription className="text-amber-600 font-medium">
+                        Write down these 12 words and store them safely. You cannot recover your account
+                        without them.
+                      </AlertDescription>
+                    </Alert>
+
+                    <div className="grid grid-cols-3 gap-2">
+                      {words.map((word, i) => (
+                        <div key={i} className="flex items-center gap-1">
+                          <span className="text-xs text-muted-foreground w-4">{i + 1}.</span>
+                          <Badge variant="secondary" className="font-mono text-xs">
+                            {word}
+                          </Badge>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
 
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="saved"
-                    checked={saved}
-                    onCheckedChange={(v) => setSaved(!!v)}
-                  />
-                  <Label htmlFor="saved" className="cursor-pointer">
-                    I have saved my 12-word passphrase
-                  </Label>
-                </div>
-
-                {saved && (
-                  <div className="space-y-3 border rounded-lg p-3">
-                    <p className="text-sm text-muted-foreground">
-                      Pick a unique username and set a password to encrypt your private key locally.
-                    </p>
-                    <div className="space-y-1">
-                      <Label htmlFor="create-username">Username</Label>
-                      <Input
-                        id="create-username"
-                        type="text"
-                        placeholder="e.g. Satoshi"
-                        value={createUsername}
-                        onChange={(e) => setCreateUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="saved"
+                        checked={saved}
+                        onCheckedChange={(v) => setSaved(!!v)}
                       />
+                      <Label htmlFor="saved" className="cursor-pointer">
+                        I have saved my 12-word passphrase
+                      </Label>
                     </div>
+
+                    <div className="flex gap-2">
+                      <Button variant="outline" className="flex-1" onClick={handleGenerate}>
+                        Regenerate
+                      </Button>
+                      <Button
+                        className="flex-1"
+                        disabled={!saved}
+                        onClick={() => setCreateStep(1)}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </>
+                )}
+
+                {/* ── Step 2: password ───────────────────────── */}
+                {createStep === 1 && (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      Set a password to encrypt your private key locally on this device.
+                    </p>
                     <div className="space-y-1">
                       <Label htmlFor="create-pw">Password</Label>
                       <Input
@@ -256,6 +287,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
                         placeholder="At least 8 characters"
                         value={createPassword}
                         onChange={(e) => setCreatePassword(e.target.value)}
+                        autoFocus
                       />
                     </div>
                     <div className="space-y-1">
@@ -266,27 +298,63 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
                         placeholder="Repeat password"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        className={passwordMismatch ? 'border-destructive' : ''}
+                        aria-invalid={passwordMismatch}
                       />
-                      {passwordMismatch && (
-                        <p className="text-xs text-destructive">Passwords do not match</p>
-                      )}
+                      <FieldError>{passwordMismatch ? 'Passwords do not match' : ''}</FieldError>
                     </div>
-                  </div>
+
+                    <div className="flex gap-2">
+                      <Button variant="outline" className="flex-1" onClick={() => setCreateStep(0)}>
+                        Back
+                      </Button>
+                      <Button
+                        className="flex-1"
+                        disabled={!passwordReady}
+                        onClick={() => setCreateStep(2)}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </>
                 )}
 
-                <div className="flex gap-2">
-                  <Button variant="outline" className="flex-1" onClick={handleGenerate}>
-                    Regenerate
-                  </Button>
-                  <Button
-                    className="flex-1"
-                    disabled={!createReady || creating}
-                    onClick={handleCreate}
-                  >
-                    {creating ? 'Creating…' : 'Create Account'}
-                  </Button>
-                </div>
+                {/* ── Step 3: username ───────────────────────── */}
+                {createStep === 2 && (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      Pick a unique username. This is how others will see you.
+                    </p>
+                    <div className="space-y-1">
+                      <Label htmlFor="create-username">Username</Label>
+                      <Input
+                        id="create-username"
+                        type="text"
+                        placeholder="e.g. Satoshi"
+                        value={createUsername}
+                        onChange={(e) => {
+                          setCreateUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''));
+                          if (usernameError) setUsernameError('');
+                        }}
+                        aria-invalid={!!usernameError}
+                        autoFocus
+                      />
+                      <FieldError>{usernameError}</FieldError>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button variant="outline" className="flex-1" onClick={() => setCreateStep(1)}>
+                        Back
+                      </Button>
+                      <Button
+                        className="flex-1"
+                        disabled={!createReady || creating}
+                        onClick={handleCreate}
+                      >
+                        {creating ? 'Creating…' : 'Create Account'}
+                      </Button>
+                    </div>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -346,8 +414,10 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
                 type="password"
                 placeholder="Used to encrypt your key on this device"
                 value={signinPassword}
-                onChange={(e) => setSigninPassword(e.target.value)}
+                onChange={(e) => { setSigninPassword(e.target.value); if (signinPwError) setSigninPwError(''); }}
+                aria-invalid={!!signinPwError}
               />
+              <FieldError>{signinPwError}</FieldError>
               <p className="text-xs text-muted-foreground">
                 You will need this password to decrypt your private key later.
               </p>

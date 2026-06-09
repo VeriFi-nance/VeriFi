@@ -178,6 +178,10 @@ class Asset(models.Model):
     kraken_pair = models.CharField(max_length=20, blank=True, default="")
     twelvedata_symbol = models.CharField(max_length=20, blank=True, default="")
     last_price_update = models.DateTimeField(null=True, blank=True)
+    # How often this asset is referenced by claims/positions. Drives "most used
+    # first" ordering in the asset search/filter dropdowns. Bumped via post_save
+    # signals (see posts/signals.py).
+    usage_count = models.PositiveIntegerField(default=0, db_index=True)
 
     def __str__(self):
         return self.name
@@ -332,7 +336,7 @@ class PositionEvent(models.Model):
 class AssetSubscription(models.Model):
     """
     Observer Design Pattern — subscriber list.
-    Each row represents one Position subscribing to one Asset (the Observable).
+    Each row represents one Position or HardClaim subscribing to one Asset (the Observable).
     The Asset iterates this table during notification to dispatch price updates
     to all active observers.
     """
@@ -340,12 +344,27 @@ class AssetSubscription(models.Model):
         Asset, on_delete=models.CASCADE, related_name="subscriptions"
     )
     position = models.OneToOneField(
-        Position, on_delete=models.CASCADE, related_name="asset_subscription"
+        Position, on_delete=models.CASCADE, related_name="asset_subscription", null=True, blank=True
+    )
+    hard_claim = models.OneToOneField(
+        HardClaim, on_delete=models.CASCADE, related_name="asset_subscription", null=True, blank=True
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(position__isnull=False, hard_claim__isnull=True) |
+                    models.Q(position__isnull=True, hard_claim__isnull=False)
+                ),
+                name="subscription_target_exclusive"
+            )
+        ]
+
     def __str__(self):
-        return f"Subscription: Position #{self.position.id} → {self.asset.symbol}"
+        target = f"Position #{self.position_id}" if self.position_id else f"HardClaim #{self.hard_claim_id}"
+        return f"Subscription: {target} → {self.asset.symbol}"
 
 
 class ClaimMarket(models.Model):

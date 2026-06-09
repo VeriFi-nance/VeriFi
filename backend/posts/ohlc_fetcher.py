@@ -440,7 +440,10 @@ def _fetch_twelvedata_ohlc(symbol: str, start: datetime, end: datetime, interval
         Interval.ONE_MIN: "1min",
     }
 
-    params = urlencode({
+    # Exchange-qualified symbols are stored as "SYMBOL:EXCHANGE" (e.g.
+    # "AKBNK:BIST" for Borsa Istanbul). TwelveData wants the bare ticker in
+    # `symbol` and the venue in a separate `exchange` param.
+    query: dict[str, object] = {
         "symbol": symbol,
         "interval": interval_map[interval],
         "start_date": start.strftime("%Y-%m-%d %H:%M:%S"),
@@ -448,7 +451,13 @@ def _fetch_twelvedata_ohlc(symbol: str, start: datetime, end: datetime, interval
         "apikey": api_key,
         "format": "JSON",
         "outputsize": 5000,
-    })
+    }
+    if ":" in symbol:
+        bare, _, exchange = symbol.partition(":")
+        query["symbol"] = bare
+        if exchange:
+            query["exchange"] = exchange
+    params = urlencode(query)
     url = f"https://api.twelvedata.com/time_series?{params}"
     payload = _http_get_json(url)
 

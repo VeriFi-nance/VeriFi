@@ -6,11 +6,12 @@ import { Star } from 'lucide-react';
 import { HardClaimCard } from '@/components/HardClaimCard';
 import { PositionAttachmentCard } from '@/components/PositionAttachmentCard';
 import { UserAvatar } from '@/components/UserAvatar';
+import { SmartTimestamp } from '@/components/SmartTimestamp';
 import { PostActions } from '@/components/feed/PostActions';
 import { truncateAddress } from '@/lib/wallet';
 import { cn, safeImageSrc } from '@/lib/utils';
 import type { PostItem, HardClaimItem, AssetItem } from '@/lib/types';
-import { ClaimDetailView } from '@/components/feed/ClaimDetailView';
+import { CLAIM_DETAIL_DIALOG_CLASS, ClaimDetailView } from '@/components/feed/ClaimDetailView';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 
 interface PostCardProps {
@@ -28,6 +29,7 @@ function PostCardImpl({ post, hardClaims = [], assets = [], onDelete, onPostChan
   const claimHints = post.hard_claims.length > 0 ? post.hard_claims : hardClaims;
   const positions = post.positions ?? [];
   const hasAttachments = claimHints.length > 0 || positions.length > 0;
+  const hasBadge = Boolean(post.channel || claimHints.length > 0 || positions.length > 0);
 
   return (
     <Card className={cn(
@@ -57,25 +59,24 @@ function PostCardImpl({ post, hardClaims = [], assets = [], onDelete, onPostChan
               </Link>
             </Button>
 
-            <time
-              dateTime={post.created_at}
-              className="text-xs text-muted-foreground shrink-0 hidden sm:block num"
-            >
-              {new Date(post.created_at).toLocaleDateString()}
-            </time>
+            <span aria-hidden="true" className="hidden size-0.5 shrink-0 rounded-full bg-muted-foreground/50 sm:block" />
+            <SmartTimestamp value={post.created_at} className="text-xs text-muted-foreground shrink-0 hidden sm:block" />
+            {hasBadge && (
+              <span aria-hidden="true" className="hidden size-0.5 shrink-0 rounded-full bg-muted-foreground/50 sm:block" />
+            )}
             {post.channel && (
-              <span className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded ml-1 shrink-0">
+              <span className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded shrink-0">
                 <Star className="size-3 fill-amber-500" />
                 PREMIUM
               </span>
             )}
             {claimHints.length > 0 && (
-              <span className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-claim-badge bg-claim-badge/10 px-1.5 py-0.5 rounded ml-1 shrink-0">
+              <span className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-claim-badge bg-claim-badge/10 px-1.5 py-0.5 rounded shrink-0">
                 CLAIM
               </span>
             )}
             {positions.length > 0 && (
-              <span className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-position-badge bg-position-badge/10 px-1.5 py-0.5 rounded ml-1 shrink-0">
+              <span className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-position-badge bg-position-badge/10 px-1.5 py-0.5 rounded shrink-0">
                 POSITION
               </span>
             )}
@@ -167,7 +168,7 @@ function PostCardImpl({ post, hardClaims = [], assets = [], onDelete, onPostChan
 
       {/* Claim detail modal */}
       <RD.Root open={!!claimModal} onOpenChange={(v) => !v && setClaimModal(null)}>
-        <RD.Content className="max-w-2xl">
+        <RD.Content className={CLAIM_DETAIL_DIALOG_CLASS}>
           <RD.Header>
             <RD.Title>Claim Details</RD.Title>
           </RD.Header>

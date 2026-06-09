@@ -138,6 +138,25 @@ export interface AssetItem {
   symbol: string;
   description: string;
   quote_currency?: string;
+  market_type?: string;
+  source?: 'local' | 'remote';
+}
+
+/**
+ * A hit from /assets/search/. Local hits carry a real `id` (already an Asset
+ * row); remote hits have `id: null` plus the provider hints the backend needs
+ * to materialize the row when the user selects it (POST /assets/resolve/).
+ */
+export interface AssetSearchResult {
+  id: number | null;
+  name: string;
+  symbol: string;
+  description?: string;
+  quote_currency?: string;
+  market_type?: string;
+  source?: 'local' | 'remote';
+  _market?: string;
+  _coingecko_id?: string | null;
 }
 
 /**
@@ -344,6 +363,21 @@ export interface PositionItem {
   position_payload?: Record<string, unknown>;
   events?: PositionEventItem[];
   profitability?: ProfitabilityData | null;
+}
+
+export interface NotificationItem {
+  id: number;
+  type: string;
+  title: string;
+  message: string;
+  target_url: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  read_at: string | null;
+  unread: boolean;
+  actor_address?: string | null;
+  actor_username?: string | null;
+  actor_avatar_url?: string | null;
 }
 
 export interface ProofBundle {

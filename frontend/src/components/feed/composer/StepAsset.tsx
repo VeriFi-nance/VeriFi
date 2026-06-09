@@ -1,23 +1,20 @@
-import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TrendingUp, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { AssetCombobox } from '@/components/AssetCombobox';
 import type { AssetItem, ClaimType } from '@/lib/types';
 import type { ClaimDraft } from './types';
 
 interface StepAssetProps {
   value: Partial<ClaimDraft>;
-  assets: AssetItem[];
   onChange: (patch: Partial<ClaimDraft>) => void;
-  onNext: () => void;
+  /** Register a newly-selected/resolved asset into the owner's known list. */
+  registerAsset: (asset: AssetItem) => void;
 }
 
-export function StepAsset({ value, assets, onChange, onNext }: StepAssetProps) {
+export function StepAsset({ value, onChange, registerAsset }: StepAssetProps) {
   // A helper to pick whether it is percentage or price
   const isPrice = value.claim_type === 'PRICE';
-
-  const canProceed = Boolean(value.asset_id && value.claim_type);
 
   function setType(type: ClaimType) {
     onChange({
@@ -30,24 +27,13 @@ export function StepAsset({ value, assets, onChange, onNext }: StepAssetProps) {
     <div className="space-y-4 animate-in slide-in-from-bottom-2 fade-in">
       <div className="space-y-2">
         <Label className="text-sm font-semibold">Select Asset</Label>
-        <Select
-          value={value.asset_id}
-          onValueChange={(v) => {
-            const a = assets.find((a) => a.id.toString() === v);
-            onChange({ asset_id: v, assetSymbol: a?.symbol ?? '' });
+        <AssetCombobox
+          selectedLabel={value.assetSymbol}
+          onSelect={(a) => {
+            registerAsset(a);
+            onChange({ asset_id: a.id.toString(), assetSymbol: a.symbol });
           }}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Search assets..." />
-          </SelectTrigger>
-          <SelectContent>
-            {assets.map((a) => (
-              <SelectItem key={a.id} value={a.id.toString()}>
-                {a.symbol.includes('/') ? a.symbol : `${a.symbol}/${a.quote_currency}`} — {a.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        />
       </div>
 
       <div className="space-y-2">
@@ -83,16 +69,6 @@ export function StepAsset({ value, assets, onChange, onNext }: StepAssetProps) {
             <span className="text-xs opacity-70 mt-1">e.g. hits $100k</span>
           </button>
         </div>
-      </div>
-
-      <div className="pt-4">
-        <Button 
-          className="w-full" 
-          disabled={!canProceed} 
-          onClick={onNext}
-        >
-          Next Step
-        </Button>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 from django.test import TestCase
 from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import AccessToken
 from accounts.models import WalletUser, ProfileChangeLog
 
 class UsernameTests(TestCase):
@@ -32,7 +33,7 @@ class UsernameTests(TestCase):
         address2 = "0x" + "2" * 40
         res = self.client.post("/api/auth/register/", {"address": address2, "username": "taken_name"})
         self.assertEqual(res.status_code, 400)
-        self.assertIn("username", res.data)
+        self.assertIn("username", res.data["error"]["fields"])
 
     def test_profile_lookup_by_username_and_address(self):
         address = "0x" + "c" * 40
@@ -92,14 +93,14 @@ class UsernameTests(TestCase):
         address = "0x" + "f" * 40
         res = self.client.post("/api/auth/register/", {"address": address, "username": "update"})
         self.assertEqual(res.status_code, 400)
-        self.assertIn("username", res.data)
+        self.assertIn("username", res.data["error"]["fields"])
 
     def test_register_username_starts_with_0x(self):
         # Trying to register with a username starting with '0x' should fail
         address = "0x" + "1a" * 20
         res = self.client.post("/api/auth/register/", {"address": address, "username": "0xmyuser"})
         self.assertEqual(res.status_code, 400)
-        self.assertIn("username", res.data)
+        self.assertIn("username", res.data["error"]["fields"])
 
     def test_profile_update_reserved_username(self):
         address = "0x" + "2b" * 20
@@ -168,3 +169,36 @@ class UsernameTests(TestCase):
         self.assertEqual(len(res.data["channels_member_of"]), 1)
         self.assertEqual(res.data["channels_member_of"][0]["id"], channel_joined.id)
 
+    def test_follow_accepts_username_lookup(self):
+        follower_address = "0x" + "a1" * 20
+        target_address = "0x" + "b2" * 20
+        WalletUser.objects.create(address=follower_address, username="follower_user")
+        WalletUser.objects.create(address=target_address, username="target_user")
+        token = AccessToken()
+        token["address"] = follower_address
+
+        res = self.client.post(
+            "/api/auth/follow/",
+            {"target_address": "target_user"},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(res.data["following"])
+
+    def test_follow_rejects_self_by_username(self):
+        address = "0x" + "c3" * 20
+        WalletUser.objects.create(address=address, username="self_user")
+        token = AccessToken()
+        token["address"] = address
+
+        res = self.client.post(
+            "/api/auth/follow/",
+            {"target_address": "self_user"},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.data["detail"], "Cannot follow yourself.")

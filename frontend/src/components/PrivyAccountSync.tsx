@@ -3,11 +3,12 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useCreateWallet, usePrivy, useWallets } from '@privy-io/react-auth';
 import {
   clearAuth,
-  isAuthenticated,
+  isBackendTokenUsable,
   loadAddress,
   loadAuthMethod,
   loginReturnTo,
   openLogin,
+  useAuthState,
 } from '@/lib/auth';
 import { clearPrivateKey } from '@/lib/keystore';
 import {
@@ -30,6 +31,7 @@ export function PrivyAccountSync() {
   const { createWallet } = useCreateWallet();
   const navigate = useNavigate();
   const location = useLocation();
+  const authState = useAuthState();
   const creatingWalletRef = useRef(false);
   const syncingRef = useRef(false);
 
@@ -61,9 +63,10 @@ export function PrivyAccountSync() {
     }
 
     const walletAddress = wallet.address.toLowerCase();
-    const currentAddress = loadAddress()?.toLowerCase();
+    const currentAddress = authState.address?.toLowerCase() ?? loadAddress()?.toLowerCase();
     const alreadySynced =
-      isAuthenticated() &&
+      authState.authenticated &&
+      isBackendTokenUsable(authState.token) &&
       loadAuthMethod() === 'privy' &&
       currentAddress === walletAddress;
 
@@ -107,6 +110,9 @@ export function PrivyAccountSync() {
     location.pathname,
     location.search,
     logout,
+    authState.address,
+    authState.authenticated,
+    authState.token,
   ]);
 
   // Privy session ended — clear VeriFi session if it was a Privy login.

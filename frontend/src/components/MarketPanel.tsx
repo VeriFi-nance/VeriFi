@@ -85,12 +85,7 @@ export function MarketPanel({ claimId, onChange }: Props) {
 
   return (
     <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-4">
-      <div className="space-y-1">
-        <h3 className="text-sm font-semibold">Reputation market</h3>
-        <p className="text-xs text-muted-foreground">
-          Stake rep to agree or disagree. Winners split the pool when the claim resolves.
-        </p>
-      </div>
+      <h3 className="text-sm font-semibold">Reputation market</h3>
 
       <div className="space-y-2">
         <div className="flex items-center justify-between text-xs">
@@ -109,7 +104,6 @@ export function MarketPanel({ claimId, onChange }: Props) {
         </div>
         <p className="text-[11px] text-muted-foreground">
           {market.stake_count} {market.stake_count === 1 ? 'person' : 'people'} staked
-          {market.total_burned > 0 && ` · ${market.total_burned.toFixed(1)} rep burned in fees`}
         </p>
       </div>
 
@@ -128,7 +122,6 @@ export function MarketPanel({ claimId, onChange }: Props) {
           <BuyButton
             side="YES"
             label="Agree"
-            hint="Claim is correct"
             preview={previewYes}
             rep={market.trader_stake}
             disabled={busy}
@@ -137,7 +130,6 @@ export function MarketPanel({ claimId, onChange }: Props) {
           <BuyButton
             side="NO"
             label="Disagree"
-            hint="Claim is wrong"
             preview={previewNo}
             rep={market.trader_stake}
             disabled={busy}
@@ -148,13 +140,6 @@ export function MarketPanel({ claimId, onChange }: Props) {
 
       {actionError && (
         <p className="text-xs text-destructive">{actionError}</p>
-      )}
-
-      {!market.resolved && (
-        <p className="text-[11px] text-muted-foreground leading-relaxed">
-          Each trade burns {Math.round(market.burn_fee * 100)}% rep. If fewer than{' '}
-          {market.min_total_voters} people vote, everyone is refunded.
-        </p>
       )}
     </div>
   );
@@ -188,7 +173,6 @@ function YourStakeCard({ stake }: { stake: NonNullable<ClaimMarketItem['your_sta
 function BuyButton({
   side,
   label,
-  hint,
   preview,
   rep,
   disabled,
@@ -196,7 +180,6 @@ function BuyButton({
 }: {
   side: 'YES' | 'NO';
   label: string;
-  hint: string;
   preview: BuyPreviewResult | null;
   rep: number;
   disabled: boolean;
@@ -219,11 +202,10 @@ function BuyButton({
       <span className={cn('text-sm font-semibold', isAgree ? 'text-success' : 'text-destructive')}>
         {label}
       </span>
-      <span className="text-[11px] text-muted-foreground">{hint}</span>
-      <span className="text-xs font-medium mt-0.5">Stake {rep} rep</span>
+      <span className="text-xs font-medium mt-0.5">{rep} rep</span>
       {preview && (
         <span className="text-[11px] font-mono text-muted-foreground">
-          Win up to {preview.locked_payout_if_win.toFixed(1)} rep
+          +{preview.locked_payout_if_win.toFixed(1)} rep
         </span>
       )}
     </Button>

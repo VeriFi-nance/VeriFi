@@ -14,11 +14,15 @@ import PostDetailPage from './pages/PostDetailPage';
 import UserPage from './pages/UserPage';
 import SettingsPage from './pages/SettingsPage';
 import ClaimDetailPage from './pages/ClaimDetailPage';
+import NotificationsPage from './pages/NotificationsPage';
 import { clearAuth, loadAddress, loadAuthMethod, openLogin, useAuthState, setAuthMethod } from './lib/auth';
 import { clearPrivateKey } from './lib/keystore';
 import { authenticateMetaMaskAddress } from './lib/walletAuth';
 import { PrivyAccountSync } from './components/PrivyAccountSync';
 import { isPrivyConfigured } from './lib/privyAuth';
+import { ConfirmProvider } from './components/ConfirmDialog';
+import { PasswordPromptProvider } from './components/PasswordPromptProvider';
+import { Toaster } from './components/ui/sonner';
 
 // Lazy so the BIP39/BIP32/secp256k1 bundle (only reachable through LoginForm)
 // is fetched on demand when the login modal opens, not in the initial chunk.
@@ -29,6 +33,8 @@ const LoginModal = lazy(() =>
 const VerifyPage = lazy(() =>
   import('./pages/VerifyPage').then((m) => ({ default: m.VerifyPage }))
 );
+
+const AboutPage = lazy(() => import('./pages/AboutPage'));
 
 function WalletAccountSync() {
   const navigate = useNavigate();
@@ -110,7 +116,9 @@ function AppRoutes() {
           <Route path="/post/:id" element={<PostDetailPage />} />
           <Route path="/claim/:id" element={<ClaimDetailPage />} />
           <Route path="/u/:address" element={<UserPage />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/settings" element={<SettingsGate />} />
+          <Route path="/about" element={<Suspense fallback={null}><AboutPage /></Suspense>} />
           <Route path="/verify" element={<Suspense fallback={null}><VerifyPage /></Suspense>} />
           <Route path="/verify/claim/:id" element={<Suspense fallback={null}><VerifyPage type="claim" /></Suspense>} />
           <Route path="/verify/position/:id" element={<Suspense fallback={null}><VerifyPage type="position" /></Suspense>} />
@@ -158,9 +166,14 @@ function PostLegacyRedirect() {
 export default function App() {
   return (
     <BrowserRouter>
-      <WalletAccountSync />
-      {isPrivyConfigured() && <PrivyAccountSync />}
-      <AppRoutes />
+      <ConfirmProvider>
+        <PasswordPromptProvider>
+          <WalletAccountSync />
+          {isPrivyConfigured() && <PrivyAccountSync />}
+          <AppRoutes />
+          <Toaster />
+        </PasswordPromptProvider>
+      </ConfirmProvider>
     </BrowserRouter>
   );
 }

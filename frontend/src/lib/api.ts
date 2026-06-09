@@ -1,5 +1,5 @@
-import { getToken } from './auth';
-import type { PostItem, PostCommentItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, PositionChartData, AssetChartData, ChartCandleInterval, ProfileStats, ChannelItem, ChannelMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType, ProofBundle, OGMetadata } from './types';
+import { clearAuth, getToken } from './auth';
+import type { PostItem, PostCommentItem, HardClaimItem, AssetItem, AssetSearchResult, ExtractClaimsResponse, ClaimChartData, PositionChartData, AssetChartData, ChartCandleInterval, ProfileStats, ChannelItem, ChannelMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType, ProofBundle, OGMetadata, NotificationItem } from './types';
 
 /**
  * Ordered list of backend base URLs to try, sourced from build-time env vars:
@@ -17,6 +17,68 @@ import type { PostItem, PostCommentItem, HardClaimItem, AssetItem, ExtractClaims
  */
 const CACHE_KEY = 'verifi_api_base';
 const DEFAULT_BASE_URL = 'http://localhost:8000';
+
+/**
+ * Typed error thrown by {@link request} on any non-2xx response.
+ *
+ * Carries the normalized backend envelope:
+ *   { error: { code, message, fields? } }
+ * while tolerating the legacy shapes still emitted by un-migrated endpoints
+ * ({ detail }, DRF field errors { field: [msg] }, and the resolution payload).
+ */
+export class ApiError extends Error {
+  code: string;
+  fields?: Record<string, string[]>;
+  status: number;
+
+  constructor(message: string, opts: { code?: string; fields?: Record<string, string[]>; status?: number } = {}) {
+    super(message);
+    this.name = 'ApiError';
+    this.code = opts.code ?? 'error';
+    this.fields = opts.fields;
+    this.status = opts.status ?? 0;
+  }
+}
+
+/** Parse any known backend error body into a typed ApiError. */
+function parseApiError(data: unknown, status: number): ApiError {
+  const body = (data ?? {}) as Record<string, unknown>;
+
+  // Preferred: normalized envelope { error: { code, message, fields } }
+  const env = body.error;
+  if (env && typeof env === 'object') {
+    const e = env as Record<string, unknown>;
+    return new ApiError(
+      typeof e.message === 'string' ? e.message : 'Request failed',
+      {
+        code: typeof e.code === 'string' ? e.code : 'error',
+        fields: (e.fields as Record<string, string[]> | undefined) ?? undefined,
+        status,
+      },
+    );
+  }
+
+  // Legacy: { detail: "..." }
+  if (typeof body.detail === 'string') {
+    return new ApiError(body.detail, { status });
+  }
+
+  // Legacy: DRF field errors { field: ["msg", ...] }
+  const fields: Record<string, string[]> = {};
+  let firstMsg: string | null = null;
+  for (const [key, val] of Object.entries(body)) {
+    const arr = Array.isArray(val) ? val.map(String) : typeof val === 'string' ? [val] : null;
+    if (arr) {
+      fields[key] = arr;
+      if (!firstMsg && arr.length) firstMsg = arr[0];
+    }
+  }
+  if (firstMsg) {
+    return new ApiError(firstMsg, { code: 'validation_error', fields, status });
+  }
+
+  return new ApiError('Request failed', { status });
+}
 
 function candidateBaseUrls(): string[] {
   const urls = [import.meta.env.VITE_API_URL, import.meta.env.VITE_API_FALLBACK_URL]
@@ -47,6 +109,13 @@ function rememberBaseUrl(base: string): void {
   } catch {
     /* localStorage unavailable — ignore */
   }
+}
+
+function hasAuthorizationHeader(headers: HeadersInit | undefined): boolean {
+  if (!headers) return false;
+  if (headers instanceof Headers) return headers.has('Authorization');
+  if (Array.isArray(headers)) return headers.some(([key]) => key.toLowerCase() === 'authorization');
+  return Object.keys(headers).some((key) => key.toLowerCase() === 'authorization');
 }
 
 async function request<T>(
@@ -88,7 +157,10 @@ async function request<T>(
     const text = await res.text();
     const data = text ? JSON.parse(text) : {};
     if (!res.ok) {
-      throw new Error(data.detail ?? 'Request failed');
+      if (res.status === 401 && hasAuthorizationHeader(optHeaders)) {
+        clearAuth();
+      }
+      throw parseApiError(data, res.status);
     }
     return data as T;
   }
@@ -216,6 +288,7 @@ export async function getFeed(params?: {
   asset_ids?: number[];
   has_claims?: boolean;
   has_positions?: boolean;
+  address?: string;
   q?: string;
 }): Promise<PaginatedResponse<PostItem>> {
   const query = new URLSearchParams();
@@ -227,6 +300,7 @@ export async function getFeed(params?: {
     query.append('asset_ids', params.asset_ids.join(','));
   if (params?.has_claims !== undefined) query.append('has_claims', String(params.has_claims));
   if (params?.has_positions !== undefined) query.append('has_positions', String(params.has_positions));
+  if (params?.address) query.append('address', params.address);
   if (params?.q) query.append('q', params.q);
   const qs = query.toString() ? `?${query.toString()}` : '';
   return request(`/api/posts/${qs}`, { headers: authHeaders() });
@@ -396,6 +470,21 @@ export async function updateHardClaimStatus(
 
 export async function getAssets(): Promise<AssetItem[]> {
   return request('/api/posts/assets/');
+}
+
+/** Hybrid asset search: local DB hits plus remote provider candidates. */
+export async function searchAssets(q: string, limit = 20): Promise<AssetSearchResult[]> {
+  const qs = new URLSearchParams({ q, limit: String(limit) });
+  return request(`/api/posts/assets/search/?${qs.toString()}`);
+}
+
+/** Persist a remote search candidate into a real Asset row (idempotent). */
+export async function resolveAsset(candidate: AssetSearchResult): Promise<AssetItem> {
+  return request('/api/posts/assets/resolve/', {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(candidate),
+  });
 }
 
 export async function getAssetChartData(
@@ -610,4 +699,40 @@ export async function getPositionChartData(
 
 export async function searchAPI(query: string, type: string): Promise<any> {
   return request(`/api/posts/search/?q=${encodeURIComponent(query)}&type=${encodeURIComponent(type)}`);
+}
+
+export async function getNotifications(params?: {
+  page?: number;
+  page_size?: number;
+}): Promise<PaginatedResponse<NotificationItem>> {
+  const query = new URLSearchParams();
+  if (params?.page) query.append('page', params.page.toString());
+  if (params?.page_size) query.append('page_size', params.page_size.toString());
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  return request(`/api/notifications/${qs}`, { headers: authHeaders() });
+}
+
+export async function getUnreadNotificationCount(): Promise<{ unread_count: number }> {
+  return request('/api/notifications/unread-count/', { headers: authHeaders() });
+}
+
+export async function markNotificationRead(id: number): Promise<NotificationItem> {
+  return request(`/api/notifications/${id}/read/`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+  });
+}
+
+export async function markAllNotificationsRead(): Promise<{ updated: number }> {
+  return request('/api/notifications/mark-all-read/', {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+}
+
+export async function deleteNotification(id: number): Promise<void> {
+  await request(`/api/notifications/${id}/`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
 }
