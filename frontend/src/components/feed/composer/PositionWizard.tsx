@@ -33,7 +33,7 @@ export function defaultPositionDraft(): PositionDraft {
 }
 
 interface PositionWizardProps {
-  assets: AssetItem[];
+  registerAsset: (asset: AssetItem) => void;
   initialDraft?: Partial<PositionDraft>;
   onComplete: (pos: PositionDraft) => void;
   onCancel: () => void;
@@ -41,7 +41,7 @@ interface PositionWizardProps {
 }
 
 export function PositionWizard({
-  assets,
+  registerAsset,
   initialDraft,
   onComplete,
   onCancel,
@@ -78,7 +78,7 @@ export function PositionWizard({
         {step === 0 && (
           <PositionStepAsset
             value={draft}
-            assets={assets}
+            registerAsset={registerAsset}
             onChange={patchDraft}
             onNext={nextStep}
           />
