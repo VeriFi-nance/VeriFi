@@ -1,0 +1,282 @@
+% !TeX program = lualatex
+% !TeX root = poster.tex
+\documentclass[final]{beamer}
+
+% ====================
+% Packages
+% ====================
+
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[size=custom,width=118.9,height=84.1,scale=1.0]{beamerposter}
+\setbeamerfont{block body}{size*={24pt}{28pt}}
+\setbeamerfont{itemize/enumerate body}{size*={24pt}{28pt}}
+\setbeamerfont{itemize/enumerate subbody}{size*={24pt}{28pt}}
+\usetheme{gemini}
+
+\usepackage{graphicx}
+\usepackage{array}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.14}
+\usepackage{anyfontsize}
+\usepackage{tabularx}
+\usepackage{makecell}
+\usepackage[table]{xcolor}
+\usepackage{simpleicons}
+
+% ====================
+% Lengths
+% ====================
+
+% If you have N columns, choose \sepwidth and \colwidth such that
+% (N+1)*\sepwidth + N*\colwidth = \paperwidth
+\newlength{\sepwidth}
+\newlength{\colwidth}
+\setlength{\sepwidth}{0.025\paperwidth}
+\setlength{\colwidth}{0.3\paperwidth}
+
+\newcommand{\separatorcolumn}{\begin{column}{\sepwidth}\end{column}}
+
+\newcommand{\blocktitleformat}[1]{%
+  {\fontsize{42}{48}\selectfont\bfseries #1}%
+}
+
+\newcommand{\subtitleformat}[1]{%
+  {\fontsize{32pt}{38pt}\selectfont\color{blue!60!black}\textbf{#1}}%
+}
+
+\newcommand{\tick}{\textcolor{blue!60!black}{\(\checkmark\)}}
+\newcommand{\dash}{\textcolor{black!35}{--}}
+
+\definecolor{vitepurple}{HTML}{646CFF}
+\definecolor{reactblue}{HTML}{61DAFB}
+\definecolor{tsblue}{HTML}{3178C6}
+\definecolor{tailwindblue}{HTML}{06B6D4}
+\definecolor{djangogreen}{HTML}{092E20}
+\definecolor{postgresblue}{HTML}{4169E1}
+\definecolor{sqliteblue}{HTML}{003B57}
+\definecolor{ethersviolet}{HTML}{2535A0}
+\definecolor{vercelblack}{HTML}{000000}
+\definecolor{rendergreen}{HTML}{46E3B7}
+
+\newcommand{\techlogo}[3]{%
+  \begin{minipage}[t]{0.18\linewidth}
+    \centering
+    {\fontsize{58}{64}\selectfont\textcolor{#2}{\simpleicon{#1}}}\\[-0.05cm]
+    {\fontsize{18}{22}\selectfont\textbf{#3}}
+  \end{minipage}%
+}
+
+\newcommand{\metamasktechlogo}{%
+  \begin{minipage}[t]{0.18\linewidth}
+    \centering
+    \includegraphics[height=2.05cm]{images/metamask-logo.pdf}\\[-0.05cm]
+    {\fontsize{18}{22}\selectfont\textbf{MetaMask}}
+  \end{minipage}%
+}
+
+\usepackage[backend=biber,style=numeric,sorting=none,maxbibnames=3]{biblatex}
+\addbibresource{poster.bib}
+
+% ====================
+% Title
+% ====================
+
+\title{\fontsize{85}{100}\selectfont \raisebox{-0.2\height}{\includegraphics[height=100pt]{"images/VeriFi logo.png"}} \hspace{0.5cm} A Verifiable Social Platform for Financial Claims}
+
+\author{Arda Saygan \and Volkan Seki \and Abdurrahman Arslan \and Yusuf Anıl Yazıcı \and Advisor: Hüseyin Birkan Yılmaz}
+
+\institute[shortinst]{\inst{1} Boğaziçi University Department of Computer Engineering}
+
+\logoright{\includegraphics[width=6cm]{logos/boun logo.pdf}}
+\logoleft{\includegraphics[width=6cm]{logos/boun logo.pdf}}
+
+% ====================
+% Body
+% ====================
+
+\begin{document}
+
+\begin{frame}[t]
+
+  \begin{figure}
+    \centering
+    \includegraphics[width=110cm,height=0.27\paperheight,keepaspectratio]{images/proflo3.drawio.png}
+  \end{figure}
+
+  \vspace{-0.4cm}
+
+\begin{columns}[t]
+\separatorcolumn
+
+% ====================
+% First Column
+% ====================
+\begin{column}{\colwidth}
+
+  \begin{block}{\blocktitleformat{What is VeriFi}}
+    A finance social media app where users publish structured market claims and suggested positions that are signed, verifiable, and resolved against real data.
+
+    \vspace{0.7cm}
+    \subtitleformat{Core proposition.}\\
+    A user's financial reputation on VeriFi cannot be faked or retroactively edited.
+  \end{block}
+
+  \begin{block}{\blocktitleformat{Motivation}}
+    Existing platforms give investors lots of opinions, but weak accountability:
+    \begin{itemize}
+      \item posts can be deleted or reworded after the outcome,
+      \item expertise is self-declared instead of measured,
+      \item screenshots and social proof are easy to manipulate,
+      \item vague predictions cannot be resolved objectively.
+    \end{itemize}
+
+    \vspace{0.7cm}
+    VeriFi supplies all three missing properties: \textbf{social}, \textbf{verifiable}, and \textbf{quantifiable}.
+
+    \vspace{0.8cm}
+    \begin{table}
+      \centering
+      \renewcommand{\arraystretch}{1.13}
+      \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}Xcccc@{}}
+        \toprule
+        \textbf{Spec} & \textbf{VeriFi} & \textbf{X} & \makecell{\textbf{Trading}\\\textbf{View}} & \textbf{Stocktwits} \\
+        \midrule
+        Structured market claim & \tick & \dash & \dash & \dash \\
+        Wallet-signed proof & \tick & \dash & \dash & \dash \\
+        Objective price resolution & \tick & \dash & \dash & \dash \\
+        Outcome-based reputation & \tick & \dash & \dash & \dash \\
+        Claim-market voting & \tick & \dash & \dash & \dash \\
+        Public finance feed & \tick & \tick & \tick & \tick \\
+        Charts / price context & \tick & \dash & \tick & \dash \\
+        \bottomrule
+      \end{tabularx}
+    \end{table}
+  \end{block}
+
+  \begin{block}{\blocktitleformat{Components}}
+    \textbf{Claims, Positions, Reputation Score, Reputation Market, Channels, Proofs}
+
+    \vspace{0.8cm}
+    \subtitleformat{Hard Claims:}
+    \begin{itemize}
+      \item asset, direction, percentage, deadline
+      \item signed by the user's wallet
+      \item resolved after expiry using market data
+    \end{itemize}
+  \end{block}
+
+\end{column}
+
+\separatorcolumn
+
+% ====================
+% Second Column
+% ====================
+\begin{column}{\colwidth}
+
+  \begin{block}{\blocktitleformat{Technical Stack}}
+    \begin{center}
+      \techlogo{vite}{vitepurple}{Vite}\hfill
+      \techlogo{react}{reactblue}{React}\hfill
+      \techlogo{typescript}{tsblue}{TypeScript}\hfill
+      \techlogo{tailwindcss}{tailwindblue}{Tailwind}\hfill
+      \techlogo{shadcnui}{vercelblack}{shadcn/ui}
+
+      \vspace{0.6cm}
+
+      \techlogo{django}{djangogreen}{Django}\hfill
+      \techlogo{postgresql}{postgresblue}{PostgreSQL}\hfill
+      \techlogo{sqlite}{sqliteblue}{SQLite}\hfill
+      \techlogo{ethers}{ethersviolet}{ethers}\hfill
+      \metamasktechlogo
+
+      \vspace{0.6cm}
+
+      \techlogo{vercel}{vercelblack}{Vercel}\hfill
+      \techlogo{render}{rendergreen}{Render}
+    \end{center}
+
+    \begin{table}
+      \centering
+      \begin{tabularx}{\linewidth}{@{}lX@{}}
+        \toprule
+        \textbf{Layer} & \textbf{Implementation} \\
+        \midrule
+        Frontend & React, Vite, TypeScript, Tailwind CSS, shadcn/ui \\
+        Backend & Django REST Framework with JWT authentication \\
+        Database & SQLite in development, PostgreSQL in production \\
+        Crypto & MetaMask/native wallet auth, ethers, secp256k1 signatures, EIP-191 recovery \\
+        Data & Market-price APIs for claim resolution \\
+        Deploy & Vercel frontend and Render backend \\
+        \bottomrule
+      \end{tabularx}
+    \end{table}
+  \end{block}
+
+  \begin{block}{\blocktitleformat{Design}}
+    \subtitleformat{Every content is signed by users.}\\
+    VeriFi uses wallet-based identity. Users authenticate with a native browser wallet or MetaMask, and the private key stays on the client.
+
+    \vspace{0.8cm}
+    \subtitleformat{Proofs make claims portable.}
+    \begin{itemize}
+      \item claim payload,
+      \item wallet address,
+      \item signature,
+      \item timestamp.
+    \end{itemize}
+
+    \vspace{0.7cm}
+    \subtitleformat{Future work.}\\
+    Train a VeriFi-owned finance LLM for the LLM extractor component, so claim parsing becomes more domain-specific and less dependent on generic extraction.
+  \end{block}
+
+\end{column}
+
+\separatorcolumn
+
+% ====================
+% Third Column
+% ====================
+\begin{column}{\colwidth}
+
+  \begin{block}{\blocktitleformat{How Reputation Market Work}}
+    \textbf{Reputation Market ensures:}
+    \begin{itemize}
+      \item early foresighters are rewarded more,
+      \item copycat predictions do not dominate,
+      \item trivial claims are not rewarded heavily,
+      \item wrong claims reduce credibility.
+    \end{itemize}
+
+    \vspace{0.7cm}
+    \textbf{What VeriFi brings:}
+    \begin{itemize}
+      \item measurable finance discussion,
+      \item public profiles backed by resolved claims,
+      \item proof files that anyone can verify,
+      \item channels for focused communities,
+      \item a reputation layer based on outcomes.
+    \end{itemize}
+  \end{block}
+
+  \begin{block}{\blocktitleformat{Try VeriFi}}
+    \begin{center}
+      \begin{figure}
+        \centering
+        \includegraphics[width=0.50\linewidth,height=16cm,keepaspectratio]{images/poster-qr.png}
+      \end{figure}
+    \end{center}
+  \end{block}
+
+\end{column}
+
+\separatorcolumn
+\end{columns}
+\end{frame}
+
+\end{document}
