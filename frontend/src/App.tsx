@@ -136,6 +136,7 @@ function AppRoutes() {
         <Route path="/app/user/:address" element={<UserLegacyRedirect />} />
         <Route path="/c" element={<Navigate to="/feed" replace />} />
         <Route path="/c/:id" element={<Navigate to="/feed" replace />} />
+        <Route path="/simulation" element={<Navigate to="/about?tab=rep" replace />} />
 
         <Route path="*" element={<Navigate to="/feed" replace />} />
       </Routes>
