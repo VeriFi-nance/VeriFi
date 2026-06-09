@@ -786,13 +786,126 @@ class ExtractClaimsView(APIView):
         claims = rule_based_claims_from_prompt(content)
         return Response({"version": CONTRACT_VERSION, "claims": [c.to_dict() for c in claims]})
     
+def _search_local_assets(query: str, limit: int | None):
+    """Local DB asset search ordered by relevance (exact symbol, symbol prefix,
+    then name/symbol contains). Returns a list of serialized assets tagged
+    source="local". limit=None returns the full list (used as the app-wide
+    id→symbol lookup table by the feed)."""
+    qs = Asset.objects.all()
+    if query:
+        from django.db.models import Case, When, IntegerField, Q
+        # Relevance first, then most-used, then name.
+        qs = qs.filter(Q(symbol__icontains=query) | Q(name__icontains=query)).annotate(
+            _rank=Case(
+                When(symbol__iexact=query, then=Value(0)),
+                When(symbol__istartswith=query, then=Value(1)),
+                When(name__istartswith=query, then=Value(2)),
+                default=Value(3),
+                output_field=IntegerField(),
+            )
+        ).order_by("_rank", "-usage_count", "name")
+    elif limit is not None:
+        # Capped no-query request (dropdown just opened): surface the most-used
+        # assets so the common picks are one keystroke away.
+        qs = qs.order_by("-usage_count", "name")
+    else:
+        qs = qs.order_by("name")
+    if limit is not None:
+        qs = qs[:limit]
+    data = AssetSerializer(qs, many=True).data
+    for row in data:
+        row["source"] = "local"
+    return data
+
+
 class AssetListView(APIView):
     authentication_classes = []
     permission_classes = []
 
     def get(self, request):
-        assets = Asset.objects.all().order_by("name")
-        return Response(AssetSerializer(assets, many=True).data)
+        query = request.query_params.get("q", "").strip()
+        # A bare GET /assets/ is the app's full asset table (feed cards resolve
+        # claim/position symbols from it), so it must NOT be capped. A limit is
+        # only honored alongside an explicit ?q= search.
+        limit_param = request.query_params.get("limit")
+        if query and limit_param:
+            try:
+                limit: int | None = min(int(limit_param), 500)
+            except (TypeError, ValueError):
+                limit = 50
+        elif query:
+            limit = 50
+        else:
+            limit = None  # full catalog
+        return Response(_search_local_assets(query, limit))
+
+
+class AssetSearchView(APIView):
+    """Hybrid search: local DB first, remote provider candidates appended when
+    the local catalog is thin. Remote candidates carry id=None + source="remote"
+    and are materialized only when the user selects one (/assets/resolve/)."""
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        query = request.query_params.get("q", "").strip()
+        try:
+            limit = min(int(request.query_params.get("limit", 20)), 50)
+        except (TypeError, ValueError):
+            limit = 20
+
+        local = _search_local_assets(query, limit)
+        results = list(local)
+
+        # Only pay the remote round-trip when local results are sparse.
+        if query and len(local) < limit:
+            from .asset_search import remote_search
+            local_keys = {(r["symbol"], r["market_type"]) for r in local}
+            for cand in remote_search(query, limit - len(local)):
+                if (cand["symbol"], cand["market_type"]) not in local_keys:
+                    results.append(cand)
+        return Response(results[:limit])
+
+
+class AssetResolveView(APIView):
+    """Persist a remote search candidate into a real Asset row (idempotent),
+    returning the serialized asset with its new id. Called by the picker right
+    before a claim/position payload that needs asset_id."""
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        data = request.data or {}
+        symbol = (data.get("symbol") or "").strip()
+        market = (data.get("_market") or data.get("market") or "").strip().lower()
+        if not symbol or not market:
+            return Response({"detail": "symbol and market are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from .asset_providers import get_or_create_asset, SUPPORTED_MARKETS
+        if market not in SUPPORTED_MARKETS:
+            return Response({"detail": f"Unsupported market: {market}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            asset, _created = get_or_create_asset(
+                symbol=symbol,
+                name=data.get("name") or symbol,
+                market=market,
+                quote_currency=(data.get("quote_currency") or "USD"),
+                coingecko_id=data.get("_coingecko_id"),
+            )
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Refresh the NL whitelist so the new ticker is recognized in free-text.
+        try:
+            from .claim_extraction import refresh_whitelist
+            refresh_whitelist()
+        except Exception:
+            logger.warning("Whitelist refresh after asset resolve failed", exc_info=True)
+
+        payload = AssetSerializer(asset).data
+        payload["source"] = "local"
+        return Response(payload, status=status.HTTP_200_OK)
 
 class HardClaimView(APIView):
     authentication_classes = []
