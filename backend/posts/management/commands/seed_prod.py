@@ -100,16 +100,34 @@ def explicit_timestamps():
 # Static pools
 # ---------------------------------------------------------------------------
 
-USERNAME_FIRST = [
-    "macro", "sats", "bist", "alpha", "degen", "chart", "swing", "vol",
-    "trend", "delta", "gamma", "hodl", "bear", "bull", "pump", "quant",
-    "yield", "perma", "turbo", "borsa", "kripto", "lira", "dolar", "altin",
-    "moon", "dip", "fib", "rsi", "wick", "candle",
-]
-USERNAME_SECOND = [
-    "mike", "hunter", "stacker", "wolf", "sniper", "wizard", "guru", "kaplan",
-    "trader", "shark", "hawk", "fox", "pasha", "reis", "abi", "usta",
-    "kurdu", "master", "lord", "punk", "whale", "ape", "cat", "owl",
+# Mixed handle styles so the user list doesn't look generated: snake_case,
+# CamelCase, lowercase mashups, plain names, numbers, Turkish + English.
+HANDLES = [
+    "MacroMike", "sats_stacker", "bullrun2024", "denizyilmaz", "fibwhisperer",
+    "CryptoEmre", "zeynep_fx", "TheChartGuy", "mr_volatility", "kerem",
+    "aysetrades", "BISTkaplani", "JLinCapital", "wickcatcher", "perma_bear_ali",
+    "GammaGoblin", "selin", "hodlferatu", "trader_joe61", "altinci_his",
+    "DegenDede", "liquidity_hunter", "Mehmet_K", "noisetrader", "OnurFX",
+    "candlewitch", "borsa_kurdu_35", "QuantQueen", "dipbuyer99", "ekremabi",
+    "SwingState", "tugce_charts", "blokzincirci", "TheRealHODL", "mertcan",
+    "VWAPyilmaz", "shortsqueezer", "Aslihan", "satoshi_torunu", "breadthwatch",
+    "Ece_Macro", "rsi_dervisi", "ChartCemil", "yieldfarmer_x", "B2Bderya",
+    "TurboTunc", "ihtiyatli_ayi", "moon_misafiri", "DrDrawdown", "haticeFX",
+    "pivot_pasa", "LeylaLong", "stop_avcisi", "GokhanGamma", "tape_reader",
+    "umutlu_boga", "FonFatihi", "cembektas", "thetagang_tr", "KriptoKaan",
+    "sessiz_balina", "OrderFlowOzge", "fakeout_fatih", "Yigit", "marjin_magduru",
+    "ButterflyBurak", "ons_altinci", "ScalperSerkan", "duygusal_yatirimci",
+    "HalukHedge", "trend_takipcisi", "irem_invests", "BetaBilal", "carrytrade",
+    "kagit_elli", "DovizDoktoru", "basebreaker", "Nazli_N", "volkan_vol",
+    "front_runner61", "EnflasyonEnes", "supportbecameresistance", "ozlem",
+    "AyiPiyasasi", "rangebound", "Cagri_Capital", "likidite_avi", "muratbey",
+    "SeranSwing", "grafik_delisi", "TahvilTayfun", "elifce", "drawdown_dayi",
+    "PnLPelin", "acik_pozisyon", "BernaBreakout", "temettucu", "harunFX",
+    "zarar_kes", "MomentumMine", "yatay_seyir", "Koray_K", "balina_izci",
+    "FundingFunda", "tersine_yatirimci", "SinemSpot", "cekic_formasyonu",
+    "uzun_vadeci", "EmirEmtia", "piyasa_turisti", "hilal_trades", "BogaBaran",
+    "islemci", "KaldiracKurbani", "sabirli_yatirimci", "DilaraDip", "ahmet_61",
+    "okkesabi", "TrendTeyze", "realized_loss", "merve_makro", "SpotSuat",
 ]
 
 CHANNEL_POOL = [
@@ -130,82 +148,118 @@ CHANNEL_POOL = [
 ]
 
 BULLISH_TEMPLATES = [
-    "{sym} is coiling for a breakout. I see {pct}% upside by {date}. Position accordingly.",
-    "Accumulation on {sym} is textbook. Calling {pct}% up before {date}.",
-    "{sym} just reclaimed a key level. {pct}% move incoming — deadline {date}.",
-    "Everyone is sleeping on {sym}. {pct}% rally by {date}, screenshot this.",
-    "My models flash green on {sym}. Target: +{pct}% by {date}.",
-    "{sym} funding reset, weak hands flushed. {pct}% up by {date} is the easy path.",
-    "Institutional flows rotating into {sym}. I'm staking rep on +{pct}% before {date}.",
-    "Higher lows since weeks on {sym}. Breakout target +{pct}% by {date}.",
-    "{sym} narrative is just getting started. +{pct}% by {date}.",
-    "Volume profile on {sym} screams continuation. +{pct}% before {date} or I'm wrong.",
+    "ok im just gonna say it. {sym} +{pct}% by {date}. been staring at this chart all week and the setup is identical to last october",
+    "loaded up on more {sym} today 🤝 target is +{pct}% before {date}, see you there",
+    "{sym} weekly close was beautiful. calling it now — {pct}% up by {date}",
+    "everyone fading {sym} rn which is exactly why im not. +{pct}% by {date} and yes im staking rep on it",
+    "cant sleep so i charted {sym} again lol. anyway, +{pct}% by {date}. screenshot this",
+    "the {sym} accumulation phase is done imo. next leg starts now. +{pct}% by {date} 📈",
+    "abi {sym} resmen kaciyor. {date} tarihine kadar +%{pct} gorurum diyorum, yazin bir kenara",
+    "{sym} hala ucuz. {date} olmadan +{pct}% bekliyorum, gerisi hikaye",
+    "unpopular take maybe but {sym} is the cleanest chart on my whole watchlist. +{pct}% by {date}",
+    "if {sym} holds this level we see +{pct}% by {date}. if not, well... lets not think about that",
+    "third time testing this resistance. {sym} breaks it this time. +{pct}% by {date}",
+    "my {sym} thesis hasnt changed in months. flows + supply squeeze = +{pct}% before {date}",
+    "was bearish on {sym} until this morning. flipped. +{pct}% by {date}, dont @ me",
+    "quietly accumulating {sym} while everyone argues on the timeline. +{pct}% by {date} is my line in the sand",
+    "{sym} grafigine bakan herkes ayni seyi goruyor ama kimse yazmiyor 🙂 {date} kadar +%{pct}",
+    "not a single bearish divergence on {sym} anywhere. {pct}% upside minimum by {date}",
+    "remember when they laughed at my last {sym} call? +{pct}% by {date}. running it back",
+    "ok hear me out: {sym}, +{pct}%, {date}. thats it. thats the post",
 ]
 BEARISH_TEMPLATES = [
-    "{sym} is wildly overextended here. {pct}% drawdown by {date}.",
-    "Distribution all over the {sym} tape. Calling {pct}% down before {date}.",
-    "{sym} bagholders won't like this: -{pct}% by {date}.",
-    "Smart money exited {sym} weeks ago. {pct}% lower by {date}.",
-    "{sym} chart is a textbook top. -{pct}% before {date}, staking my rep on it.",
-    "Liquidity below on {sym} will get taken. -{pct}% by {date}.",
-    "The {sym} pump was exit liquidity. Down {pct}% by {date}.",
-    "Macro headwinds + ugly chart = {sym} -{pct}% by {date}.",
+    "sorry but {sym} looks terrible here. -{pct}% by {date} and im not even being dramatic",
+    "took one look at {sym} funding and went short. -{pct}% by {date} 🐻",
+    "{sym} holders dont want to hear this but distribution started weeks ago. {pct}% down by {date}",
+    "everything about this {sym} pump screams exit liquidity. -{pct}% before {date}",
+    "{sym} dusecek diyorum, bana kizacaksiniz ama grafik ortada. {date} kadar -%{pct}",
+    "im short {sym}. crowded long, weak breadth, ugly macro. -{pct}% by {date}",
+    "that {sym} wick yesterday? that was the top. -{pct}% by {date}",
+    "no shot {sym} holds these levels into {date}. -{pct}% minimum, probably more",
+    "the higher {sym} goes the heavier it looks. fading the euphoria, -{pct}% by {date}",
+    "called the last two {sym} tops, calling this one too. -{pct}% before {date}",
+    "{sym} icin kotu haberim var arkadaslar... {date} kadar -%{pct}. sonra agla(ma)yin",
+    "everyone is max long {sym} which historically ends one way. -{pct}% by {date}",
+    "this {sym} rally has zero volume behind it. -{pct}% by {date} when reality hits",
 ]
 POSITION_TEMPLATES = [
-    "Opening a {dir} on {sym}. Entry {entry}, SL {sl}, TP {tp}. Risk managed, conviction high.",
-    "{sym} {dir} setup triggered my criteria. Entry {entry} / stop {sl} / target {tp}.",
-    "New {dir} position: {sym}. {entry} entry, cutting at {sl}, taking profit at {tp}.",
-    "Playing the range on {sym}. {dir} from {entry}, invalidation {sl}, target {tp}.",
-    "R:R too good to ignore on {sym}. {dir} @ {entry}, SL {sl}, TP {tp}.",
-    "Textbook setup on {sym}. Going {dir} at {entry}. Stop {sl}, target {tp}.",
+    "entered {dir} on {sym} at {entry}. stop {sl}, target {tp}. lets see how it goes",
+    "couldnt resist this {sym} setup 🎯 {dir} @ {entry}, sl {sl}, tp {tp}",
+    "{sym} {dir} from {entry}. invalidation at {sl}. if we tag {tp} drinks are on me",
+    "risking 1 to make 3 on {sym}. {dir} entry {entry} / stop {sl} / target {tp}",
+    "{dir} {sym} at {entry}. sl {sl}, tp {tp}. boring trade, good trade",
+    "girdim {sym} {dir} pozisyonuna, {entry} seviyesinden. stop {sl}, hedef {tp}. hayirlisi 🙏",
+    "been waiting two weeks for this {sym} entry. {dir} @ {entry}, stop {sl}, target {tp}",
+    "small {dir} on {sym} here ({entry}). tight stop at {sl}, letting it run to {tp}",
+    "new position: {sym} {dir}. entry {entry}, cut at {sl}, take profit {tp}. posting so i dont chicken out",
 ]
 PLAIN_TEMPLATES = [
-    "Market breadth is the worst I've seen in months. Stay nimble.",
-    "Reminder: position sizing matters more than entries.",
-    "CPI week. Reduce leverage or get humbled.",
-    "The best trades feel uncomfortable at entry. The worst feel obvious.",
-    "Took profits today. Cash is a position too.",
-    "Watching the dollar index closely — everything else is noise until it resolves.",
-    "BIST volume drying up. Either accumulation or apathy, we'll know soon.",
-    "Funding rates back to euphoric levels. You know what comes next.",
-    "Patience pays. No setup, no trade.",
-    "Earnings season is when narratives meet reality.",
-    "Halving cycles don't repeat but they rhyme.",
-    "Your edge isn't information anymore, it's discipline.",
-    "红包 season for volatility traders. IV is dirt cheap right now.",
-    "Unpopular opinion: most of you should just DCA and log off.",
-    "Risk happens fast. Hedge accordingly.",
+    "market breadth is the worst ive seen in months. stay nimble out there",
+    "reminder: position sizing matters more than your entry. learned this the expensive way",
+    "cpi week. cut the leverage or get humbled, your choice",
+    "the best trades feel uncomfortable at entry. the obvious ones are usually traps",
+    "took profits today. cash is a position too and nobody can convince me otherwise",
+    "watching dxy like a hawk, everything else is noise until it resolves",
+    "bist hacmi iyice kurudu. ya birikim ya ilgisizlik, yakinda ogrenecegiz",
+    "funding rates back at euphoric levels... you all know what happens next",
+    "no setup no trade. third day flat and honestly? peaceful",
+    "earnings season is when narratives meet reality. bring popcorn",
+    "halving cycles dont repeat but they sure do rhyme",
+    "your edge isnt information anymore. its discipline. that's the whole tweet",
+    "most of you should genuinely just DCA and log off (affectionate)",
+    "risk happens fast. hedged this morning, sleeping fine tonight",
+    "kar realizasyonu yapan herkese saygi duyuyorum, fomo ile alan herkese gecmis olsun",
+    "got stopped out twice today. market said humility and i listened",
+    "the chart doesnt care about your feelings. plan the trade, trade the plan",
+    "imagine checking your portfolio on a sunday. anyway. how's everyone doing",
+    "longest ive gone without a trade this year. edge comes to those who wait",
+    "piyasada en pahali sey acele etmek. ikinci en pahali sey beklememek 🙂",
 ]
 COMMENT_TEMPLATES = [
-    "Agreed, the chart supports this.",
-    "Bold call. Following to see how it plays out.",
-    "I'm taking the other side of this one.",
-    "What's your invalidation level?",
-    "This aged well.",
-    "Respect for staking rep on it.",
-    "Volume doesn't confirm imo.",
-    "Been watching the same level, good catch.",
-    "RemindMe when this resolves.",
-    "Katiliyorum, grafik cok net.",
-    "Bence tam tersi olacak ama gorecegiz.",
-    "Hocam bu seviyeden giris mantikli mi?",
-    "Finally someone says it.",
-    "Source: trust me bro?",
-    "The rep market disagrees with you slightly.",
-    "Solid risk management on this one.",
-    "Counter-argument: macro says no.",
-    "I was bearish until I saw this breakdown.",
-    "Following you after that last call.",
-    "Screenshot taken.",
+    "agreed, chart supports this",
+    "bold call. following to see how it plays out",
+    "im taking the other side of this one tbh",
+    "whats your invalidation?",
+    "this aged well lol",
+    "respect for staking rep on it 🫡",
+    "volume doesnt confirm imo",
+    "been watching the same level, good catch",
+    "remindme when this resolves",
+    "katiliyorum, grafik cok net",
+    "bence tam tersi olacak ama gorecegiz",
+    "hocam bu seviyeden giris mantikli mi?",
+    "finally someone says it",
+    "source: trust me bro?",
+    "the rep market slightly disagrees with you 👀",
+    "solid risk management on this one",
+    "counter: macro says no",
+    "i was bearish until i saw this breakdown ngl",
+    "followed after that last call of yours",
+    "screenshot taken 📸",
+    "ser this is a wendy's",
+    "kac kez ayni seyi yazdin ama bu sefer hakli olabilirsin",
+    "what timeframe is this on?",
+    "least delusional fintwit poster",
+    "ok but what if youre wrong tho",
+    "adding this to my watchlist, thanks",
+    "bunu kaydediyorum, resolution gunu konusuruz 😄",
+    "your last 3 calls hit so im listening",
+    "the audacity of this call lmao. staked NO",
+    "underrated post",
+    "im in. dont make me regret this",
+    "ne zamandir takip ediyorum, isabetli adamsin",
 ]
 REPLY_TEMPLATES = [
-    "Fair point, but the timeframe matters here.",
-    "We'll see at resolution.",
-    "That's what makes a market.",
-    "Invalidation is on the claim itself, check the target.",
-    "Haklisin, ama trend trend'dir.",
-    "Disagree, liquidity tells a different story.",
-    "Time will tell.",
+    "fair point but the timeframe matters here",
+    "we'll see at resolution 🤝",
+    "thats what makes a market",
+    "invalidation is on the claim itself, check the target",
+    "haklisin ama trend trend'dir",
+    "disagree, liquidity tells a different story",
+    "time will tell",
+    "!remindme 30 days",
+    "lol ok we'll bookmark this exchange",
+    "respectfully, no",
 ]
 
 # Demo asset universe: symbol -> (market for get_or_create_asset, weight)
@@ -245,6 +299,84 @@ def _midnight(d: date) -> datetime:
     return datetime.combine(d, time.min, tzinfo=UTC)
 
 
+# ---------------------------------------------------------------------------
+# Images (avatars + chart screenshots), all best-effort
+# ---------------------------------------------------------------------------
+
+def _upload_to_cloudinary(source, public_id: str) -> str | None:
+    """Upload a remote URL or file-like object; return public_id or None."""
+    try:
+        import cloudinary.uploader
+        result = cloudinary.uploader.upload(
+            source, public_id=public_id, overwrite=True, resource_type="image"
+        )
+        return result["public_id"]
+    except Exception as exc:  # network/quota failures must not kill the seed
+        import logging
+        logging.getLogger(__name__).warning("cloudinary upload failed for %s: %s", public_id, exc)
+        return None
+
+
+def _avatar_source(rng: random.Random, username: str) -> str:
+    """Photo-ish or illustrated avatar URL, varied per user."""
+    roll = rng.random()
+    if roll < 0.45:
+        return f"https://i.pravatar.cc/400?img={rng.randint(1, 70)}"
+    style = rng.choice(["notionists", "adventurer", "bottts", "thumbs", "avataaars"])
+    return f"https://api.dicebear.com/9.x/{style}/png?seed={username}&size=400"
+
+
+def _render_chart_png(asset, rows, target_price: float | None, reference_price: float | None):
+    """Dark-theme daily candle chart like a trader's screenshot. Returns PNG bytes."""
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:
+        return None
+    if len(rows) < 5:
+        return None
+
+    bg, grid_c = "#0d1117", "#21262d"
+    up_c, down_c = "#26a69a", "#ef5350"
+    fig, ax = plt.subplots(figsize=(8, 4.5), dpi=110)
+    fig.patch.set_facecolor(bg)
+    ax.set_facecolor(bg)
+
+    for x, c in enumerate(rows):
+        color = up_c if c.close >= c.open else down_c
+        ax.vlines(x, c.low, c.high, color=color, linewidth=1)
+        ax.vlines(x, min(c.open, c.close), max(c.open, c.close), color=color, linewidth=4)
+
+    if target_price:
+        ax.axhline(target_price, color="#f0b429", linestyle="--", linewidth=1.2)
+        ax.annotate(
+            f"target {target_price:,.2f}", xy=(0.01, target_price),
+            xycoords=("axes fraction", "data"), color="#f0b429",
+            fontsize=8, va="bottom",
+        )
+    if reference_price:
+        ax.axhline(reference_price, color="#8b949e", linestyle=":", linewidth=1)
+
+    ax.set_title(
+        f"{asset.symbol}/{asset.quote_currency} · 1D",
+        color="#c9d1d9", fontsize=11, loc="left",
+    )
+    ax.grid(color=grid_c, linewidth=0.5, alpha=0.6)
+    ax.tick_params(colors="#8b949e", labelsize=8)
+    for spine in ax.spines.values():
+        spine.set_color(grid_c)
+    ax.set_xticks([])
+    fig.tight_layout()
+
+    import io
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", facecolor=bg)
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
 class Command(BaseCommand):
     help = "Seed the database with realistic demo users, channels, claims, positions and engagement."
 
@@ -256,11 +388,16 @@ class Command(BaseCommand):
         parser.add_argument("--positions", type=int, default=200)
         parser.add_argument("--plain-posts", type=int, default=80)
         parser.add_argument("--seed", type=int, default=42)
+        parser.add_argument(
+            "--no-images", action="store_true",
+            help="Skip avatar/chart uploads (faster local runs).",
+        )
 
     def handle(self, *args, **opts):
         self.rng = random.Random(opts["seed"])
         self.now = django_timezone.now()
         self.today = self.now.date()
+        self.with_images = not opts["no_images"]
 
         self._remove_legacy_fixture_rows()
 
@@ -296,25 +433,39 @@ class Command(BaseCommand):
 
     def _seed_users(self, count: int) -> list[tuple[WalletUser, str]]:
         rng = self.rng
-        handles = [f"{a}_{b}" for a in USERNAME_FIRST for b in USERNAME_SECOND]
+        handles = list(HANDLES)
         rng.shuffle(handles)
-        # Dedupe-safe: pool is 30*24=720 unique handles.
+        # Overflow past the curated pool gets a numbered suffix.
+        while len(handles) < count:
+            handles.append(f"{rng.choice(HANDLES)}{rng.randint(2, 99)}")
         arch_names = [a[0] for a in ARCHETYPES]
         arch_weights = [a[1] for a in ARCHETYPES]
+        # Avatar coverage by archetype — influencers always have one, lurkers rarely.
+        avatar_odds = {"influencer": 1.0, "skilled": 0.85, "average": 0.55, "degen": 0.6, "lurker": 0.25}
 
         users: list[tuple[WalletUser, str]] = []
+        avatars = 0
         for i in range(count):
             arch = rng.choices(arch_names, weights=arch_weights)[0]
             created = self.now - timedelta(days=rng.randint(35, 240), hours=rng.randint(0, 23))
+            username = handles[i][:30]
             user = WalletUser.objects.create(
                 address=_fake_address(i),
-                username=handles[i][:30],
+                username=username,
                 rep=1000.0,  # headroom for market stakes; rescaled in _finalize_users
                 energy=float(rng.randint(0, 4)),
                 created_at=created,
             )
+            if self.with_images and rng.random() < avatar_odds[arch]:
+                public_id = _upload_to_cloudinary(
+                    _avatar_source(rng, username), f"seed/avatars/{username}"
+                )
+                if public_id:
+                    user.avatar = public_id
+                    user.save(update_fields=["avatar"])
+                    avatars += 1
             users.append((user, arch))
-        self.stdout.write(f"users: {len(users)}")
+        self.stdout.write(f"users: {len(users)} ({avatars} with avatars)")
         return users
 
     def _by_arch(self, users, *names):
@@ -473,6 +624,21 @@ class Command(BaseCommand):
     def _hit_rate(self, arch: str) -> float:
         return {a[0]: a[2] for a in ARCHETYPES}[arch]
 
+    def _maybe_attach_chart(self, post, asset, created_day, *, target=None, reference=None, odds=0.3):
+        """Attach a 'trader screenshot' built from candles BEFORE the post date."""
+        if not self.with_images or self.rng.random() > odds:
+            return
+        lookback = self._claim_ohlc(
+            asset, created_day - timedelta(days=self.rng.randint(45, 90)), created_day - timedelta(days=1)
+        )
+        buf = _render_chart_png(asset, lookback, target, reference)
+        if buf is None:
+            return
+        public_id = _upload_to_cloudinary(buf, f"seed/charts/post-{post.id}")
+        if public_id:
+            post.image = public_id
+            post.save(update_fields=["image"])
+
     # -- resolved historical claims --------------------------------------------
 
     def _seed_resolved_claims(self, users, channels, assets, count: int) -> dict:
@@ -541,6 +707,13 @@ class Command(BaseCommand):
                     "reference_url": "seeded_ohlc_open",
                     "reference_at": created_at.isoformat(),
                 },
+            )
+            target_price = (
+                reference * (1 + pct / 100) if direction == "bullish"
+                else reference * (1 - pct / 100)
+            )
+            self._maybe_attach_chart(
+                post, asset, created_day, target=target_price, reference=reference
             )
 
             if rng.random() < 0.6:
@@ -628,6 +801,13 @@ class Command(BaseCommand):
                     "reference_at": created_at.isoformat(),
                 },
             )
+            target_price = (
+                reference * (1 + pct / 100) if direction == "bullish"
+                else reference * (1 - pct / 100)
+            )
+            self._maybe_attach_chart(
+                post, asset, created_day, target=target_price, reference=reference
+            )
             AssetSubscription.objects.create(asset=asset, hard_claim=claim)
             if rng.random() < 0.5:
                 self._open_market(claim, author, users)
@@ -681,7 +861,7 @@ class Command(BaseCommand):
             lifetime = entry_interval + timedelta(days=rng.randint(10, 45))
 
             content = rng.choice(POSITION_TEMPLATES).format(
-                dir=direction.upper(),
+                dir=direction,
                 sym=asset.symbol,
                 entry=f"{entry:,.2f}",
                 sl=f"{sl:,.2f}",
@@ -710,6 +890,10 @@ class Command(BaseCommand):
                 event_type=PositionEvent.EventType.CREATION,
                 timestamp=created_at,
                 details={"message": "Position created with post"},
+            )
+            self._maybe_attach_chart(
+                post, asset, created_day, target=position.take_profit,
+                reference=position.entry_price, odds=0.25,
             )
             created_n += 1
 
