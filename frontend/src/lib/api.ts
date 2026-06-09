@@ -18,6 +18,68 @@ import type { PostItem, PostCommentItem, HardClaimItem, AssetItem, ExtractClaims
 const CACHE_KEY = 'verifi_api_base';
 const DEFAULT_BASE_URL = 'http://localhost:8000';
 
+/**
+ * Typed error thrown by {@link request} on any non-2xx response.
+ *
+ * Carries the normalized backend envelope:
+ *   { error: { code, message, fields? } }
+ * while tolerating the legacy shapes still emitted by un-migrated endpoints
+ * ({ detail }, DRF field errors { field: [msg] }, and the resolution payload).
+ */
+export class ApiError extends Error {
+  code: string;
+  fields?: Record<string, string[]>;
+  status: number;
+
+  constructor(message: string, opts: { code?: string; fields?: Record<string, string[]>; status?: number } = {}) {
+    super(message);
+    this.name = 'ApiError';
+    this.code = opts.code ?? 'error';
+    this.fields = opts.fields;
+    this.status = opts.status ?? 0;
+  }
+}
+
+/** Parse any known backend error body into a typed ApiError. */
+function parseApiError(data: unknown, status: number): ApiError {
+  const body = (data ?? {}) as Record<string, unknown>;
+
+  // Preferred: normalized envelope { error: { code, message, fields } }
+  const env = body.error;
+  if (env && typeof env === 'object') {
+    const e = env as Record<string, unknown>;
+    return new ApiError(
+      typeof e.message === 'string' ? e.message : 'Request failed',
+      {
+        code: typeof e.code === 'string' ? e.code : 'error',
+        fields: (e.fields as Record<string, string[]> | undefined) ?? undefined,
+        status,
+      },
+    );
+  }
+
+  // Legacy: { detail: "..." }
+  if (typeof body.detail === 'string') {
+    return new ApiError(body.detail, { status });
+  }
+
+  // Legacy: DRF field errors { field: ["msg", ...] }
+  const fields: Record<string, string[]> = {};
+  let firstMsg: string | null = null;
+  for (const [key, val] of Object.entries(body)) {
+    const arr = Array.isArray(val) ? val.map(String) : typeof val === 'string' ? [val] : null;
+    if (arr) {
+      fields[key] = arr;
+      if (!firstMsg && arr.length) firstMsg = arr[0];
+    }
+  }
+  if (firstMsg) {
+    return new ApiError(firstMsg, { code: 'validation_error', fields, status });
+  }
+
+  return new ApiError('Request failed', { status });
+}
+
 function candidateBaseUrls(): string[] {
   const urls = [import.meta.env.VITE_API_URL, import.meta.env.VITE_API_FALLBACK_URL]
     .filter((u): u is string => typeof u === 'string' && u.length > 0)
@@ -88,7 +150,7 @@ async function request<T>(
     const text = await res.text();
     const data = text ? JSON.parse(text) : {};
     if (!res.ok) {
-      throw new Error(data.detail ?? 'Request failed');
+      throw parseApiError(data, res.status);
     }
     return data as T;
   }
@@ -216,6 +278,7 @@ export async function getFeed(params?: {
   asset_ids?: number[];
   has_claims?: boolean;
   has_positions?: boolean;
+  address?: string;
   q?: string;
 }): Promise<PaginatedResponse<PostItem>> {
   const query = new URLSearchParams();
@@ -227,6 +290,7 @@ export async function getFeed(params?: {
     query.append('asset_ids', params.asset_ids.join(','));
   if (params?.has_claims !== undefined) query.append('has_claims', String(params.has_claims));
   if (params?.has_positions !== undefined) query.append('has_positions', String(params.has_positions));
+  if (params?.address) query.append('address', params.address);
   if (params?.q) query.append('q', params.q);
   const qs = query.toString() ? `?${query.toString()}` : '';
   return request(`/api/posts/${qs}`, { headers: authHeaders() });

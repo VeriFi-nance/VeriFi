@@ -11,6 +11,7 @@ from posts.resolution import (
     normalize_claim_for_resolution,
     preview_resolution,
     resolve_hard_claim,
+    resolve_hard_claim_observer,
     reassess_hard_claim,
     capture_reference_price,
     fetch_reference_price,
@@ -299,7 +300,7 @@ class ResolutionTests(TestCase):
         self.assertEqual(result["prices"]["target"], 1200.0)
 
 
-class ResolveClaimsCommandTests(TestCase):
+class HardClaimObserverTests(TestCase):
     def setUp(self):
         self.asset = Asset.objects.create(
             symbol="BTC",
@@ -310,40 +311,78 @@ class ResolveClaimsCommandTests(TestCase):
             quote_currency="USD",
             binance_symbol="BTCUSDT",
         )
-        self.author = WalletUser.objects.create(address="0xabc")
-        self.post = Post.objects.create(author=self.author, content="test")
-
-    def test_due_claims_excludes_until_today(self):
-        from posts.management.commands.resolve_claims import due_claims_queryset
-
-        today_claim = HardClaim.objects.create(
-            author=self.author,
+        self.author = WalletUser.objects.create(address="0x123")
+        self.post = Post.objects.create(author=self.author, content="Content")
+        self.claim = HardClaim.objects.create(
             post=self.post,
             asset=self.asset,
             direction="bullish",
-            percentage=5.0,
-            until=date.today() + timedelta(days=1),
+            percentage=10.0,
+            until=(timezone.now() + timedelta(days=2)).date(),
             status=HardClaim.Status.UNDETERMINED,
+            reference_price=1000.0,
+            reference_price_url="stored",
         )
-        past = HardClaim.objects.create(
-            author=self.author,
-            post=self.post,
-            asset=self.asset,
-            direction="bullish",
-            percentage=5.0,
-            until=date.today() + timedelta(days=1),
-            status=HardClaim.Status.UNDETERMINED,
-        )
-        HardClaim.objects.filter(id=today_claim.id).update(
-            created_at=timezone.now() - timedelta(days=5),
-            until=date.today(),
-        )
-        HardClaim.objects.filter(id=past.id).update(
-            created_at=timezone.now() - timedelta(days=5),
-            until=date.today() - timedelta(days=1),
-        )
-        due_ids = list(due_claims_queryset().values_list("id", flat=True))
-        self.assertEqual(due_ids, [past.id])
+        self.claim.created_at = timezone.now() - timedelta(days=1)
+        self.claim.save()
+
+    @patch("posts.resolution.get_ohlc_data")
+    def test_early_hit_returns_confirmed(self, mock_ohlc):
+        mock_ohlc.return_value = [
+            OHLCData(
+                asset=self.asset,
+                timestamp=timezone.now(),
+                open=1000.0,
+                high=1150.0,
+                low=980.0,
+                close=1100.0,
+            )
+        ]
+        now = timezone.now()
+        result = resolve_hard_claim_observer(self.claim, now)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["status"], HardClaim.Status.CONFIRMED)
+        self.claim.refresh_from_db()
+        self.assertEqual(self.claim.status, HardClaim.Status.CONFIRMED)
+
+    @patch("posts.resolution.get_ohlc_data")
+    def test_early_miss_returns_none(self, mock_ohlc):
+        mock_ohlc.return_value = [
+            OHLCData(
+                asset=self.asset,
+                timestamp=timezone.now(),
+                open=1000.0,
+                high=1050.0,
+                low=980.0,
+                close=1000.0,
+            )
+        ]
+        now = timezone.now()
+        result = resolve_hard_claim_observer(self.claim, now)
+        self.assertIsNone(result)
+        self.claim.refresh_from_db()
+        self.assertEqual(self.claim.status, HardClaim.Status.UNDETERMINED)
+
+    @patch("posts.resolution.get_ohlc_data")
+    def test_expired_miss_returns_rejected(self, mock_ohlc):
+        mock_ohlc.return_value = [
+            OHLCData(
+                asset=self.asset,
+                timestamp=timezone.now(),
+                open=1000.0,
+                high=1050.0,
+                low=980.0,
+                close=1000.0,
+            )
+        ]
+        # Simulate now being after deadline
+        now = timezone.now() + timedelta(days=4)
+        
+        result = resolve_hard_claim_observer(self.claim, now)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["status"], HardClaim.Status.REJECTED)
+        self.claim.refresh_from_db()
+        self.assertEqual(self.claim.status, HardClaim.Status.REJECTED)
 
 
 class ReferencePriceTests(TestCase):
