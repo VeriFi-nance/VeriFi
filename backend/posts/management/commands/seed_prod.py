@@ -214,6 +214,30 @@ PLAIN_TEMPLATES = [
     "imagine checking your portfolio on a sunday. anyway. how's everyone doing",
     "longest ive gone without a trade this year. edge comes to those who wait",
     "piyasada en pahali sey acele etmek. ikinci en pahali sey beklememek 🙂",
+    "3 monitors, 14 indicators, still entered on vibes. we are not the same",
+    "weekly candle close tonight. nobody breathe",
+    "deleted my portfolio tracker app. happiness has increased 40% (unrealized)",
+    "lesson from this week: the market can stay irrational longer than you can stay awake",
+    "kahveyi aldim, grafikleri actim, hayirli islemler herkese ☕",
+    "hot take: your watchlist is too long. pick 5 names and actually learn them",
+    "the amount of conviction in my feed today is making me nervous ngl",
+    "trade journal entry #847: i am once again asking myself why i entered that",
+    "green day. saying nothing else, dont want to jinx it",
+    "fed day tomorrow. flat going in, no hero trades",
+    "iki gundur islem yok, sadece izliyorum. bazen en iyi pozisyon hic pozisyon",
+    "if you cant explain your trade in one sentence you dont have a trade",
+    "shoutout to everyone who held through that wick. character development",
+    "yeni baslayanlara tavsiyem: ilk 6 ay kucuk oyna, ders parasi pesin odenir",
+    "real ones know the best chart is the one you didnt trade",
+    "my best month this year was the one where i traded the least. let that sink in",
+    "liquidity is a social construct until your stop gets hunted",
+    "okudugum en iyi yatirim kitabi hala kendi islem gecmisim. aci ama ogretici",
+    "weekend chart review done. 2 setups for next week, both need confirmation first",
+    "everyone is a genius until the market opens",
+    "bugun hic bakmiyorum grafiklere. aile gunu. (3 kere baktim)",
+    "less leverage, more sleep. thats the alpha nobody posts about",
+    "that feeling when your stop loss saves you from a 20% drawdown 🫡 respect the process",
+    "market doesnt know you exist. trade accordingly",
 ]
 COMMENT_TEMPLATES = [
     "agreed, chart supports this",
@@ -392,12 +416,24 @@ class Command(BaseCommand):
             "--no-images", action="store_true",
             help="Skip avatar/chart uploads (faster local runs).",
         )
+        parser.add_argument(
+            "--append-plain", type=int, default=0, metavar="N",
+            help="Only add N plain posts (+ their engagement) to an already-seeded DB.",
+        )
 
     def handle(self, *args, **opts):
         self.rng = random.Random(opts["seed"])
         self.now = django_timezone.now()
         self.today = self.now.date()
         self.with_images = not opts["no_images"]
+
+        if opts["append_plain"]:
+            users = self._load_existing_users()
+            channels = list(Channel.objects.filter(is_active=True))
+            with explicit_timestamps():
+                posts = self._seed_plain_posts(users, channels, opts["append_plain"])
+                self._seed_engagement(users, posts=posts)
+            return
 
         self._remove_legacy_fixture_rows()
 
@@ -417,6 +453,23 @@ class Command(BaseCommand):
         self._scatter_stake_timestamps()
         self._finalize_users(users)
         self._print_summary(resolved_stats)
+
+    def _load_existing_users(self) -> list[tuple[WalletUser, str]]:
+        """Rebuild (user, archetype) pairs for append runs; infer archetype from rep rank."""
+        users = list(WalletUser.objects.order_by("-rep"))
+        out = []
+        for i, user in enumerate(users):
+            frac = i / max(len(users) - 1, 1)
+            if frac < 0.07:
+                arch = "influencer"
+            elif frac < 0.25:
+                arch = "skilled"
+            elif frac < 0.70:
+                arch = "average"
+            else:
+                arch = "degen"
+            out.append((user, arch))
+        return out
 
     def _remove_legacy_fixture_rows(self):
         """Drop demo rows planted by old data migrations (posts/0007 etc.)."""
@@ -918,26 +971,31 @@ class Command(BaseCommand):
 
     # -- plain posts -------------------------------------------------------------
 
-    def _seed_plain_posts(self, users, channels, count: int):
+    def _seed_plain_posts(self, users, channels, count: int) -> list[Post]:
         rng = self.rng
-        for _ in range(count):
+        templates = list(PLAIN_TEMPLATES)
+        rng.shuffle(templates)
+        posts = []
+        for i in range(count):
             author, _arch = self._pick_author(users)
             created = self.now - timedelta(
                 days=rng.randint(0, 150), hours=rng.randint(0, 23), minutes=rng.randint(0, 59)
             )
             if created < author.created_at:
                 created = author.created_at + timedelta(hours=1)
-            Post.objects.create(
+            posts.append(Post.objects.create(
                 author=author,
                 channel=self._maybe_channel(author, channels),
-                content=rng.choice(PLAIN_TEMPLATES),
+                content=templates[i % len(templates)],
                 created_at=created,
-            )
+            ))
         self.stdout.write(f"plain posts: {count}")
+        return posts
 
     # -- engagement -------------------------------------------------------------
 
-    def _seed_engagement(self, users):
+    def _seed_engagement(self, users, posts=None):
+        """Likes/comments/saves for `posts`, or every post when None (full seed)."""
         rng = self.rng
         all_users = [u for u, _ in users]
         arch_by_pk = {u.pk: a for u, a in users}
@@ -949,7 +1007,9 @@ class Command(BaseCommand):
             .values_list("post_id", flat=True)
         )
 
-        for post in Post.objects.select_related("author").all():
+        if posts is None:
+            posts = Post.objects.select_related("author").all()
+        for post in posts:
             author_arch = arch_by_pk.get(post.author_id, "average")
             hotness = {"influencer": 35, "skilled": 18, "average": 7, "degen": 10, "lurker": 4}[
                 author_arch
