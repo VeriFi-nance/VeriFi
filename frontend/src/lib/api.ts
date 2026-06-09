@@ -1,4 +1,4 @@
-import { getToken } from './auth';
+import { clearAuth, getToken } from './auth';
 import type { PostItem, PostCommentItem, HardClaimItem, AssetItem, AssetSearchResult, ExtractClaimsResponse, ClaimChartData, PositionChartData, AssetChartData, ChartCandleInterval, ProfileStats, ChannelItem, ChannelMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType, ProofBundle, OGMetadata, NotificationItem } from './types';
 
 /**
@@ -111,6 +111,13 @@ function rememberBaseUrl(base: string): void {
   }
 }
 
+function hasAuthorizationHeader(headers: HeadersInit | undefined): boolean {
+  if (!headers) return false;
+  if (headers instanceof Headers) return headers.has('Authorization');
+  if (Array.isArray(headers)) return headers.some(([key]) => key.toLowerCase() === 'authorization');
+  return Object.keys(headers).some((key) => key.toLowerCase() === 'authorization');
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {}
@@ -150,6 +157,9 @@ async function request<T>(
     const text = await res.text();
     const data = text ? JSON.parse(text) : {};
     if (!res.ok) {
+      if (res.status === 401 && hasAuthorizationHeader(optHeaders)) {
+        clearAuth();
+      }
       throw parseApiError(data, res.status);
     }
     return data as T;
