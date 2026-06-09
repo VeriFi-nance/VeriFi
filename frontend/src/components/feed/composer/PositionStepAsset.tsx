@@ -1,4 +1,3 @@
-import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { AssetItem } from '@/lib/types';
@@ -8,12 +7,9 @@ interface PositionStepAssetProps {
   value: Partial<PositionDraft>;
   assets: AssetItem[];
   onChange: (patch: Partial<PositionDraft>) => void;
-  onNext: () => void;
 }
 
-export function PositionStepAsset({ value, assets, onChange, onNext }: PositionStepAssetProps) {
-  const canProceed = Boolean(value.assetId);
-
+export function PositionStepAsset({ value, assets, onChange }: PositionStepAssetProps) {
   return (
     <div className="space-y-4 animate-in slide-in-from-bottom-2 fade-in">
       <div className="space-y-2">
@@ -36,16 +32,6 @@ export function PositionStepAsset({ value, assets, onChange, onNext }: PositionS
             ))}
           </SelectContent>
         </Select>
-      </div>
-
-      <div className="pt-4">
-        <Button 
-          className="w-full" 
-          disabled={!canProceed} 
-          onClick={onNext}
-        >
-          Next Step
-        </Button>
       </div>
     </div>
   );

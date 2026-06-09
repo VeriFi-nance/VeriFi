@@ -1,5 +1,3 @@
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -9,50 +7,12 @@ import type { PositionDraft } from './PositionWizard';
 interface PositionStepReviewProps {
   value: PositionDraft;
   onChange: (patch: Partial<PositionDraft>) => void;
-  onComplete: () => void;
-  onBack: () => void;
+  /** Validation error surfaced by the wizard when "Attach Position" fails. */
+  error?: string;
 }
 
-export function PositionStepReview({ value, onChange, onComplete, onBack }: PositionStepReviewProps) {
-  const [error, setError] = useState('');
-
+export function PositionStepReview({ value, onChange, error }: PositionStepReviewProps) {
   const isLong = value.direction === 'long';
-
-  function validateAndComplete() {
-    setError('');
-    const en = parseFloat(value.entryPrice);
-    const sl = parseFloat(value.stopLoss);
-    const tp = parseFloat(value.takeProfit);
-
-    if (isNaN(en) || isNaN(sl) || isNaN(tp)) {
-      setError('Entry, TP, and SL must be valid numbers.');
-      return;
-    }
-
-    if (isLong && !(sl < en && en < tp)) {
-      setError('For LONG: Stop Loss < Entry < Take Profit.');
-      return;
-    }
-    if (!isLong && !(tp < en && en < sl)) {
-      setError('For SHORT: Take Profit < Entry < Stop Loss.');
-      return;
-    }
-
-    const now = new Date();
-    const entryDate = new Date(value.entryInterval);
-    const lifeDate = new Date(value.lifetime);
-
-    if (entryDate <= now) {
-      setError('Entry interval must be in the future.');
-      return;
-    }
-    if (lifeDate <= entryDate) {
-      setError('Lifetime must be after the entry interval.');
-      return;
-    }
-
-    onComplete();
-  }
 
   return (
     <div className="space-y-4 animate-in slide-in-from-right-2 fade-in">
@@ -133,18 +93,6 @@ export function PositionStepReview({ value, onChange, onComplete, onBack }: Posi
             onChange={(e) => onChange({ lifetime: e.target.value })}
           />
         </div>
-      </div>
-
-      <div className="flex gap-2 pt-4">
-        <Button variant="outline" className="w-1/3" onClick={onBack}>
-          Back
-        </Button>
-        <Button 
-          className="w-2/3" 
-          onClick={validateAndComplete}
-        >
-          Attach Position
-        </Button>
       </div>
     </div>
   );

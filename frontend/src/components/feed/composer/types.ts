@@ -2,6 +2,19 @@ import type { AssetItem, ClaimType } from '@/lib/types';
 
 export type ClaimDirection = 'Bullish' | 'Bearish';
 
+/**
+ * Navigation state a sub-wizard reports up to the modal footer.
+ * The footer renders the primary buttons; the wizard owns the logic.
+ * `back` at the first step cancels the wizard.
+ */
+export interface WizardNavState {
+  canNext: boolean;
+  nextLabel: string;
+  isFirstStep: boolean;
+  next: () => void;
+  back: () => void;
+}
+
 export const NO_PARITY = '__none__';
 
 export interface ClaimDraft {

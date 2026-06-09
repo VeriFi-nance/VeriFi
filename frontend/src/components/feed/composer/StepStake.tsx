@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { getProfileStats } from '@/lib/api';
@@ -10,11 +9,9 @@ import { AlertCircle } from 'lucide-react';
 interface StepStakeProps {
   value: ClaimDraft;
   onChange: (patch: Partial<ClaimDraft>) => void;
-  onComplete: () => void;
-  onBack: () => void;
 }
 
-export function StepStake({ value, onChange, onComplete, onBack }: StepStakeProps) {
+export function StepStake({ value, onChange }: StepStakeProps) {
   const { address } = useAuthState();
   const [rep, setRep] = useState<number | null>(null);
   const [energy, setEnergy] = useState<number | null>(null);
@@ -27,9 +24,6 @@ export function StepStake({ value, onChange, onComplete, onBack }: StepStakeProp
       }).catch(console.error);
     }
   }, [address]);
-
-  const stake = parseFloat(value.stakeRep);
-  const isValid = !isNaN(stake) && stake >= 10 && stake <= 100;
 
   return (
     <div className="space-y-5 animate-in slide-in-from-right-2 fade-in">
@@ -70,19 +64,6 @@ export function StepStake({ value, onChange, onComplete, onBack }: StepStakeProp
             There is a 2-rep listing fee (burned) and a 5% trade burn. This action costs 1 energy.
           </div>
         </div>
-      </div>
-
-      <div className="flex gap-2 pt-2">
-        <Button variant="outline" className="w-1/3" onClick={onBack}>
-          Back
-        </Button>
-        <Button 
-          className="w-2/3" 
-          disabled={!isValid} 
-          onClick={onComplete}
-        >
-          Attach Claim
-        </Button>
       </div>
     </div>
   );
