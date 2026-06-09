@@ -14,6 +14,7 @@ import PostDetailPage from './pages/PostDetailPage';
 import UserPage from './pages/UserPage';
 import SettingsPage from './pages/SettingsPage';
 import ClaimDetailPage from './pages/ClaimDetailPage';
+import NotificationsPage from './pages/NotificationsPage';
 import { clearAuth, loadAddress, loadAuthMethod, openLogin, useAuthState, setAuthMethod } from './lib/auth';
 import { clearPrivateKey } from './lib/keystore';
 import { authenticateMetaMaskAddress } from './lib/walletAuth';
@@ -115,6 +116,7 @@ function AppRoutes() {
           <Route path="/post/:id" element={<PostDetailPage />} />
           <Route path="/claim/:id" element={<ClaimDetailPage />} />
           <Route path="/u/:address" element={<UserPage />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/settings" element={<SettingsGate />} />
           <Route path="/about" element={<Suspense fallback={null}><AboutPage /></Suspense>} />
           <Route path="/verify" element={<Suspense fallback={null}><VerifyPage /></Suspense>} />

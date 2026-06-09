@@ -1,5 +1,5 @@
 import { getToken } from './auth';
-import type { PostItem, PostCommentItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, PositionChartData, AssetChartData, ChartCandleInterval, ProfileStats, ChannelItem, ChannelMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType, ProofBundle, OGMetadata } from './types';
+import type { PostItem, PostCommentItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, PositionChartData, AssetChartData, ChartCandleInterval, ProfileStats, ChannelItem, ChannelMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType, ProofBundle, OGMetadata, NotificationItem } from './types';
 
 /**
  * Ordered list of backend base URLs to try, sourced from build-time env vars:
@@ -674,4 +674,40 @@ export async function getPositionChartData(
 
 export async function searchAPI(query: string, type: string): Promise<any> {
   return request(`/api/posts/search/?q=${encodeURIComponent(query)}&type=${encodeURIComponent(type)}`);
+}
+
+export async function getNotifications(params?: {
+  page?: number;
+  page_size?: number;
+}): Promise<PaginatedResponse<NotificationItem>> {
+  const query = new URLSearchParams();
+  if (params?.page) query.append('page', params.page.toString());
+  if (params?.page_size) query.append('page_size', params.page_size.toString());
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  return request(`/api/notifications/${qs}`, { headers: authHeaders() });
+}
+
+export async function getUnreadNotificationCount(): Promise<{ unread_count: number }> {
+  return request('/api/notifications/unread-count/', { headers: authHeaders() });
+}
+
+export async function markNotificationRead(id: number): Promise<NotificationItem> {
+  return request(`/api/notifications/${id}/read/`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+  });
+}
+
+export async function markAllNotificationsRead(): Promise<{ updated: number }> {
+  return request('/api/notifications/mark-all-read/', {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+}
+
+export async function deleteNotification(id: number): Promise<void> {
+  await request(`/api/notifications/${id}/`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
 }

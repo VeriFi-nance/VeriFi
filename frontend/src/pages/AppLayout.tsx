@@ -2,13 +2,14 @@
 import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Home, LogOut, Moon, Settings, Sun, User, ShieldCheck, Info } from 'lucide-react';
+import { Bell, Home, LogOut, Moon, Settings, Sun, User, ShieldCheck, Info } from 'lucide-react';
 import { clearAuth, useAuthState, useOpenLogin, loadAuthMethod } from '@/lib/auth';
 import { clearPrivateKey } from '@/lib/keystore';
 import { triggerPrivyLogout } from '@/lib/privyLogout';
 import { clearPrivySigner } from '@/lib/privySigner';
 import { loadTheme, toggleTheme, type Theme } from '@/lib/theme';
 import { EnergyMeter } from '@/components/EnergyMeter';
+import { getUnreadNotificationCount } from '@/lib/api';
 import { UserAvatar } from '@/components/UserAvatar';
 import { truncateAddress } from '@/lib/wallet';
 import { MobileMenuButton, BottomTabBar } from '@/components/MobileNav';
@@ -38,6 +39,12 @@ export function buildNavItems(): NavItem[] {
       matches: (p) => p.startsWith('/verify'),
     },
     {
+      to: '/notifications',
+      icon: <Bell className="size-5" />,
+      label: 'Notifications',
+      matches: (p) => p.startsWith('/notifications'),
+    },
+    {
       to: '/settings',
       icon: <Settings className="size-5" />,
       label: 'Settings',
@@ -50,6 +57,7 @@ const SITE_TITLE = 'VeriFi — Verifiable finance predictions';
 
 function pageTitle(pathname: string): string {
   if (pathname === '/feed' || pathname === '/' || pathname === '') return 'Feed';
+  if (pathname.startsWith('/notifications')) return 'Notifications';
   if (pathname.startsWith('/settings')) return 'Settings';
   if (pathname.startsWith('/about')) return 'About';
   if (pathname.startsWith('/post/')) return 'Post';
@@ -63,11 +71,13 @@ function DesktopNavLink({
   icon,
   label,
   active,
+  count = 0,
 }: {
   to: string;
   icon: React.ReactNode;
   label: string;
   active: boolean;
+  count?: number;
 }) {
   return (
     <Link
@@ -83,6 +93,11 @@ function DesktopNavLink({
     >
       {icon}
       <span className="hidden lg:inline">{label}</span>
+      {count > 0 && (
+        <span className="ml-auto hidden lg:inline-flex min-w-5 justify-center rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+          {count > 99 ? '99+' : count}
+        </span>
+      )}
     </Link>
   );
 }
@@ -94,6 +109,7 @@ export default function AppLayout() {
   const address = auth.address ?? '';
   const username = auth.username;
   const [theme, setTheme] = useState<Theme>(loadTheme);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   useEffect(() => {
     const handler = (e: StorageEvent) => {
@@ -107,6 +123,33 @@ export default function AppLayout() {
 
   const items = buildNavItems();
   const title = pageTitle(location.pathname);
+
+  useEffect(() => {
+    if (!auth.authenticated) {
+      setUnreadNotifications(0);
+      return;
+    }
+
+    let cancelled = false;
+    const refresh = () => {
+      getUnreadNotificationCount()
+        .then((data) => {
+          if (!cancelled) setUnreadNotifications(data.unread_count);
+        })
+        .catch(() => {
+          if (!cancelled) setUnreadNotifications(0);
+        });
+    };
+    const onFocus = () => refresh();
+    refresh();
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('notifications-updated', refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('notifications-updated', refresh);
+    };
+  }, [auth.authenticated]);
 
   useEffect(() => {
     document.title = title === 'VeriFi' ? SITE_TITLE : `${title} · VeriFi`;
@@ -155,6 +198,7 @@ export default function AppLayout() {
                 icon={item.icon}
                 label={item.label}
                 active={item.matches(location.pathname)}
+                count={item.to === '/notifications' ? unreadNotifications : 0}
               />
             ))}
           </nav>
@@ -204,6 +248,7 @@ export default function AppLayout() {
               onToggleTheme={handleThemeToggle}
               onDisconnect={handleDisconnect}
               onLogin={goLogin}
+              unreadNotifications={unreadNotifications}
             />
 
             <div className="flex-1 min-w-0 flex justify-start lg:pl-4">
@@ -212,6 +257,25 @@ export default function AppLayout() {
 
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               <EnergyMeter hideRepOnMobile />
+
+              {auth.authenticated && (
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="icon"
+                  className="relative size-8 rounded-full text-muted-foreground hover:text-foreground"
+                  title="Notifications"
+                >
+                  <Link to="/notifications" aria-label="Notifications">
+                    <Bell className="size-4" />
+                    {unreadNotifications > 0 && (
+                      <span className="absolute -right-0.5 -top-0.5 flex min-w-4 justify-center rounded-full bg-primary px-1 text-[9px] font-semibold leading-4 text-primary-foreground">
+                        {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                      </span>
+                    )}
+                  </Link>
+                </Button>
+              )}
 
               <Button
                 variant="ghost"
@@ -261,7 +325,7 @@ export default function AppLayout() {
         </aside>
       </div>
 
-      <BottomTabBar />
+      <BottomTabBar unreadNotifications={unreadNotifications} />
     </div>
   );
 }
