@@ -896,6 +896,11 @@ class PostFeedPaginationTestCase(APITestCase):
         for i in range(25):
             Post.objects.create(author=self.author, content=f"Post {i}")
 
+    def _token_for(self, user):
+        refresh = RefreshToken()
+        refresh["address"] = user.address
+        return str(refresh.access_token)
+
     def test_feed_returns_paginated_response(self):
         url = reverse("post-list-create")
         response = self.client.get(url)
@@ -914,6 +919,38 @@ class PostFeedPaginationTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data["results"]), 5)
         self.assertFalse(response.data["has_next"])
+
+    def test_global_feed_includes_viewable_channel_posts(self):
+        member = WalletUser.objects.create(address="0xmemberfeed00000000000000000000000000000")
+        channel = Channel.objects.create(name="Premium Feed", creator=self.author)
+        ChannelMembership.objects.create(
+            channel=channel,
+            user=member,
+            status=ChannelMembership.Status.APPROVED,
+        )
+        premium_post = Post.objects.create(
+            author=self.author,
+            channel=channel,
+            content="Premium post in global feed",
+        )
+        url = reverse("post-list-create")
+
+        anonymous_response = self.client.get(url)
+        self.assertEqual(anonymous_response.status_code, status.HTTP_200_OK)
+        self.assertNotIn(
+            premium_post.id,
+            [post["id"] for post in anonymous_response.data["results"]],
+        )
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self._token_for(member)}")
+        member_response = self.client.get(url)
+
+        self.assertEqual(member_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(member_response.data["count"], 26)
+        self.assertIn(
+            premium_post.id,
+            [post["id"] for post in member_response.data["results"]],
+        )
 
 
 class PostDetailTestCase(APITestCase):
