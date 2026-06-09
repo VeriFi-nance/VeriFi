@@ -1,0 +1,461 @@
+% Unofficial University of Oxford Poster Template
+% https://github.com/andiac/gemini-cam
+% a fork of https://github.com/anishathalye/gemini
+
+\documentclass[final]{beamer}
+
+% ====================
+% Packages
+% ====================
+
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[size=custom,width=118.9,height=84.1,scale=1.0]{beamerposter}
+
+\setbeamerfont{block body}{size*={24pt}{26pt}}
+
+
+
+\usetheme{gemini}
+
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.14}
+\usepackage{anyfontsize}
+\usepackage{tabularx}
+\usepackage{makecell}
+\usepackage[table]{xcolor}
+
+
+% ====================
+% Lengths
+% ====================
+
+% If you have N columns, choose \sepwidth and \colwidth such that
+% (N+1)*\sepwidth + N*\colwidth = \paperwidth
+\newlength{\sepwidth}
+\newlength{\colwidth}
+\setlength{\sepwidth}{0.025\paperwidth}
+\setlength{\colwidth}{0.3\paperwidth}
+
+\newcommand{\separatorcolumn}{\begin{column}{\sepwidth}\end{column}}
+
+\newcommand{\subtitleformat}[1]{%
+  {\fontsize{32pt}{38pt}\selectfont\color{blue!60!black}\textbf{#1}}%
+}
+
+\usepackage[backend=biber,style=numeric,sorting=none,maxbibnames=3]{biblatex}
+\addbibresource{poster.bib}
+
+
+
+
+% ====================
+% Title
+% ====================
+
+\title{\fontsize{85}{100}\selectfont Post-Quantum Aggregatable Signatures for Ethereum Consensus}
+
+
+\author{Arda Saygan \and Advisor: H. Birkan Yılmaz}
+
+\institute[shortinst]{\inst{1} Boğaziçi University Department of Computer Engineering}
+
+
+\logoright{\includegraphics[width=6cm]{logos/boun logo.pdf}}
+\logoleft{\includegraphics[width=6cm]{logos/boun logo.pdf}}
+
+
+% ====================
+% Body
+% ====================
+
+  
+\begin{document}
+
+\begin{frame}[t]
+\begin{columns}[t]
+\separatorcolumn
+
+% ====================
+% First Column
+% ====================
+\begin{column}{\colwidth}
+
+  \begin{block}{\fontsize{42}{48}\selectfont\bfseries The Problem Definition}
+
+    \subtitleformat{Project Objective.} Developing a \textit{post-quantum secure aggregate signature scheme} to be used in distributed consensus mechanisms, that leverages the underlying network structure.
+
+\begin{figure}
+\centering
+\begin{tikzpicture}[
+    node distance=7cm,
+    every node/.style={font=\small},
+    process/.style={rectangle, draw, rounded corners, minimum width=4.5cm, minimum height=1.5cm, align=center},
+    note/.style={font=\small\itshape, align=center},
+    arrow/.style={thick,->,>=Stealth}
+]
+
+% Main nodes
+\node[process] (lmdghost) at (-4,4) {GASPER};
+\node[process] (voting) at (-4,0) {Voting Mechanism};
+\node[process] (bls) at (10,0) {BLS Aggregate Signatures};
+\node[process] (agg) at (22,1) {Aggregatable};
+\node[process] (dlog) at (22,-2) {Discrete-Log Hardness};
+
+% Explanation nodes below
+\node[note] (lmdnote) at (-4,5.5) {(Consensus Mechanism)};
+\node[note] (blsnote) at (10,-1.5) {(Participants vote by signing)};
+\node[note] (pqsecure) at (22,-3.5) {\textcolor{red}{(Not PQ-Secure)}};
+
+% Arrows
+\draw[arrow] (lmdghost) -- node[above] {\textbf{needs}} (voting);
+\draw[arrow] (voting) -- node[above] {\textbf{implemented with}} (bls);
+\draw[arrow] (bls) -- node[above] {\textbf{is}} (agg);
+\draw[arrow] (bls) -- node[above] {\textbf{relies on}} (dlog);
+
+\end{tikzpicture}
+\caption{Diagram showing how GASPER uses BLS aggregate signatures in its voting mechanism}
+\end{figure}
+
+            \begin{table}[h!]
+        \centering
+        \begin{tabular}{@{}lllll@{}}
+        \toprule
+        \textbf{Scheme} & \textbf{PQ-Secure} & \textbf{Multi-level Agg.} & \textbf{Hardness Assumption}  \\ \midrule
+        \textbf{BLS (Currently Used)} \cite{ethresearPragmaticSignature} & \textcolor{red}{No} & \textcolor{green}{Yes} & Discrete-log \\
+        \textbf{KCL22 (2022)} \cite{Khaburzaniya2022} & \textcolor{green}{Yes} & \textcolor{red}{No} & Hash-based\\
+        \textbf{Falcon + LaBRADOR (2024)} \cite{LaBRADOR-Falcon} & \textcolor{green}{Yes} & \textcolor{red}{No} & Lattice-based \\
+        \textbf{KZH-Fold (2025)} \cite{KZH-Fold} & \textcolor{red}{No} & \textcolor{green}{Yes} & Discrete-log \\
+        \textbf{Our Work} & \textcolor{green}{Yes} & \textcolor{green}{Yes} & Hash-based \\
+        \bottomrule
+        \end{tabular}
+        \caption{Comparison of Aggregate Signature Schemes}
+        \end{table}
+
+    \end{block}
+
+    \begin{block}{\fontsize{42}{48}\selectfont\bfseries Preliminaries}
+          \subtitleformat{Post-Quantum Secure Cryptography.}  Every cryptographic primitive relies on some hardness problem. Post-quantum security involves switching to different mathematical problems that are believed to be difficult for both classical and quantum computers to solve.
+
+        \begin{table}[h!]
+    \centering
+    \begin{tabular}{@{}llll@{}}
+    \toprule
+    \textbf{Primitive} & \textbf{Hardness Problem} & \textbf{PQ-Secure} & \textbf{Category} \\ \midrule
+    \textbf{RSA} & Integer Factorization & \textcolor{red}{No} & Classical \\
+    \textbf{ECDSA} & Elliptic Curve Discrete Log & \textcolor{red}{No} & Classical \\
+    \textbf{BLS} & Discrete Logarithm & \textcolor{red}{No} & Classical \\
+    \midrule
+    \textbf{XMSS} & One-way Functions & \textcolor{green}{Yes} & Hash-based \\
+    \textbf{Falcon} & NTRU & \textcolor{green}{Yes} & Lattice-based \\
+    \bottomrule
+    \end{tabular}
+    \caption{Comparison of cryptographic primitives, their underlying hardness problems, and post-quantum security status}
+    \end{table}
+
+
+\begin{figure}
+\centering
+\begin{minipage}[t]{0.44\linewidth}
+    \centering
+\subtitleformat{Digital Signature Scheme}
+        \begin{itemize}
+        \item Only a single entity is able to create a signature of its own, but everyone can verify it.
+        \item This signature is \textbf{tied to data} that gets signed.
+    \end{itemize}
+
+    
+    \includegraphics[width=\linewidth]{digital_signature_drawio.png}
+    \caption{Digital Signature Scheme}
+    \label{fig:digital-sig}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{0.54\linewidth}
+    
+    \centering
+    \subtitleformat{Signature Aggregation}
+\begin{itemize}
+    \item Multiple signatures are merged into a compact aggregate signature.
+    \item Once verified, the aggregate signature attests to the validity of the individual signatures.
+\end{itemize}
+    \includegraphics[width=\linewidth]{aggregate signature.png}
+    \caption{Signature Aggregation}
+    \label{fig:agg-sig}
+\end{minipage}
+\end{figure}
+
+    \end{block}
+
+
+  
+\end{column}
+
+\separatorcolumn
+
+% ====================
+% Second Column
+% ====================
+\begin{column}{\colwidth}
+
+    
+    \begin{block}{\fontsize{42}{48}\selectfont\bfseries  Our Methods and Solution}
+
+
+    Our solution method is to combine a PQ-secure signature scheme with a PQ-secure aggregation scheme. We have two options in mind:
+
+    \begin{table}[h!]
+    \centering
+    \begin{tabular}{@{}llcr@{}}
+    \toprule
+    & \textbf{PQ-Secure Signatures} &+ &\textbf{PQ-Secure Aggregation}\\
+    \midrule
+    1) & XMSS Signatures &  + & Recursive SNARKs\\ 
+    2) & Lattice-based Signatures &  + & Lattice-based Folding \\
+    \bottomrule
+    \end{tabular}
+    \end{table}
+
+        This semester, we implemented and benchmarked Option~1, and explored approaches to achieve Option~2 through research.
+
+    Below we present the methods we have used to implement Option~1.
+
+    \subtitleformat{SNARK.} A cryptographic proof system that allows one party (the prover) to convince another (the verifier) that they know a valid witness for a statement, without revealing it. SNARKs are widely used in zero-knowledge proofs and blockchain protocols due to their efficiency.
+
+    
+\begin{figure}
+\centering
+\begin{minipage}[h!]{0.38\linewidth}
+\raggedright
+\begin{itemize}
+    \item \textbf{\textcolor{blue}{S}}\textbf{uccinct}: Proofs are very short and quick to verify.
+    \item \textbf{\textcolor{blue}{N}}\textbf{on-interactive}: No interaction needed between prover and verifier.
+    \item \textbf{\textcolor{blue}{AR}}\textbf{gument of}: Strong guarantee of correctness.
+    \item \textbf{\textcolor{blue}{K}}\textbf{nowledge}: The prover must actually know the witness (not just that one exists).
+\end{itemize}
+
+\end{minipage}
+\hfill
+\begin{minipage}[h!]{0.6\linewidth}
+\centering
+\includegraphics[width=\linewidth]{snark.png}
+\caption{Prover tries to prove that she knows the valid witness that satisfies the public circuit without revealing it.}
+\end{minipage}
+\end{figure}
+
+
+  \end{block}
+
+
+
+
+
+
+    \subtitleformat{Recursive SNARK.} A recursive SNARK is a cryptographic proof system that can efficiently \textbf{verify another SNARK proof inside itself}. This allows multiple proofs to be merged together into a single, constant-sized proof.
+    
+    Without recursion, adding new signatures would require reprocessing all previous ones from scratch!
+
+    \begin{figure}
+        \centering
+        \includegraphics[width=1\linewidth]{snark_aggregation.png}
+        \caption{Using Recursive SNARKs to Aggregate Signatures in Multiple Levels.}
+        \label{fig:enter-label}
+    \end{figure}
+
+
+\begin{figure}
+\centering
+\begin{minipage}[t!]{0.48\linewidth}
+\raggedright
+Recursive SNARKs allow us to merge proofs (aggregate signatures), enabling \textbf{multi-level aggregation}. This approach distributes the aggregation workload across the network, allowing it to be performed in parallel.
+
+ Using multi-level aggregation gives us an exponential speed-up:
+\vspace{1ex}
+
+\[
+T_{a} = T_{c} + \frac{T_{p} \log_{2}(S)}{k}
+\]
+
+\vspace{1ex}
+
+\small Given $T_{c}$ as the signature-to-proof conversion time and $T_{p}$ as the time to merge $k$ proofs, then the total aggregation $T_{a}$ time for $S$ signatures is described above, \textit{assuming negligible network delay}.
+
+
+
+
+
+\end{minipage}
+\hfill
+\begin{minipage}[h!]{0.48\linewidth}
+\centering
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{multi-level aggregation custom.png}
+    \caption{Multi-level aggregation distributes proof merging across the network.}
+\end{figure}
+\end{minipage}
+\end{figure}
+
+
+\end{column}
+
+\separatorcolumn
+
+% ====================
+% Third Column
+% ====================
+\begin{column}{\colwidth}
+\begin{block}{\fontsize{42}{48}\selectfont\bfseries Our Implementation}
+
+    We implemented our system using \textbf{RISC0}, a post-quantum secure zero-knowledge virtual machine (zkVM). In a zkVM, the \textbf{guest program} is the computation whose correctness the prover attests to — it acts as the public circuit $\textcolor{blue}{f}$.
+\begin{figure}
+\centering
+\begin{minipage}[h!]{0.38\linewidth}
+\raggedright
+ In our case, this guest program performs the aggregation logic. Specifically, it:
+\begin{itemize}
+    \item Verifies the validity of a newly submitted signature.
+    \item Checks whether the signature belongs to a registered voter.
+    \item Verifies each existing proof (previously aggregated signature).
+    \item If all checks pass, merges their associated bitfields, indicating which voters have participated.
+\end{itemize}
+\end{minipage}
+\hfill
+\begin{minipage}[h!]{0.60\linewidth}
+\centering
+\includegraphics[width=\linewidth]{guest program.png}
+\caption{The guest program designed for recursive SNARKs, aggregates and verifies voter signatures.}
+\end{minipage}
+\end{figure}
+
+    
+    Finally, the prover generates a SNARK proof that the guest program executed correctly and that the new aggregate signature is valid.
+
+
+
+\end{block}
+
+
+
+    \begin{block}{\fontsize{42}{48}\selectfont\bfseries Results}
+
+    We have measured performance metrics for our solution and compared it with other work.
+
+    Our solution introduces a multi-level aggregation approach that improves scalability, setting it apart from \textbf{KCL22} \cite{Khaburzaniya2022}, which offers only one-level aggregation and relies on one-time signatures, providing a partial solution.
+
+    In contrast to \textbf{AAB24} \cite{LaBRADOR-Falcon}, we successfully tested our method at scale with a high number of signatures. However, the proving time and signature size in our implementation still present opportunities for further optimization.
+
+\begin{minipage}[t]{0.48\linewidth}
+\centering
+\vspace*{0.05\textheight}
+\begin{table}[H]
+\scriptsize
+\begin{tabular}{|l|c|c|c|c|c|}
+\hline
+\textbf{Schemes} & \textbf{\# Sign.} & \textbf{Sig. Size} & \textbf{Aggr. Time} & \textbf{Ver. Time} & \textbf{Assumption} \\
+\hline
+\textbf{KCL22} \cite{Khaburzaniya2022} & $2^9$ & 77 KB & 10.5 sec & 0.1 sec & Hash \\
+\textbf{KCL22} \cite{Khaburzaniya2022} & $2^9$ & 155 KB & 13.6 sec & 0.1 sec & Hash \\
+\hline
+\textbf{AAB24} \cite{LaBRADOR-Falcon} & $2^{10}$ & 88 KB & NI & NI & Lattice \\
+\textbf{KCL22} \cite{Khaburzaniya2022} & $2^{10}$ & 83 KB & 19.7 sec & 0.1 sec & Hash \\
+\textbf{KCL22} \cite{Khaburzaniya2022} & $2^{10}$ & 165 KB & 25.7 sec & 0.1 sec & Hash \\
+\textbf{This Work} & $2^{10}$ & 2.34 MB & 220.6 sec & 0.14 sec & Hash \\
+\textbf{AAB24} \cite{LaBRADOR-Falcon} & $2^{10}$ & 252 KB & NI & NI & Lattice \\
+\textbf{AAB24} \cite{LaBRADOR-Falcon} & $2^{10}$ & 417 KB & NI & NI & Lattice \\
+\hline
+\textbf{AAB24} \cite{LaBRADOR-Falcon} & $2^{12}$ & 252 KB & NI & NI & Lattice \\
+\textbf{This Work} & $2^{12}$ & 2.36 MB & 286.79 sec & 0.13 sec & Hash \\
+\hline
+\textbf{This Work} & $2^{16}$ & 2.89 MB & 795 sec & 0.16 sec & Hash \\
+\hline
+\end{tabular}
+\vskip3mm
+\caption{Performance comparison with various post-quantum aggregate signature schemes in the literature}
+\label{tab:performanceComparison}
+\end{table}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{0.48\linewidth}
+\centering
+\begin{table}[H]
+\scriptsize
+\begin{tabular}{|c|c|c|c|c|c|c|}
+\hline
+\textbf{\# Sign.} & 
+\textbf{Merge $n$} & 
+$T_c$ & 
+$T_p$ & 
+$T_a$ & 
+\textbf{Proof Size} & 
+\textbf{Ver. Time} \\
+\hline
+$2^{10}$ & 2 & 167.22 s & 5.39 s & 220.64 s & 2.24 MB & 0.14 s \\
+$2^{10}$ & 4 & 151.62 s & 10.82 s & 205.23 s & 4.45 MB & 0.25 s \\
+$2^{10}$ & 8 & 160.12 s & 11.27 s & 200.42 s & 8.64 MB & 0.49 s \\
+\hline
+$2^{11}$ & 2 & 166.26 s & 12.43 s & 301.84 s & 2.35 MB & 0.13 s \\
+$2^{11}$ & 4 & 161.35 s & 10.94 s & 222.35 s & 4.45 MB & 0.25 s \\
+$2^{11}$ & 8 & 165.36 s & 12.18 s & 209.44 s & 8.64 MB & 0.49 s \\
+\hline
+$2^{12}$ & 2 & 171.92 s & 10.36 s & 286.79 s & 2.36 MB & 0.13 s \\
+$2^{12}$ & 4 & 165.95 s & 12.36 s & 247.87 s & 4.47 MB & 0.25 s \\
+$2^{12}$ & 8 & 154.50 s & 20.32 s & 233.43 s & 8.65 MB & 0.51 s \\
+\hline
+$2^{13}$ & 2 & 180.47 s & 10.12 s & 304.39 s & 2.36 MB & 0.14 s \\
+$2^{13}$ & 4 & 168.01 s & 11.02 s & 249.74 s & 4.47 MB & 0.27 s \\
+$2^{13}$ & 8 & 188.58 s & 22.25 s & 284.02 s & 8.76 MB & 0.51 s \\
+\hline
+$2^{14}$ & 2 & 180.47 s & 10.12 s & 304.39 s & 2.36 MB & 0.14 s \\
+$2^{14}$ & 4 & 168.01 s & 11.02 s & 249.74 s & 4.47 MB & 0.27 s \\
+$2^{14}$ & 8 & 188.58 s & 22.25 s & 284.02 s & 8.76 MB & 0.51 s \\
+\hline
+$2^{15}$ & 2 & 189.55 s & 21.61 s & 512.91 s & 2.39 MB & 0.14 s \\
+$2^{15}$ & 4 & 172.78 s & 38.53 s & 457.73 s & 4.52 MB & 0.26 s \\
+$2^{15}$ & 8 & 209.01 s & 44.69 s & 441.20 s & 10.96 MB & 0.63 s \\
+\hline
+$2^{16}$ & 2 & 180.92 s & 38.12 s & 795.03 s & 2.89 MB & 0.16 s \\
+$2^{16}$ & 4 & 210.84 s & 38.02 s & 513.73 s & 5.64 MB & 0.35 s \\
+$2^{16}$ & 8 & 245.74 s & 78.23 s & 664.25 s & 13.73 MB & 0.77 s \\
+\hline
+\end{tabular}
+\vskip3mm
+\caption{Benchmark results performed on a Macbook Air (M1 Chip, 16 GB RAM) for our scheme with various number of signatures and merging factors.}
+\label{tab:BenchmarkResults}
+\end{table}
+\end{minipage}
+
+
+    \end{block}
+
+
+
+\begin{block}{\fontsize{42}{48}\selectfont\bfseries References}
+\footnotesize
+\begin{itemize}
+    \item[\textbf{[1]}] Ethereum Research Forum. \textit{Pragmatic Signature Aggregation with BLS} — ethresear.ch. \url{https://ethresear.ch/t/pragmatic-signature-aggregation-with-bls/2105}. Accessed: 2025-05-03.
+    
+    \item[\textbf{[2]}] Irakliy Khaburzaniya et al. \textit{Aggregating and Thresholdizing Hash-based Signatures using STARKs}. In: Asia Conference on Computer and Communications Security (AsiaCCS), 2022, pp. 393–407. \url{https://doi.org/10.1145/3488932.3524128}
+    
+    \item[\textbf{[3]}] Marius A. Aardal et al. \textit{Aggregating Falcon Signatures with LaBRADOR}. In: CRYPTO 2024, pp. 71–106. \url{https://doi.org/10.1007/978-3-031-68376-3_3}
+    
+    \item[\textbf{[4]}] George Kadianakis et al. \textit{KZH-Fold: Accountable Voting from Sublinear Accumulation}. Cryptology ePrint Archive, Report 2025/144. \url{https://eprint.iacr.org/2025/144}
+    
+    \item[\textbf{[5]}] GitHub Repository: \url{https://github.com/ArdaSaygan/PQ-Aggregation-via-Recursive-SNARKs}
+\end{itemize}
+\end{block}
+
+
+
+
+
+    
+\end{column}
+
+\separatorcolumn
+\end{columns}
+\end{frame}
+
+\end{document}
