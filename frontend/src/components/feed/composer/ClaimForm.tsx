@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { DollarSign, TrendingDown, TrendingUp } from 'lucide-react';
 import { MarketConfig } from './MarketConfig';
 import { cn } from '@/lib/utils';
+import { AssetCombobox } from '@/components/AssetCombobox';
 import type { AssetItem } from '@/lib/types';
 import { CLAIM_TYPE_OPTIONS } from '@/lib/claims';
 import { type ClaimDraft } from './types';
 
 interface ClaimFormProps {
   value: ClaimDraft;
-  assets: AssetItem[];
+  registerAsset: (asset: AssetItem) => void;
   onChange: (patch: Partial<ClaimDraft>) => void;
   onSubmit: () => void;
   onCancel?: () => void;
@@ -22,7 +22,7 @@ interface ClaimFormProps {
 
 export function ClaimForm({
   value,
-  assets,
+  registerAsset,
   onChange,
   onSubmit,
   onCancel,
@@ -58,24 +58,15 @@ export function ClaimForm({
 
       <div className="space-y-1">
         <Label className="text-xs">Asset</Label>
-          <Select
-            value={value.asset_id}
-            onValueChange={(v) => {
-              const a = assets.find((a) => a.id.toString() === v);
-              onChange({ asset_id: v, assetSymbol: a?.symbol ?? '' });
+          <AssetCombobox
+            size="sm"
+            placeholder="Select asset"
+            selectedLabel={value.assetSymbol}
+            onSelect={(a) => {
+              registerAsset(a);
+              onChange({ asset_id: a.id.toString(), assetSymbol: a.symbol });
             }}
-          >
-            <SelectTrigger className="h-8 text-sm">
-              <SelectValue placeholder="Select asset" />
-            </SelectTrigger>
-            <SelectContent>
-              {assets.map((a) => (
-                <SelectItem key={a.id} value={a.id.toString()}>
-                  {a.symbol.includes('/') ? a.symbol : `${a.symbol}/${a.quote_currency}`} — {a.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          />
         </div>
 
       <div className="space-y-1">

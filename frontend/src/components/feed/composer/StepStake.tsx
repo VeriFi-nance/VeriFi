@@ -3,7 +3,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { getProfileStats } from '@/lib/api';
 import { useAuthState } from '@/lib/auth';
+import { FieldError } from '@/components/ui/field-error';
 import type { ClaimDraft } from './types';
+import { LISTING_FEE, MIN_STAKE, MAX_STAKE } from './types';
 import { AlertCircle } from 'lucide-react';
 
 interface StepStakeProps {
@@ -24,6 +26,23 @@ export function StepStake({ value, onChange }: StepStakeProps) {
       }).catch(console.error);
     }
   }, [address]);
+
+  const stake = parseFloat(value.stakeRep);
+  const total = stake + LISTING_FEE;
+  const inRange = !isNaN(stake) && stake >= MIN_STAKE && stake <= MAX_STAKE;
+  const cantAfford = inRange && rep !== null && rep < total;
+  const noEnergy = energy !== null && energy < 1;
+
+  // Real-time warning so the user is told *before* hitting submit (not at the end).
+  const warning = isNaN(stake)
+    ? null
+    : !inRange
+      ? `Stake must be between ${MIN_STAKE} and ${MAX_STAKE} rep.`
+      : cantAfford
+        ? `Not enough rep: this needs ${total} rep (stake ${stake} + ${LISTING_FEE} listing fee) but you have ${rep !== null ? Math.floor(rep) : 0}.`
+        : noEnergy
+          ? 'Not enough energy: creating a claim costs 1 energy.'
+          : null;
 
   return (
     <div className="space-y-5 animate-in slide-in-from-right-2 fade-in">
@@ -54,7 +73,9 @@ export function StepStake({ value, onChange }: StepStakeProps) {
             value={value.stakeRep}
             onChange={(e) => onChange({ stakeRep: e.target.value })}
             className="h-10 text-base num"
+            aria-invalid={!!warning}
           />
+          <FieldError>{warning}</FieldError>
         </div>
 
         <div className="rounded-md bg-muted/50 p-3 flex gap-2 items-start text-xs text-muted-foreground">

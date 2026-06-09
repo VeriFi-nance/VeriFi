@@ -27,8 +27,7 @@ class RegisterView(APIView):
 
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
 
         address = serializer.validated_data["address"].lower()
         username = serializer.validated_data.get("username")
@@ -88,8 +87,7 @@ class LoginView(APIView):
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
 
         address = serializer.validated_data["address"].lower()
         signature_hex = serializer.validated_data["signature"]
@@ -245,8 +243,7 @@ class FollowToggleView(APIView):
             return Response({"detail": "Invalid token."}, status=status.HTTP_401_UNAUTHORIZED)
 
         serializer = FollowSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
             
         target_address = serializer.validated_data["target_address"].lower()
         if req_address == target_address:
@@ -260,7 +257,10 @@ class FollowToggleView(APIView):
             # Already following, so unfollow
             follow_obj.delete()
             return Response({"detail": "Unfollowed successfully.", "following": False})
-            
+
+        from notifications.emitters import notify_followed
+
+        notify_followed(target_user, current_user, follow_obj.id)
         return Response({"detail": "Followed successfully.", "following": True})
 
 class ProfitabilityView(APIView):

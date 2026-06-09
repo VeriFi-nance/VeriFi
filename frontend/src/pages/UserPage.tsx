@@ -4,15 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
 import { Settings as SettingsIcon, Copy, Check, History } from 'lucide-react';
-import { HardClaimCard } from '@/components/HardClaimCard';
+import { FeedList } from '@/components/feed/FeedList';
 import { UserAvatar } from '@/components/UserAvatar';
+import { SmartTimestamp } from '@/components/SmartTimestamp';
 import { EmptyState } from '@/components/EmptyState';
 import { PageContent } from '@/components/PageContent';
-import { SkeletonRow } from '@/components/Skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getHardClaimsByAddress, getProfileStats, toggleFollow, createChannel } from '@/lib/api';
-import { fetchAssets } from '@/hooks/useAssets';
-import type { HardClaimItem, AssetItem, ProfileStats } from '@/lib/types';
+import { getProfileStats, toggleFollow, createChannel } from '@/lib/api';
+import type { ProfileStats } from '@/lib/types';
 import { loadAddress } from '@/lib/auth';
 import { truncateAddress } from '@/lib/wallet';
 import { Plus, Sparkles } from 'lucide-react';
@@ -21,6 +20,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 import { PremiumChannelView } from '@/components/PremiumChannelView';
+import { toast, getMessage } from '@/lib/errors';
 import { ChannelCard } from '@/components/ChannelCard';
 
 function CopyAddressButton({ text }: { text: string }) {
@@ -58,24 +58,12 @@ function StatBlock({ label, value, onClick }: { label: string; value: string; on
   );
 }
 
-function formatChangeDate(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(value));
-}
-
 export default function UserPage() {
   const { address } = useParams();
   const myAddress = loadAddress();
 
-  const [claims, setClaims] = useState<HardClaimItem[]>([]);
-  const [assets, setAssets] = useState<AssetItem[]>([]);
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [following, setFollowing] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [profileRefreshKey, setProfileRefreshKey] = useState(0);
 
@@ -109,22 +97,12 @@ export default function UserPage() {
 
   useEffect(() => {
     if (!address) return;
-    setLoading(true);
     getProfileStats(address)
       .then((s) => {
         setStats(s);
         setFollowing(s.is_following ?? false);
-        return Promise.all([
-          getHardClaimsByAddress(s.address),
-          fetchAssets(),
-        ]);
       })
-      .then(([c, a]) => {
-        setClaims(c);
-        setAssets(a);
-      })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
+      .catch((e) => setError(e.message));
   }, [address, profileRefreshKey]);
 
   useEffect(() => {
@@ -149,7 +127,7 @@ export default function UserPage() {
           : null,
       );
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to follow');
+      toast.error(getMessage(e, 'Failed to follow'));
     }
   }
 
@@ -254,29 +232,8 @@ export default function UserPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="public" className="space-y-2 mt-4 animate-in fade-in-50 duration-200">
-          {loading ? (
-            <div className="space-y-2">
-              <SkeletonRow />
-              <SkeletonRow />
-              <SkeletonRow />
-            </div>
-          ) : claims.length === 0 ? (
-            <EmptyState
-              title="No claims yet"
-              description={
-                isSelf
-                  ? 'Your verifiable predictions will show up here once you publish them.'
-                  : 'This user hasn’t published any claims yet.'
-              }
-            />
-          ) : (
-            <div className="space-y-2">
-              {claims.map((c) => (
-                <HardClaimCard key={c.id} claim={c} assets={assets} />
-              ))}
-            </div>
-          )}
+        <TabsContent value="public" className="mt-4 animate-in fade-in-50 duration-200">
+          <FeedList userAddress={stats?.address || address} />
         </TabsContent>
 
         <TabsContent value="premium" className="space-y-6 mt-4 animate-in fade-in-50 duration-200">
@@ -427,7 +384,7 @@ export default function UserPage() {
                       : entry.summary}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {formatChangeDate(entry.created_at)}
+                    <SmartTimestamp value={entry.created_at} />
                   </p>
                 </div>
               );

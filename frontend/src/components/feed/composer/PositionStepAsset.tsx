@@ -1,37 +1,26 @@
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AssetCombobox } from '@/components/AssetCombobox';
 import type { AssetItem } from '@/lib/types';
 import type { PositionDraft } from './PositionWizard';
 
 interface PositionStepAssetProps {
   value: Partial<PositionDraft>;
-  assets: AssetItem[];
+  registerAsset: (asset: AssetItem) => void;
   onChange: (patch: Partial<PositionDraft>) => void;
 }
 
-export function PositionStepAsset({ value, assets, onChange }: PositionStepAssetProps) {
+export function PositionStepAsset({ value, registerAsset, onChange }: PositionStepAssetProps) {
   return (
     <div className="space-y-4 animate-in slide-in-from-bottom-2 fade-in">
       <div className="space-y-2">
         <Label className="text-sm font-semibold">Select Asset</Label>
-        <Select
-          value={value.assetId}
-          onValueChange={(v) => {
-            const a = assets.find((a) => a.id.toString() === v);
-            onChange({ assetId: v, assetSymbol: a?.symbol ?? '' });
+        <AssetCombobox
+          selectedLabel={value.assetSymbol}
+          onSelect={(a) => {
+            registerAsset(a);
+            onChange({ assetId: a.id.toString(), assetSymbol: a.symbol });
           }}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Search assets..." />
-          </SelectTrigger>
-          <SelectContent>
-            {assets.map((a) => (
-              <SelectItem key={a.id} value={a.id.toString()}>
-                {a.symbol.includes('/') ? a.symbol : `${a.symbol}/${a.quote_currency}`} — {a.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        />
       </div>
     </div>
   );

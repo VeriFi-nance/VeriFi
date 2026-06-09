@@ -11,6 +11,7 @@ import { createPost } from '@/lib/api';
 import { fetchAssets } from '@/hooks/useAssets';
 import type { AssetItem, ReviewClaim } from '@/lib/types';
 import { getClaimType } from '@/lib/claims';
+import { AssetCombobox } from '@/components/AssetCombobox';
 import { PostComposer, MAX_CHARS } from './PostComposer';
 import { ClaimForm } from './ClaimForm';
 import { ClaimWizard } from './ClaimWizard';
@@ -25,7 +26,7 @@ import {
 import { buildClaimPayload, buildPositionPayload } from '@/lib/payloads';
 import { signPayload, resolveUsername } from '@/lib/signing';
 import { PositionWizard, defaultPositionDraft, type PositionDraft } from './PositionWizard';
-import { safeImageSrc } from '@/lib/utils';
+import { cn, safeImageSrc } from '@/lib/utils';
 
 interface NewPostModalProps {
   open: boolean;
@@ -126,6 +127,12 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
 
   function patchDraft(patch: Partial<ClaimDraft>) {
     setDraft((d) => ({ ...d, ...patch }));
+  }
+
+  // Merge an asset selected/resolved via the search combobox into the known
+  // list so validateDraft and the symbol/parity lookups below can find it.
+  function registerAsset(asset: AssetItem) {
+    setAssets((prev) => (prev.some((a) => a.id === asset.id) ? prev : [...prev, asset]));
   }
 
   function addDraft(customDraft?: ClaimDraft): boolean {
@@ -468,7 +475,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
             <div className="space-y-3">
               {posWizardMode ? (
                 <PositionWizard
-                  assets={assets}
+                  registerAsset={registerAsset}
                   initialDraft={posDraft}
                   onNav={setPosNav}
                   onComplete={(pd) => {
@@ -494,21 +501,15 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
                       <Label className="text-[11px]">Asset</Label>
-                      <Select
-                        value={posDraft.assetId}
-                        onValueChange={(v) => setPosDraft((p) => ({ ...p, assetId: v }))}
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue placeholder="Select" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {assets.map((a) => (
-                            <SelectItem key={a.id} value={a.id.toString()} className="text-xs">
-                              {a.symbol}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <AssetCombobox
+                        size="sm"
+                        placeholder="Select"
+                        selectedLabel={posDraft.assetSymbol}
+                        onSelect={(a) => {
+                          registerAsset(a);
+                          setPosDraft((p) => ({ ...p, assetId: a.id.toString(), assetSymbol: a.symbol }));
+                        }}
+                      />
                     </div>
 
                     <div className="space-y-1">
@@ -609,7 +610,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
           {showDraft && (
             wizardMode ? (
               <ClaimWizard
-                assets={assets}
+                registerAsset={registerAsset}
                 initialDraft={draft}
                 onNav={setClaimNav}
                 onComplete={(d) => { if (addDraft(d)) setClaimNav(null); }}
@@ -624,7 +625,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
             ) : (
               <ClaimForm
                 value={draft}
-                assets={assets}
+                registerAsset={registerAsset}
                 onChange={patchDraft}
                 onSubmit={() => addDraft()}
                 onCancel={() => {
@@ -737,9 +738,11 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
 export function NewPostButton({
   onPosted,
   channelId,
+  compactOnMobile = false,
 }: {
   onPosted: () => void;
   channelId?: number;
+  compactOnMobile?: boolean;
 }) {
   const openLogin = useOpenLogin();
   const auth = useAuthState();
@@ -755,9 +758,14 @@ export function NewPostButton({
 
   return (
     <>
-      <Button size="sm" className="gap-2 font-medium" onClick={handleClick}>
+      <Button
+        size="sm"
+        className="shrink-0 gap-2 font-medium"
+        onClick={handleClick}
+        aria-label="New post"
+      >
         <PenSquare className="size-4" />
-        New post
+        <span className={cn(compactOnMobile && 'hidden sm:inline')}>New post</span>
       </Button>
       <NewPostModal
         open={open}

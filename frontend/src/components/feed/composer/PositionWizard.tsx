@@ -34,7 +34,7 @@ export function defaultPositionDraft(): PositionDraft {
 }
 
 interface PositionWizardProps {
-  assets: AssetItem[];
+  registerAsset: (asset: AssetItem) => void;
   initialDraft?: Partial<PositionDraft>;
   onComplete: (pos: PositionDraft) => void;
   onCancel: () => void;
@@ -47,7 +47,7 @@ interface PositionWizardProps {
 type LevelPhase = 0 | 1 | 2; // entry, take-profit, stop-loss
 
 export function PositionWizard({
-  assets,
+  registerAsset,
   initialDraft,
   onComplete,
   onCancel,
@@ -148,9 +148,11 @@ export function PositionWizard({
     }
   }
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // `next`/`back`/`onNav` excluded by design: recreated each render, only need to
+  // fire on the primitive state changes below (including them would loop).
   useEffect(() => {
     onNav({ canNext, nextLabel, isFirstStep, next, back });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, levelPhase, canNext, nextLabel, draft]);
 
   const stepLabel = step === 0 ? 1 : step === 1 ? 2 : 3;
@@ -171,7 +173,7 @@ export function PositionWizard({
 
       <div className="relative">
         {step === 0 && (
-          <PositionStepAsset value={draft} assets={assets} onChange={patchDraft} />
+          <PositionStepAsset value={draft} registerAsset={registerAsset} onChange={patchDraft} />
         )}
         {step === 1 && (
           <PositionStepLevels value={draft} onChange={patchDraft} phase={levelPhase} />

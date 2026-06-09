@@ -33,7 +33,7 @@ function readAuthState(): AuthState {
     address,
     username,
     avatar,
-    authenticated: token !== null,
+    authenticated: isBackendTokenUsable(token),
   };
 }
 
@@ -68,8 +68,36 @@ export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
 
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  const payload = token.split('.')[1];
+  if (!payload) return null;
+
+  try {
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
+    return JSON.parse(atob(padded)) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+export function isBackendTokenUsable(token: string | null = getToken()): boolean {
+  if (!token) return false;
+  const payload = decodeJwtPayload(token);
+  if (!payload) return false;
+
+  const exp = payload.exp;
+  if (typeof exp === 'number') {
+    // Leave a little clock-skew room so an about-to-expire token is refreshed
+    // before the next authenticated action reaches the backend.
+    return exp * 1000 > Date.now() + 30_000;
+  }
+
+  return true;
+}
+
 export function isAuthenticated(): boolean {
-  return getToken() !== null;
+  return isBackendTokenUsable();
 }
 
 export function saveAddress(address: string): void {

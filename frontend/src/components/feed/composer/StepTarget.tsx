@@ -5,6 +5,7 @@ import { getAssetChartData } from '@/lib/api';
 import type { AssetChartData, ChartCandleInterval } from '@/lib/types';
 import type { ClaimDraft } from './types';
 import { InteractiveChart } from './InteractiveChart';
+import { FieldError } from '@/components/ui/field-error';
 import { cn } from '@/lib/utils';
 
 interface StepTargetProps {
@@ -58,6 +59,24 @@ export function StepTarget({ value, onChange }: StepTargetProps) {
       direction: magnitude ? (negative ? 'Bearish' : 'Bullish') : '',
     });
   }
+
+  // Per-field validation (shown only once the field has a value, so the user
+  // isn't scolded before typing). Mirrors backend rules in validateDraft.
+  const pct = parseFloat(value.percentage);
+  const targetError = !value.percentage
+    ? ''
+    : isNaN(pct)
+      ? 'Enter a number.'
+      : isPrice
+        ? (pct <= 0 ? 'Target price must be greater than 0.' : '')
+        : (pct < 0.1 || pct > 1000 ? 'Target move must be between 0.1% and 1000%.' : '');
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const deadlineError = !value.until
+    ? ''
+    : value.until <= todayStr
+      ? 'Deadline must be tomorrow or later.'
+      : '';
 
   function handleSelectTarget(price: number, dateStr: string) {
     const update: Partial<ClaimDraft> = { until: dateStr };
@@ -115,8 +134,10 @@ export function StepTarget({ value, onChange }: StepTargetProps) {
               onChange={(e) => handlePercentageChange(e.target.value)}
               className={cn('h-9 text-sm num', isPrice && 'pl-6')}
               placeholder={isPrice ? 'e.g. 103000' : 'e.g. 25 or -10'}
+              aria-invalid={!!targetError}
             />
           </div>
+          <FieldError>{targetError}</FieldError>
           {!isPrice && value.direction && (
             <div className={cn("text-xs font-medium", value.direction === 'Bullish' ? 'text-success' : 'text-danger')}>
               {value.direction === 'Bullish' ? '↑ Bullish (Up)' : '↓ Bearish (Down)'}
@@ -140,7 +161,9 @@ export function StepTarget({ value, onChange }: StepTargetProps) {
             value={value.until}
             onChange={(e) => onChange({ until: e.target.value })}
             className="h-9 text-sm num"
+            aria-invalid={!!deadlineError}
           />
+          <FieldError>{deadlineError}</FieldError>
         </div>
       </div>
 

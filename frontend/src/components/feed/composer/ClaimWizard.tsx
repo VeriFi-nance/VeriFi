@@ -6,7 +6,7 @@ import { StepTarget } from './StepTarget';
 import { StepStake } from './StepStake';
 
 interface ClaimWizardProps {
-  assets: AssetItem[];
+  registerAsset: (asset: AssetItem) => void;
   initialDraft?: Partial<ClaimDraft>;
   onComplete: (claim: ClaimDraft) => void;
   onCancel: () => void;
@@ -18,7 +18,7 @@ interface ClaimWizardProps {
 const TOTAL_STEPS = 3;
 
 export function ClaimWizard({
-  assets,
+  registerAsset,
   initialDraft,
   onComplete,
   onCancel,
@@ -55,10 +55,12 @@ export function ClaimWizard({
     else setStep((s) => s - 1);
   }
 
-  // Push nav state to the footer whenever it changes.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Push nav state to the footer whenever it changes. `next`/`back`/`onNav` are
+  // intentionally excluded: they are recreated each render but only need to fire
+  // when the primitive state below changes (including them would loop).
   useEffect(() => {
     onNav({ canNext, nextLabel, isFirstStep: step === 0, next, back });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, canNext, nextLabel, draft]);
 
   return (
@@ -77,7 +79,7 @@ export function ClaimWizard({
 
       <div className="relative">
         {step === 0 && (
-          <StepAsset value={draft} assets={assets} onChange={patchDraft} />
+          <StepAsset value={draft} registerAsset={registerAsset} onChange={patchDraft} />
         )}
         {step === 1 && (
           <StepTarget value={draft} onChange={patchDraft} />

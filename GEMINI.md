@@ -20,12 +20,10 @@
 
 ## 3. Core Architecture
 - **Stateless Backend Auth**: Challenge-response authentication via wallet signature. The backend issues JWTs, while private keys never leave the client device (encrypted in `localStorage` for native wallets).
-- **Position Resolution (Observer Pattern)**: 
+- **Resolution Engine (Observer Pattern)**: 
   - Periodic job (`update_and_notify`) fetches OHLC data for assets.
-  - Assets act as Observables, notifying subscribed Positions (Observers).
-  - Position state transitions (`PENDING` -> `ACTIVE` -> `CONFIRMED`/`REJECTED`/`MISSED`) happen dynamically based on price triggers.
-- **Legacy/Other Resolution**: Hard claims are resolved independently since they only require deadline checks, via `resolve_claims` management command.
-
+  - Assets act as Observables, notifying subscribed Positions and HardClaims (Observers) via `AssetSubscription`.
+  - State transitions happen dynamically based on price triggers or deadlines.
 ## 4. Current State & Recent Changes
 - Authentication and base models are implemented.
 - **Task 04 (Position Model & API)** is DONE.

@@ -27,6 +27,19 @@ from . import rep_market
 from .signature_verification import verify_claim_signature, verify_position_signature
 from accounts.energy import grant_energy, spend, CLAIM_ENERGY_COST
 from accounts.serializers import validate_image_upload
+from notifications.emitters import (
+    notify_channel_join_request,
+    notify_channel_membership,
+    notify_claim_market_opened,
+    notify_comment_liked,
+    notify_comment_replied,
+    notify_energy_spent,
+    notify_post_commented,
+    notify_post_liked,
+    notify_post_saved,
+    notify_rep_spent,
+)
+from notifications.models import Notification
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +150,14 @@ def _filter_posts_queryset(qs, request):
     query = request.query_params.get("q", "").strip()
     if query:
         qs = qs.filter(content__icontains=query)
+
+    address = request.query_params.get("address", "").strip().lower()
+    if address:
+        qs = qs.filter(author__address=address)
+
+    username_q = request.query_params.get("username", "").strip()
+    if username_q:
+        qs = qs.filter(author__username__iexact=username_q)
 
     # ── Asset + type filtering ────────────────────────────────────────────────
     raw_asset_ids = request.query_params.get("asset_ids", "").strip()
@@ -453,12 +474,13 @@ class PostListCreateView(APIView):
                         signature=hc_sig,
                         claim_payload=hc_claim_payload,
                     )
-                    from .models import HardClaimEvent
+                    from .models import HardClaimEvent, AssetSubscription
                     HardClaimEvent.objects.create(
                         hard_claim=hard_claim,
                         event_type=HardClaimEvent.EventType.CREATION,
                         details={}
                     )
+                    AssetSubscription.objects.get_or_create(hard_claim=hard_claim, defaults={"asset": asset})
                     try:
                         capture_reference_price(hard_claim)
                     except ResolutionError as exc:
@@ -469,6 +491,25 @@ class PostListCreateView(APIView):
                         )
                     if market_block is not None:
                         rep_market.init_market(hard_claim, user, m_side, m_stake)
+                        notify_claim_market_opened(hard_claim, user)
+                        notify_energy_spent(
+                            recipient=user,
+                            amount=CLAIM_ENERGY_COST,
+                            title="Energy spent",
+                            message=f"You spent {CLAIM_ENERGY_COST} energy opening a claim market.",
+                            target_url=f"/claim/{hard_claim.id}",
+                            metadata={"claim_id": hard_claim.id, "reason": "claim_market_opened"},
+                            dedupe_key=f"energy-spent:claim-market:{hard_claim.id}",
+                        )
+                        notify_rep_spent(
+                            recipient=user,
+                            amount=rep_market.LISTING_FEE + m_stake,
+                            title="Rep spent",
+                            message=f"You spent {rep_market.LISTING_FEE + m_stake:.2f} rep opening a claim market.",
+                            target_url=f"/claim/{hard_claim.id}",
+                            metadata={"claim_id": hard_claim.id, "reason": "claim_market_opened"},
+                            dedupe_key=f"rep-spent:claim-market-open:{hard_claim.id}",
+                        )
                 except rep_market.MarketError:
                     transaction.set_rollback(True)
                     logger.exception("Market initialization failed during post creation.")
@@ -585,7 +626,9 @@ class PostLikeView(APIView):
         if error_response is not None:
             return error_response
 
-        PostLike.objects.get_or_create(post=post, user=user)
+        like, created = PostLike.objects.get_or_create(post=post, user=user)
+        if created:
+            notify_post_liked(post, user, like.id)
         post = _posts_with_social_annotations(_posts_queryset(), user).get(pk=pk)
         return Response(PostSerializer(post).data, status=status.HTTP_200_OK)
 
@@ -651,6 +694,12 @@ class PostCommentListCreateView(APIView):
                 return Response({"detail": "Invalid parent comment."}, status=status.HTTP_400_BAD_REQUEST)
 
         comment = PostComment.objects.create(post=post, parent=parent, author=user, content=content, image=image_file)
+        if parent is not None:
+            notify_comment_replied(comment)
+            if parent.author_id != post.author_id:
+                notify_post_commented(comment)
+        else:
+            notify_post_commented(comment)
         comment = _comments_with_social_annotations(PostComment.objects.filter(pk=comment.pk), user).get()
         return Response(PostCommentSerializer(comment).data, status=status.HTTP_201_CREATED)
 
@@ -668,7 +717,9 @@ class PostCommentLikeView(APIView):
         if error_response is not None:
             return error_response
 
-        PostCommentLike.objects.get_or_create(comment=comment, user=user)
+        like, created = PostCommentLike.objects.get_or_create(comment=comment, user=user)
+        if created:
+            notify_comment_liked(comment, user, like.id)
         comment = _comments_with_social_annotations(PostComment.objects.filter(pk=pk).select_related("author"), user).get()
         return Response(PostCommentSerializer(comment).data, status=status.HTTP_200_OK)
 
@@ -699,7 +750,9 @@ class PostSavedProofView(APIView):
         if error_response is not None:
             return error_response
 
-        SavedProof.objects.get_or_create(post=post, user=user)
+        saved_proof, created = SavedProof.objects.get_or_create(post=post, user=user)
+        if created:
+            notify_post_saved(post, user, saved_proof.id)
         post = _posts_with_social_annotations(_posts_queryset(), user).get(pk=pk)
         return Response(PostSerializer(post).data, status=status.HTTP_200_OK)
 
@@ -733,13 +786,126 @@ class ExtractClaimsView(APIView):
         claims = rule_based_claims_from_prompt(content)
         return Response({"version": CONTRACT_VERSION, "claims": [c.to_dict() for c in claims]})
     
+def _search_local_assets(query: str, limit: int | None):
+    """Local DB asset search ordered by relevance (exact symbol, symbol prefix,
+    then name/symbol contains). Returns a list of serialized assets tagged
+    source="local". limit=None returns the full list (used as the app-wide
+    id→symbol lookup table by the feed)."""
+    qs = Asset.objects.all()
+    if query:
+        from django.db.models import Case, When, IntegerField, Q
+        # Relevance first, then most-used, then name.
+        qs = qs.filter(Q(symbol__icontains=query) | Q(name__icontains=query)).annotate(
+            _rank=Case(
+                When(symbol__iexact=query, then=Value(0)),
+                When(symbol__istartswith=query, then=Value(1)),
+                When(name__istartswith=query, then=Value(2)),
+                default=Value(3),
+                output_field=IntegerField(),
+            )
+        ).order_by("_rank", "-usage_count", "name")
+    elif limit is not None:
+        # Capped no-query request (dropdown just opened): surface the most-used
+        # assets so the common picks are one keystroke away.
+        qs = qs.order_by("-usage_count", "name")
+    else:
+        qs = qs.order_by("name")
+    if limit is not None:
+        qs = qs[:limit]
+    data = AssetSerializer(qs, many=True).data
+    for row in data:
+        row["source"] = "local"
+    return data
+
+
 class AssetListView(APIView):
     authentication_classes = []
     permission_classes = []
 
     def get(self, request):
-        assets = Asset.objects.all().order_by("name")
-        return Response(AssetSerializer(assets, many=True).data)
+        query = request.query_params.get("q", "").strip()
+        # A bare GET /assets/ is the app's full asset table (feed cards resolve
+        # claim/position symbols from it), so it must NOT be capped. A limit is
+        # only honored alongside an explicit ?q= search.
+        limit_param = request.query_params.get("limit")
+        if query and limit_param:
+            try:
+                limit: int | None = min(int(limit_param), 500)
+            except (TypeError, ValueError):
+                limit = 50
+        elif query:
+            limit = 50
+        else:
+            limit = None  # full catalog
+        return Response(_search_local_assets(query, limit))
+
+
+class AssetSearchView(APIView):
+    """Hybrid search: local DB first, remote provider candidates appended when
+    the local catalog is thin. Remote candidates carry id=None + source="remote"
+    and are materialized only when the user selects one (/assets/resolve/)."""
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        query = request.query_params.get("q", "").strip()
+        try:
+            limit = min(int(request.query_params.get("limit", 20)), 50)
+        except (TypeError, ValueError):
+            limit = 20
+
+        local = _search_local_assets(query, limit)
+        results = list(local)
+
+        # Only pay the remote round-trip when local results are sparse.
+        if query and len(local) < limit:
+            from .asset_search import remote_search
+            local_keys = {(r["symbol"], r["market_type"]) for r in local}
+            for cand in remote_search(query, limit - len(local)):
+                if (cand["symbol"], cand["market_type"]) not in local_keys:
+                    results.append(cand)
+        return Response(results[:limit])
+
+
+class AssetResolveView(APIView):
+    """Persist a remote search candidate into a real Asset row (idempotent),
+    returning the serialized asset with its new id. Called by the picker right
+    before a claim/position payload that needs asset_id."""
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        data = request.data or {}
+        symbol = (data.get("symbol") or "").strip()
+        market = (data.get("_market") or data.get("market") or "").strip().lower()
+        if not symbol or not market:
+            return Response({"detail": "symbol and market are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from .asset_providers import get_or_create_asset, SUPPORTED_MARKETS
+        if market not in SUPPORTED_MARKETS:
+            return Response({"detail": f"Unsupported market: {market}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            asset, _created = get_or_create_asset(
+                symbol=symbol,
+                name=data.get("name") or symbol,
+                market=market,
+                quote_currency=(data.get("quote_currency") or "USD"),
+                coingecko_id=data.get("_coingecko_id"),
+            )
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Refresh the NL whitelist so the new ticker is recognized in free-text.
+        try:
+            from .claim_extraction import refresh_whitelist
+            refresh_whitelist()
+        except Exception:
+            logger.warning("Whitelist refresh after asset resolve failed", exc_info=True)
+
+        payload = AssetSerializer(asset).data
+        payload["source"] = "local"
+        return Response(payload, status=status.HTTP_200_OK)
 
 class HardClaimView(APIView):
     authentication_classes = []
@@ -783,8 +949,7 @@ class HardClaimView(APIView):
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
         
         serializer = HardClaimInputSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
         # Validate that asset exists
@@ -880,12 +1045,13 @@ class HardClaimView(APIView):
                 signature=sig,
                 claim_payload=claim_payload,
             )
-            from .models import HardClaimEvent
+            from .models import HardClaimEvent, AssetSubscription
             HardClaimEvent.objects.create(
                 hard_claim=hard_claim,
                 event_type=HardClaimEvent.EventType.CREATION,
                 details={}
             )
+            AssetSubscription.objects.get_or_create(hard_claim=hard_claim, defaults={"asset": asset})
             try:
                 capture_reference_price(hard_claim)
             except ResolutionError as exc:
@@ -896,6 +1062,25 @@ class HardClaimView(APIView):
                 )
             if market_block is not None:
                 rep_market.init_market(hard_claim, user, m_side, m_stake)
+                notify_claim_market_opened(hard_claim, user)
+                notify_energy_spent(
+                    recipient=user,
+                    amount=CLAIM_ENERGY_COST,
+                    title="Energy spent",
+                    message=f"You spent {CLAIM_ENERGY_COST} energy opening a claim market.",
+                    target_url=f"/claim/{hard_claim.id}",
+                    metadata={"claim_id": hard_claim.id, "reason": "claim_market_opened"},
+                    dedupe_key=f"energy-spent:claim-market:{hard_claim.id}",
+                )
+                notify_rep_spent(
+                    recipient=user,
+                    amount=rep_market.LISTING_FEE + m_stake,
+                    title="Rep spent",
+                    message=f"You spent {rep_market.LISTING_FEE + m_stake:.2f} rep opening a claim market.",
+                    target_url=f"/claim/{hard_claim.id}",
+                    metadata={"claim_id": hard_claim.id, "reason": "claim_market_opened"},
+                    dedupe_key=f"rep-spent:claim-market-open:{hard_claim.id}",
+                )
         except rep_market.MarketError as e:
             return Response({"detail": f"market: {e}"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
@@ -922,6 +1107,12 @@ class HardClaimView(APIView):
 
         hard_claim.status = new_status
         hard_claim.save()
+        if new_status in (HardClaim.Status.CONFIRMED, HardClaim.Status.REJECTED):
+            from .resolution import _maybe_settle_rep_market
+            from notifications.emitters import notify_claim_resolved
+
+            notify_claim_resolved(hard_claim)
+            _maybe_settle_rep_market(hard_claim)
         return Response(HardClaimSerializer(hard_claim).data)
 
 
@@ -979,7 +1170,11 @@ class HardClaimResolveView(APIView):
         try:
             result = preview_resolution(hard_claim) if preview_only else resolve_hard_claim(hard_claim)
         except ResolutionError as exc:
-            return Response(exc.to_payload(), status=status.HTTP_400_BAD_REQUEST)
+            payload = exc.to_payload()
+            # Standard error envelope (consumed by the frontend client) while
+            # keeping the legacy top-level keys for the admin resolution UI.
+            payload["error"] = {"code": exc.code, "message": exc.message}
+            return Response(payload, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(result)
 
@@ -1428,6 +1623,7 @@ class ChannelJoinView(APIView):
             user=user,
             status=ChannelMembership.Status.PENDING
         )
+        notify_channel_join_request(channel, user, membership.id)
             
         return Response(ChannelMembershipSerializer(membership).data, status=status.HTTP_201_CREATED)
 
@@ -1451,9 +1647,28 @@ class ChannelApproveView(APIView):
         if action == "approve":
             membership.status = ChannelMembership.Status.APPROVED
             membership.save()
+            notify_channel_membership(
+                channel=channel,
+                recipient=target_user,
+                actor=user,
+                type=Notification.Type.CHANNEL_APPROVED,
+                title="Channel request approved",
+                message=f"Your request to join {channel.name} was approved.",
+                dedupe_key=f"channel-approved:{membership.id}",
+            )
             return Response(ChannelMembershipSerializer(membership).data)
         elif action == "reject":
+            membership_id = membership.id
             membership.delete()
+            notify_channel_membership(
+                channel=channel,
+                recipient=target_user,
+                actor=user,
+                type=Notification.Type.CHANNEL_REJECTED,
+                title="Channel request rejected",
+                message=f"Your request to join {channel.name} was rejected.",
+                dedupe_key=f"channel-rejected:{membership_id}",
+            )
             return Response({"detail": "Request rejected."})
         else:
             return Response({"detail": "Invalid action. Use 'approve' or 'reject'."}, status=status.HTTP_400_BAD_REQUEST)
@@ -1487,6 +1702,15 @@ class ChannelBanView(APIView):
         )
         membership.status = ChannelMembership.Status.BANNED
         membership.save()
+        notify_channel_membership(
+            channel=channel,
+            recipient=target_user,
+            actor=user,
+            type=Notification.Type.CHANNEL_BANNED,
+            title="Removed from channel",
+            message=f"You were banned from {channel.name}.",
+            dedupe_key=f"channel-banned:{channel.id}:{target_user.pk}:{membership.id}",
+        )
         return Response(ChannelMembershipSerializer(membership).data)
 
     def delete(self, request, pk, user_address):
@@ -1503,7 +1727,17 @@ class ChannelBanView(APIView):
         try:
             membership = ChannelMembership.objects.get(channel=channel, user=target_user)
             if membership.status == ChannelMembership.Status.BANNED:
+                membership_id = membership.id
                 membership.delete()
+                notify_channel_membership(
+                    channel=channel,
+                    recipient=target_user,
+                    actor=user,
+                    type=Notification.Type.CHANNEL_UNBANNED,
+                    title="Channel ban removed",
+                    message=f"You were unbanned from {channel.name}.",
+                    dedupe_key=f"channel-unbanned:{channel.id}:{target_user.pk}:{membership_id}",
+                )
                 return Response({"detail": "User unbanned."}, status=status.HTTP_204_NO_CONTENT)
             else:
                 return Response({"detail": "User is not banned."}, status=status.HTTP_400_BAD_REQUEST)
@@ -1664,8 +1898,7 @@ class PositionListCreateView(APIView):
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
 
         serializer = PositionInputSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
 
         data = serializer.validated_data
         channel = get_object_or_404(Channel, pk=data["channel_id"])
@@ -1893,6 +2126,25 @@ class HardClaimMarketCreateView(APIView):
             market = rep_market.init_market(hard_claim, user, side, stake_rep)
         except rep_market.MarketError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        notify_claim_market_opened(hard_claim, user)
+        notify_energy_spent(
+            recipient=user,
+            amount=CLAIM_ENERGY_COST,
+            title="Energy spent",
+            message=f"You spent {CLAIM_ENERGY_COST} energy opening a claim market.",
+            target_url=f"/claim/{hard_claim.id}",
+            metadata={"claim_id": hard_claim.id, "reason": "claim_market_opened"},
+            dedupe_key=f"energy-spent:claim-market:{hard_claim.id}",
+        )
+        notify_rep_spent(
+            recipient=user,
+            amount=rep_market.LISTING_FEE + stake_rep,
+            title="Rep spent",
+            message=f"You spent {rep_market.LISTING_FEE + stake_rep:.2f} rep opening a claim market.",
+            target_url=f"/claim/{hard_claim.id}",
+            metadata={"claim_id": hard_claim.id, "reason": "claim_market_opened"},
+            dedupe_key=f"rep-spent:claim-market-open:{hard_claim.id}",
+        )
         return Response(_serialize_market(market, user), status=status.HTTP_201_CREATED)
 
 
@@ -1919,6 +2171,15 @@ class HardClaimMarketBuyView(APIView):
             stake = rep_market.buy(market, user, side)
         except rep_market.MarketError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        notify_rep_spent(
+            recipient=user,
+            amount=rep_market.TRADER_STAKE,
+            title="Rep spent",
+            message=f"You spent {rep_market.TRADER_STAKE:.2f} rep buying {side} shares.",
+            target_url=f"/claim/{market.hard_claim_id}",
+            metadata={"claim_id": market.hard_claim_id, "stake_id": stake.id, "side": side, "reason": "claim_market_buy"},
+            dedupe_key=f"rep-spent:claim-market-buy:{stake.id}",
+        )
         return Response(
             {
                 "market": _serialize_market(market, user),
@@ -1989,6 +2250,15 @@ class ChannelModeratorView(APIView):
 
         membership.role = ChannelMembership.Role.MODERATOR
         membership.save()
+        notify_channel_membership(
+            channel=channel,
+            recipient=target_user,
+            actor=user,
+            type=Notification.Type.CHANNEL_MODERATOR_ADDED,
+            title="You are now a moderator",
+            message=f"You were promoted to moderator in {channel.name}.",
+            dedupe_key=f"channel-moderator-added:{membership.id}",
+        )
         return Response(ChannelMembershipSerializer(membership).data)
 
     def delete(self, request, pk, user_address):
@@ -2008,6 +2278,15 @@ class ChannelModeratorView(APIView):
 
         membership.role = ChannelMembership.Role.MEMBER
         membership.save()
+        notify_channel_membership(
+            channel=channel,
+            recipient=target_user,
+            actor=user,
+            type=Notification.Type.CHANNEL_MODERATOR_REMOVED,
+            title="Moderator role removed",
+            message=f"You are no longer a moderator in {channel.name}.",
+            dedupe_key=f"channel-moderator-removed:{membership.id}",
+        )
         return Response(ChannelMembershipSerializer(membership).data)
 
 
