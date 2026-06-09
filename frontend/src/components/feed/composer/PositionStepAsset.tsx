@@ -1,4 +1,3 @@
-import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { AssetCombobox } from '@/components/AssetCombobox';
 import type { AssetItem } from '@/lib/types';
@@ -8,12 +7,9 @@ interface PositionStepAssetProps {
   value: Partial<PositionDraft>;
   registerAsset: (asset: AssetItem) => void;
   onChange: (patch: Partial<PositionDraft>) => void;
-  onNext: () => void;
 }
 
-export function PositionStepAsset({ value, registerAsset, onChange, onNext }: PositionStepAssetProps) {
-  const canProceed = Boolean(value.assetId);
-
+export function PositionStepAsset({ value, registerAsset, onChange }: PositionStepAssetProps) {
   return (
     <div className="space-y-4 animate-in slide-in-from-bottom-2 fade-in">
       <div className="space-y-2">
@@ -25,16 +21,6 @@ export function PositionStepAsset({ value, registerAsset, onChange, onNext }: Po
             onChange({ assetId: a.id.toString(), assetSymbol: a.symbol });
           }}
         />
-      </div>
-
-      <div className="pt-4">
-        <Button 
-          className="w-full" 
-          disabled={!canProceed} 
-          onClick={onNext}
-        >
-          Next Step
-        </Button>
       </div>
     </div>
   );

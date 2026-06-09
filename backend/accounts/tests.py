@@ -1,5 +1,6 @@
 from django.test import TestCase
 from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import AccessToken
 from accounts.models import WalletUser, ProfileChangeLog
 
 class UsernameTests(TestCase):
@@ -168,3 +169,36 @@ class UsernameTests(TestCase):
         self.assertEqual(len(res.data["channels_member_of"]), 1)
         self.assertEqual(res.data["channels_member_of"][0]["id"], channel_joined.id)
 
+    def test_follow_accepts_username_lookup(self):
+        follower_address = "0x" + "a1" * 20
+        target_address = "0x" + "b2" * 20
+        WalletUser.objects.create(address=follower_address, username="follower_user")
+        WalletUser.objects.create(address=target_address, username="target_user")
+        token = AccessToken()
+        token["address"] = follower_address
+
+        res = self.client.post(
+            "/api/auth/follow/",
+            {"target_address": "target_user"},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(res.data["following"])
+
+    def test_follow_rejects_self_by_username(self):
+        address = "0x" + "c3" * 20
+        WalletUser.objects.create(address=address, username="self_user")
+        token = AccessToken()
+        token["address"] = address
+
+        res = self.client.post(
+            "/api/auth/follow/",
+            {"target_address": "self_user"},
+            format="json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.data["detail"], "Cannot follow yourself.")

@@ -132,7 +132,15 @@ def _filter_posts_queryset(qs, request):
                 status=status.HTTP_403_FORBIDDEN,
             )
     else:
-        qs = qs.filter(channel__isnull=True)
+        user = _get_wallet_user(request)
+        if user:
+            viewable_channel_ids = Channel.objects.filter(
+                Q(creator=user) |
+                Q(memberships__user=user, memberships__status=ChannelMembership.Status.APPROVED)
+            ).values_list("id", flat=True)
+            qs = qs.filter(Q(channel__isnull=True) | Q(channel_id__in=viewable_channel_ids))
+        else:
+            qs = qs.filter(channel__isnull=True)
 
     feed_type = request.query_params.get("feed")
     if feed_type == "following":

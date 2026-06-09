@@ -245,11 +245,13 @@ class FollowToggleView(APIView):
         serializer = FollowSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
             
-        target_address = serializer.validated_data["target_address"].lower()
-        if req_address == target_address:
+        target_lookup = serializer.validated_data["target_address"].lower()
+        target_user = WalletUser.objects.filter(address=target_lookup).first()
+        if not target_user:
+            target_user = get_object_or_404(WalletUser, username__iexact=target_lookup)
+
+        if current_user.pk == target_user.pk:
             return Response({"detail": "Cannot follow yourself."}, status=status.HTTP_400_BAD_REQUEST)
-            
-        target_user = get_object_or_404(WalletUser, address=target_address)
         
         follow_obj, created = Follow.objects.get_or_create(follower=current_user, following=target_user)
         

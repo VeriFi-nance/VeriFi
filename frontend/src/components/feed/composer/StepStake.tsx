@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { getProfileStats } from '@/lib/api';
@@ -12,11 +11,9 @@ import { AlertCircle } from 'lucide-react';
 interface StepStakeProps {
   value: ClaimDraft;
   onChange: (patch: Partial<ClaimDraft>) => void;
-  onComplete: () => void;
-  onBack: () => void;
 }
 
-export function StepStake({ value, onChange, onComplete, onBack }: StepStakeProps) {
+export function StepStake({ value, onChange }: StepStakeProps) {
   const { address } = useAuthState();
   const [rep, setRep] = useState<number | null>(null);
   const [energy, setEnergy] = useState<number | null>(null);
@@ -35,7 +32,6 @@ export function StepStake({ value, onChange, onComplete, onBack }: StepStakeProp
   const inRange = !isNaN(stake) && stake >= MIN_STAKE && stake <= MAX_STAKE;
   const cantAfford = inRange && rep !== null && rep < total;
   const noEnergy = energy !== null && energy < 1;
-  const isValid = inRange && !cantAfford && !noEnergy;
 
   // Real-time warning so the user is told *before* hitting submit (not at the end).
   const warning = isNaN(stake)
@@ -89,19 +85,6 @@ export function StepStake({ value, onChange, onComplete, onBack }: StepStakeProp
             There is a 2-rep listing fee (burned) and a 5% trade burn. This action costs 1 energy.
           </div>
         </div>
-      </div>
-
-      <div className="flex gap-2 pt-2">
-        <Button variant="outline" className="w-1/3" onClick={onBack}>
-          Back
-        </Button>
-        <Button 
-          className="w-2/3" 
-          disabled={!isValid} 
-          onClick={onComplete}
-        >
-          Attach Claim
-        </Button>
       </div>
     </div>
   );
