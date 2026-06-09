@@ -365,6 +365,21 @@ export interface PositionItem {
   profitability?: ProfitabilityData | null;
 }
 
+export interface NotificationItem {
+  id: number;
+  type: string;
+  title: string;
+  message: string;
+  target_url: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  read_at: string | null;
+  unread: boolean;
+  actor_address?: string | null;
+  actor_username?: string | null;
+  actor_avatar_url?: string | null;
+}
+
 export interface ProofBundle {
   type: 'claim' | 'position';
   claim_id?: number;
