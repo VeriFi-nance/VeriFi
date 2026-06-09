@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { Bell, Home, Tv, Settings, Menu, LogOut, Sun, Moon, User, ShieldCheck } from 'lucide-react';
+import { Bell, Home, Tv, Settings, Menu, LogOut, Sun, Moon, User, ShieldCheck, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -136,6 +136,15 @@ export function MobileMenuButton({
               {theme === 'dark' ? <Sun className="size-5" /> : <Moon className="size-5" />}
               {theme === 'dark' ? 'Light mode' : 'Dark mode'}
             </button>
+            <DialogPrimitive.Close asChild>
+              <Link
+                to="/about"
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              >
+                <Info className="size-5" />
+                About VeriFi
+              </Link>
+            </DialogPrimitive.Close>
             {authenticated ? (
               <button
                 onClick={onDisconnect}

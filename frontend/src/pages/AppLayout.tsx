@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Bell, Home, LogOut, Moon, Settings, Sun, User, ShieldCheck } from 'lucide-react';
+import { Bell, Home, LogOut, Moon, Settings, Sun, User, ShieldCheck, Info } from 'lucide-react';
 import { clearAuth, useAuthState, useOpenLogin, loadAuthMethod } from '@/lib/auth';
 import { clearPrivateKey } from '@/lib/keystore';
 import { triggerPrivyLogout } from '@/lib/privyLogout';
@@ -59,6 +59,7 @@ function pageTitle(pathname: string): string {
   if (pathname === '/feed' || pathname === '/' || pathname === '') return 'Feed';
   if (pathname.startsWith('/notifications')) return 'Notifications';
   if (pathname.startsWith('/settings')) return 'Settings';
+  if (pathname.startsWith('/about')) return 'About';
   if (pathname.startsWith('/post/')) return 'Post';
   if (pathname.startsWith('/claim/')) return 'Claim';
   if (pathname.startsWith('/u/')) return 'Profile';
@@ -202,12 +203,12 @@ export default function AppLayout() {
             ))}
           </nav>
 
-          <div className="px-2 lg:px-3 pb-5 pt-3 border-t border-border">
+          <div className="px-2 lg:px-3 pb-5 pt-3 border-t border-border flex items-center gap-1">
             {auth.authenticated ? (
               <button
                 onClick={handleDisconnect}
                 title="Disconnect"
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors justify-center lg:justify-start"
+                className="flex-1 flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors justify-center lg:justify-start"
               >
                 <LogOut className="size-5 shrink-0" />
                 <span className="hidden lg:inline">Disconnect</span>
@@ -216,12 +217,25 @@ export default function AppLayout() {
               <button
                 onClick={goLogin}
                 title="Login"
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors justify-center lg:justify-start"
+                className="flex-1 flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors justify-center lg:justify-start"
               >
                 <User className="size-5 shrink-0" />
                 <span className="hidden lg:inline">Login</span>
               </button>
             )}
+            <Link
+              to="/about"
+              title="About VeriFi"
+              aria-label="About VeriFi"
+              className={cn(
+                'shrink-0 flex items-center justify-center size-9 rounded-md transition-colors',
+                location.pathname.startsWith('/about')
+                  ? 'bg-foreground/5 text-foreground'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+              )}
+            >
+              <Info className="size-5" />
+            </Link>
           </div>
         </aside>
 

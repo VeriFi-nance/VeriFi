@@ -34,6 +34,8 @@ const VerifyPage = lazy(() =>
   import('./pages/VerifyPage').then((m) => ({ default: m.VerifyPage }))
 );
 
+const AboutPage = lazy(() => import('./pages/AboutPage'));
+
 function WalletAccountSync() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -116,6 +118,7 @@ function AppRoutes() {
           <Route path="/u/:address" element={<UserPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/settings" element={<SettingsGate />} />
+          <Route path="/about" element={<Suspense fallback={null}><AboutPage /></Suspense>} />
           <Route path="/verify" element={<Suspense fallback={null}><VerifyPage /></Suspense>} />
           <Route path="/verify/claim/:id" element={<Suspense fallback={null}><VerifyPage type="claim" /></Suspense>} />
           <Route path="/verify/position/:id" element={<Suspense fallback={null}><VerifyPage type="position" /></Suspense>} />
