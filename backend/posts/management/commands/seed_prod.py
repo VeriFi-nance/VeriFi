@@ -166,6 +166,30 @@ BULLISH_TEMPLATES = [
     "not a single bearish divergence on {sym} anywhere. {pct}% upside minimum by {date}",
     "remember when they laughed at my last {sym} call? +{pct}% by {date}. running it back",
     "ok hear me out: {sym}, +{pct}%, {date}. thats it. thats the post",
+    "everyone is doom posting about the iran headlines which is exactly when you buy {sym}. +{pct}% by {date}",
+    "bear market is over, you just dont know it yet. {sym} +{pct}% by {date}",
+]
+# Asset-class flavored extras so crypto memes don't land on AAPL claims.
+BULLISH_CRYPTO_EXTRA = [
+    "etf outflows slowing, miners done capitulating, funding negative. {sym} +{pct}% by {date}. bottom is a process and the process is over",
+    "saylor stopped posting which historically means we're close to the bottom. {sym} +{pct}% by {date}",
+    "tom lee just reiterated his target so naturally im scared, but the {sym} chart says +{pct}% by {date} anyway",
+    "everyone who survived this bear market deserves the {sym} +{pct}% candle coming before {date}",
+]
+BULLISH_EQUITY_EXTRA = [
+    "ai capex supercycle is NOT slowing down whatever the bears say. {sym} +{pct}% by {date}",
+    "every earnings call says 'ai' 47 times and guides up. {sym} +{pct}% by {date}, the hype is the fundamentals now",
+    "defense + energy rotation from the gulf tension lands in {sym} eventually. +{pct}% by {date}",
+]
+BEARISH_CRYPTO_EXTRA = [
+    "mstr selling, etf outflows, miners capitulating. {sym} -{pct}% by {date}, sorry",
+    "when the biggest corporate holder becomes a seller you dont knife catch. {sym} -{pct}% by {date}",
+    "bear market rallies exist to hurt you specifically. {sym} -{pct}% by {date}",
+]
+BEARISH_EQUITY_EXTRA = [
+    "ai hype is priced into {sym} three times over. -{pct}% by {date} when the capex questions start",
+    "if hormuz actually closes, {sym} is collateral damage. -{pct}% by {date}",
+    "nasdaq is 7 stocks selling ai to each other and {sym} blinks first. -{pct}% by {date}",
 ]
 BEARISH_TEMPLATES = [
     "sorry but {sym} looks terrible here. -{pct}% by {date} and im not even being dramatic",
@@ -238,46 +262,129 @@ PLAIN_TEMPLATES = [
     "less leverage, more sleep. thats the alpha nobody posts about",
     "that feeling when your stop loss saves you from a 20% drawdown 🫡 respect the process",
     "market doesnt know you exist. trade accordingly",
+    "the fact that MSTR is selling btc to fund the dividend should radicalize you a little",
+    "saylor went from 'bitcoin is hope' to quietly trimming the stack. nature is healing i guess",
+    "tom lee year-end target unchanged again. respect the commitment to the bit honestly",
+    "nasdaq is 7 companies in a trenchcoat and all 7 are selling AI to each other",
+    "my ai agent rebalanced my portfolio into 100% NVDA overnight. i did not ask for this",
+    "us iran headlines moving oil 4% premarket AGAIN. love trading geopolitics (i hate trading geopolitics)",
+    "hormuz haberleri yine dustu, brent gapliyor, risk-off... ve ben tabii ki longdayim 🤡",
+    "yapay zeka isimi alacakmis. alsin kardesim, zararlar da onun olsun artik",
+    "mstr satiyor, saylor sustu, tom lee hala ayni hedefi soyluyor. sirk tam kadro sahnede",
+    "everyone's an ai company now. my barber put 'powered by AI' on his window. he cuts hair",
+    "btc down bad and my uber driver stopped pitching me coins. historically a bottom signal",
+    "bear market survival guide: 1) log off 2) thats it",
+    "ai bubble or new paradigm? por que no los dos",
+    "imagine surviving the whole bear market just to get liquidated on the recovery wick",
+    "fed cuts: dump. fed pauses: dump. fed hikes: dump. at some point its not the fed, its you",
+    "agents are trading with agents now. we just provide the liquidity and the vibes",
+    "savas, ai baloncugu, bear market... yine de en buyuk riskim kendi islemlerim 🙂",
+    "if your bull thesis requires a ceasefire, a fed pivot AND nvidia beating by 20%, you dont have a thesis you have a wishlist",
+    "watching congress ask the ai ceo questions is the best volatility hedge, cant trade while laughing",
+    "this market has two states: 'ai changes everything' and 'oil above 95'. sometimes both before lunch",
 ]
-COMMENT_TEMPLATES = [
-    "agreed, chart supports this",
-    "bold call. following to see how it plays out",
-    "im taking the other side of this one tbh",
-    "whats your invalidation?",
-    "this aged well lol",
-    "respect for staking rep on it 🫡",
-    "volume doesnt confirm imo",
-    "been watching the same level, good catch",
+# Comment pools matched to the post they land on: claim posts get claim-talk
+# (staking, targets, deadlines), position posts get trade-talk, plain posts get
+# generic banter. Resolved claims also get aftermath comments timestamped
+# AFTER the deadline so "this aged well" can never precede resolution.
+CLAIM_COMMENTS = [
+    "whats your invalidation if {sym} just chops sideways till the deadline?",
+    "staked NO on this one, sorry 🫡",
+    "im with you, took YES",
+    "bold timeframe ngl",
+    "the rep market is pricing this around a coinflip rn",
+    "kac gunluk pencere bu? takvime ekledim 😄",
+    "following. if this hits im never doubting you again",
+    "what makes you confident in the timing tho",
+    "{pct}% is a big number for that window but ok",
+    "bunu kaydediyorum, resolution gunu konusuruz",
     "remindme when this resolves",
-    "katiliyorum, grafik cok net",
-    "bence tam tersi olacak ama gorecegiz",
-    "hocam bu seviyeden giris mantikli mi?",
-    "finally someone says it",
-    "source: trust me bro?",
-    "the rep market slightly disagrees with you 👀",
-    "solid risk management on this one",
-    "counter: macro says no",
-    "i was bearish until i saw this breakdown ngl",
-    "followed after that last call of yours",
-    "screenshot taken 📸",
-    "ser this is a wendy's",
-    "kac kez ayni seyi yazdin ama bu sefer hakli olabilirsin",
-    "what timeframe is this on?",
-    "least delusional fintwit poster",
-    "ok but what if youre wrong tho",
-    "adding this to my watchlist, thanks",
-    "bunu kaydediyorum, resolution gunu konusuruz 😄",
     "your last 3 calls hit so im listening",
+    "respect for staking rep instead of just tweeting 🫡",
+    "{sym} has been on my watchlist for weeks, this might be the push i needed",
     "the audacity of this call lmao. staked NO",
+    "screenshot taken 📸",
+    "did your ai agent write this or is this a human take",
+    "geopolitik riski hesaba kattin mi hocam? hormuz kapanirsa bu hedef hayal",
+    "one bad headline out of the gulf and this whole thesis is toast, but ok",
+    "this is either genius or the bear market talking, no in between",
+]
+CLAIM_COMMENTS_BULLISH = [
+    "if {sym} reclaims last week's high i'll join you",
+    "longed {sym} myself yesterday, lets ride 🤝",
+    "yukari yonlu katiliyorum ama hedef biraz agresif bence",
+    "volume doesnt confirm the breakout on {sym} yet imo",
+    "everyone is bullish {sym} rn which scares me a little",
+    "been watching the same level on {sym}, good catch",
+]
+CLAIM_COMMENTS_BEARISH = [
+    "shorting {sym} here is brave, the squeeze will be violent if youre wrong",
+    "{sym} bears have been wrong all year but maybe this time",
+    "finally a bear with actual conviction",
+    "dusus bekleyen tek kisi sen degilsin, ben de NO tarafindayim",
+    "counter: {sym} flows are still strong, macro says no",
+    "i was bullish {sym} until i saw this breakdown ngl",
+    "saylor just unfollowed you for this",
+    "tom lee would like a word",
+]
+CLAIM_AFTERMATH_CONFIRMED = [
+    "this aged well 🫡",
+    "called it. respect",
+    "ok i owe you an apology, this actually hit",
+    "gg, rep well earned",
+    "hocam helal olsun, tutturdun",
+    "and THIS is why i follow you",
+    "watched this resolve live, beautiful",
+]
+CLAIM_AFTERMATH_REJECTED = [
+    "this aged like milk my friend",
+    "resolution day came and went... 😬",
+    "the market had other plans huh",
+    "F in the chat",
+    "olmadi bu sefer, bir dahakine",
+    "the rep market thanks you for your donation",
+    "deadline geldi gecti hocam, ne diyorsun simdi 😄",
+]
+POSITION_COMMENTS = [
+    "thats a tight stop on {sym}, one wick and youre out",
+    "good R:R, im stealing this setup",
+    "{sym} liquidity is thin around your TP, watch the fill",
+    "what timeframe did you spot this on?",
+    "entry looks a bit late but the stop placement is smart",
+    "ayni seviyeden ben de girdim, beraber batariz artik 😄",
+    "size? asking for a friend",
+    "watching this one. update us when it triggers",
+    "solid risk management on this one",
+    "would wait for a retest personally but i see it",
+    "{sym} chart does look ready for this tbh",
+]
+PLAIN_COMMENTS = [
+    "facts",
+    "needed this today",
+    "this but louder",
+    "kaydettim, haftada bir okuyacagim",
+    "en mantikli post bugun timeline'da",
+    "say it louder for the people in the back",
     "underrated post",
-    "im in. dont make me regret this",
-    "ne zamandir takip ediyorum, isabetli adamsin",
+    "real",
+    "ok this is actually good advice",
+    "finally someone says it",
+    "ser this is a wendy's",
+    "least delusional fintwit poster",
+    "bunu cerceveletip masama asacagim",
+    "felt this one in my pnl",
+    "needed to hear this before monday open",
+    "my ai agent liked this before i could",
+    "bu bear marketta hepimiz biraz boyleyiz",
+    "the trenchcoat thing is so real it hurts",
+    "tom lee strong disagree, so youre probably right",
+    "cant tell if bullish or bearish but im scared either way",
+    "posting this from the bottom of a drawdown, thanks i needed it",
 ]
 REPLY_TEMPLATES = [
     "fair point but the timeframe matters here",
     "we'll see at resolution 🤝",
     "thats what makes a market",
-    "invalidation is on the claim itself, check the target",
     "haklisin ama trend trend'dir",
     "disagree, liquidity tells a different story",
     "time will tell",
@@ -420,12 +527,20 @@ class Command(BaseCommand):
             "--append-plain", type=int, default=0, metavar="N",
             help="Only add N plain posts (+ their engagement) to an already-seeded DB.",
         )
+        parser.add_argument(
+            "--rebuild-comments", action="store_true",
+            help="Delete all comments and regenerate them matched to their posts. Leaves everything else intact.",
+        )
 
     def handle(self, *args, **opts):
         self.rng = random.Random(opts["seed"])
         self.now = django_timezone.now()
         self.today = self.now.date()
         self.with_images = not opts["no_images"]
+
+        if opts["rebuild_comments"]:
+            self._rebuild_comments()
+            return
 
         if opts["append_plain"]:
             users = self._load_existing_users()
@@ -453,6 +568,86 @@ class Command(BaseCommand):
         self._scatter_stake_timestamps()
         self._finalize_users(users)
         self._print_summary(resolved_stats)
+
+    def _rebuild_comments(self):
+        """Replace every comment with one matched to its post; keep likes/saves/posts."""
+        deleted, _ = PostComment.objects.all().delete()  # cascades comment likes
+        self.stdout.write(f"deleted {deleted} comment-related rows")
+        users = self._load_existing_users()
+        rng = self.rng
+        all_users = [u for u, _ in users]
+        arch_by_pk = {u.pk: a for u, a in users}
+        post_ctx = self._post_context()
+        comments = clikes = 0
+
+        with explicit_timestamps():
+            for post in Post.objects.select_related("author").all():
+                info = post_ctx.get(post.id)
+                author_arch = arch_by_pk.get(post.author_id, "average")
+                hotness = {"influencer": 35, "skilled": 18, "average": 7, "degen": 10, "lurker": 4}[
+                    author_arch
+                ]
+                window_end = min(self.now, post.created_at + timedelta(days=14))
+                if info and info["kind"] == "claim":
+                    window_end = min(self.now, _midnight(info["until"]))
+                if window_end <= post.created_at:
+                    window_end = min(self.now, post.created_at + timedelta(days=2))
+
+                post_comments = []
+                for _ in range(rng.randint(0, max(2, hotness // 3))):
+                    comment = PostComment.objects.create(
+                        post=post,
+                        author=rng.choice(all_users),
+                        content=self._comment_text(info),
+                        created_at=post.created_at + (window_end - post.created_at) * rng.random(),
+                    )
+                    post_comments.append(comment)
+                    comments += 1
+                    if rng.random() < 0.3:
+                        PostComment.objects.create(
+                            post=post,
+                            parent=comment,
+                            author=rng.choice(all_users),
+                            content=rng.choice(REPLY_TEMPLATES),
+                            created_at=min(comment.created_at + timedelta(hours=rng.randint(1, 48)), self.now),
+                        )
+                        comments += 1
+
+                if (
+                    info
+                    and info["kind"] == "claim"
+                    and info["status"] in (HardClaim.Status.CONFIRMED, HardClaim.Status.REJECTED)
+                    and _midnight(info["until"]) < self.now
+                ):
+                    aftermath_pool = (
+                        CLAIM_AFTERMATH_CONFIRMED
+                        if info["status"] == HardClaim.Status.CONFIRMED
+                        else CLAIM_AFTERMATH_REJECTED
+                    )
+                    resolved_at = _midnight(info["until"]) + timedelta(days=1)
+                    for text in rng.sample(aftermath_pool, rng.randint(0, min(3, max(1, hotness // 12) + 1))):
+                        when = resolved_at + (self.now - resolved_at) * rng.random() * 0.3
+                        comment = PostComment.objects.create(
+                            post=post,
+                            author=rng.choice(all_users),
+                            content=text,
+                            created_at=min(when, self.now),
+                        )
+                        post_comments.append(comment)
+                        comments += 1
+
+                for comment in post_comments:
+                    for user in rng.sample(all_users, rng.randint(0, 4)):
+                        if PostCommentLike.objects.filter(comment=comment, user=user).exists():
+                            continue
+                        PostCommentLike.objects.create(
+                            comment=comment,
+                            user=user,
+                            created_at=min(self.now, comment.created_at + timedelta(hours=rng.randint(1, 72))),
+                        )
+                        clikes += 1
+
+        self.stdout.write(f"rebuilt comments: {comments} comments, {clikes} comment likes")
 
     def _load_existing_users(self) -> list[tuple[WalletUser, str]]:
         """Rebuild (user, archetype) pairs for append runs; infer archetype from rep rank."""
@@ -677,6 +872,12 @@ class Command(BaseCommand):
     def _hit_rate(self, arch: str) -> float:
         return {a[0]: a[2] for a in ARCHETYPES}[arch]
 
+    def _claim_templates(self, asset, direction: str) -> list[str]:
+        is_crypto = asset.market_type == Asset.MarketType.CRYPTO
+        if direction == "bullish":
+            return BULLISH_TEMPLATES + (BULLISH_CRYPTO_EXTRA if is_crypto else BULLISH_EQUITY_EXTRA)
+        return BEARISH_TEMPLATES + (BEARISH_CRYPTO_EXTRA if is_crypto else BEARISH_EQUITY_EXTRA)
+
     def _maybe_attach_chart(self, post, asset, created_day, *, target=None, reference=None, odds=0.3):
         """Attach a 'trader screenshot' built from candles BEFORE the post date."""
         if not self.with_images or self.rng.random() > odds:
@@ -729,7 +930,7 @@ class Command(BaseCommand):
                 pct = max(favorable, 0.5) * rng.uniform(1.25, 2.5)
             pct = round(min(max(pct, 0.5), 90.0), 1)
 
-            templates = BULLISH_TEMPLATES if direction == "bullish" else BEARISH_TEMPLATES
+            templates = self._claim_templates(asset, direction)
             content = rng.choice(templates).format(
                 sym=asset.symbol, pct=pct, date=until.strftime("%d %b %Y")
             )
@@ -822,7 +1023,7 @@ class Command(BaseCommand):
 
             direction = "bullish" if rng.random() < 0.6 else "bearish"
             pct = round(rng.uniform(2.0, 35.0), 1)
-            templates = BULLISH_TEMPLATES if direction == "bullish" else BEARISH_TEMPLATES
+            templates = self._claim_templates(asset, direction)
             content = rng.choice(templates).format(
                 sym=asset.symbol, pct=pct, date=until.strftime("%d %b %Y")
             )
@@ -994,6 +1195,37 @@ class Command(BaseCommand):
 
     # -- engagement -------------------------------------------------------------
 
+    def _post_context(self):
+        """Map post_id -> dict describing what kind of post it is, for comment matching."""
+        claims = HardClaim.objects.exclude(post=None).values(
+            "post_id", "direction", "percentage", "status", "until", "asset__symbol"
+        )
+        positions = Position.objects.exclude(post=None).values("post_id", "asset__symbol")
+        ctx = {}
+        for c in claims:
+            ctx[c["post_id"]] = {
+                "kind": "claim",
+                "sym": c["asset__symbol"],
+                "pct": c["percentage"],
+                "direction": c["direction"],
+                "status": c["status"],
+                "until": c["until"],
+            }
+        for p in positions:
+            ctx.setdefault(p["post_id"], {"kind": "position", "sym": p["asset__symbol"]})
+        return ctx
+
+    def _comment_text(self, info) -> str:
+        """Pick a comment that actually fits the post under it."""
+        rng = self.rng
+        if info is None:
+            return rng.choice(PLAIN_COMMENTS)
+        if info["kind"] == "position":
+            return rng.choice(POSITION_COMMENTS).format(sym=info["sym"])
+        pool = list(CLAIM_COMMENTS)
+        pool += CLAIM_COMMENTS_BULLISH if info["direction"] == "bullish" else CLAIM_COMMENTS_BEARISH
+        return rng.choice(pool).format(sym=info["sym"], pct=info["pct"])
+
     def _seed_engagement(self, users, posts=None):
         """Likes/comments/saves for `posts`, or every post when None (full seed)."""
         rng = self.rng
@@ -1001,20 +1233,27 @@ class Command(BaseCommand):
         arch_by_pk = {u.pk: a for u, a in users}
         likes = comments = clikes = saves = 0
 
-        confirmed_post_ids = set(
-            HardClaim.objects.filter(status=HardClaim.Status.CONFIRMED)
-            .exclude(post=None)
-            .values_list("post_id", flat=True)
-        )
+        post_ctx = self._post_context()
+        confirmed_post_ids = {
+            pid for pid, info in post_ctx.items()
+            if info["kind"] == "claim" and info["status"] == HardClaim.Status.CONFIRMED
+        }
 
         if posts is None:
             posts = Post.objects.select_related("author").all()
         for post in posts:
+            info = post_ctx.get(post.id)
             author_arch = arch_by_pk.get(post.author_id, "average")
             hotness = {"influencer": 35, "skilled": 18, "average": 7, "degen": 10, "lurker": 4}[
                 author_arch
             ]
+            # Pre-resolution chatter stays inside the claim window; generic
+            # posts get the usual two-week engagement tail.
             window_end = min(self.now, post.created_at + timedelta(days=14))
+            if info and info["kind"] == "claim":
+                window_end = min(self.now, _midnight(info["until"]))
+            if window_end <= post.created_at:
+                window_end = min(self.now, post.created_at + timedelta(days=2))
 
             def ts():
                 return post.created_at + (window_end - post.created_at) * rng.random()
@@ -1031,7 +1270,7 @@ class Command(BaseCommand):
                 comment = PostComment.objects.create(
                     post=post,
                     author=commenter,
-                    content=rng.choice(COMMENT_TEMPLATES),
+                    content=self._comment_text(info),
                     created_at=ts(),
                 )
                 post_comments.append(comment)
@@ -1046,11 +1285,39 @@ class Command(BaseCommand):
                     )
                     comments += 1
 
+            # Aftermath comments land only after a resolved claim's deadline.
+            if (
+                info
+                and info["kind"] == "claim"
+                and info["status"] in (HardClaim.Status.CONFIRMED, HardClaim.Status.REJECTED)
+                and _midnight(info["until"]) < self.now
+            ):
+                aftermath_pool = (
+                    CLAIM_AFTERMATH_CONFIRMED
+                    if info["status"] == HardClaim.Status.CONFIRMED
+                    else CLAIM_AFTERMATH_REJECTED
+                )
+                resolved_at = _midnight(info["until"]) + timedelta(days=1)
+                for text in rng.sample(aftermath_pool, rng.randint(0, min(3, max(1, hotness // 12) + 1))):
+                    when = resolved_at + (self.now - resolved_at) * rng.random() * 0.3
+                    comment = PostComment.objects.create(
+                        post=post,
+                        author=rng.choice(all_users),
+                        content=text,
+                        created_at=min(when, self.now),
+                    )
+                    post_comments.append(comment)
+                    comments += 1
+
             for comment in post_comments:
                 for user in rng.sample(all_users, rng.randint(0, 4)):
                     if PostCommentLike.objects.filter(comment=comment, user=user).exists():
                         continue
-                    PostCommentLike.objects.create(comment=comment, user=user, created_at=ts())
+                    PostCommentLike.objects.create(
+                        comment=comment,
+                        user=user,
+                        created_at=min(self.now, comment.created_at + timedelta(hours=rng.randint(1, 72))),
+                    )
                     clikes += 1
 
             save_odds = 0.5 if post.id in confirmed_post_ids else 0.06
