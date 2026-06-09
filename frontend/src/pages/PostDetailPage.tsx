@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ChevronLeft, Heart, MessageCircle, ImagePlus, X } from 'lucide-react';
 import { UserAvatar } from '@/components/UserAvatar';
 import { SmartTimestamp } from '@/components/SmartTimestamp';
-import { ClaimDetailView } from '@/components/feed/ClaimDetailView';
+import { CLAIM_DETAIL_DIALOG_CLASS, ClaimDetailView } from '@/components/feed/ClaimDetailView';
 import { PostActions } from '@/components/feed/PostActions';
 import { SkeletonPostCard } from '@/components/Skeleton';
 import { PageContent } from '@/components/PageContent';
@@ -577,7 +577,7 @@ export default function PostDetailPage() {
 
       {/* Claim detail modal */}
       <RD.Root open={!!claimModal} onOpenChange={(v) => !v && setClaimModal(null)}>
-        <RD.Content className="max-w-2xl">
+        <RD.Content className={CLAIM_DETAIL_DIALOG_CLASS}>
           <RD.Header>
             <RD.Title>Claim Details</RD.Title>
           </RD.Header>

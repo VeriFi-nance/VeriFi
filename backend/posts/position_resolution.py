@@ -10,6 +10,18 @@ from .resolution import fetch_current_price, ResolutionError
 
 logger = logging.getLogger(__name__)
 
+
+def _notify_position_entry(pos: Position):
+    from notifications.emitters import notify_position_entry
+
+    notify_position_entry(pos)
+
+
+def _notify_position_resolved(pos: Position):
+    from notifications.emitters import notify_position_resolved
+
+    notify_position_resolved(pos)
+
 def calculate_pnl(direction, entry_price, exit_price):
     if direction == Position.Direction.LONG:
         return ((exit_price - entry_price) / entry_price) * 100
@@ -130,6 +142,7 @@ def _resolve_pending(pos: Position, now: datetime):
                         event_type=PositionEvent.EventType.RESOLUTION,
                         details={"message": "Missed entry price within interval"}
                     )
+                    _notify_position_resolved(pos)
                     return
             except Exception:
                 pass # If daily query also fails, fallback to transition below
@@ -146,6 +159,7 @@ def _resolve_pending(pos: Position, now: datetime):
                     "ambiguous": True
                 }
             )
+            _notify_position_resolved(pos)
         return
     
     triggered = False
@@ -173,6 +187,7 @@ def _resolve_pending(pos: Position, now: datetime):
             event_type=PositionEvent.EventType.ENTRY_TRIGGERED,
             details={"trigger_time": trigger_time.isoformat()}
         )
+        _notify_position_entry(pos)
     elif now > pos.entry_interval:
         # Time ran out, missed entry
         pos.status = Position.Status.MISSED
@@ -182,6 +197,7 @@ def _resolve_pending(pos: Position, now: datetime):
             event_type=PositionEvent.EventType.RESOLUTION,
             details={"message": "Missed entry price within interval"}
         )
+        _notify_position_resolved(pos)
 
 def _resolve_active(pos: Position, now: datetime):
     # Determine when it became active. Find the ENTRY_TRIGGERED event.
@@ -243,6 +259,7 @@ def _resolve_active(pos: Position, now: datetime):
                         event_type=PositionEvent.EventType.RESOLUTION,
                         details=details
                     )
+                    _notify_position_resolved(pos)
                     return
             except Exception:
                 pass # Fall through to closing at latest known price
@@ -280,6 +297,7 @@ def _resolve_active(pos: Position, now: datetime):
                     "ambiguous": True
                 }
             )
+            _notify_position_resolved(pos)
         return
 
     resolved = False
@@ -322,6 +340,7 @@ def _resolve_active(pos: Position, now: datetime):
             event_type=PositionEvent.EventType.RESOLUTION,
             details=details
         )
+        _notify_position_resolved(pos)
     elif now > pos.lifetime:
         # Expired. Close at latest known price
         if ohlc_rows:
@@ -342,4 +361,4 @@ def _resolve_active(pos: Position, now: datetime):
             event_type=PositionEvent.EventType.RESOLUTION,
             details={"message": "Position expired, closed at market"}
         )
-
+        _notify_position_resolved(pos)

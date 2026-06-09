@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { PenSquare, Plus, Pencil, X, TrendingUp } from 'lucide-react';
+import { PenSquare, Plus, Pencil, X, TrendingUp, ArrowLeft, ArrowRight } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 import { useAuthState, useOpenLogin } from '@/lib/auth';
@@ -11,6 +11,7 @@ import { createPost } from '@/lib/api';
 import { fetchAssets } from '@/hooks/useAssets';
 import type { AssetItem, ReviewClaim } from '@/lib/types';
 import { getClaimType } from '@/lib/claims';
+import { AssetCombobox } from '@/components/AssetCombobox';
 import { PostComposer, MAX_CHARS } from './PostComposer';
 import { ClaimForm } from './ClaimForm';
 import { ClaimWizard } from './ClaimWizard';
@@ -20,6 +21,7 @@ import {
   validateDraft,
   type AttachedClaim,
   type ClaimDraft,
+  type WizardNavState,
 } from './types';
 import { buildClaimPayload, buildPositionPayload } from '@/lib/payloads';
 import { signPayload, resolveUsername } from '@/lib/signing';
@@ -36,6 +38,7 @@ interface NewPostModalProps {
 export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPostModalProps) {
   const openLogin = useOpenLogin();
   const auth = useAuthState();
+  const [phase, setPhase] = useState<'compose' | 'attach'>('compose');
   const [content, setContent] = useState('');
   const [image, setImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -53,6 +56,10 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
   const [posDraft, setPosDraft] = useState<PositionDraft>(defaultPositionDraft());
   const [posError, setPosError] = useState('');
   const [posAttached, setPosAttached] = useState<PositionDraft | null>(null);
+  // Nav state reported up by whichever sub-wizard is open, so the modal footer
+  // can render Previous/Next instead of Cancel/Post.
+  const [claimNav, setClaimNav] = useState<WizardNavState | null>(null);
+  const [posNav, setPosNav] = useState<WizardNavState | null>(null);
 
 
 
@@ -97,6 +104,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
   }
 
   function reset() {
+    setPhase('compose');
     setContent('');
     clearImage();
     setAttached([]);
@@ -108,6 +116,8 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
     setPosDraft(defaultPositionDraft());
     setPosError('');
     setPosAttached(null);
+    setClaimNav(null);
+    setPosNav(null);
   }
 
   function handleOpenChange(next: boolean) {
@@ -119,12 +129,18 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
     setDraft((d) => ({ ...d, ...patch }));
   }
 
-  function addDraft(customDraft?: ClaimDraft) {
+  // Merge an asset selected/resolved via the search combobox into the known
+  // list so validateDraft and the symbol/parity lookups below can find it.
+  function registerAsset(asset: AssetItem) {
+    setAssets((prev) => (prev.some((a) => a.id === asset.id) ? prev : [...prev, asset]));
+  }
+
+  function addDraft(customDraft?: ClaimDraft): boolean {
     const d = customDraft || draft;
     const result = validateDraft(d, assets);
     if (!result.ok) {
       setError(result.error);
-      return;
+      return false;
     }
     setError('');
     setAttached((prev) => [
@@ -141,6 +157,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
     ]);
     setDraft(emptyDraft());
     setShowDraft(false);
+    return true;
   }
 
   function removeAttached(idx: number) {
@@ -163,6 +180,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
     setShowDraft(true);
     setWizardMode(true);
     setError('');
+    setPhase('attach');
   }
 
   function loadExtractedIntoDraft(c: ReviewClaim) {
@@ -183,6 +201,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
     });
     setShowDraft(true);
     setWizardMode(true);
+    setPhase('attach');
   }
 
   async function submit() {
@@ -283,6 +302,26 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
 
   const overLimit = content.length > MAX_CHARS;
   const canSubmit = content.trim().length > 0 && !overLimit && !submitting;
+  const canAdvanceToAttach = content.trim().length > 0 && !overLimit;
+
+  // Footer routing: a sub-wizard drives nav; manual forms own their buttons.
+  const wizardActive = (showDraft && wizardMode) || (showPositionForm && posWizardMode);
+  const manualFormOpen = (showDraft && !wizardMode) || (showPositionForm && !posWizardMode);
+  const activeNav: WizardNavState | null = showDraft ? claimNav : showPositionForm ? posNav : null;
+
+  function cancelActiveWizard() {
+    if (showDraft) {
+      setShowDraft(false);
+      setDraft(emptyDraft());
+      setError('');
+      setClaimNav(null);
+    } else if (showPositionForm) {
+      setShowPositionForm(false);
+      setPosDraft(defaultPositionDraft());
+      setPosError('');
+      setPosNav(null);
+    }
+  }
 
   return (
     <RD.Root open={open} onOpenChange={handleOpenChange}>
@@ -301,37 +340,52 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
             </Alert>
           )}
 
-          <PostComposer
-            content={content}
-            onContentChange={setContent}
-            attached={attached}
-            assets={assets}
-            onAddExtracted={(c) => setAttached((prev) => [...prev, c])}
-            onEditExtracted={loadExtractedIntoDraft}
-            onAttachImage={() => fileInputRef.current?.click()}
-            onPasteImage={(file) => pickImage(file)}
-          />
+          {phase === 'compose' && (
+            <>
+              <PostComposer
+                content={content}
+                onContentChange={setContent}
+                attached={attached}
+                assets={assets}
+                onAddExtracted={(c) => setAttached((prev) => [...prev, c])}
+                onEditExtracted={loadExtractedIntoDraft}
+                onAttachImage={() => fileInputRef.current?.click()}
+                onPasteImage={(file) => pickImage(file)}
+              />
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => pickImage(e.target.files?.[0] ?? null)}
-          />
-          {imagePreview && (
-            <div className="relative w-full overflow-hidden rounded-lg border border-border">
-              <img src={safeImageSrc(imagePreview)} alt="" className="w-full max-h-72 object-cover" />
-              <button
-                type="button"
-                onClick={clearImage}
-                aria-label="Remove image"
-                className="absolute top-2 right-2 size-7 flex items-center justify-center rounded-full bg-background/80 text-foreground hover:bg-background transition-colors"
-              >
-                <X className="size-4" />
-              </button>
-            </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => pickImage(e.target.files?.[0] ?? null)}
+              />
+              {imagePreview && (
+                <div className="relative w-full overflow-hidden rounded-lg border border-border">
+                  <img src={safeImageSrc(imagePreview)} alt="" className="w-full max-h-72 object-cover" />
+                  <button
+                    type="button"
+                    onClick={clearImage}
+                    aria-label="Remove image"
+                    className="absolute top-2 right-2 size-7 flex items-center justify-center rounded-full bg-background/80 text-foreground hover:bg-background transition-colors"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+              )}
+            </>
           )}
+
+          {phase === 'attach' && (
+          <>
+          {/* Post recap so the user keeps context while attaching. */}
+          <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Your post</p>
+            <p className="text-sm whitespace-pre-wrap break-words line-clamp-3">{content || <span className="text-muted-foreground">No text</span>}</p>
+            {imagePreview && (
+              <img src={safeImageSrc(imagePreview)} alt="" className="w-full max-h-32 object-cover rounded-md border border-border" />
+            )}
+          </div>
 
           {attached.length > 0 && (
             <div className="space-y-2">
@@ -397,6 +451,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
                     setPosAttached(null);
                     setShowPositionForm(true);
                     setPosWizardMode(false);
+                    setPosNav(null);
                   }}
                   title="Edit position"
                   className="size-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -421,19 +476,22 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
             <div className="space-y-3">
               {posWizardMode ? (
                 <PositionWizard
-                  assets={assets}
+                  registerAsset={registerAsset}
                   initialDraft={posDraft}
+                  onNav={setPosNav}
                   onComplete={(pd) => {
                     setPosAttached(pd);
                     setShowPositionForm(false);
                     setPosError('');
+                    setPosNav(null);
                   }}
                   onCancel={() => {
                     setShowPositionForm(false);
                     setPosDraft(defaultPositionDraft());
                     setPosError('');
+                    setPosNav(null);
                   }}
-                  onFillManually={() => setPosWizardMode(false)}
+                  onFillManually={() => { setPosWizardMode(false); setPosNav(null); }}
                 />
               ) : (
                 <div className="p-3 border border-position-badge/20 rounded-lg space-y-3 bg-position-badge/5">
@@ -444,21 +502,15 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
                       <Label className="text-[11px]">Asset</Label>
-                      <Select
-                        value={posDraft.assetId}
-                        onValueChange={(v) => setPosDraft((p) => ({ ...p, assetId: v }))}
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue placeholder="Select" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {assets.map((a) => (
-                            <SelectItem key={a.id} value={a.id.toString()} className="text-xs">
-                              {a.symbol}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <AssetCombobox
+                        size="sm"
+                        placeholder="Select"
+                        selectedLabel={posDraft.assetSymbol}
+                        onSelect={(a) => {
+                          registerAsset(a);
+                          setPosDraft((p) => ({ ...p, assetId: a.id.toString(), assetSymbol: a.symbol }));
+                        }}
+                      />
                     </div>
 
                     <div className="space-y-1">
@@ -545,7 +597,11 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
                       size="sm"
                       variant="ghost"
                       className="h-7 text-xs text-muted-foreground hover:bg-muted"
-                      onClick={() => { setShowPositionForm(false); setPosDraft(defaultPositionDraft()); }}
+                      onClick={() => {
+                        setShowPositionForm(false);
+                        setPosDraft(defaultPositionDraft());
+                        setPosNav(null);
+                      }}
                     >
                       Cancel
                     </Button>
@@ -559,26 +615,29 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
           {showDraft && (
             wizardMode ? (
               <ClaimWizard
-                assets={assets}
+                registerAsset={registerAsset}
                 initialDraft={draft}
-                onComplete={(d) => addDraft(d)}
+                onNav={setClaimNav}
+                onComplete={(d) => { if (addDraft(d)) setClaimNav(null); }}
                 onCancel={() => {
                   setShowDraft(false);
                   setDraft(emptyDraft());
                   setError('');
+                  setClaimNav(null);
                 }}
-                onFillManually={() => setWizardMode(false)}
+                onFillManually={() => { setWizardMode(false); setClaimNav(null); }}
               />
             ) : (
               <ClaimForm
                 value={draft}
-                assets={assets}
+                registerAsset={registerAsset}
                 onChange={patchDraft}
                 onSubmit={() => addDraft()}
                 onCancel={() => {
                   setShowDraft(false);
                   setDraft(emptyDraft());
                   setError('');
+                  setClaimNav(null);
                 }}
               />
             )
@@ -596,6 +655,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
                     setShowDraft(true);
                     setWizardMode(true);
                     setError('');
+                    setClaimNav(null);
                   }}
                 >
                   <Plus className="size-3.5" />
@@ -612,6 +672,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
                     setShowPositionForm(true);
                     setPosWizardMode(true);
                     setPosError('');
+                    setPosNav(null);
                   }}
                 >
                   <TrendingUp className="size-3.5" />
@@ -620,17 +681,61 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
               )}
             </div>
           )}
+          </>
+          )}
         </div>
 
         <RD.Footer className="border-t border-border pt-4 md:pt-5 -mx-5 px-5 md:-mx-6 md:px-6 sm:items-center">
-          <div className="sm:mr-auto" />
-          <Button variant="outline" size="sm" onClick={() => handleOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button size="sm" disabled={!canSubmit} onClick={submit} className="gap-1.5">
-            <PenSquare className="size-3.5" />
-            {submitting ? 'Posting…' : 'Post'}
-          </Button>
+          {wizardActive ? (
+            // A sub-wizard owns navigation: Cancel | Previous | Next.
+            <>
+              <div className="sm:mr-auto" />
+              <Button variant="ghost" size="sm" onClick={cancelActiveWizard}>
+                Cancel
+              </Button>
+              {activeNav && !activeNav.isFirstStep && (
+                <Button variant="outline" size="sm" onClick={activeNav.back} className="gap-1.5">
+                  <ArrowLeft className="size-3.5" />
+                  Previous
+                </Button>
+              )}
+              <Button
+                size="sm"
+                disabled={!activeNav?.canNext}
+                onClick={() => activeNav?.next()}
+                className="gap-1.5"
+              >
+                {activeNav?.nextLabel ?? 'Next'}
+                <ArrowRight className="size-3.5" />
+              </Button>
+            </>
+          ) : manualFormOpen ? (
+            // Manual claim/position forms render their own buttons inline.
+            <div className="sm:mr-auto" />
+          ) : phase === 'compose' ? (
+            <>
+              <div className="sm:mr-auto" />
+              <Button variant="outline" size="sm" onClick={() => handleOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button size="sm" disabled={!canAdvanceToAttach} onClick={() => setPhase('attach')} className="gap-1.5">
+                Next
+                <ArrowRight className="size-3.5" />
+              </Button>
+            </>
+          ) : (
+            <>
+              <div className="sm:mr-auto" />
+              <Button variant="outline" size="sm" onClick={() => setPhase('compose')} className="gap-1.5">
+                <ArrowLeft className="size-3.5" />
+                Back
+              </Button>
+              <Button size="sm" disabled={!canSubmit} onClick={submit} className="gap-1.5">
+                <PenSquare className="size-3.5" />
+                {submitting ? 'Posting…' : 'Post'}
+              </Button>
+            </>
+          )}
         </RD.Footer>
       </RD.Content>
     </RD.Root>

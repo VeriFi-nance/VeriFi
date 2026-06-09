@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { getAssetChartData } from '@/lib/api';
 import type { AssetChartData, ChartCandleInterval } from '@/lib/types';
@@ -9,20 +8,16 @@ import { InteractiveChart } from './InteractiveChart';
 interface PositionStepLevelsProps {
   value: PositionDraft;
   onChange: (patch: Partial<PositionDraft>) => void;
-  onNext: () => void;
-  onBack: () => void;
+  /** Which level the user is picking: 0 entry, 1 take-profit, 2 stop-loss. Owned by the wizard. */
+  phase: 0 | 1 | 2;
 }
 
-export function PositionStepLevels({ value, onChange, onNext, onBack }: PositionStepLevelsProps) {
+export function PositionStepLevels({ value, onChange, phase }: PositionStepLevelsProps) {
   const [chartData, setChartData] = useState<AssetChartData | null>(null);
   const [interval, setInterval] = useState<ChartCandleInterval>('4h');
   const [loading, setLoading] = useState(false);
 
-  // 0: Entry, 1: TP, 2: SL
-  const [phase, setPhase] = useState<0 | 1 | 2>(0);
-  const [entry, setEntry] = useState<string>(value.entryPrice || '');
-  const [tp, setTp] = useState<string>(value.takeProfit || '');
-  const [sl, setSl] = useState<string>(value.stopLoss || '');
+  const { entryPrice: entry, takeProfit: tp, stopLoss: sl } = value;
 
   useEffect(() => {
     if (!value.assetId) return;
@@ -45,44 +40,9 @@ export function PositionStepLevels({ value, onChange, onNext, onBack }: Position
 
   function handleSelectTarget(price: number) {
     const pStr = price.toFixed(4); // Use 4 decimals for crypto accuracy
-    if (phase === 0) {
-      setEntry(pStr);
-    } else if (phase === 1) {
-      setTp(pStr);
-    } else if (phase === 2) {
-      setSl(pStr);
-    }
-  }
-
-  function handleNext() {
-    if (phase === 0) {
-      setPhase(1);
-    } else if (phase === 1) {
-      setPhase(2);
-    } else {
-      // Validate direction naturally
-      const en = parseFloat(entry);
-      const t = parseFloat(tp);
-      const direction = t >= en ? 'long' : 'short';
-      
-      onChange({ 
-        entryPrice: entry, 
-        takeProfit: tp, 
-        stopLoss: sl, 
-        direction 
-      });
-      onNext();
-    }
-  }
-
-  function handleBack() {
-    if (phase === 2) {
-      setPhase(1);
-    } else if (phase === 1) {
-      setPhase(0);
-    } else {
-      onBack();
-    }
+    if (phase === 0) onChange({ entryPrice: pStr });
+    else if (phase === 1) onChange({ takeProfit: pStr });
+    else onChange({ stopLoss: pStr });
   }
 
   const priceLines = [];
@@ -95,11 +55,6 @@ export function PositionStepLevels({ value, onChange, onNext, onBack }: Position
   if (sl && !isNaN(parseFloat(sl)) && phase >= 2) {
     priceLines.push({ price: parseFloat(sl), color: '#ef4444', title: 'Stop Loss' });
   }
-
-  let canProceed = false;
-  if (phase === 0 && entry) canProceed = true;
-  if (phase === 1 && tp) canProceed = true;
-  if (phase === 2 && sl) canProceed = true;
 
   const getPhaseTitle = () => {
     if (phase === 0) return 'Pick Entry Price';
@@ -151,19 +106,6 @@ export function PositionStepLevels({ value, onChange, onNext, onBack }: Position
            <p className="text-[10px] text-muted-foreground uppercase">Stop Loss</p>
            <p className="text-xs font-semibold text-red-500">{sl && phase >= 2 ? `$${sl}` : '-'}</p>
          </div>
-      </div>
-
-      <div className="flex gap-2 pt-4">
-        <Button variant="outline" className="w-1/3" onClick={handleBack}>
-          Back
-        </Button>
-        <Button 
-          className="w-2/3" 
-          disabled={!canProceed} 
-          onClick={handleNext}
-        >
-          {phase === 2 ? 'Review Position' : 'Next'}
-        </Button>
       </div>
     </div>
   );

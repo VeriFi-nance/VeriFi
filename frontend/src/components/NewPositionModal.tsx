@@ -4,24 +4,24 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AssetCombobox } from '@/components/AssetCombobox';
 import { createPosition } from '@/lib/api';
-import type { AssetItem } from '@/lib/types';
 import { PlusCircle } from 'lucide-react';
 import { buildPositionPayload } from '@/lib/payloads';
 import { signPayload, resolveUsername } from '@/lib/signing';
 
 interface NewPositionModalProps {
   channelId: number;
-  assets: AssetItem[];
   onCreated: () => void;
 }
 
-export function NewPositionModal({ channelId, assets, onCreated }: NewPositionModalProps) {
+export function NewPositionModal({ channelId, onCreated }: NewPositionModalProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const [assetId, setAssetId] = useState('');
+  const [assetSymbol, setAssetSymbol] = useState('');
   const [direction, setDirection] = useState<'long' | 'short'>('long');
   const [entryPrice, setEntryPrice] = useState('');
   const [stopLoss, setStopLoss] = useState('');
@@ -81,10 +81,8 @@ export function NewPositionModal({ channelId, assets, onCreated }: NewPositionMo
 
     setLoading(true);
     try {
-      const selectedAsset = assets.find((a) => a.id.toString() === assetId);
-      
       const payloadObj = {
-        asset_symbol: selectedAsset?.symbol || '',
+        asset_symbol: assetSymbol || '',
         author_username: await resolveUsername(),
         direction,
         entry_price: entry,
@@ -136,18 +134,13 @@ export function NewPositionModal({ channelId, assets, onCreated }: NewPositionMo
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Asset</Label>
-              <Select value={assetId} onValueChange={setAssetId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select asset" />
-                </SelectTrigger>
-                <SelectContent>
-                  {assets.map(a => (
-                    <SelectItem key={a.id} value={a.id.toString()}>
-                      {a.symbol} - {a.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <AssetCombobox
+                selectedLabel={assetSymbol}
+                onSelect={(a) => {
+                  setAssetId(a.id.toString());
+                  setAssetSymbol(a.symbol);
+                }}
+              />
             </div>
             <div className="space-y-2">
               <Label>Direction</Label>

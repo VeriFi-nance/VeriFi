@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { getAssetChartData } from '@/lib/api';
@@ -12,11 +11,9 @@ import { cn } from '@/lib/utils';
 interface StepTargetProps {
   value: ClaimDraft;
   onChange: (patch: Partial<ClaimDraft>) => void;
-  onNext: () => void;
-  onBack: () => void;
 }
 
-export function StepTarget({ value, onChange, onNext, onBack }: StepTargetProps) {
+export function StepTarget({ value, onChange }: StepTargetProps) {
   const [chartData, setChartData] = useState<AssetChartData | null>(null);
   const [interval, setInterval] = useState<ChartCandleInterval>('4h');
   const [loading, setLoading] = useState(false);
@@ -47,6 +44,22 @@ export function StepTarget({ value, onChange, onNext, onBack }: StepTargetProps)
     return () => { active = false; };
   }, [value.asset_id, interval]);
 
+  // Manual entry: a leading "-" on a percentage move means a downward (bearish) claim.
+  // The magnitude is stored positive; the sign only drives direction/claim_type.
+  function handlePercentageChange(raw: string) {
+    if (isPrice) {
+      onChange({ percentage: raw });
+      return;
+    }
+    const negative = raw.trim().startsWith('-');
+    const magnitude = raw.replace('-', '');
+    onChange({
+      percentage: magnitude,
+      claim_type: negative ? 'PERCENTAGE_DOWN' : 'PERCENTAGE_UP',
+      direction: magnitude ? (negative ? 'Bearish' : 'Bullish') : '',
+    });
+  }
+
   // Per-field validation (shown only once the field has a value, so the user
   // isn't scolded before typing). Mirrors backend rules in validateDraft.
   const pct = parseFloat(value.percentage);
@@ -64,8 +77,6 @@ export function StepTarget({ value, onChange, onNext, onBack }: StepTargetProps)
     : value.until <= todayStr
       ? 'Deadline must be tomorrow or later.'
       : '';
-
-  const canProceed = Boolean(value.percentage && value.until) && !targetError && !deadlineError;
 
   function handleSelectTarget(price: number, dateStr: string) {
     const update: Partial<ClaimDraft> = { until: dateStr };
@@ -117,12 +128,12 @@ export function StepTarget({ value, onChange, onNext, onBack }: StepTargetProps)
             {isPrice && <span className="absolute left-3 text-muted-foreground text-sm">$</span>}
             <Input
               type="number"
-              min={isPrice ? '0' : '0.1'}
+              min={isPrice ? '0' : undefined}
               step={isPrice ? '0.01' : '0.1'}
-              value={value.percentage}
-              onChange={(e) => onChange({ percentage: e.target.value })}
+              value={isPrice ? value.percentage : value.direction === 'Bearish' && value.percentage ? `-${value.percentage}` : value.percentage}
+              onChange={(e) => handlePercentageChange(e.target.value)}
               className={cn('h-9 text-sm num', isPrice && 'pl-6')}
-              placeholder={isPrice ? 'e.g. 103000' : 'e.g. 25'}
+              placeholder={isPrice ? 'e.g. 103000' : 'e.g. 25 or -10'}
               aria-invalid={!!targetError}
             />
           </div>
@@ -131,6 +142,9 @@ export function StepTarget({ value, onChange, onNext, onBack }: StepTargetProps)
             <div className={cn("text-xs font-medium", value.direction === 'Bullish' ? 'text-success' : 'text-danger')}>
               {value.direction === 'Bullish' ? '↑ Bullish (Up)' : '↓ Bearish (Down)'}
             </div>
+          )}
+          {!isPrice && !value.direction && (
+            <p className="text-[11px] text-muted-foreground">Tip: enter a negative value (e.g. -10) for a downward move.</p>
           )}
           {isPrice && value.direction && (
             <div className={cn("text-xs font-medium", value.direction === 'Bullish' ? 'text-success' : 'text-danger')}>
@@ -169,19 +183,6 @@ export function StepTarget({ value, onChange, onNext, onBack }: StepTargetProps)
             <span className="text-sm text-muted-foreground animate-pulse">Loading chart...</span>
           </div>
         )}
-      </div>
-
-      <div className="flex gap-2 pt-4">
-        <Button variant="outline" className="w-1/3" onClick={onBack}>
-          Back
-        </Button>
-        <Button 
-          className="w-2/3" 
-          disabled={!canProceed} 
-          onClick={onNext}
-        >
-          Next Step
-        </Button>
       </div>
     </div>
   );

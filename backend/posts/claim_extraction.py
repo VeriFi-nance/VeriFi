@@ -80,13 +80,64 @@ def _load_whitelist_config(path: str = _CONFIG_PATH):
 
 
 # Active whitelist groups + alias map, mapped into memory once at import time.
+# These JSON-backed lists form the static *base* of the whitelist; the seeded
+# Asset catalog is merged on top at runtime by refresh_whitelist().
 CURRENCIES, CRYPTO, STOCKS, alias_map = _load_whitelist_config()
 
-# Global kontrol listesi (numerator/denominator validation set).
+# Global kontrol listesi (numerator/denominator validation set). Starts from the
+# JSON base and is extended with DB Asset symbols once the DB is reachable.
 TOTAL_WHITELIST = CURRENCIES + CRYPTO + STOCKS
 
 # Lower-cased ticker lookup ("btc" -> "BTC"), rebuilt from the active whitelist.
 ticker_map = {ticker.lower(): ticker for ticker in TOTAL_WHITELIST}
+
+# --- DB-driven whitelist extension ------------------------------------------
+# The picker can seed/create thousands of assets; free-text claim extraction
+# must recognize those tickers too. We merge Asset symbols into the whitelist
+# lazily (DB isn't reachable at import time during migrations) and cache the
+# result with a short TTL so the common path doesn't hit the DB every call.
+import time as _time
+
+_WHITELIST_TTL_SECONDS = 300
+_whitelist_last_refresh: float = 0.0
+# Immutable JSON base so each refresh recomputes from a clean slate.
+_BASE_WHITELIST = tuple(TOTAL_WHITELIST)
+
+
+def refresh_whitelist(force: bool = False) -> None:
+    """Merge seeded Asset symbols into TOTAL_WHITELIST / ticker_map.
+
+    Safe to call frequently: throttled by a TTL unless force=True, and any DB
+    error degrades silently to the current (JSON-base) whitelist. Called lazily
+    from the extraction entrypoint and explicitly after an asset is resolved.
+    """
+    global TOTAL_WHITELIST, ticker_map, _whitelist_last_refresh
+
+    now = _time.monotonic()
+    if not force and (now - _whitelist_last_refresh) < _WHITELIST_TTL_SECONDS:
+        return
+    _whitelist_last_refresh = now
+
+    try:
+        from .models import Asset
+        db_symbols = [
+            str(s).strip().upper()
+            for s in Asset.objects.values_list("symbol", flat=True)
+            if str(s).strip()
+        ]
+    except Exception:
+        # DB unavailable (import-time / migration / no connection) — keep base.
+        return
+
+    merged: list[str] = list(_BASE_WHITELIST)
+    seen = {s for s in merged}
+    for sym in db_symbols:
+        if sym not in seen:
+            seen.add(sym)
+            merged.append(sym)
+
+    TOTAL_WHITELIST = merged
+    ticker_map = {ticker.lower(): ticker for ticker in merged}
 
 
 # ---------------------------------------------------------------------------
@@ -1538,6 +1589,8 @@ def rule_based_claims_from_prompt(
     text = prompt.strip()
     if not text:
         return []
+    # Pick up any newly seeded/resolved Asset tickers (TTL-throttled, DB-safe).
+    refresh_whitelist()
     results_a = _strategy_punctuation_split(text, base_date)
     results_b = _strategy_hierarchical_proximity(text, base_date)
     return _select_best_results(results_a, results_b)

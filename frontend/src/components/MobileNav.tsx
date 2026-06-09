@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { Home, Tv, Settings, Menu, LogOut, Sun, Moon, User, ShieldCheck } from 'lucide-react';
+import { Bell, Home, Tv, Settings, Menu, LogOut, Sun, Moon, User, ShieldCheck, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -35,6 +35,12 @@ function buildNavItems(): NavItem[] {
       matches: (p) => p.startsWith('/verify'),
     },
     {
+      to: '/notifications',
+      icon: <Bell className="size-5" />,
+      label: 'Notifications',
+      matches: (p) => p.startsWith('/notifications'),
+    },
+    {
       to: '/settings',
       icon: <Settings className="size-5" />,
       label: 'Settings',
@@ -49,6 +55,7 @@ export interface MobileNavProps {
   onToggleTheme: () => void;
   onDisconnect: () => void;
   onLogin: () => void;
+  unreadNotifications?: number;
 }
 
 export function MobileMenuButton({
@@ -57,6 +64,7 @@ export function MobileMenuButton({
   onToggleTheme,
   onDisconnect,
   onLogin,
+  unreadNotifications = 0,
 }: MobileNavProps) {
   const location = useLocation();
   const [open, setOpen] = useState(false);
@@ -106,7 +114,14 @@ export function MobileMenuButton({
                         : 'text-muted-foreground hover:text-foreground hover:bg-accent',
                     )}
                   >
-                    {item.icon}
+                    <span className="relative">
+                      {item.icon}
+                      {item.to === '/notifications' && unreadNotifications > 0 && (
+                        <span className="absolute -right-1.5 -top-1.5 flex min-w-4 justify-center rounded-full bg-primary px-1 text-[9px] font-semibold leading-4 text-primary-foreground">
+                          {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                        </span>
+                      )}
+                    </span>
                     {item.label}
                   </Link>
                 </DialogPrimitive.Close>
@@ -121,6 +136,15 @@ export function MobileMenuButton({
               {theme === 'dark' ? <Sun className="size-5" /> : <Moon className="size-5" />}
               {theme === 'dark' ? 'Light mode' : 'Dark mode'}
             </button>
+            <DialogPrimitive.Close asChild>
+              <Link
+                to="/about"
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              >
+                <Info className="size-5" />
+                About VeriFi
+              </Link>
+            </DialogPrimitive.Close>
             {authenticated ? (
               <button
                 onClick={onDisconnect}
@@ -145,7 +169,7 @@ export function MobileMenuButton({
   );
 }
 
-export function BottomTabBar() {
+export function BottomTabBar({ unreadNotifications = 0 }: { unreadNotifications?: number }) {
   const location = useLocation();
   const items = buildNavItems();
   return (
@@ -153,7 +177,7 @@ export function BottomTabBar() {
       aria-label="Primary"
       className="md:hidden fixed bottom-0 inset-x-0 z-30 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 pb-[env(safe-area-inset-bottom)]"
     >
-      <ul className="grid grid-cols-4">
+      <ul className="grid grid-cols-5">
         {items.map((item) => {
           const active = item.matches(location.pathname);
           return (
@@ -166,7 +190,14 @@ export function BottomTabBar() {
                 )}
                 aria-current={active ? 'page' : undefined}
               >
-                {item.icon}
+                <span className="relative">
+                  {item.icon}
+                  {item.to === '/notifications' && unreadNotifications > 0 && (
+                    <span className="absolute -right-1.5 -top-1.5 flex min-w-4 justify-center rounded-full bg-primary px-1 text-[9px] font-semibold leading-4 text-primary-foreground">
+                      {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                    </span>
+                  )}
+                </span>
                 <span>{item.label}</span>
               </Link>
             </li>

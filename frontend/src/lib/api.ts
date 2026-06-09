@@ -1,5 +1,5 @@
-import { getToken } from './auth';
-import type { PostItem, PostCommentItem, HardClaimItem, AssetItem, ExtractClaimsResponse, ClaimChartData, PositionChartData, AssetChartData, ChartCandleInterval, ProfileStats, ChannelItem, ChannelMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType, ProofBundle, OGMetadata } from './types';
+import { clearAuth, getToken } from './auth';
+import type { PostItem, PostCommentItem, HardClaimItem, AssetItem, AssetSearchResult, ExtractClaimsResponse, ClaimChartData, PositionChartData, AssetChartData, ChartCandleInterval, ProfileStats, ChannelItem, ChannelMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType, ProofBundle, OGMetadata, NotificationItem } from './types';
 
 /**
  * Ordered list of backend base URLs to try, sourced from build-time env vars:
@@ -111,6 +111,13 @@ function rememberBaseUrl(base: string): void {
   }
 }
 
+function hasAuthorizationHeader(headers: HeadersInit | undefined): boolean {
+  if (!headers) return false;
+  if (headers instanceof Headers) return headers.has('Authorization');
+  if (Array.isArray(headers)) return headers.some(([key]) => key.toLowerCase() === 'authorization');
+  return Object.keys(headers).some((key) => key.toLowerCase() === 'authorization');
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {}
@@ -150,6 +157,9 @@ async function request<T>(
     const text = await res.text();
     const data = text ? JSON.parse(text) : {};
     if (!res.ok) {
+      if (res.status === 401 && hasAuthorizationHeader(optHeaders)) {
+        clearAuth();
+      }
       throw parseApiError(data, res.status);
     }
     return data as T;
@@ -462,6 +472,21 @@ export async function getAssets(): Promise<AssetItem[]> {
   return request('/api/posts/assets/');
 }
 
+/** Hybrid asset search: local DB hits plus remote provider candidates. */
+export async function searchAssets(q: string, limit = 20): Promise<AssetSearchResult[]> {
+  const qs = new URLSearchParams({ q, limit: String(limit) });
+  return request(`/api/posts/assets/search/?${qs.toString()}`);
+}
+
+/** Persist a remote search candidate into a real Asset row (idempotent). */
+export async function resolveAsset(candidate: AssetSearchResult): Promise<AssetItem> {
+  return request('/api/posts/assets/resolve/', {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(candidate),
+  });
+}
+
 export async function getAssetChartData(
   assetId: number,
   interval?: ChartCandleInterval,
@@ -674,4 +699,40 @@ export async function getPositionChartData(
 
 export async function searchAPI(query: string, type: string): Promise<any> {
   return request(`/api/posts/search/?q=${encodeURIComponent(query)}&type=${encodeURIComponent(type)}`);
+}
+
+export async function getNotifications(params?: {
+  page?: number;
+  page_size?: number;
+}): Promise<PaginatedResponse<NotificationItem>> {
+  const query = new URLSearchParams();
+  if (params?.page) query.append('page', params.page.toString());
+  if (params?.page_size) query.append('page_size', params.page_size.toString());
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  return request(`/api/notifications/${qs}`, { headers: authHeaders() });
+}
+
+export async function getUnreadNotificationCount(): Promise<{ unread_count: number }> {
+  return request('/api/notifications/unread-count/', { headers: authHeaders() });
+}
+
+export async function markNotificationRead(id: number): Promise<NotificationItem> {
+  return request(`/api/notifications/${id}/read/`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+  });
+}
+
+export async function markAllNotificationsRead(): Promise<{ updated: number }> {
+  return request('/api/notifications/mark-all-read/', {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+}
+
+export async function deleteNotification(id: number): Promise<void> {
+  await request(`/api/notifications/${id}/`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
 }

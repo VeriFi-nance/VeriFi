@@ -24,6 +24,9 @@ interface ClaimDetailViewProps {
   assets: AssetItem[];
 }
 
+export const CLAIM_DETAIL_DIALOG_CLASS =
+  'inset-auto top-1/2 left-1/2 bottom-auto w-[calc(100vw-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-lg border p-6 shadow-lg md:max-w-2xl data-[state=closed]:slide-out-to-bottom-0 data-[state=open]:slide-in-from-bottom-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95';
+
 function statusLabel(status: HardClaimItem['status'], pastDue: boolean) {
   if (status === 'confirmed') return 'Confirmed';
   if (status === 'rejected') return 'Rejected';
