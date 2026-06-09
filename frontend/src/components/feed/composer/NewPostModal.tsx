@@ -451,6 +451,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
                     setPosAttached(null);
                     setShowPositionForm(true);
                     setPosWizardMode(false);
+                    setPosNav(null);
                   }}
                   title="Edit position"
                   className="size-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -596,7 +597,11 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
                       size="sm"
                       variant="ghost"
                       className="h-7 text-xs text-muted-foreground hover:bg-muted"
-                      onClick={() => { setShowPositionForm(false); setPosDraft(defaultPositionDraft()); }}
+                      onClick={() => {
+                        setShowPositionForm(false);
+                        setPosDraft(defaultPositionDraft());
+                        setPosNav(null);
+                      }}
                     >
                       Cancel
                     </Button>
@@ -632,6 +637,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
                   setShowDraft(false);
                   setDraft(emptyDraft());
                   setError('');
+                  setClaimNav(null);
                 }}
               />
             )
@@ -649,6 +655,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
                     setShowDraft(true);
                     setWizardMode(true);
                     setError('');
+                    setClaimNav(null);
                   }}
                 >
                   <Plus className="size-3.5" />
@@ -665,6 +672,7 @@ export function NewPostModal({ open, onOpenChange, onPosted, channelId }: NewPos
                     setShowPositionForm(true);
                     setPosWizardMode(true);
                     setPosError('');
+                    setPosNav(null);
                   }}
                 >
                   <TrendingUp className="size-3.5" />

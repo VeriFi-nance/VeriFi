@@ -11,7 +11,7 @@ import { PostActions } from '@/components/feed/PostActions';
 import { truncateAddress } from '@/lib/wallet';
 import { cn, safeImageSrc } from '@/lib/utils';
 import type { PostItem, HardClaimItem, AssetItem } from '@/lib/types';
-import { ClaimDetailView } from '@/components/feed/ClaimDetailView';
+import { CLAIM_DETAIL_DIALOG_CLASS, ClaimDetailView } from '@/components/feed/ClaimDetailView';
 import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 
 interface PostCardProps {
@@ -168,7 +168,7 @@ function PostCardImpl({ post, hardClaims = [], assets = [], onDelete, onPostChan
 
       {/* Claim detail modal */}
       <RD.Root open={!!claimModal} onOpenChange={(v) => !v && setClaimModal(null)}>
-        <RD.Content className="max-w-2xl">
+        <RD.Content className={CLAIM_DETAIL_DIALOG_CLASS}>
           <RD.Header>
             <RD.Title>Claim Details</RD.Title>
           </RD.Header>
