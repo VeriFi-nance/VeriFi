@@ -1,11 +1,12 @@
 import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, Download, FileCheck2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AttachmentRow } from '@/components/AttachmentRow';
 import { cn } from '@/lib/utils';
 import type { HardClaimItem, AssetItem } from '@/lib/types';
 import { getClaimProof, getMarket, buyShares } from '@/lib/api';
-import { getClaimWindowProgress, getFeedClaimTagLabel, getHardClaimDisplay, getHardClaimType, isClaimPastDue } from '@/lib/claims';
+import { getFeedClaimTagLabel, getHardClaimDisplay, getHardClaimType, isClaimPastDue } from '@/lib/claims';
 import { useAuthState, useOpenLogin } from '@/lib/auth';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { toast, getMessage } from '@/lib/errors';
@@ -27,6 +28,7 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
   const auth = useAuthState();
   const openLogin = useOpenLogin();
   const confirm = useConfirm();
+  const queryClient = useQueryClient();
   const [busySide, setBusySide] = useState<'YES' | 'NO' | null>(null);
   const [downloadingProof, setDownloadingProof] = useState(false);
 
@@ -46,18 +48,16 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
   const isConfirmed = claim.status === 'confirmed';
   const isRejected = claim.status === 'rejected';
   const pastDue = isClaimPastDue(claim);
-  const progress = getClaimWindowProgress(claim.created_at, claim.until);
-
-  const timelinePct = Math.min(100, Math.max(0, isConfirmed || isRejected ? 100 : progress));
-  const timelineLabel = `${Math.round(timelinePct)}%`;
-  const timelineBarClass = isConfirmed
-    ? 'bg-emerald-500'
-    : isRejected
-      ? 'bg-red-500'
-      : pastDue
-        ? 'bg-amber-500'
-        : 'bg-blue-400';
   const marketClosed = claim.status !== 'undetermined';
+  const marketQueryKey = ['claim-market', claim.id] as const;
+  const { data: marketState } = useQuery({
+    queryKey: marketQueryKey,
+    queryFn: () => getMarket(claim.id),
+    enabled: auth.authenticated && !marketClosed,
+    staleTime: 30_000,
+    retry: false,
+  });
+  const activeSide = marketState?.your_stake?.side ?? null;
 
   async function handleDownloadProof(e: React.MouseEvent) {
     e.preventDefault();
@@ -88,9 +88,14 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
 
     try {
       setBusySide(side);
-      const market = await getMarket(claim.id);
+      const market = marketState ?? await getMarket(claim.id);
+      queryClient.setQueryData(marketQueryKey, market);
       if (market.resolved || market.claim_status !== 'undetermined') {
         toast.error('This market is already resolved.');
+        return;
+      }
+      if (market.your_stake) {
+        toast.error(`You already bought ${market.your_stake.side === 'YES' ? 'Agree' : 'Disagree'} shares.`);
         return;
       }
 
@@ -102,7 +107,8 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
       });
       if (!ok) return;
 
-      await buyShares(claim.id, side);
+      const result = await buyShares(claim.id, side);
+      queryClient.setQueryData(marketQueryKey, result.market);
       toast.success(`${label} shares bought.`);
     } catch (err: unknown) {
       toast.error(getMessage(err, 'Could not buy market shares'));
@@ -115,14 +121,11 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
     <AttachmentRow
       icon={<FileCheck2 className="size-4" />}
       title={assetSymbol}
-      badge={tag.label}
-      badgeVariant={tag.variant}
+      titleTone={display.isBullish ? 'text-emerald-400' : 'text-rose-400'}
+      meta={<span className={cn(display.isBullish ? 'text-emerald-400' : 'text-rose-400')}>{tag.label}</span>}
+      badge="Claim"
+      badgeVariant="outline"
       summary={<span className="truncate">{display.summary}</span>}
-      progress={{
-        value: timelinePct,
-        label: timelineLabel,
-        className: timelineBarClass,
-      }}
       right={
         <span
           className={cn(
@@ -139,11 +142,17 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
             type="button"
             variant="ghost"
             size="icon"
-            disabled={busySide !== null || marketClosed}
+            disabled={busySide !== null || marketClosed || activeSide !== null}
+            aria-pressed={activeSide === 'YES'}
             title="Buy Agree shares"
             aria-label="Buy Agree shares"
             onClick={(e) => handleBuy(e, 'YES')}
-            className="size-8 rounded-md text-success hover:bg-success/10 hover:text-success disabled:opacity-35"
+            className={cn(
+              'size-8 rounded-md text-success hover:bg-success/10 hover:text-success',
+              activeSide === 'YES'
+                ? 'bg-success/15 ring-1 ring-success/40 disabled:opacity-100'
+                : 'disabled:opacity-35',
+            )}
           >
             {busySide === 'YES' ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
           </Button>
@@ -151,11 +160,17 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
             type="button"
             variant="ghost"
             size="icon"
-            disabled={busySide !== null || marketClosed}
+            disabled={busySide !== null || marketClosed || activeSide !== null}
+            aria-pressed={activeSide === 'NO'}
             title="Buy Disagree shares"
             aria-label="Buy Disagree shares"
             onClick={(e) => handleBuy(e, 'NO')}
-            className="size-8 rounded-md text-destructive hover:bg-destructive/10 hover:text-destructive disabled:opacity-35"
+            className={cn(
+              'size-8 rounded-md text-destructive hover:bg-destructive/10 hover:text-destructive',
+              activeSide === 'NO'
+                ? 'bg-destructive/15 ring-1 ring-destructive/40 disabled:opacity-100'
+                : 'disabled:opacity-35',
+            )}
           >
             {busySide === 'NO' ? <Loader2 className="size-4 animate-spin" /> : <ArrowDown className="size-4" />}
           </Button>
@@ -174,10 +189,9 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
         </>
       }
       className={cn(
-        isConfirmed && 'border-emerald-500/60 shadow-sm',
-        isRejected && 'border-red-500/60 opacity-80',
-        !isConfirmed && !isRejected && pastDue && 'border-amber-500/50',
-        !isConfirmed && !isRejected && !pastDue && 'border-border hover:shadow-sm',
+        isConfirmed && 'border-emerald-500/35',
+        isRejected && 'border-red-500/35 opacity-80',
+        !isConfirmed && !isRejected && pastDue && 'border-amber-500/35',
       )}
     />
   );

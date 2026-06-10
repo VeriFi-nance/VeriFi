@@ -34,8 +34,7 @@ function PostCardImpl({ post, hardClaims = [], assets = [], onDelete, onPostChan
   return (
     <Card className={cn(
       "group relative max-w-2xl gap-0 py-0 overflow-hidden rounded-lg transition-colors hover:bg-muted/20",
-      claimHints.length > 0 && "border-claim-badge/35 shadow-claim-badge/10",
-      positions.length > 0 && "border-position-badge/35 shadow-position-badge/10"
+      (claimHints.length > 0 || positions.length > 0) && "border-border"
     )}>
       <Link
         to={`/post/${post.id}`}
@@ -77,12 +76,12 @@ function PostCardImpl({ post, hardClaims = [], assets = [], onDelete, onPostChan
               </span>
             )}
             {claimHints.length > 0 && (
-              <span className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-claim-badge bg-claim-badge/10 px-1.5 py-0.5 rounded shrink-0">
+              <span className="flex items-center gap-1 rounded border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground shrink-0">
                 CLAIM
               </span>
             )}
             {positions.length > 0 && (
-              <span className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-position-badge bg-position-badge/10 px-1.5 py-0.5 rounded shrink-0">
+              <span className="flex items-center gap-1 rounded border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground shrink-0">
                 POSITION
               </span>
             )}
@@ -155,7 +154,7 @@ function PostCardImpl({ post, hardClaims = [], assets = [], onDelete, onPostChan
               {/* Positions section */}
               {positions.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-position-badge">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                     Positions
                   </p>
                   {positions.map((pos) => (

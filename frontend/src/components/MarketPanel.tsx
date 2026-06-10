@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -19,6 +20,7 @@ function isClaimClosed(status?: string | null): boolean {
 export function MarketPanel({ claimId, claimStatus, onChange }: Props) {
   const openLogin = useOpenLogin();
   const auth = useAuthState();
+  const queryClient = useQueryClient();
   const [market, setMarket] = useState<ClaimMarketItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +35,7 @@ export function MarketPanel({ claimId, claimStatus, onChange }: Props) {
       const m = await getMarket(claimId);
       const isClosed = m.resolved || isClaimClosed(m.claim_status) || isClaimClosed(claimStatus);
       setMarket(m);
+      queryClient.setQueryData(['claim-market', claimId], m);
       setError(null);
       if (!isClosed) {
         const [py, pn] = await Promise.all([
@@ -66,7 +69,8 @@ export function MarketPanel({ claimId, claimStatus, onChange }: Props) {
     setBusy(true);
     setActionError(null);
     try {
-      await buyShares(claimId, side);
+      const result = await buyShares(claimId, side);
+      queryClient.setQueryData(['claim-market', claimId], result.market);
       await reload();
       onChange?.();
     } catch (e: unknown) {

@@ -6,6 +6,7 @@ interface AttachmentRowProps {
   icon: ReactNode;
   title: string;
   titleTone?: string;
+  meta?: ReactNode;
   badge: string;
   badgeVariant?: React.ComponentProps<typeof Badge>['variant'];
   summary: ReactNode;
@@ -23,6 +24,7 @@ export function AttachmentRow({
   icon,
   title,
   titleTone,
+  meta,
   badge,
   badgeVariant = 'outline',
   summary,
@@ -36,20 +38,21 @@ export function AttachmentRow({
   return (
     <div
       className={cn(
-        'group/attachment flex w-full items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-left transition-colors hover:bg-muted/35',
+        'group/attachment flex w-full items-center gap-3 rounded-md border border-border/80 bg-background/45 px-3 py-2 text-left transition-colors hover:bg-muted/35',
         className,
       )}
     >
-      <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+      <div className="flex size-7 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
         {icon}
       </div>
 
-      <div className="min-w-0 flex-1 space-y-1">
+      <div className="min-w-0 flex-1 space-y-0.5">
         <div className="flex min-w-0 items-center gap-2">
           <span className={cn('truncate font-mono text-xs font-bold text-foreground', titleTone)}>
             {title}
           </span>
-          <Badge variant={badgeVariant} className="px-1.5 py-0 text-[9px] uppercase tracking-wide">
+          {meta && <span className="shrink-0 text-[10px] font-semibold text-muted-foreground">{meta}</span>}
+          <Badge variant={badgeVariant} className="px-1.5 py-0 text-[9px] uppercase tracking-wide text-muted-foreground">
             {badge}
           </Badge>
           {right && <div className="ml-auto shrink-0">{right}</div>}
