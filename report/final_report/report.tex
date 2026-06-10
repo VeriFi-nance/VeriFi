@@ -496,7 +496,7 @@ Claim data durability & Claim records MUST survive post deletions and account de
 \end{center}
 \end{table}
 
-\begin{figure}[H]
+\begin{figure}[p]
 \centering
 \resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
@@ -512,53 +512,55 @@ Claim data durability & Claim records MUST survive post deletions and account de
     dasharr/.style={-{Stealth[length=2mm]}, dashed, thick},
 ]
 
-% System boundary
-\node[draw, dashed, rounded corners=8pt, minimum width=10cm, minimum height=10cm,
-      label={[font=\large\bfseries]above:VeriFi System}] (sys) at (6.5,0) {};
+% System boundary (drawn explicitly so all use cases fit inside)
+\draw[dashed, rounded corners=8pt] (0.9,-4.9) rectangle (11.7,6.3);
+\node[font=\large\bfseries] at (6.3,6.7) {VeriFi System};
 
 % Actors (left side)
-\node[actor] (predictor) at (-1.5, 2.5)  {Predictor};
-\node[actor] (visitor)   at (-1.5, -1) {Visitor};
+\node[actor] (predictor) at (-2.2, 3.0)  {Predictor};
+\node[actor] (visitor)   at (-2.2, -5.2) {Visitor};
 
 % Actors (right side)
-\node[actor] (admin)    at (14.5, 2)  {Admin};
-\node[actor] (verifier) at (14.5, -2) {Proof\\Verifier};
+\node[actor] (admin)    at (13.4, 3.0)  {Admin};
+\node[actor] (verifier) at (13.4, -3.6) {Proof\\Verifier};
 
-% Use cases
-\node[usecase] (register) at (4, 4.5)   {Register Wallet};
-\node[usecase] (login)    at (9, 4.5)   {Login (Challenge--Response)};
-\node[usecase] (create)   at (4, 2.5)   {Create Hard Claim};
-\node[usecase] (sign)     at (9, 2.5)   {Sign Claim};
-\node[usecase] (feed)     at (4, 0.5)   {Browse Claim Feed};
-\node[usecase] (profile)  at (9, 0.5)   {View Profile \& Rep Score};
-\node[usecase] (download) at (4, -1.5)  {Download Proof};
-\node[usecase] (verify)   at (9, -1.5)  {Verify Proof};
-\node[usecase] (resolve)  at (9, -3.5)  {Resolve Claim};
-\node[usecase] (extract)  at (4, -3.5)  {Claim Extraction};
+% Use cases — left column
+\node[usecase] (register) at (3.3, 5.0)  {Register Wallet};
+\node[usecase] (create)   at (3.3, 2.9)  {Create Hard Claim};
+\node[usecase] (feed)     at (3.3, 0.8)  {Browse Claim Feed};
+\node[usecase] (download) at (3.3, -1.3) {Download Proof};
+\node[usecase] (profile)  at (3.3, -3.4) {View Profile \& Rep Score};
+
+% Use cases — right column
+\node[usecase] (login)    at (9.3, 5.0)  {Login (Challenge--Response)};
+\node[usecase] (sign)     at (9.3, 2.9)  {Sign Claim};
+\node[usecase] (extract)  at (9.3, 0.8)  {Claim Extraction};
+\node[usecase] (resolve)  at (9.3, -1.3) {Resolve Claim};
+\node[usecase] (verify)   at (9.3, -3.4) {Verify Proof};
 
 % Predictor associations
 \draw[arr] (predictor) -- (register);
 \draw[arr] (predictor) -- (login);
 \draw[arr] (predictor) -- (create);
 \draw[arr] (predictor) -- (feed);
-\draw[arr] (predictor) -- (profile);
 \draw[arr] (predictor) -- (download);
+\draw[arr] (predictor) to[bend right=18] (profile);
 
 % Visitor associations
-\draw[arr] (visitor) -- (feed);
+\draw[arr] (visitor) to[bend left=18] (feed);
 \draw[arr] (visitor) -- (profile);
 \draw[arr] (visitor) -- (verify);
 
 % Admin associations
 \draw[arr] (admin) -- (login);
-\draw[arr] (admin) -- (resolve);
+\draw[arr] (admin) to[bend left=20] (resolve);
 
 % Verifier associations
 \draw[arr] (verifier) -- (verify);
 
-% <<include>> relationships
-\draw[dasharr] (create) -- node[above, font=\scriptsize, sloped] {$\ll$include$\gg$} (sign);
-\draw[dasharr] (create) -- node[below, font=\scriptsize, sloped] {$\ll$extend$\gg$} (extract);
+% <<include>> / <<extend>> relationships
+\draw[dasharr] (create) -- node[above, font=\scriptsize] {$\ll$include$\gg$} (sign);
+\draw[dasharr] (extract) -- node[below, font=\scriptsize, sloped] {$\ll$extend$\gg$} (create);
 
 \end{tikzpicture}%
 }
