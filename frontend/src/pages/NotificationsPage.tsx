@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Bell, Loader2, Trash2 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { EmptyState } from '@/components/EmptyState';
 import { PageContent } from '@/components/PageContent';
+import { RepAmount } from '@/components/RepAmount';
+import { RepIcon } from '@/components/RepIcon';
 import { UserAvatar } from '@/components/UserAvatar';
 import {
   deleteNotification,
@@ -38,6 +40,76 @@ function actorProfilePath(item: NotificationItem): string | null {
   return `/u/${item.actor_username || item.actor_address}`;
 }
 
+function isRepNotification(item: NotificationItem): boolean {
+  return item.type === 'rep_spent' || item.type === 'rep_payout';
+}
+
+function renderRepMessageText(message: string): ReactNode {
+  const re = /(\d+(?:\.\d+)?)\s*rep\b/gi;
+  const parts: ReactNode[] = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = re.exec(message)) !== null) {
+    if (match.index > last) {
+      parts.push(message.slice(last, match.index));
+    }
+    parts.push(
+      <RepAmount key={`${match.index}-${match[1]}`} value={match[1]} iconSize="xs" className="mx-0.5" />,
+    );
+    last = match.index + match[0].length;
+  }
+
+  if (last < message.length) {
+    parts.push(message.slice(last));
+  }
+
+  return parts.length > 0 ? parts : message;
+}
+
+function NotificationLeadingIcon({ item }: { item: NotificationItem }) {
+  if (isRepNotification(item)) {
+    return (
+      <div
+        className={cn(
+          'ml-4 mt-3 flex size-8 shrink-0 items-center justify-center rounded-full bg-muted/50',
+          item.unread && 'ring-2 ring-primary/30',
+        )}
+      >
+        <RepIcon size="sm" />
+      </div>
+    );
+  }
+
+  if (actorProfilePath(item)) {
+    return (
+      <Link
+        to={actorProfilePath(item)!}
+        className="ml-4 mt-3 h-fit rounded-full transition-opacity hover:opacity-80"
+        aria-label={`View profile for ${actorLabel(item)}`}
+      >
+        <UserAvatar
+          address={item.actor_address || 'system'}
+          src={item.actor_avatar_url}
+          size="sm"
+          ring={item.unread}
+        />
+      </Link>
+    );
+  }
+
+  return (
+    <div className="ml-4 mt-3 h-fit">
+      <UserAvatar
+        address="system"
+        src={item.actor_avatar_url}
+        size="sm"
+        ring={item.unread}
+      />
+    </div>
+  );
+}
+
 export default function NotificationsPage() {
   const auth = useAuthState();
   const navigate = useNavigate();
@@ -49,7 +121,12 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     if (auth.authenticated) return;
-    openLogin(navigate, location, '/notifications');
+    openLogin(navigate, location, '/notifications', {
+      ...location,
+      pathname: '/feed',
+      search: '',
+      hash: '',
+    });
   }, [auth.authenticated, navigate, location]);
 
   useEffect(() => {
@@ -112,7 +189,11 @@ export default function NotificationsPage() {
       <div>
         <h1 className="text-xl font-semibold tracking-normal">Notifications</h1>
         <p className="text-sm text-muted-foreground">
-          {items.length > 0 ? `${items.length} notification${items.length === 1 ? '' : 's'}` : 'All caught up'}
+          {loading
+            ? 'Loading…'
+            : items.length > 0
+              ? `${items.length} notification${items.length === 1 ? '' : 's'}`
+              : 'All caught up'}
         </p>
       </div>
 
@@ -138,29 +219,7 @@ export default function NotificationsPage() {
                 item.unread ? 'bg-foreground/[0.03]' : 'hover:bg-accent/60',
               )}
             >
-              {actorProfilePath(item) ? (
-                <Link
-                  to={actorProfilePath(item)!}
-                  className="ml-4 mt-3 h-fit rounded-full transition-opacity hover:opacity-80"
-                  aria-label={`View profile for ${actorLabel(item)}`}
-                >
-                  <UserAvatar
-                    address={item.actor_address || 'system'}
-                    src={item.actor_avatar_url}
-                    size="sm"
-                    ring={item.unread}
-                  />
-                </Link>
-              ) : (
-                <div className="ml-4 mt-3 h-fit">
-                  <UserAvatar
-                    address="system"
-                    src={item.actor_avatar_url}
-                    size="sm"
-                    ring={item.unread}
-                  />
-                </div>
-              )}
+              <NotificationLeadingIcon item={item} />
               <button
                 type="button"
                 onClick={() => handleOpen(item)}
@@ -168,7 +227,8 @@ export default function NotificationsPage() {
               >
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex items-start justify-between gap-3">
-                    <p className="text-sm font-medium leading-snug">
+                    <p className="inline-flex items-center gap-1.5 text-sm font-medium leading-snug">
+                      {isRepNotification(item) && <RepIcon size="xs" className="shrink-0" />}
                       {item.title}
                       {item.unread && <span className="ml-2 inline-block size-2 rounded-full bg-primary align-middle" />}
                     </p>
@@ -178,7 +238,14 @@ export default function NotificationsPage() {
                   </div>
                   <p className="text-sm text-muted-foreground leading-snug">
                     <span className="text-foreground">{actorLabel(item)}</span>
-                    {item.message ? ` · ${item.message}` : ''}
+                    {item.message
+                      ? (
+                        <>
+                          {' · '}
+                          {isRepNotification(item) ? renderRepMessageText(item.message) : item.message}
+                        </>
+                      )
+                      : ''}
                   </p>
                   {item.target_url && <span className="inline-flex text-xs font-medium text-primary">Open</span>}
                 </div>

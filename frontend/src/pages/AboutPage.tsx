@@ -2,15 +2,18 @@ import { lazy, Suspense } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Info, KeyRound, Trophy, Layers, ShieldCheck, Loader2 } from 'lucide-react';
+import { Info, KeyRound, Layers, ShieldCheck, Loader2 } from 'lucide-react';
+import { RepIcon } from '@/components/RepIcon';
 
 const RepScoreSim = lazy(() => import('@/components/info/RepScoreSim'));
 
 function CryptoRow({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border p-3">
+    <div className="rounded-lg border p-3 sm:p-4">
       <div className="font-medium text-foreground text-sm mb-1">{title}</div>
-      <div className="text-xs text-muted-foreground leading-relaxed">{children}</div>
+      <div className="text-xs text-muted-foreground leading-relaxed break-words [&_code]:break-all">
+        {children}
+      </div>
     </div>
   );
 }
@@ -27,29 +30,33 @@ export default function AboutPage() {
 
   return (
     <div className="mx-auto w-full max-w-3xl">
-      <Card>
-        <CardHeader className="border-b">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Info className="size-5 text-primary" /> About VeriFi
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b px-4 py-4 sm:px-6">
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <Info className="size-5 shrink-0 text-primary" /> About VeriFi
           </CardTitle>
-          <CardDescription>Verifiable finance predictions — how the project works under the hood.</CardDescription>
+          <CardDescription className="text-sm leading-relaxed">
+            Verifiable finance predictions — how the project works under the hood.
+          </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 pt-4 sm:px-6">
           <Tabs value={activeTab} onValueChange={handleTabChange}>
-            <TabsList className="w-full flex-wrap h-auto">
-              <TabsTrigger value="about">
-                <ShieldCheck className="size-3.5" /> About
-              </TabsTrigger>
-              <TabsTrigger value="crypto">
-                <KeyRound className="size-3.5" /> Cryptography
-              </TabsTrigger>
-              <TabsTrigger value="rep">
-                <Trophy className="size-3.5" /> Rep Score
-              </TabsTrigger>
-              <TabsTrigger value="stack">
-                <Layers className="size-3.5" /> Stack
-              </TabsTrigger>
-            </TabsList>
+            <div className="-mx-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:overflow-visible">
+              <TabsList className="inline-flex h-auto w-max min-w-full justify-start gap-0.5 p-1 sm:w-full sm:flex-wrap">
+                <TabsTrigger value="about" className="shrink-0 flex-none gap-1 px-2.5 text-xs sm:flex-1 sm:px-3 sm:text-sm">
+                  <ShieldCheck className="size-3.5" /> About
+                </TabsTrigger>
+                <TabsTrigger value="crypto" className="shrink-0 flex-none gap-1 px-2.5 text-xs sm:flex-1 sm:px-3 sm:text-sm">
+                  <KeyRound className="size-3.5" /> Cryptography
+                </TabsTrigger>
+                <TabsTrigger value="rep" className="shrink-0 flex-none gap-1 px-2.5 text-xs sm:flex-1 sm:px-3 sm:text-sm">
+                  <RepIcon size="xs" /> Rep Score
+                </TabsTrigger>
+                <TabsTrigger value="stack" className="shrink-0 flex-none gap-1 px-2.5 text-xs sm:flex-1 sm:px-3 sm:text-sm">
+                  <Layers className="size-3.5" /> Stack
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
             <div className="pt-4">
               {/* About */}

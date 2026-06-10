@@ -12,7 +12,7 @@ import { EnergyMeter } from '@/components/EnergyMeter';
 import { getUnreadNotificationCount } from '@/lib/api';
 import { UserAvatar } from '@/components/UserAvatar';
 import { truncateAddress } from '@/lib/wallet';
-import { MobileMenuButton, BottomTabBar } from '@/components/MobileNav';
+import { BottomTabBar } from '@/components/MobileNav';
 import { BrandLogo } from '@/components/BrandLogo';
 import { SearchBar } from '@/components/SearchBar';
 import { RightSidebar } from '@/components/RightSidebar';
@@ -243,45 +243,29 @@ export default function AppLayout() {
         {/* Main column */}
         <div className="flex flex-col flex-1 min-w-0">
           <header className="sticky top-0 z-20 h-14 flex items-center border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 px-3 sm:px-6 gap-2 sm:gap-3">
-            <MobileMenuButton
-              authenticated={auth.authenticated}
-              theme={theme}
-              onToggleTheme={handleThemeToggle}
-              onDisconnect={handleDisconnect}
-              onLogin={goLogin}
-              unreadNotifications={unreadNotifications}
-            />
-
             <div className="flex-1 min-w-0 flex justify-start lg:pl-4">
               <SearchBar />
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-              <EnergyMeter hideRepOnMobile />
+              <EnergyMeter />
 
-              {auth.authenticated && (
-                <Button
-                  asChild
-                  variant="ghost"
-                  size="icon"
-                  className="relative size-8 rounded-full text-muted-foreground hover:text-foreground"
-                  title="Notifications"
-                >
-                  <Link to="/notifications" aria-label="Notifications">
-                    <Bell className="size-4" />
-                    {unreadNotifications > 0 && (
-                      <span className="absolute -right-0.5 -top-0.5 flex min-w-4 justify-center rounded-full bg-primary px-1 text-[9px] font-semibold leading-4 text-primary-foreground">
-                        {unreadNotifications > 9 ? '9+' : unreadNotifications}
-                      </span>
-                    )}
-                  </Link>
-                </Button>
-              )}
+              <Button
+                asChild
+                variant="ghost"
+                size="icon"
+                className="md:hidden size-8 rounded-full text-muted-foreground hover:text-foreground"
+                title="Settings"
+              >
+                <Link to="/settings" aria-label="Settings">
+                  <Settings className="size-4" />
+                </Link>
+              </Button>
 
               <Button
                 variant="ghost"
                 size="icon"
-                className="size-8 rounded-full text-muted-foreground hover:text-foreground"
+                className="hidden md:inline-flex size-8 rounded-full text-muted-foreground hover:text-foreground"
                 onClick={handleThemeToggle}
                 title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
               >
@@ -291,7 +275,7 @@ export default function AppLayout() {
               {address && (
                 <Link
                   to={`/u/${username || address}`}
-                  className="hidden sm:flex items-center gap-2 hover:opacity-80 transition-opacity"
+                  className="hidden md:flex items-center gap-2 hover:opacity-80 transition-opacity"
                   aria-label="Your profile"
                 >
                   <UserAvatar address={address} src={auth.avatar} size="sm" ring />
