@@ -10,6 +10,7 @@ import { getClaimWindowProgress, getFeedClaimTagLabel, getHardClaimDisplay, getH
 import { useAuthState, useOpenLogin } from '@/lib/auth';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { toast, getMessage } from '@/lib/errors';
+import { RepAmount } from '@/components/RepAmount';
 
 function downloadJson(name: string, data: unknown) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -119,7 +120,11 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
 
       const label = side === 'YES' ? 'Agree' : 'Disagree';
       const ok = await confirm({
-        title: `${label} with ${market.trader_stake} rep?`,
+        title: (
+          <>
+            {label} with <RepAmount value={market.trader_stake} iconSize="sm" />?
+          </>
+        ),
         description: `You will buy ${label} shares on this claim's reputation market. Your stake is locked until the claim resolves.`,
         confirmText: `Buy ${label}`,
       });
@@ -141,6 +146,7 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
       titleTone={display.isBullish ? 'text-emerald-400' : 'text-rose-400'}
       meta={<span className={cn(display.isBullish ? 'text-emerald-400' : 'text-rose-400')}>{tag.label}</span>}
       summary={<span className="truncate">{display.summary}</span>}
+      hideSummaryOnMobile
       right={
         <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
           {statusIcon}

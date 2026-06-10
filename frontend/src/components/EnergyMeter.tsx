@@ -1,17 +1,24 @@
 import { useEffect, useState } from 'react';
-import { Zap } from 'lucide-react';
 import { getProfileStats } from '@/lib/api';
 import { useAuthState } from '@/lib/auth';
 import { cn } from '@/lib/utils';
+import { RepIcon } from '@/components/RepIcon';
+import { EnergyIcon } from '@/components/EnergyIcon';
 
 interface Props {
   /** Bump this counter to force a refetch after a market action. */
   refreshKey?: number;
   className?: string;
   hideRepOnMobile?: boolean;
+  hideEnergyOnMobile?: boolean;
 }
 
-export function EnergyMeter({ refreshKey, className, hideRepOnMobile = false }: Props) {
+export function EnergyMeter({
+  refreshKey,
+  className,
+  hideRepOnMobile = false,
+  hideEnergyOnMobile = false,
+}: Props) {
   const [energy, setEnergy] = useState<number | null>(null);
   const [rep, setRep] = useState<number | null>(null);
   const [localRefreshKey, setLocalRefreshKey] = useState(0);
@@ -43,12 +50,13 @@ export function EnergyMeter({ refreshKey, className, hideRepOnMobile = false }: 
   return (
     <div className={cn('flex items-center gap-3 text-xs', className)}>
       {rep != null && (
-        <span className={cn('font-mono', hideRepOnMobile && 'hidden sm:inline')}>
-          <span className="text-muted-foreground">rep</span> {rep.toFixed(0)}
+        <span className={cn('flex items-center gap-1 font-mono', hideRepOnMobile && 'hidden sm:inline')}>
+          <RepIcon size="xs" />
+          {rep.toFixed(0)}
         </span>
       )}
-      <span className="flex items-center gap-1 font-mono">
-        <Zap className="size-3.5 text-amber-500" />
+      <span className={cn('flex items-center gap-1 font-mono', hideEnergyOnMobile && 'hidden sm:flex')}>
+        <EnergyIcon size="xs" />
         {Math.floor(energy)}
       </span>
     </div>

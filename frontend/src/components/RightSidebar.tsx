@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Activity, TrendingUp, Users } from 'lucide-react';
 import { UserAvatar } from '@/components/UserAvatar';
+import { RepIcon } from '@/components/RepIcon';
 import { getSidebarSummary } from '@/lib/api';
 
 function compactNumber(value: number, maximumFractionDigits = 1): string {
@@ -101,8 +102,9 @@ export function RightSidebar() {
                         </div>
                       </div>
                     </Link>
-                    <div className="shrink-0 text-right text-xs text-muted-foreground">
-                      {compactNumber(predictor.rep, 0)} rep
+                    <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                      <RepIcon size="xs" />
+                      <span className="num">{compactNumber(predictor.rep, 0)}</span>
                     </div>
                   </div>
                 ))}

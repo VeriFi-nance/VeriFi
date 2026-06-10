@@ -1,5 +1,8 @@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { RepAmount } from '@/components/RepAmount';
+import { RepIcon } from '@/components/RepIcon';
+import { EnergyIcon } from '@/components/EnergyIcon';
 import type { ClaimDraft } from './types';
 
 interface MarketConfigProps {
@@ -17,7 +20,9 @@ export function MarketConfig({ value, onChange }: MarketConfigProps) {
         Creator side is auto-set to <span className="font-semibold text-success">YES</span>.
       </p>
       <div className="space-y-1">
-        <Label className="text-xs">Stake (10–100 rep)</Label>
+        <Label className="inline-flex items-center gap-1 text-xs">
+          Stake (10–100 <RepIcon size="xs" />)
+        </Label>
         <Input
           type="number"
           min={10}
@@ -29,7 +34,8 @@ export function MarketConfig({ value, onChange }: MarketConfigProps) {
         />
       </div>
       <p className="text-[10px] text-muted-foreground leading-snug">
-        Plus a 2-rep listing fee (burned) and 5% trade burn. Costs 1 energy.
+        Plus a <RepAmount value={2} /> listing fee (burned) and 5% trade burn. Costs 1{' '}
+        <EnergyIcon size="xs" className="inline-block align-middle" /> energy.
       </p>
     </div>
   );

@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useDebounce } from '@/hooks/useDebounce';
+import { cn } from '@/lib/utils';
 import { searchAPI, searchAssets, resolveAsset } from '@/lib/api';
 import { queryClient } from '@/lib/queryClient';
 import { useAssets } from '@/hooks/useAssets';
@@ -147,6 +148,27 @@ export function SearchBar() {
     new URLSearchParams(location.search).get(key) === '1';
   const activeFilterCount =
     currentAssetIds().length + (flagOn('claims') ? 1 : 0) + (flagOn('positions') ? 1 : 0);
+  const isFeedRoute = location.pathname === '/feed' || location.pathname === '/';
+
+  const searchTypeSelect = (
+    <Select
+      value={type}
+      onValueChange={(value) => {
+        setType(value as SearchType);
+        if (value === 'assets' || (query.trim() && value !== 'posts')) setIsOpen(true);
+      }}
+    >
+      <SelectTrigger className="w-full md:w-[7.5rem]">
+        <SelectValue placeholder="Type" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="posts">Posts</SelectItem>
+        <SelectItem value="people">People</SelectItem>
+        <SelectItem value="channels">Channels</SelectItem>
+        <SelectItem value="assets">Assets</SelectItem>
+      </SelectContent>
+    </Select>
+  );
 
   function removeAssetFilter(id: number) {
     const next = currentAssetIds().filter((x) => x !== id);
@@ -176,8 +198,8 @@ export function SearchBar() {
   };
 
   return (
-    <div className="relative flex-1 max-w-lg flex items-center gap-2" ref={wrapperRef}>
-      <div className="relative flex items-center group flex-1">
+    <div className="relative flex-1 min-w-0 max-w-lg flex items-center gap-2" ref={wrapperRef}>
+      <div className="relative flex min-w-0 items-center group flex-1">
         <Search className="absolute left-3 size-4 text-muted-foreground pointer-events-none" />
         <Input
           placeholder="Search..."
@@ -195,7 +217,7 @@ export function SearchBar() {
               setIsOpen(false);
             }
           }}
-          className="pl-9 pr-[130px] w-full"
+          className="pl-9 pr-9 w-full"
         />
         
         {query && (
@@ -211,44 +233,27 @@ export function SearchBar() {
                 }
               }
             }}
-            className="absolute right-[110px] top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1 transition-colors z-10"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1 transition-colors z-10"
             aria-label="Clear search"
           >
             <X className="size-4" />
           </button>
         )}
-
-        {/* Type Selector inside the search bar */}
-        <div className="absolute right-1 top-1/2 -translate-y-1/2">
-          <Select value={type} onValueChange={(value) => {
-            setType(value as SearchType);
-            if (value === 'assets' || (query.trim() && value !== 'posts')) setIsOpen(true);
-          }}>
-            <SelectTrigger className="h-8 border-none bg-transparent hover:bg-muted focus:ring-0 focus:ring-offset-0 w-[100px] text-xs shadow-none">
-              <SelectValue placeholder="Type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="posts">Posts</SelectItem>
-              <SelectItem value="people">People</SelectItem>
-              <SelectItem value="channels">Channels</SelectItem>
-              <SelectItem value="assets">Assets</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
       </div>
 
-      {/* Feed filter — claim / position toggles (asset filtering lives in the
-          Assets search type above). Single home for all feed filtering. */}
+      <div className="hidden md:block shrink-0">{searchTypeSelect}</div>
+
+      {/* Mobile: search type + optional feed filters. Desktop feed: feed filters only. */}
       <Popover>
         <PopoverTrigger asChild>
           <Button
             variant="outline"
             size="icon"
-            className="relative shrink-0"
-            aria-label="Filter feed"
+            className={cn('relative shrink-0', !isFeedRoute && 'md:hidden')}
+            aria-label={isFeedRoute ? 'Filter feed' : 'Search options'}
           >
             <SlidersHorizontal className="size-4" />
-            {activeFilterCount > 0 && (
+            {isFeedRoute && activeFilterCount > 0 && (
               <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center size-4 rounded-full bg-primary text-[10px] font-bold text-primary-foreground leading-none">
                 {activeFilterCount}
               </span>
@@ -256,7 +261,14 @@ export function SearchBar() {
           </Button>
         </PopoverTrigger>
         <PopoverContent align="end" className="w-60 space-y-3">
-          {currentAssetIds().length > 0 && (
+          <div className="space-y-2 md:hidden">
+            <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              Search type
+            </Label>
+            {searchTypeSelect}
+          </div>
+
+          {isFeedRoute && currentAssetIds().length > 0 && (
             <div className="space-y-2">
               <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                 Assets
@@ -281,17 +293,21 @@ export function SearchBar() {
             </div>
           )}
 
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Posts with
-          </p>
-          <div className="flex items-center justify-between">
-            <Label htmlFor="sb-has-claims" className="text-sm cursor-pointer">Claim</Label>
-            <Switch id="sb-has-claims" checked={flagOn('claims')} onCheckedChange={() => toggleFeedFlag('claims')} />
-          </div>
-          <div className="flex items-center justify-between">
-            <Label htmlFor="sb-has-positions" className="text-sm cursor-pointer">Position</Label>
-            <Switch id="sb-has-positions" checked={flagOn('positions')} onCheckedChange={() => toggleFeedFlag('positions')} />
-          </div>
+          {isFeedRoute && (
+            <>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                Posts with
+              </p>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="sb-has-claims" className="text-sm cursor-pointer">Claim</Label>
+                <Switch id="sb-has-claims" checked={flagOn('claims')} onCheckedChange={() => toggleFeedFlag('claims')} />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="sb-has-positions" className="text-sm cursor-pointer">Position</Label>
+                <Switch id="sb-has-positions" checked={flagOn('positions')} onCheckedChange={() => toggleFeedFlag('positions')} />
+              </div>
+            </>
+          )}
         </PopoverContent>
       </Popover>
 
