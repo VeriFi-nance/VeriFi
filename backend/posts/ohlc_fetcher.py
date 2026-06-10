@@ -399,6 +399,11 @@ def _fetch_yfinance_ohlc(symbol: str, start: datetime, end: datetime, interval: 
     indicators = result.get("indicators", {})
     quotes = indicators.get("quote") or [{}]
     quote = quotes[0]
+    # Daily candles arrive stamped at the exchange session open (e.g. 13:30
+    # UTC for NYSE), but the cache layer keys daily rows on 00:00 UTC of the
+    # trading day. Use the exchange gmtoffset to recover the local trading
+    # date, then normalize to UTC midnight so the rows survive caching.
+    gmtoffset = int(result.get("meta", {}).get("gmtoffset") or 0)
 
     opens = quote.get("open") or []
     highs = quote.get("high") or []
@@ -413,7 +418,11 @@ def _fetch_yfinance_ohlc(symbol: str, start: datetime, end: datetime, interval: 
         c = closes[i] if i < len(closes) else None
         if any(v is None for v in (o, h, l_, c)):
             continue
-        candle_timestamp = datetime.fromtimestamp(ts, tz=timezone.utc)
+        if interval == Interval.ONE_DAY:
+            local = datetime.fromtimestamp(ts + gmtoffset, tz=timezone.utc)
+            candle_timestamp = local.replace(hour=0, minute=0, second=0, microsecond=0)
+        else:
+            candle_timestamp = datetime.fromtimestamp(ts, tz=timezone.utc)
         rows.append({"timestamp": candle_timestamp, "open": float(o), "high": float(h), "low": float(l_), "close": float(c)})
     return rows
 
