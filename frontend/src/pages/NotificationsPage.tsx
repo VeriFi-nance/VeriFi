@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Bell, Loader2, Trash2 } from 'lucide-react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { EmptyState } from '@/components/EmptyState';
 import { PageContent } from '@/components/PageContent';
 import { UserAvatar } from '@/components/UserAvatar';
@@ -31,6 +31,11 @@ function actorLabel(item: NotificationItem): string {
   if (item.actor_username) return `@${item.actor_username}`;
   if (item.actor_address) return `${item.actor_address.slice(0, 6)}...${item.actor_address.slice(-4)}`;
   return 'VeriFi';
+}
+
+function actorProfilePath(item: NotificationItem): string | null {
+  if (!item.actor_address) return null;
+  return `/u/${item.actor_username || item.actor_address}`;
 }
 
 export default function NotificationsPage() {
@@ -133,17 +138,34 @@ export default function NotificationsPage() {
                 item.unread ? 'bg-foreground/[0.03]' : 'hover:bg-accent/60',
               )}
             >
+              {actorProfilePath(item) ? (
+                <Link
+                  to={actorProfilePath(item)!}
+                  className="ml-4 mt-3 h-fit rounded-full transition-opacity hover:opacity-80"
+                  aria-label={`View profile for ${actorLabel(item)}`}
+                >
+                  <UserAvatar
+                    address={item.actor_address || 'system'}
+                    src={item.actor_avatar_url}
+                    size="sm"
+                    ring={item.unread}
+                  />
+                </Link>
+              ) : (
+                <div className="ml-4 mt-3 h-fit">
+                  <UserAvatar
+                    address="system"
+                    src={item.actor_avatar_url}
+                    size="sm"
+                    ring={item.unread}
+                  />
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => handleOpen(item)}
-                className="flex min-w-0 flex-1 items-start gap-3 py-3 pl-4 pr-2 text-left"
+                className="flex min-w-0 flex-1 items-start py-3 pl-3 pr-2 text-left"
               >
-                <UserAvatar
-                  address={item.actor_address || 'system'}
-                  src={item.actor_avatar_url}
-                  size="sm"
-                  ring={item.unread}
-                />
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex items-start justify-between gap-3">
                     <p className="text-sm font-medium leading-snug">

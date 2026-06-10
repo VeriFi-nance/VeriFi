@@ -2,14 +2,14 @@ import json
 import logging
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Count, Exists, OuterRef, Prefetch, Value
+from django.db.models import Count, Exists, OuterRef, Prefetch, Q, Value
 from django.db.models import BooleanField
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from accounts.models import WalletUser, ProfileChangeLog
-from .models import Post, HardClaim, Asset, Channel, ChannelMembership, AssetSubscription, ClaimMarket, ClaimStake, PostLike, PostComment, PostCommentLike, SavedProof, Position, PositionEvent
+from .models import Post, HardClaim, Asset, Channel, ChannelMembership, AssetSubscription, ClaimMarket, ClaimStake, PostLike, PostComment, PostCommentLike, SavedProof, Position, PositionEvent, OHLCData
 from .serializers import PostSerializer, PostCommentSerializer, HardClaimInputSerializer, HardClaimSerializer, AssetSerializer, ChannelSerializer, ChannelMembershipSerializer, PositionInputSerializer, PositionSerializer
 from .claim_extraction import rule_based_claims_from_prompt
 from django.shortcuts import get_object_or_404
@@ -26,7 +26,7 @@ from .resolution import (
 from . import rep_market
 from .signature_verification import verify_claim_signature, verify_position_signature
 from accounts.energy import grant_energy, spend, CLAIM_ENERGY_COST
-from accounts.serializers import validate_image_upload
+from accounts.serializers import avatar_delivery_url, validate_image_upload
 from notifications.emitters import (
     notify_channel_join_request,
     notify_channel_membership,
@@ -45,6 +45,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
+SIDEBAR_LIMIT = 5
 
 # Sentinel distinguishing "not yet computed" from a cached None result.
 _UNSET = object()
@@ -2064,6 +2065,7 @@ def _serialize_market(market: ClaimMarket, viewer: WalletUser | None) -> dict:
             }
     return {
         "claim_id": market.hard_claim_id,
+        "claim_status": market.hard_claim.status,
         "yes_price": rep_market.yes_price(market),
         "y_reserve": market.y_reserve,
         "n_reserve": market.n_reserve,
@@ -2110,6 +2112,8 @@ class HardClaimMarketCreateView(APIView):
             hard_claim = HardClaim.objects.get(pk=pk)
         except HardClaim.DoesNotExist:
             return Response({"detail": "Claim not found."}, status=status.HTTP_404_NOT_FOUND)
+        if hard_claim.status != HardClaim.Status.UNDETERMINED:
+            return Response({"detail": "Claim already resolved."}, status=status.HTTP_400_BAD_REQUEST)
         if hard_claim.author_id != user.pk:
             return Response({"detail": "Only the claim author can create its market."}, status=status.HTTP_403_FORBIDDEN)
         side = str(request.data.get("side", "")).upper()
@@ -2168,7 +2172,7 @@ class HardClaimMarketBuyView(APIView):
             market = ClaimMarket.objects.get(hard_claim_id=pk)
         except ClaimMarket.DoesNotExist:
             return Response({"detail": "No market."}, status=status.HTTP_404_NOT_FOUND)
-        if market.resolved:
+        if market.resolved or market.hard_claim.status != HardClaim.Status.UNDETERMINED:
             return Response({"detail": "Market resolved."}, status=status.HTTP_400_BAD_REQUEST)
         side = str(request.data.get("side", "")).upper()
         if side not in ("YES", "NO"):
@@ -2215,6 +2219,8 @@ class HardClaimMarketPreviewView(APIView):
             market = ClaimMarket.objects.get(hard_claim_id=pk)
         except ClaimMarket.DoesNotExist:
             return Response({"detail": "No market."}, status=status.HTTP_404_NOT_FOUND)
+        if market.resolved or market.hard_claim.status != HardClaim.Status.UNDETERMINED:
+            return Response({"detail": "Market resolved."}, status=status.HTTP_400_BAD_REQUEST)
         side = request.query_params.get("side", "").upper()
         if side not in ("YES", "NO"):
             return Response({"detail": "side must be YES or NO."}, status=status.HTTP_400_BAD_REQUEST)
@@ -2371,6 +2377,119 @@ class PositionProofView(APIView):
             "payload": position.position_payload,
             "server_timestamp": position.created_at.isoformat()
         })
+
+
+class SidebarSummaryView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        top_assets = list(
+            Asset.objects.annotate(
+                open_claims=Count(
+                    "hardclaim",
+                    filter=Q(hardclaim__status=HardClaim.Status.UNDETERMINED),
+                    distinct=True,
+                ),
+                open_positions=Count(
+                    "position",
+                    filter=Q(position__status__in=[Position.Status.PENDING, Position.Status.ACTIVE]),
+                    distinct=True,
+                ),
+            )
+            .filter(Q(usage_count__gt=0) | Q(open_claims__gt=0) | Q(open_positions__gt=0))
+            .order_by("-usage_count", "-open_claims", "-open_positions", "symbol")[:SIDEBAR_LIMIT]
+        )
+
+        assets = []
+        rates = []
+        for asset in top_assets:
+            latest = OHLCData.objects.filter(asset=asset).order_by("-timestamp").first()
+            previous = None
+            if latest:
+                previous = (
+                    OHLCData.objects.filter(
+                        asset=asset,
+                        interval=latest.interval,
+                        timestamp__lt=latest.timestamp,
+                    )
+                    .order_by("-timestamp")
+                    .first()
+                )
+
+            change_24h = None
+            if latest and previous and previous.close:
+                change_24h = ((latest.close - previous.close) / previous.close) * 100
+
+            assets.append(
+                {
+                    "id": asset.id,
+                    "symbol": asset.symbol,
+                    "name": asset.name,
+                    "quote_currency": asset.quote_currency,
+                    "usage_count": asset.usage_count,
+                    "open_claims": asset.open_claims,
+                    "open_positions": asset.open_positions,
+                }
+            )
+            if latest:
+                rates.append(
+                    {
+                        "asset_id": asset.id,
+                        "symbol": asset.symbol,
+                        "quote_currency": asset.quote_currency,
+                        "price": latest.close,
+                        "change_24h": change_24h,
+                        "as_of": latest.timestamp.isoformat(),
+                    }
+                )
+
+        predictor_candidates = (
+            WalletUser.objects.select_related("profitability")
+            .annotate(
+                open_claims=Count(
+                    "hard_claims",
+                    filter=Q(hard_claims__status=HardClaim.Status.UNDETERMINED),
+                    distinct=True,
+                ),
+                open_positions=Count(
+                    "positions",
+                    filter=Q(positions__status__in=[Position.Status.PENDING, Position.Status.ACTIVE]),
+                    distinct=True,
+                ),
+            )
+            .filter(Q(open_claims__gt=0) | Q(open_positions__gt=0))
+        )
+        predictors = sorted(
+            predictor_candidates,
+            key=lambda user: (user.open_claims + user.open_positions, user.rep),
+            reverse=True,
+        )[:SIDEBAR_LIMIT]
+
+        return Response(
+            {
+                "top_assets": assets,
+                "exchange_rates": rates,
+                "top_predictors": [
+                    {
+                        "address": user.address,
+                        "username": user.username,
+                        "avatar_url": avatar_delivery_url(user.avatar),
+                        "rep": user.rep,
+                        "open_predictions": user.open_claims + user.open_positions,
+                        "pnl_all": getattr(getattr(user, "profitability", None), "pnl_all", None),
+                    }
+                    for user in predictors
+                ],
+                "stats": {
+                    "open_claims": HardClaim.objects.filter(status=HardClaim.Status.UNDETERMINED).count(),
+                    "open_positions": Position.objects.filter(
+                        status__in=[Position.Status.PENDING, Position.Status.ACTIVE]
+                    ).count(),
+                    "tracked_assets": Asset.objects.filter(usage_count__gt=0).count(),
+                },
+            }
+        )
 
 
 class SearchAPIView(APIView):

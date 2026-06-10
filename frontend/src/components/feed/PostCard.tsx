@@ -45,7 +45,13 @@ function PostCardImpl({ post, hardClaims = [], assets = [], onDelete, onPostChan
 
       <div className="relative z-10 pointer-events-none">
         <div className="flex items-center gap-3 px-4 sm:px-5 pt-4 sm:pt-5 pb-3 transition-colors duration-200 group-hover:bg-muted/60 rounded-t-lg">
-          <UserAvatar address={post.author_address} src={post.author_avatar_url} size="md" />
+          <Link
+            to={`/u/${post.author_username || post.author_address}`}
+            className="pointer-events-auto rounded-full transition-opacity hover:opacity-80"
+            aria-label={`View profile for ${post.author_username ? `@${post.author_username}` : truncateAddress(post.author_address)}`}
+          >
+            <UserAvatar address={post.author_address} src={post.author_avatar_url} size="md" />
+          </Link>
 
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <Button
