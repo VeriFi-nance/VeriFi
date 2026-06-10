@@ -142,6 +142,39 @@ export interface AssetItem {
   source?: 'local' | 'remote';
 }
 
+export interface SidebarSummary {
+  top_assets: Array<{
+    id: number;
+    symbol: string;
+    name: string;
+    quote_currency: string;
+    usage_count: number;
+    open_claims: number;
+    open_positions: number;
+  }>;
+  exchange_rates: Array<{
+    asset_id: number;
+    symbol: string;
+    quote_currency: string;
+    price: number;
+    change_24h: number | null;
+    as_of: string;
+  }>;
+  top_predictors: Array<{
+    address: string;
+    username: string;
+    avatar_url?: string | null;
+    rep: number;
+    open_predictions: number;
+    pnl_all: number | null;
+  }>;
+  stats: {
+    open_claims: number;
+    open_positions: number;
+    tracked_assets: number;
+  };
+}
+
 /**
  * A hit from /assets/search/. Local hits carry a real `id` (already an Asset
  * row); remote hits have `id: null` plus the provider hints the backend needs
@@ -266,6 +299,7 @@ export interface MarketYourStake {
 
 export interface ClaimMarketItem {
   claim_id: number;
+  claim_status: 'confirmed' | 'undetermined' | 'rejected';
   yes_price: number;
   y_reserve: number;
   n_reserve: number;

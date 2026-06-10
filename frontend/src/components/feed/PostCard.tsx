@@ -45,7 +45,13 @@ function PostCardImpl({ post, hardClaims = [], assets = [], onDelete, onPostChan
 
       <div className="relative z-10 pointer-events-none">
         <div className="flex items-center gap-3 px-4 sm:px-5 pt-4 sm:pt-5 pb-3 transition-colors duration-200 group-hover:bg-muted/60 rounded-t-lg">
-          <UserAvatar address={post.author_address} src={post.author_avatar_url} size="md" />
+          <Link
+            to={`/u/${post.author_username || post.author_address}`}
+            className="pointer-events-auto rounded-full transition-opacity hover:opacity-80"
+            aria-label={`View profile for ${post.author_username ? `@${post.author_username}` : truncateAddress(post.author_address)}`}
+          >
+            <UserAvatar address={post.author_address} src={post.author_avatar_url} size="md" />
+          </Link>
 
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <Button
@@ -71,12 +77,12 @@ function PostCardImpl({ post, hardClaims = [], assets = [], onDelete, onPostChan
               </span>
             )}
             {claimHints.length > 0 && (
-              <span className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-claim-badge bg-claim-badge/10 px-1.5 py-0.5 rounded shrink-0">
+              <span className="flex items-center gap-1 rounded border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground shrink-0">
                 CLAIM
               </span>
             )}
             {positions.length > 0 && (
-              <span className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-position-badge bg-position-badge/10 px-1.5 py-0.5 rounded shrink-0">
+              <span className="flex items-center gap-1 rounded border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground shrink-0">
                 POSITION
               </span>
             )}
@@ -149,7 +155,7 @@ function PostCardImpl({ post, hardClaims = [], assets = [], onDelete, onPostChan
               {/* Positions section */}
               {positions.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-position-badge">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                     Positions
                   </p>
                   {positions.map((pos) => (

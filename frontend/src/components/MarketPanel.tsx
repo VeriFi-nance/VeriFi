@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -8,12 +9,18 @@ import type { BuyPreviewResult, ClaimMarketItem } from '@/lib/types';
 
 interface Props {
   claimId: number;
+  claimStatus?: 'confirmed' | 'undetermined' | 'rejected' | string;
   onChange?: () => void;
 }
 
-export function MarketPanel({ claimId, onChange }: Props) {
+function isClaimClosed(status?: string | null): boolean {
+  return Boolean(status && status !== 'undetermined');
+}
+
+export function MarketPanel({ claimId, claimStatus, onChange }: Props) {
   const openLogin = useOpenLogin();
   const auth = useAuthState();
+  const queryClient = useQueryClient();
   const [market, setMarket] = useState<ClaimMarketItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,15 +33,20 @@ export function MarketPanel({ claimId, onChange }: Props) {
     try {
       setLoading(true);
       const m = await getMarket(claimId);
+      const isClosed = m.resolved || isClaimClosed(m.claim_status) || isClaimClosed(claimStatus);
       setMarket(m);
+      queryClient.setQueryData(['claim-market', claimId], m);
       setError(null);
-      if (!m.resolved) {
+      if (!isClosed) {
         const [py, pn] = await Promise.all([
           previewBuy(claimId, 'YES'),
           previewBuy(claimId, 'NO'),
         ]);
         setPreviewYes(py);
         setPreviewNo(pn);
+      } else {
+        setPreviewYes(null);
+        setPreviewNo(null);
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'No market');
@@ -57,11 +69,16 @@ export function MarketPanel({ claimId, onChange }: Props) {
     setBusy(true);
     setActionError(null);
     try {
-      await buyShares(claimId, side);
+      const result = await buyShares(claimId, side);
+      queryClient.setQueryData(['claim-market', claimId], result.market);
       await reload();
       onChange?.();
     } catch (e: unknown) {
-      setActionError(e instanceof Error ? e.message : 'Buy failed');
+      const message = e instanceof Error ? e.message : 'Buy failed';
+      setActionError(message);
+      if (message.toLowerCase().includes('resolved')) {
+        await reload();
+      }
     } finally {
       setBusy(false);
     }
@@ -82,6 +99,7 @@ export function MarketPanel({ claimId, onChange }: Props) {
   const agreePct = market.yes_price * 100;
   const disagreePct = 100 - agreePct;
   const hasStake = !!market.your_stake;
+  const isClosed = market.resolved || isClaimClosed(market.claim_status) || isClaimClosed(claimStatus);
 
   return (
     <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-4">
@@ -107,13 +125,16 @@ export function MarketPanel({ claimId, onChange }: Props) {
         </p>
       </div>
 
-      {market.resolved ? (
-        <div className="text-sm">
+      {isClosed ? (
+        <div className="space-y-2 text-sm">
           {market.refunded_trivial ? (
             <Badge variant="secondary">Refunded — not enough voters</Badge>
           ) : (
-            <Badge variant="outline">Market settled</Badge>
+            <Badge variant="outline">{market.resolved ? 'Market settled' : 'Market closed'}</Badge>
           )}
+          <p className="text-xs text-muted-foreground">
+            This claim has resolved, so reputation staking is closed.
+          </p>
         </div>
       ) : hasStake ? (
         <YourStakeCard stake={market.your_stake!} />

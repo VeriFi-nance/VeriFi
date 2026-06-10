@@ -137,7 +137,13 @@ function CommentThreadItem({
   return (
     <article className={depth > 0 ? 'border-l border-border pl-3 sm:pl-4' : ''}>
       <div className="flex gap-3">
-        <UserAvatar address={comment.author_address} src={comment.author_avatar_url} size="sm" />
+        <Link
+          to={`/u/${comment.author_username || comment.author_address}`}
+          className="h-fit rounded-full transition-opacity hover:opacity-80"
+          aria-label={`View profile for ${comment.author_username ? `@${comment.author_username}` : truncateAddress(comment.author_address)}`}
+        >
+          <UserAvatar address={comment.author_address} src={comment.author_avatar_url} size="sm" />
+        </Link>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <Link
@@ -409,7 +415,13 @@ export default function PostDetailPage() {
       <Card>
         <CardContent className="p-5 space-y-4">
           <div className="flex items-center gap-3">
-            <UserAvatar address={post.author_address} src={post.author_avatar_url} size="md" />
+            <Link
+              to={`/u/${post.author_username || post.author_address}`}
+              className="rounded-full transition-opacity hover:opacity-80"
+              aria-label={`View profile for ${post.author_username ? `@${post.author_username}` : truncateAddress(post.author_address)}`}
+            >
+              <UserAvatar address={post.author_address} src={post.author_avatar_url} size="md" />
+            </Link>
             <Link
               to={`/u/${post.author_username || post.author_address}`}
               className="text-sm font-mono font-medium hover:underline truncate"

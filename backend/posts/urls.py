@@ -6,11 +6,12 @@ from .views import (
     ChannelMemberListView, PositionListCreateView, PositionCloseView, PositionResolveView,
     HardClaimMarketView, HardClaimMarketCreateView, HardClaimMarketBuyView, HardClaimMarketPreviewView,
     HardClaimProofView, PositionProofView, ChannelModeratorView, PostDeleteView,
-    PositionChartDataView, AssetChartDataView, SearchAPIView,
+    PositionChartDataView, AssetChartDataView, SearchAPIView, SidebarSummaryView,
 )
 from .og import HardClaimOGView, PositionOGView
 
 urlpatterns = [
+    path("sidebar-summary/", SidebarSummaryView.as_view(), name="sidebar-summary"),
     path("search/", SearchAPIView.as_view(), name="search"),
     path("", PostListCreateView.as_view(), name="post-list-create"),
     path("<int:pk>/", PostDetailView.as_view(), name="post-detail"),
