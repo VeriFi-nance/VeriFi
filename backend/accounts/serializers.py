@@ -25,20 +25,26 @@ def avatar_delivery_url(resource):
     """Cloudinary URL for a profile picture: 256x256 face-aware square, auto format/quality."""
     if not resource:
         return None
-    return resource.build_url(
-        width=256, height=256, crop="fill", gravity="face",
-        quality="auto", fetch_format="auto", secure=True,
-    )
+    try:
+        return resource.build_url(
+            width=256, height=256, crop="fill", gravity="face",
+            quality="auto", fetch_format="auto", secure=True,
+        )
+    except ValueError:
+        return None
 
 
 def post_image_delivery_url(resource):
     """Cloudinary URL for a post image: width-capped at 1280px, auto format/quality."""
     if not resource:
         return None
-    return resource.build_url(
-        width=1280, crop="limit",
-        quality="auto", fetch_format="auto", secure=True,
-    )
+    try:
+        return resource.build_url(
+            width=1280, crop="limit",
+            quality="auto", fetch_format="auto", secure=True,
+        )
+    except ValueError:
+        return None
 
 
 def validate_username_format(value):

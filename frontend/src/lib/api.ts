@@ -1,5 +1,5 @@
 import { clearAuth, getToken } from './auth';
-import type { PostItem, PostCommentItem, HardClaimItem, AssetItem, AssetSearchResult, ExtractClaimsResponse, ClaimChartData, PositionChartData, AssetChartData, ChartCandleInterval, ProfileStats, ChannelItem, ChannelMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType, ProofBundle, OGMetadata, NotificationItem } from './types';
+import type { PostItem, PostCommentItem, HardClaimItem, AssetItem, AssetSearchResult, ExtractClaimsResponse, ClaimChartData, PositionChartData, AssetChartData, ChartCandleInterval, ProfileStats, ChannelItem, ChannelMembershipItem, PositionItem, ClaimMarketItem, BuyPreviewResult, BuyResult, ClaimType, ProofBundle, OGMetadata, NotificationItem, SidebarSummary } from './types';
 
 /**
  * Ordered list of backend base URLs to try, sourced from build-time env vars:
@@ -42,6 +42,12 @@ export class ApiError extends Error {
 
 /** Parse any known backend error body into a typed ApiError. */
 function parseApiError(data: unknown, status: number): ApiError {
+  if (!data || typeof data !== 'object') {
+    return new ApiError(status >= 500 ? 'The server had trouble completing this request.' : 'Request failed', {
+      status,
+    });
+  }
+
   const body = (data ?? {}) as Record<string, unknown>;
 
   // Preferred: normalized envelope { error: { code, message, fields } }
@@ -78,6 +84,20 @@ function parseApiError(data: unknown, status: number): ApiError {
   }
 
   return new ApiError('Request failed', { status });
+}
+
+function parseResponseText(text: string, status: number): unknown {
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new ApiError(
+      status >= 500
+        ? 'The server had trouble completing this request.'
+        : 'The server returned an unexpected response.',
+      { code: 'invalid_response', status },
+    );
+  }
 }
 
 function candidateBaseUrls(): string[] {
@@ -154,14 +174,20 @@ async function request<T>(
       return {} as T;
     }
 
-    const text = await res.text();
-    const data = text ? JSON.parse(text) : {};
     if (!res.ok) {
       if (res.status === 401 && hasAuthorizationHeader(optHeaders)) {
         clearAuth();
       }
+      let data: unknown = {};
+      try {
+        data = parseResponseText(await res.text(), res.status);
+      } catch (err) {
+        if (err instanceof ApiError) throw err;
+        throw new ApiError('Request failed', { status: res.status });
+      }
       throw parseApiError(data, res.status);
     }
+    const data = parseResponseText(await res.text(), res.status);
     return data as T;
   }
 
@@ -450,11 +476,14 @@ export async function buyShares(
   claimId: number,
   side: 'YES' | 'NO'
 ): Promise<BuyResult> {
-  return request(`/api/posts/hard-claims/${claimId}/market/buy/`, {
+  const result = await request<BuyResult>(`/api/posts/hard-claims/${claimId}/market/buy/`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({ side }),
   });
+  // Spending rep on a stake changes header rep/energy — notify meters.
+  window.dispatchEvent(new Event('energy-updated'));
+  return result;
 }
 
 export async function updateHardClaimStatus(
@@ -699,6 +728,10 @@ export async function getPositionChartData(
 
 export async function searchAPI(query: string, type: string): Promise<any> {
   return request(`/api/posts/search/?q=${encodeURIComponent(query)}&type=${encodeURIComponent(type)}`);
+}
+
+export async function getSidebarSummary(): Promise<SidebarSummary> {
+  return request('/api/posts/sidebar-summary/');
 }
 
 export async function getNotifications(params?: {

@@ -15,6 +15,7 @@ import { truncateAddress } from '@/lib/wallet';
 import { MobileMenuButton, BottomTabBar } from '@/components/MobileNav';
 import { BrandLogo } from '@/components/BrandLogo';
 import { SearchBar } from '@/components/SearchBar';
+import { RightSidebar } from '@/components/RightSidebar';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -313,15 +314,15 @@ export default function AppLayout() {
           </main>
         </div>
 
-        {/* Right Sidebar for future tools */}
+        {/* Right Sidebar */}
         <aside
           className={cn(
             'hidden lg:flex sticky top-0 h-dvh flex-col border-l border-border bg-background shrink-0 self-start',
             'w-56 transition-[width] duration-200',
           )}
-          aria-label="Secondary navigation / Tools"
+          aria-label="Market summary"
         >
-          {/* Placeholder for future tools */}
+          <RightSidebar />
         </aside>
       </div>
 

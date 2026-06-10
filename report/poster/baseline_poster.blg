@@ -1,0 +1,9 @@
+[0] Config.pm:307> INFO - This is Biber 2.19
+[0] Config.pm:310> INFO - Logfile is 'baseline_poster.blg'
+[33] biber-darwin:340> INFO - === Tue Jun  9, 2026, 16:54:38
+[41] Biber.pm:419> INFO - Reading 'baseline_poster.bcf'
+[77] Biber.pm:979> INFO - Found 0 citekeys in bib section 0
+[84] bbl.pm:660> INFO - Writing 'baseline_poster.bbl' with encoding 'UTF-8'
+[84] bbl.pm:763> INFO - Output to baseline_poster.bbl
+[84] Biber.pm:131> WARN - The file 'baseline_poster.bcf' does not contain any citations!
+[84] Biber.pm:133> INFO - WARNINGS: 1

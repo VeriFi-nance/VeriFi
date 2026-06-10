@@ -7,8 +7,73 @@ from rest_framework.test import APITestCase
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from accounts.models import WalletUser, ProfileChangeLog
-from .models import Post, Asset, HardClaim, Channel, ChannelMembership
+from .models import Post, Asset, HardClaim, Channel, ChannelMembership, OHLCData, Position
 from .resolution import ResolutionError, normalize_claim_for_resolution
+
+
+class SidebarSummaryAPITestCase(APITestCase):
+    def test_sidebar_summary_returns_general_market_info(self):
+        user = WalletUser.objects.create(
+            address="0x1111111111111111111111111111111111111111",
+            rep=420,
+        )
+        asset = Asset.objects.create(
+            name="Bitcoin",
+            symbol="BTC",
+            description="Digital gold",
+            market_type=Asset.MarketType.CRYPTO,
+            provider=Asset.Provider.COINGECKO,
+            provider_symbol="bitcoin",
+            usage_count=999,
+        )
+        now = timezone.now()
+        OHLCData.objects.create(
+            asset=asset,
+            timestamp=now - timedelta(days=1),
+            interval="1d",
+            open=100,
+            high=110,
+            low=90,
+            close=100,
+        )
+        OHLCData.objects.create(
+            asset=asset,
+            timestamp=now,
+            interval="1d",
+            open=100,
+            high=125,
+            low=95,
+            close=120,
+        )
+        HardClaim.objects.create(
+            author=user,
+            asset=asset,
+            direction="bullish",
+            percentage=10,
+            until=(now + timedelta(days=7)).date(),
+        )
+        Position.objects.create(
+            author=user,
+            asset=asset,
+            direction=Position.Direction.LONG,
+            entry_price=100,
+            entry_interval=now + timedelta(days=1),
+            stop_loss=90,
+            take_profit=130,
+            lifetime=now + timedelta(days=7),
+            status=Position.Status.ACTIVE,
+        )
+
+        response = self.client.get(reverse("sidebar-summary"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(response.data["stats"]["open_claims"], 1)
+        self.assertGreaterEqual(response.data["stats"]["open_positions"], 1)
+        self.assertEqual(response.data["top_assets"][0]["symbol"], "BTC")
+        self.assertEqual(response.data["exchange_rates"][0]["price"], 120)
+        self.assertEqual(response.data["exchange_rates"][0]["change_24h"], 20)
+        self.assertEqual(response.data["top_predictors"][0]["username"], user.username)
+        self.assertEqual(response.data["top_predictors"][0]["open_predictions"], 2)
 
 
 class HardClaimAPITestCase(APITestCase):

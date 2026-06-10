@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { Bell, Home, Tv, Settings, Menu, LogOut, Sun, Moon, User, ShieldCheck, Info } from 'lucide-react';
+import { Bell, Home, Settings, Menu, LogOut, Sun, Moon, User, ShieldCheck, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -21,12 +21,6 @@ function buildNavItems(): NavItem[] {
       icon: <Home className="size-5" />,
       label: 'Feed',
       matches: (p) => p === '/feed' || p === '/' || p.startsWith('/post/') || p.startsWith('/claim/'),
-    },
-    {
-      to: '/channels',
-      icon: <Tv className="size-5" />,
-      label: 'Channels',
-      matches: (p) => p.startsWith('/channels') || p.startsWith('/c'),
     },
     {
       to: '/verify',
@@ -177,7 +171,7 @@ export function BottomTabBar({ unreadNotifications = 0 }: { unreadNotifications?
       aria-label="Primary"
       className="md:hidden fixed bottom-0 inset-x-0 z-30 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 pb-[env(safe-area-inset-bottom)]"
     >
-      <ul className="grid grid-cols-5">
+      <ul className="grid grid-cols-4">
         {items.map((item) => {
           const active = item.matches(location.pathname);
           return (
