@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, Download, FileCheck2, Loader2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, AlertTriangle, CheckCircle2, Clock, Download, Loader2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AttachmentRow } from '@/components/AttachmentRow';
 import { cn } from '@/lib/utils';
 import type { HardClaimItem, AssetItem } from '@/lib/types';
 import { getClaimProof, getMarket, buyShares } from '@/lib/api';
-import { getFeedClaimTagLabel, getHardClaimDisplay, getHardClaimType, isClaimPastDue } from '@/lib/claims';
+import { getClaimWindowProgress, getFeedClaimTagLabel, getHardClaimDisplay, getHardClaimType, isClaimPastDue } from '@/lib/claims';
 import { useAuthState, useOpenLogin } from '@/lib/auth';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { toast, getMessage } from '@/lib/errors';
@@ -48,6 +48,24 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
   const isConfirmed = claim.status === 'confirmed';
   const isRejected = claim.status === 'rejected';
   const pastDue = isClaimPastDue(claim);
+  const timelinePct = Math.min(
+    100,
+    Math.max(0, isConfirmed || isRejected ? 100 : getClaimWindowProgress(claim.created_at, claim.until)),
+  );
+  const timelineBarClass = isConfirmed
+    ? 'bg-emerald-500'
+    : isRejected
+      ? 'bg-red-500'
+      : pastDue
+        ? 'bg-amber-500'
+        : 'bg-blue-400';
+  const statusIcon = isConfirmed
+    ? <CheckCircle2 className="size-3.5 text-emerald-500" />
+    : isRejected
+      ? <XCircle className="size-3.5 text-rose-500" />
+      : pastDue
+        ? <AlertTriangle className="size-3.5 text-amber-500" />
+        : <Clock className="size-3.5 text-blue-400" />;
   const marketClosed = claim.status !== 'undetermined';
   const marketQueryKey = ['claim-market', claim.id] as const;
   const { data: marketState } = useQuery({
@@ -119,23 +137,21 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
 
   return (
     <AttachmentRow
-      icon={<FileCheck2 className="size-4" />}
       title={assetSymbol}
       titleTone={display.isBullish ? 'text-emerald-400' : 'text-rose-400'}
       meta={<span className={cn(display.isBullish ? 'text-emerald-400' : 'text-rose-400')}>{tag.label}</span>}
-      badge="Claim"
-      badgeVariant="outline"
       summary={<span className="truncate">{display.summary}</span>}
       right={
-        <span
-          className={cn(
-            'text-[10px] font-semibold uppercase tracking-wide',
-            isConfirmed ? 'text-success' : isRejected ? 'text-destructive' : pastDue ? 'text-amber-500' : 'text-muted-foreground',
-          )}
-        >
+        <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          {statusIcon}
           {isConfirmed ? 'Confirmed' : isRejected ? 'Rejected' : pastDue ? 'Past due' : 'Open'}
         </span>
       }
+      progress={{
+        value: timelinePct,
+        label: `${Math.round(timelinePct)}%`,
+        className: timelineBarClass,
+      }}
       actions={
         <>
           <Button
@@ -188,11 +204,6 @@ export function HardClaimCard({ claim, assets }: { claim: HardClaimItem; assets:
           </Button>
         </>
       }
-      className={cn(
-        isConfirmed && 'border-emerald-500/35',
-        isRejected && 'border-red-500/35 opacity-80',
-        !isConfirmed && !isRejected && pastDue && 'border-amber-500/35',
-      )}
     />
   );
 }

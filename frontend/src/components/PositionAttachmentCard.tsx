@@ -3,8 +3,8 @@ import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 import { PositionCard } from '@/components/PositionCard';
 import { AttachmentRow } from '@/components/AttachmentRow';
 import type { PositionSummaryItem, AssetItem } from '@/lib/types';
-import { TrendingUp, TrendingDown } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { TrendingUp, TrendingDown, CheckCircle2, XCircle, Clock, AlertTriangle, CircleMinus } from 'lucide-react';
+import { cn, formatCompactPrice } from '@/lib/utils';
 
 interface PositionAttachmentCardProps {
   position: PositionSummaryItem;
@@ -24,6 +24,41 @@ function statusLabel(status: PositionSummaryItem['status']): string {
   return map[status] ?? status;
 }
 
+function StatusIcon({ status }: { status: PositionSummaryItem['status'] }) {
+  switch (status) {
+    case 'confirmed': return <CheckCircle2 className="size-3.5 text-emerald-500" />;
+    case 'rejected': return <XCircle className="size-3.5 text-rose-500" />;
+    case 'active': return <Clock className="size-3.5 text-indigo-400" />;
+    case 'missed':
+    case 'expired': return <AlertTriangle className="size-3.5 text-amber-500" />;
+    case 'closed_early': return <CircleMinus className="size-3.5 text-muted-foreground" />;
+    default: return <Clock className="size-3.5 text-muted-foreground" />;
+  }
+}
+
+function statusBarClass(status: PositionSummaryItem['status']): string {
+  switch (status) {
+    case 'confirmed': return 'bg-emerald-500';
+    case 'rejected': return 'bg-red-500';
+    case 'active': return 'bg-indigo-400';
+    case 'missed':
+    case 'expired': return 'bg-amber-500';
+    default: return 'bg-muted-foreground/40';
+  }
+}
+
+/** Progress through the position lifetime window (0–100). */
+function lifetimeProgress(createdAt: string, lifetime: string): number {
+  const start = new Date(createdAt).getTime();
+  const end = new Date(lifetime).getTime();
+  const span = end - start;
+  if (!Number.isFinite(span) || span <= 0) return 100;
+  const now = Date.now();
+  if (now <= start) return 0;
+  if (now >= end) return 100;
+  return ((now - start) / span) * 100;
+}
+
 export function PositionAttachmentCard({ position, assets = [] }: PositionAttachmentCardProps) {
   const [open, setOpen] = useState(false);
 
@@ -33,6 +68,8 @@ export function PositionAttachmentCard({ position, assets = [] }: PositionAttach
 
   const pnl = position.pnl_percentage;
   const hasPnl = pnl !== null && pnl !== undefined;
+  const isResolved = !['pending', 'active'].includes(position.status);
+  const timelinePct = isResolved ? 100 : lifetimeProgress(position.created_at, position.lifetime);
 
   return (
     <>
@@ -47,7 +84,6 @@ export function PositionAttachmentCard({ position, assets = [] }: PositionAttach
         aria-label={`View position: ${symbol} ${position.direction}`}
       >
         <AttachmentRow
-          icon={isLong ? <TrendingUp className="size-4" /> : <TrendingDown className="size-4" />}
           title={symbol}
           titleTone={isLong ? 'text-emerald-400' : 'text-rose-400'}
           meta={
@@ -55,10 +91,9 @@ export function PositionAttachmentCard({ position, assets = [] }: PositionAttach
               {isLong ? 'Long' : 'Short'}
             </span>
           }
-          badge="Position"
           summary={
             <span className="truncate">
-              EP {position.entry_price.toLocaleString()} · TP {position.take_profit.toLocaleString()} · SL {position.stop_loss.toLocaleString()}
+              EP {formatCompactPrice(position.entry_price)} · TP {formatCompactPrice(position.take_profit)} · SL {formatCompactPrice(position.stop_loss)}
             </span>
           }
           right={
@@ -68,11 +103,17 @@ export function PositionAttachmentCard({ position, assets = [] }: PositionAttach
                   {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}%
                 </span>
               )}
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <StatusIcon status={position.status} />
                 {statusLabel(position.status)}
               </span>
             </span>
           }
+          progress={{
+            value: timelinePct,
+            label: `${Math.round(timelinePct)}%`,
+            className: statusBarClass(position.status),
+          }}
         />
       </button>
 

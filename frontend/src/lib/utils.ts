@@ -18,6 +18,21 @@ export function cn(...inputs: ClassValue[]) {
  * Extract the first image file from a clipboard paste, if any. Lets users paste
  * an image (e.g. a screenshot) into a composer and have it treated as an upload.
  */
+/**
+ * Compact price for tight rows: 62217.54 → "62.2k", 1500000 → "1.5M".
+ * Values under 1000 keep up to 2 decimals.
+ */
+export function formatCompactPrice(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) return `${trimZeros((value / 1_000_000).toFixed(1))}M`;
+  if (abs >= 1_000) return `${trimZeros((value / 1_000).toFixed(1))}k`;
+  return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function trimZeros(s: string): string {
+  return s.replace(/\.0$/, '');
+}
+
 export function imageFileFromClipboard(data: DataTransfer | null): File | null {
   if (!data) return null;
   for (const item of Array.from(data.items)) {

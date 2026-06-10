@@ -217,16 +217,13 @@ export default function UserPage() {
       )}
 
       <Tabs defaultValue="public" className="mt-6 w-full">
-        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-lg border border-border bg-muted/70 p-1 shadow-sm">
-          <TabsTrigger
-            value="public"
-            className="h-10 rounded-md border border-transparent px-4 text-sm font-semibold text-foreground/75 hover:bg-background/70 hover:text-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
-          >
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="public" className="font-semibold">
             Public
           </TabsTrigger>
           <TabsTrigger
             value="premium"
-            className="h-10 rounded-md border border-transparent px-4 text-sm font-semibold text-amber-700 hover:border-amber-300/80 hover:bg-amber-100/80 hover:text-amber-900 data-[state=active]:border-amber-400 data-[state=active]:bg-amber-200 data-[state=active]:text-amber-950 data-[state=active]:shadow-sm dark:text-amber-300 dark:hover:border-amber-500/50 dark:hover:bg-amber-500/15 dark:hover:text-amber-200 dark:data-[state=active]:border-amber-500/70 dark:data-[state=active]:bg-amber-500/20 dark:data-[state=active]:text-amber-100"
+            className="font-semibold text-primary/80 hover:text-primary data-[state=active]:text-primary"
           >
             Premium
           </TabsTrigger>

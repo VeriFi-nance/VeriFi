@@ -34,7 +34,8 @@ function PostCardImpl({ post, hardClaims = [], assets = [], onDelete, onPostChan
   return (
     <Card className={cn(
       "group relative max-w-2xl gap-0 py-0 overflow-hidden rounded-lg transition-colors hover:bg-muted/20",
-      (claimHints.length > 0 || positions.length > 0) && "border-border"
+      claimHints.length > 0 && "border-claim-badge/35 shadow-claim-badge/10",
+      positions.length > 0 && "border-position-badge/35 shadow-position-badge/10"
     )}>
       <Link
         to={`/post/${post.id}`}

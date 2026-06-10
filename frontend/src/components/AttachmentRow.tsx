@@ -3,11 +3,11 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 interface AttachmentRowProps {
-  icon: ReactNode;
+  icon?: ReactNode;
   title: string;
   titleTone?: string;
   meta?: ReactNode;
-  badge: string;
+  badge?: string;
   badgeVariant?: React.ComponentProps<typeof Badge>['variant'];
   summary: ReactNode;
   progress?: {
@@ -42,9 +42,11 @@ export function AttachmentRow({
         className,
       )}
     >
-      <div className="flex size-7 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
-        {icon}
-      </div>
+      {icon && (
+        <div className="flex size-7 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
+          {icon}
+        </div>
+      )}
 
       <div className="min-w-0 flex-1 space-y-0.5">
         <div className="flex min-w-0 items-center gap-2">
@@ -52,9 +54,11 @@ export function AttachmentRow({
             {title}
           </span>
           {meta && <span className="shrink-0 text-[10px] font-semibold text-muted-foreground">{meta}</span>}
-          <Badge variant={badgeVariant} className="px-1.5 py-0 text-[9px] uppercase tracking-wide text-muted-foreground">
-            {badge}
-          </Badge>
+          {badge && (
+            <Badge variant={badgeVariant} className="px-1.5 py-0 text-[9px] uppercase tracking-wide text-muted-foreground">
+              {badge}
+            </Badge>
+          )}
           {right && <div className="ml-auto shrink-0">{right}</div>}
         </div>
 

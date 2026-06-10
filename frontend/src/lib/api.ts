@@ -476,11 +476,14 @@ export async function buyShares(
   claimId: number,
   side: 'YES' | 'NO'
 ): Promise<BuyResult> {
-  return request(`/api/posts/hard-claims/${claimId}/market/buy/`, {
+  const result = await request<BuyResult>(`/api/posts/hard-claims/${claimId}/market/buy/`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({ side }),
   });
+  // Spending rep on a stake changes header rep/energy — notify meters.
+  window.dispatchEvent(new Event('energy-updated'));
+  return result;
 }
 
 export async function updateHardClaimStatus(
