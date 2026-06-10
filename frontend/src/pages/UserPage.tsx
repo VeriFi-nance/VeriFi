@@ -217,16 +217,16 @@ export default function UserPage() {
       )}
 
       <Tabs defaultValue="public" className="mt-6 w-full">
-        <TabsList className="bg-transparent border-none p-0 flex gap-2 h-auto justify-start w-full">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-lg border border-border bg-muted/70 p-1 shadow-sm">
           <TabsTrigger
             value="public"
-            className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground data-[state=active]:bg-foreground/5 dark:data-[state=active]:bg-foreground/5 data-[state=active]:text-foreground data-[state=active]:border-transparent dark:data-[state=active]:border-transparent data-[state=active]:shadow-none cursor-pointer transition-colors border-0"
+            className="h-10 rounded-md border border-transparent px-4 text-sm font-semibold text-foreground/75 hover:bg-background/70 hover:text-foreground data-[state=active]:border-border data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
           >
             Public
           </TabsTrigger>
           <TabsTrigger
             value="premium"
-            className="rounded-md px-3 py-1.5 text-sm font-medium text-amber-500/70 hover:text-amber-500 hover:bg-amber-500/10 data-[state=active]:bg-amber-500/15 data-[state=active]:text-amber-500 data-[state=active]:border-transparent data-[state=active]:shadow-none cursor-pointer transition-colors border-0 flex items-center gap-1.5"
+            className="h-10 rounded-md border border-transparent px-4 text-sm font-semibold text-amber-700 hover:border-amber-300/80 hover:bg-amber-100/80 hover:text-amber-900 data-[state=active]:border-amber-400 data-[state=active]:bg-amber-200 data-[state=active]:text-amber-950 data-[state=active]:shadow-sm dark:text-amber-300 dark:hover:border-amber-500/50 dark:hover:bg-amber-500/15 dark:hover:text-amber-200 dark:data-[state=active]:border-amber-500/70 dark:data-[state=active]:bg-amber-500/20 dark:data-[state=active]:text-amber-100"
           >
             Premium
           </TabsTrigger>
