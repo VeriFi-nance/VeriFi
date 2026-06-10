@@ -206,6 +206,10 @@ export function loginReturnTo(searchParams: URLSearchParams): string {
   return searchParams.get('returnTo') || '/feed';
 }
 
+function loginDismissPath(pathname: string): string {
+  return pathname === '/settings' || pathname === '/notifications' ? '/feed' : pathname;
+}
+
 export function openLogin(
   navigate: NavigateFunction,
   location: Location,
@@ -225,7 +229,7 @@ export function closeLogin(navigate: NavigateFunction, location: Location) {
   const returnTo = params.get('returnTo') || '/feed';
 
   if (background) {
-    const pathname = background.pathname === '/settings' ? '/feed' : background.pathname;
+    const pathname = loginDismissPath(background.pathname);
     navigate(
       { pathname, search: background.search, hash: background.hash },
       { replace: true },
@@ -233,7 +237,7 @@ export function closeLogin(navigate: NavigateFunction, location: Location) {
     return;
   }
 
-  const destination = returnTo === '/settings' ? '/feed' : returnTo;
+  const destination = loginDismissPath(returnTo);
   navigate(destination, { replace: true });
 }
 

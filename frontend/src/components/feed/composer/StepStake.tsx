@@ -4,6 +4,9 @@ import { Label } from '@/components/ui/label';
 import { getProfileStats } from '@/lib/api';
 import { useAuthState } from '@/lib/auth';
 import { FieldError } from '@/components/ui/field-error';
+import { RepIcon } from '@/components/RepIcon';
+import { EnergyIcon } from '@/components/EnergyIcon';
+import { RepAmount } from '@/components/RepAmount';
 import type { ClaimDraft } from './types';
 import { LISTING_FEE, MIN_STAKE, MAX_STAKE } from './types';
 import { AlertCircle } from 'lucide-react';
@@ -56,15 +59,23 @@ export function StepStake({ value, onChange }: StepStakeProps) {
       <div className="rounded-lg border bg-card p-4 space-y-4">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium">Your Current Rep</span>
-          <span className="font-mono text-sm font-semibold">{rep !== null ? rep.toFixed(0) : '...'}</span>
+          <span className="flex items-center gap-1 font-mono text-sm font-semibold">
+            <RepIcon size="xs" />
+            {rep !== null ? rep.toFixed(0) : '...'}
+          </span>
         </div>
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium">Your Energy</span>
-          <span className="font-mono text-sm font-semibold">{energy !== null ? energy.toFixed(0) : '...'} ⚡</span>
+          <span className="flex items-center gap-1 font-mono text-sm font-semibold">
+            <EnergyIcon size="xs" />
+            {energy !== null ? energy.toFixed(0) : '...'}
+          </span>
         </div>
 
         <div className="space-y-2 pt-2 border-t">
-          <Label className="text-xs font-semibold">Stake Amount (10 - 100 rep)</Label>
+          <Label className="inline-flex items-center gap-1 text-xs font-semibold">
+            Stake Amount (10 - 100 <RepIcon size="xs" />)
+          </Label>
           <Input
             type="number"
             min={10}
@@ -82,7 +93,8 @@ export function StepStake({ value, onChange }: StepStakeProps) {
           <AlertCircle className="size-4 shrink-0 mt-0.5" />
           <div className="leading-snug">
             Creator side is auto-set to <span className="font-semibold text-success">YES</span>.<br/>
-            There is a 2-rep listing fee (burned) and a 5% trade burn. This action costs 1 energy.
+            There is a <RepAmount value={2} /> listing fee (burned) and a 5% trade burn. This action costs 1{' '}
+            <EnergyIcon size="xs" className="inline-block align-middle" /> energy.
           </div>
         </div>
       </div>

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { buyShares, getMarket, previewBuy } from '@/lib/api';
 import { useAuthState, useOpenLogin } from '@/lib/auth';
+import { RepAmount } from '@/components/RepAmount';
 import type { BuyPreviewResult, ClaimMarketItem } from '@/lib/types';
 
 interface Props {
@@ -179,12 +180,10 @@ function YourStakeCard({ stake }: { stake: NonNullable<ClaimMarketItem['your_sta
       </div>
       <p className="text-sm">
         If you&apos;re right, you win{' '}
-        <span className="font-semibold font-mono num">
-          {stake.locked_payout_if_win.toFixed(1)} rep
-        </span>
+        <RepAmount value={stake.locked_payout_if_win.toFixed(1)} className="font-semibold" />
       </p>
       <p className="text-xs text-muted-foreground">
-        You staked {stake.rep_paid_gross.toFixed(0)} rep at {(stake.entry_price * 100).toFixed(0)}%
+        You staked <RepAmount value={stake.rep_paid_gross.toFixed(0)} /> at {(stake.entry_price * 100).toFixed(0)}%
         odds
       </p>
     </div>
@@ -223,10 +222,12 @@ function BuyButton({
       <span className={cn('text-sm font-semibold', isAgree ? 'text-success' : 'text-destructive')}>
         {label}
       </span>
-      <span className="text-xs font-medium mt-0.5">{rep} rep</span>
+      <span className="mt-0.5 inline-flex items-center text-xs font-medium">
+        <RepAmount value={rep} />
+      </span>
       {preview && (
-        <span className="text-[11px] font-mono text-muted-foreground">
-          +{preview.locked_payout_if_win.toFixed(1)} rep
+        <span className="inline-flex items-center text-[11px] font-mono text-muted-foreground">
+          +<RepAmount value={preview.locked_payout_if_win.toFixed(1)} />
         </span>
       )}
     </Button>

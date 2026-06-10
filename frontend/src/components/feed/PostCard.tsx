@@ -34,8 +34,8 @@ function PostCardImpl({ post, hardClaims = [], assets = [], onDelete, onPostChan
   return (
     <Card className={cn(
       "group relative max-w-2xl gap-0 py-0 overflow-hidden rounded-lg transition-colors hover:bg-muted/20",
-      claimHints.length > 0 && "border-claim-badge/35 shadow-claim-badge/10",
-      positions.length > 0 && "border-position-badge/35 shadow-position-badge/10"
+      claimHints.length > 0 && "border-2 border-claim-badge/50 shadow-claim-badge/15",
+      positions.length > 0 && "border-2 border-position-badge/50 shadow-position-badge/15",
     )}>
       <Link
         to={`/post/${post.id}`}
@@ -53,7 +53,7 @@ function PostCardImpl({ post, hardClaims = [], assets = [], onDelete, onPostChan
             <UserAvatar address={post.author_address} src={post.author_avatar_url} size="md" />
           </Link>
 
-          <div className="flex items-center gap-2 flex-1 min-w-0">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
             <Button
               variant="link"
               size="sm"
@@ -65,8 +65,8 @@ function PostCardImpl({ post, hardClaims = [], assets = [], onDelete, onPostChan
               </Link>
             </Button>
 
-            <span aria-hidden="true" className="hidden size-0.5 shrink-0 rounded-full bg-muted-foreground/50 sm:block" />
-            <SmartTimestamp value={post.created_at} className="text-xs text-muted-foreground shrink-0 hidden sm:block" />
+            <span aria-hidden="true" className="size-0.5 shrink-0 rounded-full bg-muted-foreground/50" />
+            <SmartTimestamp value={post.created_at} className="shrink-0 text-[11px] text-muted-foreground sm:text-xs" />
             {hasBadge && (
               <span aria-hidden="true" className="hidden size-0.5 shrink-0 rounded-full bg-muted-foreground/50 sm:block" />
             )}

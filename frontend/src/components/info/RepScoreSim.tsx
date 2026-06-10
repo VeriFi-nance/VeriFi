@@ -10,8 +10,10 @@ import {
   Shuffle,
   Gavel,
   Search,
-  Zap,
 } from 'lucide-react';
+import { EnergyIcon } from '@/components/EnergyIcon';
+import { RepAmount } from '@/components/RepAmount';
+import { RepIcon } from '@/components/RepIcon';
 import { cn } from '@/lib/utils';
 
 // ---------------------------------------------------------------------------
@@ -290,20 +292,22 @@ export default function RepScoreSim() {
       </p>
 
       {/* Creator setup */}
-      <div className="rounded-lg border p-3 space-y-2">
+      <div className="rounded-lg border p-3 sm:p-4 space-y-3">
         <div className="font-medium">1 · Open the market</div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground leading-relaxed">
           The creator always takes <strong className="text-emerald-600 dark:text-emerald-400">YES</strong> (you only open
-          a market on a claim you believe). It costs <strong className="text-foreground">1 energy</strong> + a{' '}
-          <strong className="text-foreground">{LISTING_FEE}-Rep listing fee</strong> (burned), plus a stake between{' '}
-          {CREATOR_MIN_STAKE} and {CREATOR_MAX_STAKE} Rep.
+          a market on a claim you believe). It costs <strong className="text-foreground">1</strong>{' '}
+          <EnergyIcon size="xs" className="inline-block align-middle" /> energy + a{' '}
+          <RepAmount value={LISTING_FEE} className="font-semibold text-foreground" iconSize="xs" /> listing fee (burned),
+          plus a stake between {CREATOR_MIN_STAKE} and {CREATOR_MAX_STAKE}{' '}
+          <RepIcon size="xs" className="inline-block align-middle" />.
         </p>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="space-y-1">
-            <label htmlFor="repsim-stake" className="text-xs font-medium text-muted-foreground">
-              Creator stake ({CREATOR_MIN_STAKE}–{CREATOR_MAX_STAKE} Rep)
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+          <div className="min-w-0 flex-1 space-y-1">
+            <label htmlFor="repsim-stake" className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
+              Creator stake ({CREATOR_MIN_STAKE}–{CREATOR_MAX_STAKE} <RepIcon size="xs" />)
             </label>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
               <input
                 id="repsim-stake"
                 type="range"
@@ -312,7 +316,7 @@ export default function RepScoreSim() {
                 step={10}
                 value={creatorStake}
                 onChange={(e) => setCreatorStake(Number(e.target.value))}
-                className="w-36 accent-primary"
+                className="w-full min-w-0 accent-primary sm:w-36"
               />
               <Input
                 type="number"
@@ -321,26 +325,27 @@ export default function RepScoreSim() {
                 step={10}
                 value={creatorStake}
                 onChange={(e) => setCreatorStake(Number(e.target.value))}
-                className="w-20 h-8"
+                className="h-8 w-full sm:w-20"
               />
             </div>
           </div>
-          <Button size="sm" onClick={applyCreator}>
+          <Button size="sm" className="w-full sm:w-auto" onClick={applyCreator}>
             <RotateCcw /> Open / reset
           </Button>
         </div>
       </div>
 
       {/* Market */}
-      <div className="rounded-lg border p-3 space-y-3">
+      <div className="rounded-lg border p-3 sm:p-4 space-y-3">
         <div>
-          <div className="font-medium">2 · {QUESTION}</div>
-          <div className="text-xs text-muted-foreground">
-            Pool: <strong className="text-foreground">{pool.toFixed(0)} Rep</strong> · {state.stakes.length} predictions ·
-            creator staked {state.creatorStake} on{' '}
+          <div className="font-medium leading-snug">2 · {QUESTION}</div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-1 gap-y-1 text-xs text-muted-foreground">
+            Pool:{' '}
+            <RepAmount value={pool.toFixed(0)} className="font-semibold text-foreground" iconSize="xs" /> ·{' '}
+            {state.stakes.length} predictions · creator staked {state.creatorStake} on{' '}
             <span className="text-emerald-600 dark:text-emerald-400">YES</span>
             {resolved && (
-              <span className="ml-2 inline-flex items-center rounded-full bg-foreground/10 px-2 py-0.5 font-medium text-foreground">
+              <span className="inline-flex items-center rounded-full bg-foreground/10 px-2 py-0.5 font-medium text-foreground">
                 Resolved · {resolved} won{state.trivial ? ' (trivial refund)' : ''}
               </span>
             )}
@@ -360,20 +365,20 @@ export default function RepScoreSim() {
         </div>
 
         {/* Stake actions */}
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" disabled={!!resolved} onClick={() => dispatch({ type: 'add', side: 'YES' })}>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+          <Button size="sm" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white sm:w-auto" disabled={!!resolved} onClick={() => dispatch({ type: 'add', side: 'YES' })}>
             <TrendingUp /> Stake YES
           </Button>
-          <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white" disabled={!!resolved} onClick={() => dispatch({ type: 'add', side: 'NO' })}>
+          <Button size="sm" className="w-full bg-red-600 hover:bg-red-700 text-white sm:w-auto" disabled={!!resolved} onClick={() => dispatch({ type: 'add', side: 'NO' })}>
             <TrendingDown /> Stake NO
           </Button>
-          <Button size="sm" variant="outline" disabled={!!resolved} onClick={() => dispatch({ type: 'addMany', side: 'YES', count: 10 })}>
+          <Button size="sm" variant="outline" className="w-full sm:w-auto" disabled={!!resolved} onClick={() => dispatch({ type: 'addMany', side: 'YES', count: 10 })}>
             +10 YES
           </Button>
-          <Button size="sm" variant="outline" disabled={!!resolved} onClick={() => dispatch({ type: 'addMany', side: 'NO', count: 10 })}>
+          <Button size="sm" variant="outline" className="w-full sm:w-auto" disabled={!!resolved} onClick={() => dispatch({ type: 'addMany', side: 'NO', count: 10 })}>
             +10 NO
           </Button>
-          <Button size="sm" variant="outline" disabled={!!resolved} onClick={() => dispatch({ type: 'random', count: 25 })}>
+          <Button size="sm" variant="outline" className="col-span-2 w-full sm:col-span-1 sm:w-auto" disabled={!!resolved} onClick={() => dispatch({ type: 'random', count: 25 })}>
             <Shuffle /> 25 random
           </Button>
         </div>
@@ -397,11 +402,11 @@ export default function RepScoreSim() {
               <p className="text-xs text-muted-foreground">
                 At the deadline the oracle decides the real outcome. Pick the winner to see who gets paid.
               </p>
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => dispatch({ type: 'resolve', side: 'YES' })}>
+              <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
+                <Button size="sm" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white sm:w-auto" onClick={() => dispatch({ type: 'resolve', side: 'YES' })}>
                   Resolve: YES wins
                 </Button>
-                <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white" onClick={() => dispatch({ type: 'resolve', side: 'NO' })}>
+                <Button size="sm" className="w-full bg-red-600 hover:bg-red-700 text-white sm:w-auto" onClick={() => dispatch({ type: 'resolve', side: 'NO' })}>
                   Resolve: NO wins
                 </Button>
               </div>
@@ -421,7 +426,8 @@ export default function RepScoreSim() {
                 ) : (
                   <span className="text-muted-foreground">
                     {paidCount} winner{paidCount === 1 ? '' : 's'} shared{' '}
-                    <strong className="text-foreground">{totalPaid.toFixed(1)} Rep</strong> from the pool.
+                    <RepAmount value={totalPaid.toFixed(1)} className="font-semibold text-foreground" iconSize="xs" /> from
+                    the pool.
                   </span>
                 )}
               </p>
@@ -440,7 +446,7 @@ export default function RepScoreSim() {
           <div className="text-xs text-muted-foreground">
             {resolved ? 'Final Rep credited to each participant, and their net P/L.' : 'Net Rep change per participant, depending on which side wins.'}
           </div>
-          <div className="relative w-full max-w-xs">
+          <div className="relative w-full sm:max-w-xs">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
               placeholder="Search participant or side…"
@@ -449,26 +455,26 @@ export default function RepScoreSim() {
                 setQuery(e.target.value);
                 setPage(0);
               }}
-              className="pl-8 h-8"
+              className="h-8 w-full pl-8"
             />
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
+        <div className="-mx-3 overflow-x-auto sm:mx-0">
+          <table className="w-full min-w-[320px] text-xs sm:text-sm">
             <thead>
-              <tr className="border-b text-xs text-muted-foreground">
-                <th className="px-3 py-2 text-left font-medium">Participant</th>
-                <th className="px-3 py-2 text-left font-medium">Side</th>
-                <th className="px-3 py-2 text-right font-medium">Entry odds</th>
+              <tr className="border-b text-[11px] text-muted-foreground sm:text-xs">
+                <th className="px-2 py-2 text-left font-medium sm:px-3">Participant</th>
+                <th className="px-2 py-2 text-left font-medium sm:px-3">Side</th>
+                <th className="hidden px-2 py-2 text-right font-medium sm:table-cell sm:px-3">Entry odds</th>
                 {resolved ? (
                   <>
-                    <th className="px-3 py-2 text-right font-medium">Paid</th>
-                    <th className="px-3 py-2 text-right font-medium">Net P/L</th>
+                    <th className="px-2 py-2 text-right font-medium sm:px-3">Paid</th>
+                    <th className="px-2 py-2 text-right font-medium sm:px-3">Net P/L</th>
                   </>
                 ) : (
                   <>
-                    <th className="px-3 py-2 text-right font-medium">If YES</th>
-                    <th className="px-3 py-2 text-right font-medium">If NO</th>
+                    <th className="px-2 py-2 text-right font-medium sm:px-3">If YES</th>
+                    <th className="px-2 py-2 text-right font-medium sm:px-3">If NO</th>
                   </>
                 )}
               </tr>
@@ -478,28 +484,28 @@ export default function RepScoreSim() {
                 const won = resolved && r.side === resolved && !state.trivial;
                 return (
                   <tr key={r.id} className={cn('border-b last:border-0', won && 'bg-emerald-500/5')}>
-                    <td className="px-3 py-1.5 whitespace-nowrap">
+                    <td className="whitespace-nowrap px-2 py-1.5 sm:px-3">
                       {r.isCreator ? <span className="font-medium text-primary">Creator</span> : <span className="text-muted-foreground">{r.label}</span>}
                     </td>
-                    <td className="px-3 py-1.5">
+                    <td className="px-2 py-1.5 sm:px-3">
                       <span className={cn('font-semibold', r.side === 'YES' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400')}>{r.side}</span>
                     </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">{r.odds.toFixed(0)}%</td>
+                    <td className="hidden px-2 py-1.5 text-right tabular-nums text-muted-foreground sm:table-cell sm:px-3">{r.odds.toFixed(0)}%</td>
                     {resolved ? (
                       <>
-                        <td className="px-3 py-1.5 text-right tabular-nums">
+                        <td className="px-2 py-1.5 text-right tabular-nums sm:px-3">
                           {r.paid > 0.005 ? <span className="font-semibold text-foreground">{r.paid.toFixed(1)}</span> : <span className="text-muted-foreground">0.0</span>}
                         </td>
-                        <td className="px-3 py-1.5 text-right tabular-nums">
+                        <td className="px-2 py-1.5 text-right tabular-nums sm:px-3">
                           <Money value={r.netResolved} />
                         </td>
                       </>
                     ) : (
                       <>
-                        <td className="px-3 py-1.5 text-right tabular-nums">
+                        <td className="px-2 py-1.5 text-right tabular-nums sm:px-3">
                           <Money value={r.yesProfit} />
                         </td>
-                        <td className="px-3 py-1.5 text-right tabular-nums">
+                        <td className="px-2 py-1.5 text-right tabular-nums sm:px-3">
                           <Money value={r.noProfit} />
                         </td>
                       </>
@@ -517,12 +523,12 @@ export default function RepScoreSim() {
             </tbody>
           </table>
         </div>
-        <div className="flex items-center justify-between border-t px-3 py-2 text-xs text-muted-foreground">
+        <div className="flex flex-col gap-2 border-t px-3 py-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <span>
             {filtered.length} participant{filtered.length === 1 ? '' : 's'}
             {query && ' (filtered)'}
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between gap-2 sm:justify-end">
             <Button size="xs" variant="outline" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>
               Prev
             </Button>
@@ -545,7 +551,7 @@ export default function RepScoreSim() {
         {showMath && (
           <div className="border-t p-3 text-muted-foreground space-y-3 leading-relaxed">
             <div className="rounded-lg border bg-muted/30 p-2.5 flex gap-2">
-              <Zap className="size-4 shrink-0 text-amber-500 mt-0.5" />
+              <EnergyIcon size="sm" className="mt-0.5" />
               <span>
                 <strong className="text-foreground">Energy ≠ Rep.</strong> Energy is your daily action budget — start with{' '}
                 {INITIAL_ENERGY}, +{DAILY_GRANT} each UTC day. Posting a claim costs {CLAIM_ENERGY_COST} energy and each
@@ -567,8 +573,10 @@ export default function RepScoreSim() {
                 stake is burned, so spamming junk predictions bleeds Rep.
               </li>
               <li>
-                <strong className="text-foreground">Creator incentive.</strong> A {LISTING_FEE}-Rep listing fee is burned
-                on open; if YES wins, the creator earns a {(CREATOR_CUT_PCT * 100).toFixed(0)}% cut of the losing pool.
+                <strong className="text-foreground">Creator incentive.</strong> A{' '}
+                <RepAmount value={LISTING_FEE} className="font-semibold text-foreground" iconSize="xs" /> listing fee is
+                burned on open; if YES wins, the creator earns a {(CREATOR_CUT_PCT * 100).toFixed(0)}% cut of the losing
+                pool.
               </li>
               <li>
                 <strong className="text-foreground">Trivial markets refund.</strong> Fewer than {MIN_LOSER_VOTERS} losers

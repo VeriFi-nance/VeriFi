@@ -1,11 +1,11 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useContext, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
 import { ResponsiveDialog as RD } from './ResponsiveDialog';
 import { Button } from './ui/button';
 
 export interface ConfirmOptions {
-  title: string;
-  description?: string;
+  title: ReactNode;
+  description?: ReactNode;
   confirmText?: string;
   cancelText?: string;
   /** `destructive` styles the confirm button red — use for irreversible actions. */
