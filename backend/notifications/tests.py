@@ -258,7 +258,7 @@ class NotificationEmitterTests(APITestCase):
             direction="bullish",
             percentage=10,
             until="2027-12-31",
-            status=HardClaim.Status.CONFIRMED,
+            status=HardClaim.Status.UNDETERMINED,
         )
         from posts import rep_market
 
@@ -268,6 +268,9 @@ class NotificationEmitterTests(APITestCase):
         buy = self.client.post(reverse("hard-claim-market-buy", kwargs={"pk": claim.pk}), {"side": "NO"}, format="json")
         self.assertEqual(buy.status_code, 201)
         self.assertTrue(Notification.objects.filter(recipient=self.viewer, type=Notification.Type.REP_SPENT).exists())
+
+        claim.status = HardClaim.Status.CONFIRMED
+        claim.save(update_fields=["status"])
 
         from posts.resolution import _maybe_settle_rep_market
 
