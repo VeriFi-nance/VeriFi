@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Info, KeyRound, Trophy, Layers, ShieldCheck, Loader2 } from 'lucide-react';
@@ -15,6 +16,15 @@ function CryptoRow({ title, children }: { title: string; children: React.ReactNo
 }
 
 export default function AboutPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = ['about', 'crypto', 'rep', 'stack'].includes(searchParams.get('tab') ?? '')
+    ? searchParams.get('tab')!
+    : 'about';
+
+  const handleTabChange = (tab: string) => {
+    setSearchParams(tab === 'about' ? {} : { tab });
+  };
+
   return (
     <div className="mx-auto w-full max-w-3xl">
       <Card>
@@ -25,7 +35,7 @@ export default function AboutPage() {
           <CardDescription>Verifiable finance predictions — how the project works under the hood.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="about">
+          <Tabs value={activeTab} onValueChange={handleTabChange}>
             <TabsList className="w-full flex-wrap h-auto">
               <TabsTrigger value="about">
                 <ShieldCheck className="size-3.5" /> About
