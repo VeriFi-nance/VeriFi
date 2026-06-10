@@ -119,6 +119,8 @@ class Command(BaseCommand):
                 symbol = (coin.get("symbol") or "").strip()
                 if not symbol or len(symbol) > 10:  # Asset.symbol is varchar(10)
                     continue
+                if len(coin.get("id") or "") > 50:  # Asset.provider_symbol is varchar(50)
+                    continue
                 get_or_create_asset(
                     symbol=symbol, name=coin.get("name") or symbol,
                     market="crypto", quote_currency="USD",
