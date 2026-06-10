@@ -5,6 +5,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
 import { Settings as SettingsIcon, Copy, Check, History } from 'lucide-react';
 import { FeedList } from '@/components/feed/FeedList';
+import { FeedFilterPopover, type FeedFilter } from '@/components/feed/FeedFilterPopover';
 import { UserAvatar } from '@/components/UserAvatar';
 import { SmartTimestamp } from '@/components/SmartTimestamp';
 import { EmptyState } from '@/components/EmptyState';
@@ -22,6 +23,8 @@ import { ResponsiveDialog as RD } from '@/components/ResponsiveDialog';
 import { PremiumChannelView } from '@/components/PremiumChannelView';
 import { toast, getMessage } from '@/lib/errors';
 import { ChannelCard } from '@/components/ChannelCard';
+import { RepIcon } from '@/components/RepIcon';
+import { EnergyIcon } from '@/components/EnergyIcon';
 
 function CopyAddressButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -37,10 +40,23 @@ function CopyAddressButton({ text }: { text: string }) {
   );
 }
 
-function StatBlock({ label, value, onClick }: { label: string; value: string; onClick?: () => void }) {
+function StatBlock({
+  label,
+  value,
+  onClick,
+  icon,
+}: {
+  label: string;
+  value: string;
+  onClick?: () => void;
+  icon?: React.ReactNode;
+}) {
   const content = (
     <>
-      <span className="text-base font-semibold num">{value}</span>
+      <span className="flex items-center gap-1 text-base font-semibold num">
+        {icon}
+        {value}
+      </span>
       <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</span>
     </>
   );
@@ -78,6 +94,11 @@ export default function UserPage() {
   
   const [subscriptionsOpen, setSubscriptionsOpen] = useState(false);
   const [usernameHistoryOpen, setUsernameHistoryOpen] = useState(false);
+  const [feedFilter, setFeedFilter] = useState<FeedFilter>({
+    assetIds: [],
+    hasClaims: false,
+    hasPositions: false,
+  });
 
   const usernameChanges = (stats?.changelog ?? []).filter(
     (entry) => entry.event_type === 'username_updated',
@@ -181,9 +202,15 @@ export default function UserPage() {
                 }
               }}
             />
-            {stats.rep != null && <StatBlock label="Rep" value={stats.rep.toFixed(0)} />}
+            {stats.rep != null && (
+              <StatBlock label="Rep" value={stats.rep.toFixed(0)} icon={<RepIcon size="sm" />} />
+            )}
             {stats.energy != null && (
-              <StatBlock label="Energy" value={String(Math.floor(stats.energy))} />
+              <StatBlock
+                label="Energy"
+                value={String(Math.floor(stats.energy))}
+                icon={<EnergyIcon size="sm" />}
+              />
             )}
           </div>
         )}
@@ -217,20 +244,27 @@ export default function UserPage() {
       )}
 
       <Tabs defaultValue="public" className="mt-6 w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="public" className="font-semibold">
-            Public
-          </TabsTrigger>
-          <TabsTrigger
-            value="premium"
-            className="font-semibold text-primary/80 hover:text-primary data-[state=active]:text-primary"
-          >
-            Premium
-          </TabsTrigger>
-        </TabsList>
+        <div className="flex items-center gap-3">
+          <TabsList className="grid flex-1 grid-cols-2">
+            <TabsTrigger value="public" className="font-semibold">
+              Public
+            </TabsTrigger>
+            <TabsTrigger
+              value="premium"
+              className="font-semibold text-primary/80 hover:text-primary data-[state=active]:text-primary"
+            >
+              Premium
+            </TabsTrigger>
+          </TabsList>
+          <FeedFilterPopover filter={feedFilter} onApply={setFeedFilter} />
+        </div>
 
         <TabsContent value="public" className="mt-4 animate-in fade-in-50 duration-200">
-          <FeedList userAddress={stats?.address || address} />
+          <FeedList
+            userAddress={stats?.address || address}
+            filter={feedFilter}
+            hideFilterToolbar
+          />
         </TabsContent>
 
         <TabsContent value="premium" className="space-y-6 mt-4 animate-in fade-in-50 duration-200">
