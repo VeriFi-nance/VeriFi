@@ -131,7 +131,9 @@ def _sign_claim_payload(private_key: str, payload: dict) -> str:
     signed = Account.sign_message(
         encode_defunct(text=_canonical_json(payload)), private_key=private_key
     )
-    return signed.signature.hex()
+    sig = signed.signature.hex()
+    # ethers' verifyMessage on the /verify page requires the 0x prefix
+    return sig if sig.startswith("0x") else f"0x{sig}"
 
 
 class Command(BaseCommand):
@@ -163,6 +165,11 @@ class Command(BaseCommand):
         user_objs: list[WalletUser] = []
         for acct in accounts:
             u, _ = WalletUser.objects.get_or_create(address=acct.address.lower())
+            # Re-seeding leaves rep spent on deleted markets; top back up so
+            # market creation/buys don't fail with insufficient_rep.
+            if u.rep < 200.0:
+                u.rep = 200.0
+                u.save(update_fields=["rep"])
             user_objs.append(u)
 
         # Create posts + hard claims (signed) + markets
@@ -174,12 +181,15 @@ class Command(BaseCommand):
 
             for hc in entry.get("hard_claims", []):
                 asset = asset_map[hc["asset"]]
+                # Integral floats stored as ints so JS JSON.stringify on the
+                # /verify page reproduces the exact signed canonical JSON.
+                pct = float(hc["percentage"])
                 payload = {
                     "asset_symbol": asset.symbol,
                     "author_username": author.username,
                     "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                     "direction": hc["direction"],
-                    "percentage": float(hc["percentage"]),
+                    "percentage": int(pct) if pct.is_integer() else pct,
                     "until": hc["until"].isoformat(),
                 }
                 claim = HardClaim.objects.create(
