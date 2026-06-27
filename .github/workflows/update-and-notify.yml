@@ -11,13 +11,20 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [production, develop]
     defaults:
       run:
         working-directory: backend
     env:
-      DATABASE_URL: ${{ github.ref == 'refs/heads/main' && secrets.DATABASE_URL || (secrets.DATABASE_URL_DEVELOP || secrets.DATABASE_URL) }}
+      DATABASE_URL: ${{ matrix.environment == 'production' && secrets.DATABASE_URL || (secrets.DATABASE_URL_DEVELOP || secrets.DATABASE_URL) }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.environment == 'production' && 'main' || 'develop' }}
+
 
       - uses: astral-sh/setup-uv@v5
         with:
