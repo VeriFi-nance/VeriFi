@@ -31,3 +31,10 @@ migrate_with_retry
 # the picker also resolves assets on demand via live provider search, so a
 # transient CoinGecko/TwelveData error must never block the deploy.
 uv run python manage.py seed_assets || echo "seed_assets failed (non-fatal); picker falls back to live search" >&2
+
+# Backfill AssetSubscription rows for any Position / HardClaim that was created
+# before the observer pattern was introduced (migration 0023). Both commands are
+# idempotent (get_or_create) so re-running on every deploy is safe. Non-fatal:
+# the post-detail view resolves claims on-demand as a fallback.
+uv run python manage.py backfill_subscriptions || echo "backfill_subscriptions failed (non-fatal)" >&2
+uv run python manage.py backfill_hardclaim_subscriptions || echo "backfill_hardclaim_subscriptions failed (non-fatal)" >&2

@@ -41,6 +41,14 @@ jobs:
           DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
           DJANGO_DEBUG: "false"
 
+      - name: Backfill missing AssetSubscriptions
+        run: |
+          uv run python manage.py backfill_subscriptions
+          uv run python manage.py backfill_hardclaim_subscriptions
+        env:
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+          DJANGO_DEBUG: "false"
+
       - name: Run update_and_notify
         run: uv run python manage.py update_and_notify
         env:
