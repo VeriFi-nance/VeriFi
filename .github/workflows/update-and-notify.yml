@@ -28,9 +28,16 @@ jobs:
 
       - run: uv sync
 
+      - name: Run migrations
+        run: uv run python manage.py migrate --noinput
+        env:
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+          DJANGO_DEBUG: "false"
+
       - name: Run update_and_notify
         run: uv run python manage.py update_and_notify
         env:
           DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
           DJANGO_DEBUG: "false"
           TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+
